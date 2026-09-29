@@ -57,6 +57,7 @@ print_help() {
     printf "  %-42s %s\n" "lpm shortcut <slugs...|--all>" "$(t help.games_shortcut)"
     printf "  %-42s %s\n" "" "$(t help.games_shortcut_cont)"
     printf "  %-42s %s\n" "lpm icon [slugs...|--all]" "$(t help.games_icon)"
+    printf "  %-42s %s\n" "lpm splash [slugs...|--all]" "$(t help.games_splash)"
     printf "  %-42s %s\n" "lpm tools [slug] [outil] [exe]" "$(t help.games_tools)"
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
     printf "  %-42s %s\n" "lpm lsfg [slugs...] [on|off]" "$(t help.games_lsfg)"
@@ -203,6 +204,9 @@ if [[ $# -gt 0 ]]; then
         icon)
             exec bash "${LIB_DIR}/zgp-game-icon.sh" "$@"
             ;;
+        splash)
+            exec bash "${LIB_DIR}/zgp-game-splash.sh" "$@"
+            ;;
         tools)
             exec bash "${LIB_DIR}/zgp-game-tools.sh" "$@"
             ;;
@@ -256,6 +260,7 @@ opt_exe_install="$(t menu.opt_exe_install)"
 opt_shortcut="$(t menu.opt_shortcut)"
 opt_isolate="$(t menu.opt_isolate)"
 opt_icon="$(t menu.opt_icon)"
+opt_splash="$(t menu.opt_splash)"
 opt_tools="$(t menu.opt_tools)"
 opt_lsfg="$(t menu.opt_lsfg)"
 opt_launcher="$(t menu.opt_launcher)"
@@ -281,6 +286,7 @@ while true; do
         FALSE "${opt_shortcut}" \
         FALSE "${opt_isolate}" \
         FALSE "${opt_icon}" \
+        FALSE "${opt_splash}" \
         FALSE "${opt_tools}" \
         FALSE "${opt_lsfg}" \
         FALSE "${opt_launcher}" \
@@ -318,6 +324,9 @@ while true; do
             ;;
         "${opt_icon}")
             bash "${LIB_DIR}/zgp-game-icon.sh"
+            ;;
+        "${opt_splash}")
+            bash "${LIB_DIR}/zgp-game-splash.sh"
             ;;
         "${opt_tools}")
             bash "${LIB_DIR}/zgp-game-tools.sh"
