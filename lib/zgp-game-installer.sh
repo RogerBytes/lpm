@@ -169,6 +169,11 @@ games_to_install=()
 declare -A filepath_by_name
 create_menu=false
 create_desktop=false
+# Écran de chargement (voir lib/zgl-launcher-orchestrator.sh) : actif par défaut pour tout
+# raccourci créé par lpm, quel que soit le mode (CLI ou interactif/double-clic) -- aucun
+# flag CLI dédié pour l'instant, même convention que create_menu/create_desktop en mode CLI
+# (toujours "true", sans équivalent --no-menu/--no-desktop).
+loadingscreen_enabled=true
 
 # Gestion Mode CLI strict vs Mode Interactif / Double-clic
 if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
@@ -246,16 +251,21 @@ else
   opt_menu_label="$(t install_game.shortcuts_opt_menu)"
   opt_desktop_label="$(t install_game.shortcuts_opt_desktop)"
   opt_allow_scripts_label="$(t install_game.shortcuts_opt_allow_scripts)"
+  # Même case, même libellé que l'écran équivalent de zgp-game-shortcutter.sh -- cochée par
+  # défaut (TRUE), contrairement à opt_allow_scripts_label juste au-dessus : voir
+  # lib/zgl-launcher-orchestrator.sh pour la conception, l'écran de chargement est une
+  # amélioration cosmétique par défaut, pas une décision de sécurité à activer avec prudence.
+  opt_loadingscreen_label="$(t install_game.shortcuts_opt_loadingscreen)"
 
-  # Troisième option ajoutée à cet écran (déjà affiché une fois par lot, en mode menu ET
-  # double-clic) plutôt qu'un nouvel écran séparé : décochée par défaut (FALSE), contrairement
-  # aux deux premières -- contrairement aux raccourcis, accepter des scripts automatiques est
-  # une décision de sécurité qui ne doit jamais être activée par mégarde.
+  # Quatrième option ajoutée à cet écran (déjà affiché une fois par lot, en mode menu ET
+  # double-clic) plutôt qu'un nouvel écran séparé : décochée par défaut (FALSE) pour
+  # opt_allow_scripts_label -- contrairement aux raccourcis, accepter des scripts automatiques
+  # est une décision de sécurité qui ne doit jamais être activée par mégarde.
   # Code de sortie vérifié explicitement (comme pour zenity --file-selection plus haut) : sans
   # ça, un clic sur "Annuler" ici renvoyait une chaîne vide en stdout -- indiscernable d'un OK
-  # avec les trois cases décochées -- et le flux continuait tout droit vers la sélection des
+  # avec toutes les cases décochées -- et le flux continuait tout droit vers la sélection des
   # jeux puis l'installation, au lieu de s'arrêter net comme l'utilisateur s'y attendait.
-  if ! shortcuts_options=$(zenity --list --checklist --title="$(t install_game.shortcuts_title)" --text="$(t install_game.shortcuts_text)" --column="$(t install_game.shortcuts_col_create)" --column="$(t install_game.shortcuts_col_location)" --separator=$'\x1f' TRUE "${opt_menu_label}" TRUE "${opt_desktop_label}" FALSE "${opt_allow_scripts_label}" --width=500 --height=260 2>/dev/null); then
+  if ! shortcuts_options=$(zenity --list --checklist --title="$(t install_game.shortcuts_title)" --text="$(t install_game.shortcuts_text)" --column="$(t install_game.shortcuts_col_create)" --column="$(t install_game.shortcuts_col_location)" --separator=$'\x1f' TRUE "${opt_menu_label}" TRUE "${opt_desktop_label}" TRUE "${opt_loadingscreen_label}" FALSE "${opt_allow_scripts_label}" --width=500 --height=300 2>/dev/null); then
     exit 0
   fi
 
@@ -264,6 +274,10 @@ else
   fi
   if [[ "${shortcuts_options}" == *"${opt_desktop_label}"* ]]; then
     create_desktop=true
+  fi
+  loadingscreen_enabled=false
+  if [[ "${shortcuts_options}" == *"${opt_loadingscreen_label}"* ]]; then
+    loadingscreen_enabled=true
   fi
   if [[ "${shortcuts_options}" == *"${opt_allow_scripts_label}"* ]]; then
     allow_scripts_flag="yes"
@@ -833,6 +847,13 @@ EOF
     game_id=$(sqlite3 "${lutris_db}" "SELECT id FROM games WHERE slug='${safe_slug}';")
 
     zgu_write_game_shortcut "${game_real_name}" "${slug}" "${prefix_dir}" "${game_id}" "${version}" "${create_menu}" "${create_desktop}" "${executable_path}" "${config_id}" "${lutris_config_dir}" "${runner_dir}"
+
+    # Marqueur d'écran de chargement (voir lib/zgl-launcher-orchestrator.sh) : idempotent,
+    # même logique que zgp-game-shortcutter.sh -- créé si décoché, absent (donc écran actif)
+    # sinon, ce qui est déjà l'état par défaut d'un dossier de jeu fraîchement extrait.
+    if [[ "${loadingscreen_enabled}" = false ]]; then
+      : > "${prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
+    fi
 
     zgu_log "install" "OK" "slug=${slug} nom=${game_real_name}"
     echo 1 >> "${install_success_file}"

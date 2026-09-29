@@ -358,18 +358,59 @@ print(version)
     return 1
   fi
 
+  # Emplacement FIXE de lpm-launch.bat -- DANS drive_c (jamais à la racine de $GAMEDIR
+  # comme dans une version précédente). Vérifié réel avec un vrai jeu (Wine/Proton, Lutris
+  # Flatpak) : Lutris exécute un ".bat" via "cmd /C <nom>", avec le dossier du ".bat" comme
+  # répertoire de travail du processus -- si ce dossier est hors de drive_c (ex: la racine
+  # du préfixe), il n'est atteignable depuis Wine que si le préfixe a un lecteur Z:
+  # (mappage de "/"), souvent absent des préfixes isolés par jeu -- confirmé : le jeu ne
+  # démarrait pas du tout dans ce cas.
+  #
+  # Racine choisie : le sous-dossier direct de "drive_c/Games/" qui contient l'exe (à sa
+  # racine ou dans n'importe lequel de ses propres sous-dossiers, peu importe la
+  # profondeur) -- PAS "working_dir" (peut ne pas être défini, et même défini il ne
+  # correspond pas forcément à cette racine-là) ni "dirname(exe)" (peut être arbitrairement
+  # profond). Exemple concret : exe dans
+  #   drive_c/Games/Jeu/sous/sous/sous/sous/sous/exe
+  # avec un autre dossier "drive_c/Games/Truc" à côté -- le ".bat" doit aller dans
+  #   drive_c/Games/Jeu/lpm-launch.bat
+  # c'est-à-dire le premier niveau sous "Games/" qui mène (directement ou via ses propres
+  # sous-dossiers) jusqu'à l'exe, jamais plus profond. "Games/" est le dossier
+  # d'installation standard utilisé par les installateurs Lutris/lpm.
+  local drive_c games_root bat_dir bat_path_linux
+  drive_c="${current_prefix}/drive_c"
+  games_root="${drive_c}/Games"
+
+  if [[ "${current_exe}" = "${games_root}/"* ]]; then
+    local rel_to_games top_component
+    rel_to_games="${current_exe#"${games_root}"/}"
+    top_component="${rel_to_games%%/*}"
+    bat_dir="${games_root}/${top_component}"
+  else
+    # Repli : installation hors de la convention drive_c/Games/<jeu>/... -- on ne peut pas
+    # appliquer la règle ci-dessus sans connaître la convention réelle utilisée. On retombe
+    # sur "current_workdir" (résolu plus haut, working_dir explicite de la config sinon
+    # dirname(exe)), en le journalisant pour rester traçable.
+    bat_dir="${current_workdir}"
+    zgu_log "launcher" "AVERT" "slug=${slug} raison=exe_hors_convention_games bat_dir=${bat_dir}"
+  fi
+
+  bat_path_linux="${bat_dir}/lpm-launch.bat"
+
   # --- Écriture de lpm-launcher.yml (entrée auto-remplie + repli exemple commenté) ---
   local default_label
   default_label="$(t launcher.default_entry_label)"
 
   YML_PATH="${game_dir}/lpm-launcher.yml" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
-    LABEL="${default_label}" WORKDIR="${win_workdir}" EXE="${win_exe}" ORIGINAL_EXE="${current_exe}" python3 -c '
+    LABEL="${default_label}" WORKDIR="${win_workdir}" EXE="${win_exe}" ORIGINAL_EXE="${current_exe}" \
+    BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
 import os, yaml
 
 data = {
     "title": os.environ["TITLE"],
     "prompt": os.environ["PROMPT"],
     "original_exe": os.environ["ORIGINAL_EXE"],
+    "bat_path": os.environ["BAT_PATH_LINUX"],
     "entries": [
         {"label": os.environ["LABEL"], "workdir": os.environ["WORKDIR"], "exe": os.environ["EXE"]},
     ],
@@ -406,8 +447,20 @@ EOF
   fi
 
   # --- Branchement dans la config Lutris : game.exe + system.prelaunch_command ---
-  YML_PATH="${yml_file}" BAT_PATH="${game_dir}/lpm-launch.bat" \
-    PRELAUNCH="bash '${game_dir}/scripts/lpm-launcher.sh'" python3 -c '
+  #
+  # PAS de "bash" devant le chemin du relais : le fichier est déjà exécutable (chmod +x
+  # ci-dessus) et porte son propre shebang -- l'ajouter est inutile et n'a jamais été la
+  # cause d'un quelconque souci (vérifié).
+  #
+  # "prelaunch_wait: true" est INDISPENSABLE : par défaut (absent), Lutris lance
+  # prelaunch_command EN ARRIÈRE-PLAN et enchaîne IMMÉDIATEMENT sur le vrai lancement, en
+  # parallèle -- confirmé dans le code source de Lutris (lutris/game.py,
+  # start_prelaunch_command(), et lutris/sysoptions.py où "prelaunch_wait" a bien
+  # default=False). Sans ce réglage, Wine peut tenter d'exécuter lpm-launch.bat avant même
+  # que ce script ait fini de l'écrire -- confirmé réel : c'est exactement ce qui rendait le
+  # jeu injouable au tout premier lancement.
+  YML_PATH="${yml_file}" BAT_PATH="${bat_path_linux}" \
+    PRELAUNCH="${game_dir}/scripts/lpm-launcher.sh" python3 -c '
 import os, yaml
 
 yml_path = os.environ["YML_PATH"]
@@ -421,6 +474,7 @@ data["game"]["exe"] = os.environ["BAT_PATH"]
 if "system" not in data or not isinstance(data.get("system"), dict):
     data["system"] = {}
 data["system"]["prelaunch_command"] = os.environ["PRELAUNCH"]
+data["system"]["prelaunch_wait"] = True
 
 with open(yml_path, "w") as f:
     yaml.dump(data, f, sort_keys=False)
@@ -433,6 +487,78 @@ with open(yml_path, "w") as f:
 
   zgu_log "launcher" "OK" "slug=${slug} action=on"
   zgp_launcher_report_info "$(t launcher.setup_done "${name_by_slug[${slug}]}" "${game_dir}/lpm-launcher.yml")"
+
+  # --- Lutris Flatpak : rappel de permission, best-effort ---
+  #
+  # Un Lutris installé en Flatpak tourne dans un bac à sable qui ne voit PAS forcément
+  # "/usr/lib/lpm" (ou l'installation de lpm en cours d'exécution, quel que soit son
+  # emplacement réel) -- confirmé réel : sans "host"/"host:ro" ni ce chemin précis dans les
+  # permissions Flatpak accordées, le relais ($GAMEDIR/scripts/lpm-launcher.sh, TOUJOURS
+  # visible car sous $HOME) ne peut pas atteindre le vrai script runtime, et échoue
+  # silencieusement -- rien dans le log de lpm, rien à l'écran, juste le jeu qui se lance
+  # sans launcher, sans erreur visible. "flatpak info --show-permissions" est la seule
+  # façon fiable de vérifier ça (voir doc Flatpak officielle : un chemin précis accordé via
+  # "--filesystem=" est monté au MÊME chemin dans le bac à sable, jamais sous "/run/host/"
+  # sauf pour les permissions larges "host"/"host-os"/"host-etc"). Simple rappel
+  # informatif, jamais bloquant -- la commande reste utilisable telle quelle si ce rappel
+  # ne s'affiche pas correctement pour une raison ou une autre (flatpak absent, etc.).
+  if [[ "${version}" = "flatpak" ]] && command -v flatpak >/dev/null 2>&1; then
+    local fp_perms="" fp_ok=false
+    fp_perms=$(flatpak info --show-permissions net.lutris.Lutris 2>/dev/null)
+    if printf '%s' "${fp_perms}" | grep -Eq "filesystems=.*host(:ro)?(;|$)"; then
+      fp_ok=true
+    elif printf '%s' "${fp_perms}" | grep -qF "${script_dir}"; then
+      fp_ok=true
+    fi
+    if [[ "${fp_ok}" = false ]]; then
+      # On propose de l'appliquer nous-mêmes plutôt que de simplement afficher la commande
+      # -- l'utilisateur confirme, lpm exécute "flatpak override" lui-même. Repli sur le
+      # rappel manuel (ancien comportement) si la confirmation est refusée, ou si aucun
+      # moyen de la demander n'est disponible (ni zenity, ni terminal interactif).
+      local flatpak_question apply_now=false
+      flatpak_question="$(t launcher.flatpak_permission_question "${script_dir}")"
+
+      if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
+        zenity --question --text="${flatpak_question}" --width=550 2>/dev/null && apply_now=true
+      elif [[ -t 0 ]]; then
+        echo "${flatpak_question}" >&2
+        local reponse=""
+        read -r -p "[o/N] " reponse </dev/tty 2>/dev/null
+        [[ "${reponse,,}" =~ ^(o|oui|y|yes)$ ]] && apply_now=true
+      fi
+
+      if [[ "${apply_now}" = true ]]; then
+        if flatpak override --user net.lutris.Lutris --filesystem="${script_dir}:ro" >/dev/null 2>&1; then
+          local ok_msg
+          ok_msg="$(t launcher.flatpak_permission_applied_ok)"
+          if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
+            zenity --info --text="${ok_msg}" --width=400 2>/dev/null
+          else
+            echo "${ok_msg}" >&2
+          fi
+          zgu_log "launcher" "OK" "slug=${slug} action=flatpak_override_applique"
+        else
+          local fail_msg
+          fail_msg="$(t launcher.flatpak_permission_applied_fail "${script_dir}")"
+          if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
+            zenity --error --text="${fail_msg}" --width=550 2>/dev/null
+          else
+            echo "${fail_msg}" >&2
+          fi
+          zgu_log "launcher" "ERREUR" "slug=${slug} raison=flatpak_override_echoue"
+        fi
+      else
+        local flatpak_hint
+        flatpak_hint="$(t launcher.flatpak_permission_hint "${script_dir}")"
+        if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
+          zenity --info --text="${flatpak_hint}" --width=550 2>/dev/null
+        else
+          echo "${flatpak_hint}" >&2
+        fi
+      fi
+    fi
+  fi
+
   return 0
 }
 
@@ -478,6 +604,7 @@ if isinstance(system, dict):
     current = str(system.get("prelaunch_command") or "")
     if os.environ["RELAY_MARKER"] in current:
         system.pop("prelaunch_command", None)
+        system.pop("prelaunch_wait", None)
 
 with open(yml_path, "w") as f:
     yaml.dump(data, f, sort_keys=False)

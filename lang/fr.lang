@@ -158,6 +158,7 @@ install_game.shortcuts_col_location=Option
 install_game.shortcuts_opt_menu=Menu des applications
 install_game.shortcuts_opt_desktop=Raccourci sur le Bureau
 install_game.shortcuts_opt_allow_scripts=Autoriser automatiquement les scripts de lancement/fermeture embarqués (avancé, à utiliser avec prudence)
+install_game.shortcuts_opt_loadingscreen=Écran de chargement
 install_game.hash_mismatch_title=Signature invalide
 install_game.hash_mismatch_text=La signature (sha256) des jeux suivants ne correspond pas à celle attendue. L'archive a peut-être été modifiée ou corrompue :
 install_game.hash_mismatch_item=\n• <b>%s</b>
@@ -807,6 +808,10 @@ launcher.default_prompt=Lequel voulez-vous lancer ?
 launcher.example_entry_comment=Décommentez et adaptez pour ajouter une autre entrée :
 launcher.example_entry_label=Exemple
 launcher.setup_done=LPM Launcher activé pour "%s".\nÉditez ce fichier pour ajouter ou modifier des entrées :\n%s
+launcher.flatpak_permission_hint=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher (le jeu se lance normalement, mais sans l'écran de chargement). Si ça arrive, exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_question=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_applied_ok=Permission Flatpak appliquée avec succès.
+launcher.flatpak_permission_applied_fail=Échec de l'application automatique de la permission Flatpak. Applique-la toi-même :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.launcher_yml_missing=Erreur : lpm-launcher.yml introuvable pour "%s" -- impossible de restaurer l'exécutable d'origine.
 launcher.no_original_exe=Erreur : aucun exécutable d'origine sauvegardé pour "%s".
 launcher.teardown_done=LPM Launcher désactivé pour "%s". L'exécutable d'origine a été restauré -- vérifiez-le dans les réglages du jeu dans Lutris.
@@ -814,6 +819,7 @@ launcher.done_one_on_cli=%s : activé. Éditez %s pour ajouter ou modifier des e
 launcher.done_one_off_cli=%s : désactivé.
 launcher.picker_column=Choisir
 launcher.runtime_error=Erreur LPM Launcher : %s
+launcher.loading_text=Chargement...
 help.games_launcher=Active/désactive un écran de chargement + sélecteur multi-exécutable pour un jeu
 help.games_launcher_cont=  (un seul exécutable ou plusieurs : épisodes, DLC, contenu bonus...)
 

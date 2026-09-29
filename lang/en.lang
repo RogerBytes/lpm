@@ -158,6 +158,7 @@ install_game.shortcuts_col_location=Option
 install_game.shortcuts_opt_menu=Applications Menu
 install_game.shortcuts_opt_desktop=Desktop Shortcut
 install_game.shortcuts_opt_allow_scripts=Automatically allow embedded launch/exit scripts (advanced, use with caution)
+install_game.shortcuts_opt_loadingscreen=Loading screen
 install_game.hash_mismatch_title=Invalid signature
 install_game.hash_mismatch_text=The sha256 signature of the following games does not match the expected value. The archive may have been modified or corrupted:
 install_game.hash_mismatch_item=\n• <b>%s</b>
@@ -807,6 +808,10 @@ launcher.default_prompt=Which one do you want to launch?
 launcher.example_entry_comment=Uncomment and adapt to add another entry:
 launcher.example_entry_label=Example
 launcher.setup_done=LPM Launcher enabled for "%s".\nEdit this file to add or change entries:\n%s
+launcher.flatpak_permission_hint=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start (game launches normally, without the loading screen). If that happens, run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_question=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_applied_ok=Flatpak permission applied successfully.
+launcher.flatpak_permission_applied_fail=Automatic Flatpak permission fix failed. Apply it yourself:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.launcher_yml_missing=Error: lpm-launcher.yml not found for "%s" -- cannot restore the original executable.
 launcher.no_original_exe=Error: no original executable saved for "%s".
 launcher.teardown_done=LPM Launcher disabled for "%s". The original executable has been restored -- please double-check it in Lutris's game settings.
@@ -814,6 +819,7 @@ launcher.done_one_on_cli=%s: enabled. Edit %s to add or change entries.
 launcher.done_one_off_cli=%s: disabled.
 launcher.picker_column=Choose
 launcher.runtime_error=LPM Launcher error: %s
+launcher.loading_text=Loading...
 help.games_launcher=Enable/disable a splash screen + optional multi-executable picker for a game
 help.games_launcher_cont=  (single or multiple executables: episodes, DLC, bonus content...)
 

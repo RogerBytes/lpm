@@ -7,28 +7,29 @@
 #
 # Usage : zgl-launcher-runtime.sh <gamedir>
 #
-# Rôle, dans l'ordre (voir l'échange complet qui a mené à cette conception -- chaque étape
-# a été discutée et validée séparément) :
+# Rôle, dans l'ordre (voir l'échange complet qui a mené à cette conception) :
 #   1. Lit lpm-launcher.yml (SEUL chemin en dur : celui-ci, passé en argument).
-#   2. Affiche un fond noir plein écran (écran principal sous X11, tous les écrans sous
-#      Wayland -- voir zgu-launcher-blackscreen.py) et verrouille la/les manette(s)
-#      détectée(s) en exclusivité, avec pont vers le clavier (voir
-#      zgu-launcher-gamepad-bridge.py) -- actif du tout début (picker) jusqu'à la toute fin
-#      (disparition du splash), jamais relâché entre les deux.
-#   3. S'il y a plusieurs entrées dans le YAML : affiche le picker Zenity (clavier/souris
-#      déjà natifs, manette via le pont) par-dessus le fond noir. Une seule entrée : aucun
-#      menu, lancement direct.
-#   4. Réécrit lpm-launch.bat (vidé puis réécrit) avec l'entrée choisie.
-#   5. Bascule le fond noir sur l'image de splash, surveille l'apparition de la fenêtre du
-#      jeu (X11 seulement -- voir limite documentée plus bas) pour la faire disparaître dès
-#      que le jeu est visible, avec une limite de temps de sécurité dans tous les cas.
-#   6. Relâche le verrou manette, sort -- Lutris enchaîne alors sur le vrai lancement (via
-#      le .bat qu'on vient d'écrire).
+#   2. S'il y a plusieurs entrées dans le YAML : affiche le picker Zenity. Une seule entrée :
+#      aucun menu, lancement direct.
+#   3. Réécrit lpm-launch.bat (vidé puis réécrit) avec l'entrée choisie.
 #
-# Ce script REND TOUJOURS LA MAIN (exit 0) même en cas de souci (YAML absent, aucun écran
-# détecté, etc.) : system.prelaunch_command ne doit jamais bloquer indéfiniment le lancement
-# du jeu -- une erreur est journalisée et, si possible, signalée par une boîte Zenity, mais
-# le jeu doit pouvoir se lancer quand même (avec le .bat existant, potentiellement périmé).
+# CE QUE CE SCRIPT NE FAIT PLUS (voir lib/zgl-launcher-orchestrator.sh) : le fond noir/
+# splash, l'indicateur "chargement", le verrou manette et la détection de la fenêtre du jeu
+# sont désormais TOUJOURS gérés par l'orchestrateur, point d'entrée unique de tous les
+# raccourcis .desktop créés par lpm -- déjà en cours d'exécution (fond déjà affiché) par le
+# temps que CE script démarre, dans le cas normal. Ce script se contente de retrouver le
+# fichier de contrôle déjà ouvert (chemin fixe, dérivé de "gamedir" -- IDENTIQUE au calcul
+# fait par l'orchestrateur, les deux scripts partent de la même résolution "directory" de la
+# base Lutris, voir zgp-game-shortcutter.sh / zgl-launcher-manager.sh) pour y écrire
+# IND_HIDE/IND_SHOW autour du picker -- jamais pour le créer, jamais pour le fermer. S'il
+# n'existe pas (jeu lancé autrement que via le raccourci lpm, ou écran de chargement
+# désactivé pour ce jeu via ".lpm-no-loadingscreen"), le picker fonctionne quand même, juste
+# sans fond derrière -- dégradation gracieuse, jamais une erreur.
+#
+# Ce script REND TOUJOURS LA MAIN (exit 0) même en cas de souci (YAML absent, etc.) :
+# system.prelaunch_command ne doit jamais bloquer indéfiniment le lancement du jeu -- une
+# erreur est journalisée et, si possible, signalée par une boîte Zenity, mais le jeu doit
+# pouvoir se lancer quand même (avec le .bat existant, potentiellement périmé).
 
 set -u
 
@@ -74,12 +75,14 @@ if not isinstance(data, dict):
 
 title = str(data.get("title") or "")
 prompt = str(data.get("prompt") or "")
+bat_path = str(data.get("bat_path") or "")
 entries = data.get("entries") or []
 if not isinstance(entries, list):
     sys.exit(1)
 
 print("TITLE\x1f" + title.replace("\x1f", " ").replace("\n", " "))
 print("PROMPT\x1f" + prompt.replace("\x1f", " ").replace("\n", " "))
+print("BATPATH\x1f" + bat_path.replace("\x1f", " ").replace("\n", " "))
 for e in entries:
     if not isinstance(e, dict):
         continue
@@ -93,13 +96,14 @@ for e in entries:
 
 [[ -z "${parsed}" ]] && bail "yaml_invalide_ou_vide"
 
-title="" prompt=""
+title="" prompt="" bat_path_yaml=""
 entry_labels=() entry_workdirs=() entry_exes=()
 
 while IFS=$'\x1f' read -r kind a b c; do
   case "${kind}" in
     TITLE) title="${a}" ;;
     PROMPT) prompt="${a}" ;;
+    BATPATH) bat_path_yaml="${a}" ;;
     ENTRY)
       entry_labels+=("${a}")
       entry_workdirs+=("${b}")
@@ -110,51 +114,37 @@ done <<< "${parsed}"
 
 [[ ${#entry_labels[@]} -eq 0 ]] && bail "aucune_entree_valide"
 
-# --- 2. Détection X11 / Wayland, fond noir + verrou manette ---
-session_kind="x11"
-if [[ "${XDG_SESSION_TYPE,,}" = "wayland" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-  session_kind="wayland"
-fi
+# Repli pour un lpm-launcher.yml généré avant l'ajout de la clé "bat_path" (compatibilité
+# ascendante) : ancien emplacement, à la racine de $gamedir.
+bat_path="${bat_path_yaml:-${gamedir}/lpm-launch.bat}"
 
-has_display=false
-if [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-  has_display=true
-fi
+# --- Fichier de contrôle de l'orchestrateur (déjà ouvert, ou pas -- voir l'en-tête de
+# fichier). Même dérivation EXACTE que lib/zgl-launcher-orchestrator.sh : sha256sum de
+# gamedir, chemin fixe, pas de mktemp -- pour retrouver le même fichier sans coordination
+# explicite entre les deux scripts. ---
+ctrl_key=$(printf '%s' "${gamedir}" | sha256sum | cut -c1-24)
+control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
-control_file=""
-blackscreen_pid=""
-bridge_pid=""
-
-cleanup() {
-  [[ -n "${control_file}" ]] && echo "STOP" > "${control_file}" 2>/dev/null
-  [[ -n "${bridge_pid}" ]] && kill "${bridge_pid}" 2>/dev/null
-  zgu_stop_focus_watcher 2>/dev/null
-  sleep 0.3
-  [[ -n "${blackscreen_pid}" ]] && kill "${blackscreen_pid}" 2>/dev/null
-  [[ -n "${control_file}" ]] && rm -f "${control_file}" 2>/dev/null
+set_indicator() {
+  # Best-effort : le fichier de contrôle peut ne pas exister (jeu lancé autrement que via
+  # le raccourci lpm, ou écran de chargement désactivé pour ce jeu) -- dans ce cas, on ne
+  # touche à rien, le picker s'affiche quand même, juste sans fond derrière.
+  [[ -f "${control_file}" ]] || return 0
+  local bg_line
+  bg_line=$(head -n 1 "${control_file}" 2>/dev/null)
+  [[ -z "${bg_line}" ]] && bg_line="NONE"
+  {
+    printf '%s\n' "${bg_line}"
+    printf '%s\n' "$1"
+  } > "${control_file}" 2>/dev/null
 }
-trap cleanup EXIT
 
-if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
-  control_file=$(mktemp "${TMPDIR:-/tmp}/lpm-launcher-ctrl.XXXXXX")
-  echo "NONE" > "${control_file}"
-
-  python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" >/dev/null 2>&1 &
-  blackscreen_pid=$!
-  disown "${blackscreen_pid}" 2>/dev/null
-
-  python3 "${script_dir}/zgu-launcher-gamepad-bridge.py" "${session_kind}" >/dev/null 2>&1 &
-  bridge_pid=$!
-  disown "${bridge_pid}" 2>/dev/null
-
-  sleep 0.3  # laisse le temps au fond noir de s'afficher avant le picker
-fi
-
-# --- 3. Picker (seulement si plusieurs entrées) ---
+# --- 2. Picker (seulement si plusieurs entrées) ---
 chosen_workdir="" chosen_exe=""
 
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
-  [[ "${has_display}" = true ]] && zgu_start_focus_watcher
+  set_indicator "IND_HIDE"
+  zgu_start_focus_watcher
 
   zenity_values=()
   for lbl in "${entry_labels[@]}"; do
@@ -169,6 +159,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
     --width=500 --height=400 2>/dev/null)
 
   zgu_stop_focus_watcher 2>/dev/null
+  set_indicator "IND_SHOW"
 
   chosen_idx=-1
   if [[ -n "${selection}" ]]; then
@@ -187,9 +178,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
     # S'il n'existe pas encore (tout premier lancement jamais validé), on retombe sur la
     # première entrée du YAML plutôt que de ne rien lancer du tout.
     zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
-    if [[ -f "${gamedir}/lpm-launch.bat" ]]; then
-      cleanup
-      trap - EXIT
+    if [[ -f "${bat_path}" ]]; then
       exit 0
     fi
     chosen_idx=0
@@ -201,42 +190,18 @@ fi
 chosen_workdir="${entry_workdirs[${chosen_idx}]}"
 chosen_exe="${entry_exes[${chosen_idx}]}"
 
-# --- 4. Écriture de lpm-launch.bat (vidé puis réécrit, voir modèle validé par
+# --- 3. Écriture de lpm-launch.bat (vidé puis réécrit, voir modèle validé par
 # l'utilisateur -- start "" avec titre vide, pas d'appel direct, pour gérer proprement les
-# chemins avec espaces et rendre la main correctement à cmd) ---
-bat_path="${gamedir}/lpm-launch.bat"
+# chemins avec espaces et rendre la main correctement à cmd). Écrit dans "${bat_path}"
+# (résolu plus haut depuis le YAML, avec repli) -- CE chemin doit être à l'intérieur de
+# drive_c du préfixe Wine pour que Lutris/cmd.exe puisse l'exécuter (voir
+# zgl-launcher-manager.sh pour le détail de ce choix). ---
+mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
 {
   printf '@echo off\r\n'
   printf 'cd /d "%s"\r\n' "${chosen_workdir}"
   printf 'start "" "%s"\r\n' "${chosen_exe}"
 } > "${bat_path}" 2>/dev/null || bail "ecriture_bat_echouee"
-
-# --- 5. Bascule sur le splash, détection de la fenêtre du jeu ---
-if [[ -n "${control_file}" ]]; then
-  splash_image="${gamedir}/splash/splash.png"
-  [[ -f "${splash_image}" ]] || splash_image="${script_dir}/launcher-splash-default.png"
-  echo "${splash_image}" > "${control_file}" 2>/dev/null
-
-  max_wait_s=60
-  waited=0
-
-  if [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; then
-    before_windows=$(xdotool search --onlyvisible "" 2>/dev/null | sort)
-    while [[ "${waited}" -lt "${max_wait_s}" ]]; do
-      sleep 1
-      waited=$(( waited + 1 ))
-      after_windows=$(xdotool search --onlyvisible "" 2>/dev/null | sort)
-      new_windows=$(comm -13 <(echo "${before_windows}") <(echo "${after_windows}"))
-      [[ -n "${new_windows}" ]] && break
-    done
-  else
-    # Wayland : xdotool ne fonctionne pas pour lister/détecter les fenêtres d'autres
-    # applications (limite du protocole, pas de notre fait -- voir l'échange à ce sujet).
-    # Repli : attente fixe raisonnable, le temps que la plupart des jeux affichent leur
-    # fenêtre, puis fermeture du splash quoi qu'il arrive.
-    sleep 12
-  fi
-fi
 
 zgu_log "launcher-runtime" "OK" "gamedir=${gamedir} entree=${entry_labels[${chosen_idx}]}"
 

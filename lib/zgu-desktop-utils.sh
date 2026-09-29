@@ -118,12 +118,18 @@ zgu_write_game_shortcut() {
     [[ -n "${icon_file}" ]] && icon_path="${icon_file}"
   fi
 
-  local exec_cmd
-  if [[ "${version}" = "flatpak" ]]; then
-    exec_cmd="env LUTRIS_SKIP_INIT=1 flatpak run net.lutris.Lutris lutris:rungameid/${game_id}"
-  else
-    exec_cmd="env LUTRIS_SKIP_INIT=1 lutris lutris:rungameid/${game_id}"
-  fi
+  # Tous les raccourcis .desktop créés par lpm passent désormais par l'orchestrateur
+  # (lib/zgl-launcher-orchestrator.sh), point d'entrée unique -- voir son en-tête pour la
+  # conception complète (écran de chargement, homogénéité voulue de tous les Exec=). Seuls
+  # "game_id" (entier) et "version" (mot fixe "flatpak"/"package") transitent par Exec= :
+  # tous deux toujours sûrs sans échappement particulier, contrairement à "slug"/"game_dir"
+  # (chemins potentiellement porteurs d'espaces) qu'un Exec= au format Desktop Entry devrait
+  # alors échapper selon des règles propres à ce format, distinctes de celles d'un shell --
+  # l'orchestrateur re-interroge lui-même la base Lutris pour le reste (voir ce fichier).
+  # shellcheck disable=SC2154 # script_dir : assigné par l'appelant avant de sourcer ce
+  # fichier (zgp-game-shortcutter.sh / zgp-game-installer.sh), même convention que partout
+  # ailleurs dans le projet -- portée dynamique bash, pas une variable non définie.
+  local exec_cmd="${script_dir}/zgl-launcher-orchestrator.sh ${game_id} ${version}"
 
   # WM_CLASS Wine = nom de fichier de l'exécutable tel quel (casse et extension conservées,
   # ex: "Notepad.exe"), jamais le chemin complet. executable_path vient de la base Lutris

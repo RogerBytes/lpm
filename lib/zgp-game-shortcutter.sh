@@ -177,6 +177,13 @@ fi
 games_to_process=()
 create_menu=false
 create_desktop=false
+# Écran de chargement (voir lib/zgl-launcher-orchestrator.sh) : actif par défaut pour tout
+# raccourci créé/régénéré par lpm, quel que soit le mode (CLI ou interactif) -- aucun flag
+# CLI dédié pour l'instant (cohérent avec create_menu/create_desktop en mode CLI, toujours
+# "true" également, sans équivalent --no-menu/--no-desktop). Désactivable ensuite au cas par
+# cas en décochant la case ci-dessous en mode interactif, ou en supprimant à la main le
+# marqueur "${game_dir}/.lpm-no-loadingscreen" en mode CLI.
+loadingscreen_enabled=true
 
 # --- Mode CLI vs Mode Interactif ---
 if [[ ${#cli_targets[@]} -gt 0 ]]; then
@@ -238,14 +245,22 @@ else
   # même sens, les deux pré-cochées par défaut.
   opt_menu_label="$(t install_game.shortcuts_opt_menu)"
   opt_desktop_label="$(t install_game.shortcuts_opt_desktop)"
+  # Même case, mêmes libellés réutilisés qu'entre zgp-game-shortcutter.sh et
+  # zgp-game-installer.sh pour opt_menu_label/opt_desktop_label ci-dessus -- voir
+  # zgp-game-installer.sh pour l'écran équivalent à la création.
+  opt_loadingscreen_label="$(t install_game.shortcuts_opt_loadingscreen)"
 
-  shortcut_locations=$(zenity --list --checklist --title="$(t shortcut.locations_title)" --text="$(t shortcut.locations_text)" --column="$(t install_game.shortcuts_col_create)" --column="$(t install_game.shortcuts_col_location)" --separator=$'\x1f' TRUE "${opt_menu_label}" TRUE "${opt_desktop_label}" --width=500 --height=220 2>/dev/null)
+  shortcut_locations=$(zenity --list --checklist --title="$(t shortcut.locations_title)" --text="$(t shortcut.locations_text)" --column="$(t install_game.shortcuts_col_create)" --column="$(t install_game.shortcuts_col_location)" --separator=$'\x1f' TRUE "${opt_menu_label}" TRUE "${opt_desktop_label}" TRUE "${opt_loadingscreen_label}" --width=500 --height=250 2>/dev/null)
 
   if [[ "${shortcut_locations}" == *"${opt_menu_label}"* ]]; then
     create_menu=true
   fi
   if [[ "${shortcut_locations}" == *"${opt_desktop_label}"* ]]; then
     create_desktop=true
+  fi
+  loadingscreen_enabled=false
+  if [[ "${shortcut_locations}" == *"${opt_loadingscreen_label}"* ]]; then
+    loadingscreen_enabled=true
   fi
 
   if [[ "${create_menu}" = false ]] && [[ "${create_desktop}" = false ]]; then
@@ -263,6 +278,16 @@ for game_name in "${games_to_process[@]}"; do
   game_configpath="${configpath_by_slug[${game_slug}]}"
 
   zgu_write_game_shortcut "${game_name}" "${game_slug}" "${game_prefix_dir}" "${game_id}" "${version}" "${create_menu}" "${create_desktop}" "${game_exe}" "${game_configpath}" "${lutris_config_dir}" "${runner_dir}"
+
+  # Marqueur d'écran de chargement (voir lib/zgl-launcher-orchestrator.sh) : idempotent,
+  # aussi bien pour une toute première création que pour une régénération -- créé si décoché,
+  # supprimé si coché, quel que soit l'état précédent.
+  if [[ "${loadingscreen_enabled}" = true ]]; then
+    rm -f "${game_prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
+  else
+    mkdir -p "${game_prefix_dir}" 2>/dev/null
+    : > "${game_prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
+  fi
 
   [[ ${#cli_targets[@]} -gt 0 ]] && t shortcut.created_cli "${game_name}"
 done

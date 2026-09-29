@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-# --- lpm launcher : fenêtre noire plein écran + image de splash, avec vraie transparence ---
+# --- lpm launcher : fenêtre noire plein écran + image de splash + indicateur, avec vraie
+# transparence ---
 #
-# Usage : zgu-launcher-blackscreen.py <control_file>
+# Usage : zgu-launcher-blackscreen.py <control_file> [<indicator_text>]
 #
-# <control_file> est un fichier texte que le script relit en boucle (toutes les 150ms,
-# même technique de sondage que zgu-focus-utils.sh) pour savoir quoi afficher :
-#   - "NONE"        : fond noir seul, rien par-dessus (état de départ, pendant le picker)
-#   - "<chemin>"     : fond noir + l'image PNG à ce chemin, centrée (canal alpha respecté
-#                      via un visual RGBA -- transparent si un compositeur tourne, sinon
-#                      dégradation automatique en noir plein, vérifié empiriquement, voir
-#                      l'échange qui a mené à ce choix -- AUCUNE détection de compositeur
-#                      n'est donc nécessaire ici, GTK/Cairo gère la dégradation tout seul)
-#   - "STOP"        : le script se termine proprement
+# <control_file> est un fichier texte de DEUX lignes que le script relit en boucle (toutes
+# les 150ms, même technique de sondage que zgu-focus-utils.sh) :
+#   Ligne 1 -- le fond :
+#     - "NONE"        : fond noir seul, rien par-dessus
+#     - "<chemin>"     : fond noir + l'image PNG à ce chemin, centrée (canal alpha respecté
+#                        via un visual RGBA -- transparent si un compositeur tourne, sinon
+#                        dégradation automatique en noir plein, vérifié empiriquement, voir
+#                        l'échange qui a mené à ce choix -- AUCUNE détection de compositeur
+#                        n'est donc nécessaire ici, GTK/Cairo gère la dégradation tout seul)
+#     - "STOP"        : le script se termine proprement (la ligne 2 est alors ignorée)
+#   Ligne 2 -- l'indicateur "chargement" (texte + spinner, bas-droite, jamais recouvert par
+#   une bannière puisqu'ancré dans un coin) :
+#     - "IND_SHOW"    : visible (état par défaut si la ligne est absente, pour compatibilité)
+#     - "IND_HIDE"    : masqué -- utilisé par zgl-launcher-runtime.sh pendant que le picker
+#                       multi-entrées est affiché par-dessus (on n'est plus "en train de
+#                       charger", on attend un choix) ; le fond, lui, ne bouge jamais.
 #
 # Écran couvert : sous X11, seulement l'écran physique marqué "primaire" (Gdk.Display /
 # get_monitor, propriété is_primary()) -- les écrans secondaires restent inchangés. Sous
@@ -24,7 +32,13 @@
 # Robustesse : le fichier de contrôle peut disparaître ou devenir illisible entre deux
 # lectures (nettoyage concurrent) -- traité comme "ne rien changer", jamais comme une
 # erreur fatale.
+#
+# Indicateur dessiné en Cairo pur (pas de Gtk.Spinner) -- délibéré : testé, ce widget ne
+# s'affiche pas du tout dans un environnement minimal sans thème GTK complet (vérifié en
+# amont). Un arc dessiné à la main ne dépend d'aucun thème, fonctionne identiquement
+# partout, cohérent avec le rendu de l'image de fond déjà fait à la main juste au-dessus.
 
+import math
 import sys
 import os
 
@@ -38,15 +52,44 @@ except Exception as exc:  # pragma: no cover - dépendance système absente
     sys.exit(1)
 
 if len(sys.argv) < 2:
-    sys.stderr.write("Usage: zgu-launcher-blackscreen.py <control_file>\n")
+    sys.stderr.write("Usage: zgu-launcher-blackscreen.py <control_file> [<indicator_text>]\n")
     sys.exit(1)
 
 CONTROL_FILE = sys.argv[1]
+INDICATOR_TEXT = sys.argv[2] if len(sys.argv) > 2 else ""
 POLL_MS = 150
+SPIN_TICK_MS = 60
+
+SPINNER_SIZE = 20
+MARGIN_RIGHT = 28
+MARGIN_BOTTOM = 24
+TEXT_SPINNER_GAP = 10
+FONT_SIZE = 16
 
 is_wayland = (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland") or bool(
     os.environ.get("WAYLAND_DISPLAY")
 )
+
+# État partagé (mutable via listes à un élément, lu/écrit depuis les callbacks GLib) --
+# show_indicator/spinner_angle sont communs à toutes les fenêtres (un seul indicateur
+# "logique", même s'il est physiquement dessiné sur chaque écran sous Wayland).
+show_indicator = [True]
+spinner_angle = [0.0]
+
+
+def draw_spinner(cr, cx, cy, radius, angle):
+    """8 rayons dégradés qui tournent, à la façon des spinners classiques -- dessiné à la
+    main, aucune dépendance à un thème ou à une icône système."""
+    n = 8
+    cr.set_line_width(2.4)
+    cr.set_line_cap(cairo.LINE_CAP_ROUND)
+    for i in range(n):
+        a = angle + i * (2 * math.pi / n)
+        alpha = (i + 1) / n
+        cr.set_source_rgba(1, 1, 1, alpha)
+        cr.move_to(cx + (radius - 3) * math.cos(a), cy + (radius - 3) * math.sin(a))
+        cr.line_to(cx + radius * math.cos(a), cy + radius * math.sin(a))
+        cr.stroke()
 
 
 class BlackWindow(Gtk.Window):
@@ -88,7 +131,29 @@ class BlackWindow(Gtk.Window):
             cr.scale(scale, scale)
             cr.set_source_surface(self.current_surface, 0, 0)
             cr.paint()
+            cr.identity_matrix()
+
+        if show_indicator[0] and INDICATOR_TEXT:
+            cr.set_operator(cairo.OPERATOR_OVER)
+            self.draw_indicator(cr)
         return False
+
+    def draw_indicator(self, cr):
+        win_alloc = self.get_allocation()
+
+        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(FONT_SIZE)
+        extents = cr.text_extents(INDICATOR_TEXT)
+
+        spinner_cx = win_alloc.width - MARGIN_RIGHT - SPINNER_SIZE / 2
+        center_y = win_alloc.height - MARGIN_BOTTOM - SPINNER_SIZE / 2
+        text_x = spinner_cx - SPINNER_SIZE / 2 - TEXT_SPINNER_GAP - extents.width
+
+        cr.set_source_rgba(0.91, 0.91, 0.91, 1)
+        cr.move_to(text_x, center_y + extents.height / 2)
+        cr.show_text(INDICATOR_TEXT)
+
+        draw_spinner(cr, spinner_cx, center_y, SPINNER_SIZE / 2 - 2, spinner_angle[0])
 
     def set_image(self, path):
         try:
@@ -118,33 +183,49 @@ def get_monitor_geometries():
 
 
 windows = []
-last_state = None
+last_bg_state = None
+last_indicator_state = None
 
 
 def poll_control_file():
-    global last_state
+    global last_bg_state, last_indicator_state
     try:
         with open(CONTROL_FILE, "r") as f:
-            state = f.read().strip()
+            lines = f.read().splitlines()
     except Exception:
         return True  # fichier momentanément illisible : on réessaie au prochain tick
 
-    if state == last_state:
-        return True
-    last_state = state
+    bg_state = lines[0].strip() if len(lines) > 0 else "NONE"
+    indicator_state = lines[1].strip() if len(lines) > 1 else "IND_SHOW"
 
-    if state == "STOP":
+    if bg_state == "STOP":
         Gtk.main_quit()
         return False
 
-    for win in windows:
-        if state == "NONE" or not state:
-            win.clear_image()
-        elif os.path.isfile(state):
-            win.set_image(state)
-        else:
-            win.clear_image()
+    if bg_state != last_bg_state:
+        last_bg_state = bg_state
+        for win in windows:
+            if bg_state == "NONE" or not bg_state:
+                win.clear_image()
+            elif os.path.isfile(bg_state):
+                win.set_image(bg_state)
+            else:
+                win.clear_image()
 
+    if indicator_state != last_indicator_state:
+        last_indicator_state = indicator_state
+        show_indicator[0] = (indicator_state != "IND_HIDE")
+        for win in windows:
+            win.queue_draw()
+
+    return True
+
+
+def tick_spinner():
+    spinner_angle[0] += 0.35
+    if show_indicator[0]:
+        for win in windows:
+            win.queue_draw()
     return True
 
 
@@ -161,6 +242,7 @@ def main():
         windows.append(win)
 
     GLib.timeout_add(POLL_MS, poll_control_file)
+    GLib.timeout_add(SPIN_TICK_MS, tick_spinner)
     Gtk.main()
 
 
