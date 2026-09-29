@@ -21,7 +21,9 @@ The software version lives in a single place, `LPM_VERSION` in `bin/lpm`; it is 
 
 There is currently no automated test suite — changes are verified by running the affected commands manually against a real Lutris install.
 
-To build the distribution packages locally (requires Docker):
+While working on a fix, the fastest loop is to run `sudo ./install.sh` directly from your modified checkout and test with the real `lpm` command — no need to rebuild a package for every iteration.
+
+To verify that the final packaging still works before a release (requires Docker):
 
 ```bash
 cd packaging
