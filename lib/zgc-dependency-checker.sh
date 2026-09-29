@@ -113,6 +113,23 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
   exit 1
 fi
 
+# xdotool sur une session X11 : optionnel (jamais bloquant, ce n'est pas ici un paquet
+# absent qui casse une fonctionnalité entière), mais son absence dégradait plusieurs points
+# en silence -- le focus forcé des fenêtres Zenity (zgu-focus-utils.sh), la navigation
+# manette hors du picker (zgu-gamepad-nav-utils.sh) et surtout la détection réelle de la
+# fenêtre du jeu par l'orchestrateur de l'écran de chargement (lib/zgl-launcher-
+# orchestrator.sh), qui retombe alors sur une attente fixe de 12s au lieu de disparaître dès
+# que le jeu s'affiche vraiment. Non applicable sous Wayland (xdotool n'y fonctionne pas,
+# quelle que soit son installation -- ydotool est l'équivalent, déjà utilisé là où c'est
+# possible, voir les fichiers cités).
+session_kind_check="x11"
+if [[ "${XDG_SESSION_TYPE,,}" = "wayland" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+  session_kind_check="wayland"
+fi
+if [[ "${session_kind_check}" = "x11" ]] && ! command -v xdotool >/dev/null 2>&1; then
+  say "$(t check.xdotool_missing)"
+fi
+
 # 2. Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout
 # aussi le cas des deux installées en même temps, voir zgu_resolve_lutris_version)
 lutris_version=$(zgu_resolve_lutris_version "${mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")

@@ -27,6 +27,8 @@ fi
 source "${LIB_DIR}/zgl-lang-loader.sh"
 # shellcheck source=../lib/zgu-focus-utils.sh
 source "${LIB_DIR}/zgu-focus-utils.sh"
+# shellcheck source=../lib/zgu-gamepad-nav-utils.sh
+source "${LIB_DIR}/zgu-gamepad-nav-utils.sh"
 
 # --- 1bis. Affichage de la version (--version / -v) ---
 if [[ "$1" = "--version" ]] || [[ "$1" = "-v" ]]; then
@@ -272,6 +274,7 @@ opt_check="$(t menu.opt_check)"
 opt_lutris_version="$(t menu.opt_lutris_version)"
 
 zgu_start_focus_watcher
+zgu_start_gamepad_nav
 
 while true; do
     if ! choice=$(zenity --list --radiolist \

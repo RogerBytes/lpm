@@ -187,7 +187,7 @@ python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicat
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
-python3 "${script_dir}/zgu-launcher-gamepad-bridge.py" "${session_kind}" >/dev/null 2>&1 &
+python3 "${script_dir}/zgu-gamepad-bridge.py" "${session_kind}" >/dev/null 2>&1 &
 bridge_pid=$!
 disown "${bridge_pid}" 2>/dev/null
 
@@ -211,6 +211,7 @@ POST_WINDOW_GRACE_MS=500
   start_ms=$(date +%s%3N 2>/dev/null || echo 0)
   max_wait_s=60
   waited=0
+  window_detected=""
 
   if [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; then
     before_windows=$(xdotool search --onlyvisible "" 2>/dev/null | sort)
@@ -219,8 +220,20 @@ POST_WINDOW_GRACE_MS=500
       waited=$(( waited + 1 ))
       after_windows=$(xdotool search --onlyvisible "" 2>/dev/null | sort)
       new_windows=$(comm -13 <(echo "${before_windows}") <(echo "${after_windows}"))
-      [[ -n "${new_windows}" ]] && break
+      if [[ -n "${new_windows}" ]]; then
+        window_detected="1"
+        break
+      fi
     done
+  elif [[ "${session_kind}" = "x11" ]]; then
+    # xdotool absent sur une session X11 : dégradation vers l'attente fixe Wayland, MAIS
+    # journalisée -- avant ce correctif, cette dégradation était totalement silencieuse
+    # (mêmes symptômes que Wayland : toujours 12s pile, même pour un jeu qui se lance en
+    # 2s, sans aucun moyen de comprendre pourquoi depuis les logs). "lpm check" recommande
+    # maintenant aussi l'installation de xdotool sur une session X11 -- voir
+    # zgc-dependency-checker.sh.
+    zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=xdotool_absent_degradation_attente_fixe"
+    sleep 12
   else
     # Wayland : même limite documentée qu'avant (xdotool ne peut pas lister/détecter les
     # fenêtres d'autres applications) -- attente fixe raisonnable.
@@ -239,6 +252,24 @@ POST_WINDOW_GRACE_MS=500
       remaining_ms=$(( MIN_DISPLAY_MS - elapsed_ms ))
       sleep "$(awk -v ms="${remaining_ms}" 'BEGIN { printf "%.3f", ms / 1000 }')"
     fi
+  fi
+
+  # --- Délai dépassé sans qu'aucune fenêtre ne soit apparue (SEULEMENT détectable sur X11
+  # avec xdotool -- aucun signal fiable équivalent sur Wayland ni sans xdotool, voir
+  # ci-dessus, donc jamais de faux avertissement dans ces deux cas) : plutôt que de
+  # disparaître en silence comme si tout s'était bien passé, affiche un avertissement
+  # quelques secondes avant de fermer -- réutilise la ligne "titre" (voir
+  # zgu-launcher-blackscreen.py) pour ça, aucune modification de ce script nécessaire.
+  # L'indicateur "chargement"/spinner est masqué en même temps : ce n'est plus "en train de
+  # charger" à ce stade, plus la peine de le prétendre. ---
+  if [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1 && [[ -z "${window_detected}" ]]; then
+    zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=aucune_fenetre_detectee_apres_delai delai_s=${max_wait_s}"
+    {
+      printf '%s\n' "${bg_state}"
+      printf '%s\n' "IND_HIDE"
+      printf '%s\n' "$(t launcher.launch_timeout_warning)"
+    } > "${control_file}" 2>/dev/null
+    sleep 4
   fi
 
   echo "STOP" > "${control_file}" 2>/dev/null

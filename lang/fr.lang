@@ -111,6 +111,7 @@ check.antimicro_install_offer_gui=AntimicroX est introuvable. L'installer depuis
 check.antimicro_installed_success=AntimicroX a été installé avec succès.
 check.antimicro_install_failed=Erreur : l'installation Flatpak d'AntimicroX a échoué.\n%s
 check.antimicro_no_flatpak_hint=Flatpak n'est pas disponible pour l'installer automatiquement. Installez AntimicroX via le gestionnaire de paquets de votre distribution, ou consultez https://antimicrox.github.io/guide/installation.html
+check.xdotool_missing=Recommandé : 'xdotool' n'est pas installé. Il est utilisé pour forcer le focus des fenêtres de dialogue, pour la navigation manette, et pour détecter quand la fenêtre d'un jeu lancé apparaît réellement (écran de chargement). Installez-le via le gestionnaire de paquets de votre distribution.
 
 # --- lpm lutris-version ---
 lutris_version.zenity_missing=Erreur : 'zenity' n'est pas installé pour l'interface graphique.
@@ -820,6 +821,7 @@ launcher.done_one_off_cli=%s : désactivé.
 launcher.picker_column=Choisir
 launcher.runtime_error=Erreur LPM Launcher : %s
 launcher.loading_text=Chargement...
+launcher.launch_timeout_warning=Le lancement semble anormalement long -- vérifiez Lutris
 help.games_launcher=Active/désactive un écran de chargement + sélecteur multi-exécutable pour un jeu
 help.games_launcher_cont=  (un seul exécutable ou plusieurs : épisodes, DLC, contenu bonus...)
 
