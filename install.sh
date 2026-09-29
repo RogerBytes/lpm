@@ -36,6 +36,7 @@ mkdir -p "${ICON_MIMETYPES_DIR}"
 if [[ -d "lib" ]]; then
   cp -r lib/* "${INSTALL_LIB_DIR}/"
   chmod +x "${INSTALL_LIB_DIR}"/*.sh
+  chmod +x "${INSTALL_LIB_DIR}"/*.py 2>/dev/null || true
   echo "[OK] Bibliothèques copiées dans ${INSTALL_LIB_DIR}"
 else
   echo "Erreur : Le dossier 'lib' est introuvable."

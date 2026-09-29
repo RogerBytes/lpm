@@ -11,6 +11,8 @@ BuildArch:      noarch
 Requires:       bash
 Requires:       python3
 Requires:       python3-pyyaml
+Requires:       python3-gobject
+Requires:       python3-evdev
 Requires:       sqlite
 Requires:       zenity
 Requires:       zstd
@@ -24,6 +26,7 @@ Recommends:     winetricks
 Recommends:     ImageMagick
 Recommends:     curl
 Recommends:     xdotool
+Recommends:     ydotool
 Recommends:     bash-completion
 
 %description
@@ -47,6 +50,10 @@ install -d %{buildroot}/usr/lib/lpm
 for f in lib/*.sh; do
   install -Dm755 "${f}" "%{buildroot}/usr/lib/lpm/$(basename "${f}")"
 done
+for f in lib/*.py; do
+  install -Dm755 "${f}" "%{buildroot}/usr/lib/lpm/$(basename "${f}")"
+done
+install -Dm644 lib/launcher-splash-default.png "%{buildroot}/usr/lib/lpm/launcher-splash-default.png"
 
 install -d %{buildroot}/usr/lib/lpm/lang
 for f in lang/*.lang; do

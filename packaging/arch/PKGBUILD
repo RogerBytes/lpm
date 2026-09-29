@@ -7,13 +7,14 @@ arch=('any')
 url="https://rogerbytes.com"
 license=('MIT' 'GPL3')  # MIT: lpm code -- GPL3: assets/icons/application-x-zg{p,r}-*.svg
                         # (traced artwork from Mint-L-Blue, see packaging/debian/copyright)
-depends=('bash' 'python' 'python-yaml' 'sqlite' 'zenity' 'zstd' 'libarchive'
+depends=('bash' 'python' 'python-yaml' 'python-gobject' 'python-evdev' 'sqlite' 'zenity' 'zstd' 'libarchive'
          'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme')
 optdepends=('lutris: manage Lutris games'
             'wine: run Windows games'
             'winetricks: Windows dependencies inside wineprefixes'
             'imagemagick: SteamGridDB icon processing'
-            'xdotool: automatic window focus'
+            'xdotool: automatic window focus, gamepad bridge under X11'
+            'ydotool: gamepad bridge under Wayland'
             'curl: download remote runners'
             'bash-completion: bash completion for lpm')
 source=("$pkgname-$pkgver.tar.gz")
@@ -28,6 +29,10 @@ package() {
   for f in lib/*.sh; do
     install -Dm755 "$f" "$pkgdir/usr/lib/lpm/$(basename "$f")"
   done
+  for f in lib/*.py; do
+    install -Dm755 "$f" "$pkgdir/usr/lib/lpm/$(basename "$f")"
+  done
+  install -Dm644 lib/launcher-splash-default.png "$pkgdir/usr/lib/lpm/launcher-splash-default.png"
 
   install -d "$pkgdir/usr/lib/lpm/lang"
   for f in lang/*.lang; do

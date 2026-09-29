@@ -61,6 +61,8 @@ print_help() {
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
     printf "  %-42s %s\n" "lpm lsfg [slugs...] [on|off]" "$(t help.games_lsfg)"
     printf "  %-42s %s\n" "" "$(t help.games_lsfg_cont)"
+    printf "  %-42s %s\n" "lpm launcher [slugs...] [on single|multi|off]" "$(t help.games_launcher)"
+    printf "  %-42s %s\n" "" "$(t help.games_launcher_cont)"
     printf "  %-42s %s\n" "lpm killwine [-y]" "$(t help.games_killwine)"
     echo ""
     t help.runners_header
@@ -207,6 +209,9 @@ if [[ $# -gt 0 ]]; then
         lsfg)
             exec bash "${LIB_DIR}/zgl-lsfg-manager.sh" "$@"
             ;;
+        launcher)
+            exec bash "${LIB_DIR}/zgl-launcher-manager.sh" "$@"
+            ;;
         killwine)
             exec bash "${LIB_DIR}/zgc-wine-killer.sh" "cli" "${confirm_flag}"
             ;;
@@ -253,6 +258,7 @@ opt_isolate="$(t menu.opt_isolate)"
 opt_icon="$(t menu.opt_icon)"
 opt_tools="$(t menu.opt_tools)"
 opt_lsfg="$(t menu.opt_lsfg)"
+opt_launcher="$(t menu.opt_launcher)"
 opt_killwine="$(t menu.opt_killwine)"
 opt_install_runner="$(t menu.opt_install_runner)"
 opt_pack_runner="$(t menu.opt_pack_runner)"
@@ -277,6 +283,7 @@ while true; do
         FALSE "${opt_icon}" \
         FALSE "${opt_tools}" \
         FALSE "${opt_lsfg}" \
+        FALSE "${opt_launcher}" \
         FALSE "${opt_killwine}" \
         FALSE "${opt_install_runner}" \
         FALSE "${opt_pack_runner}" \
@@ -317,6 +324,9 @@ while true; do
             ;;
         "${opt_lsfg}")
             bash "${LIB_DIR}/zgl-lsfg-manager.sh"
+            ;;
+        "${opt_launcher}")
+            bash "${LIB_DIR}/zgl-launcher-manager.sh"
             ;;
         "${opt_killwine}")
             bash "${LIB_DIR}/zgc-wine-killer.sh"

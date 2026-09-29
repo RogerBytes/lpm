@@ -1,5 +1,7 @@
 bin/lpm usr/bin
 lib/*.sh usr/lib/lpm
+lib/*.py usr/lib/lpm
+lib/launcher-splash-default.png usr/lib/lpm
 lang/*.lang usr/lib/lpm/lang
 completions/_lpm usr/share/zsh/vendor-completions
 man/man1/lpm.1 usr/share/man/man1
