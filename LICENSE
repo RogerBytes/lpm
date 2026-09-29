@@ -22,27 +22,26 @@ DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------
 
-Exception : deux fichiers d'icônes
+Exception: two icon files
 
-Les fichiers suivants reprennent un tracé vectoriel du thème d'icônes
-Mint-L-Blue (dépôt public linuxmint/mint-l-icons) et restent sous la
-licence d'origine de ce thème (GNU General Public License v3, ou toute
-version ultérieure), PAS sous la licence MIT ci-dessus :
+The following files reuse vector path data from the Mint-L-Blue icon theme
+(public repository linuxmint/mint-l-icons) and remain under that theme's
+original license (GNU General Public License v3, or any later version),
+NOT under the MIT license above:
 
   - assets/icons/application-x-zgp-game.svg
   - assets/icons/application-x-zgr-runner.svg
 
-Le texte complet de la GPLv3 est disponible sur :
+The full text of the GPLv3 is available at:
 https://www.gnu.org/licenses/gpl-3.0.txt
 
-Tout le reste du projet (code, documentation, autres icônes) est sous
-licence MIT.
+The rest of the project (code, documentation, other icons) is under the
+MIT license.
 
 ------------------------------------------------------------------------
 
-Nom du projet
+Project name
 
-Les noms "Ludis Package Manager" et "lpm" ne sont pas couverts par cette
-licence. La licence MIT autorise à copier, modifier et redistribuer le
-code, mais ne donne aucun droit sur ces noms.
-
+The names "Ludis Package Manager" and "lpm" are not covered by this
+license. The MIT license grants the right to copy, modify and redistribute
+the code, but grants no rights over these names.

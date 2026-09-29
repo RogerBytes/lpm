@@ -1,29 +1,54 @@
-# Contribuer à Ludis Package Manager
+# Contributing to Ludis Package Manager
 
-Merci de l'intérêt porté à ce projet. Avant d'ouvrir une issue ou une pull request, merci de lire ce qui suit.
+Thanks for your interest in this project. Before opening an issue or a pull request, please read the following.
 
-## Ce qu'est lpm
+## What lpm is
 
-**lpm est un outil d'archivage et de sauvegarde** de préfixes Wine/Lutris que vous possédez déjà sur votre machine. Il empaquette, anonymise et restaure des dossiers locaux — il ne télécharge, n'héberge et ne distribue aucun contenu de jeu.
+**lpm is an archiving and backup tool** for Wine/Lutris prefixes you already own on your machine. It packages, anonymizes and restores local folders — it does not download, host, or distribute any game content.
 
-## Ce qui est bienvenu
+## Project layout
 
-- Rapports de bug (idéalement avec les étapes de reproduction et la sortie de `lpm check` si pertinent)
-- Demandes de fonctionnalité en lien avec l'empaquetage, l'installation ou la gestion des runners
-- Corrections de documentation
-- Pull requests suivant le style existant du projet
+- `bin/lpm` — entry point script.
+- `lib/*.sh` — modules loaded by `bin/lpm` (one file per feature area: installer, packer, desktop integration, language loader, etc.).
+- `lang/*.lang` — translation strings, loaded by `lib/zgl-lang-loader.sh`.
+- `assets/icons/` — application and file-type icons. Two files are GPLv3-derived (see `LICENSE`); everything else is MIT.
+- `man/`, `completions/` — manual page and shell completions (bash/zsh).
+- `packaging/` — build pipeline for `.deb`, `.rpm`, and Arch packages, each built in its own Docker container. See `packaging/build.sh`.
 
-## Ce qui sera fermé sans discussion
+The software version lives in a single place, `LPM_VERSION` in `bin/lpm`; it is injected everywhere else (changelog, spec file, PKGBUILD) at build time. Never hardcode a version number anywhere else.
 
-- Toute issue demandant de l'aide pour obtenir, installer ou identifier des fichiers de jeux que vous ne possédez pas légalement
-- Tout lien vers des fichiers de jeux, des paquets `.zgp`/`.zgr` de tiers, ou des sites de téléchargement, publié en commentaire
-- Toute demande de fonctionnalité visant à faciliter le partage ou la distribution de jeux (plutôt que la sauvegarde personnelle)
+## Building and testing locally
 
-Ces issues seront fermées et l'auteur bloqué, sans avertissement préalable.
+There is currently no automated test suite — changes are verified by running the affected commands manually against a real Lutris install.
 
-## Rapporter un bug
+To build the distribution packages locally (requires Docker):
 
-Merci d'inclure :
-- La commande exacte utilisée (`lpm ...`)
-- La sortie d'erreur complète
-- Votre distribution et si Lutris est installé en Flatpak ou en paquet natif
+```bash
+cd packaging
+./build.sh all      # or: deb | rpm | arch
+```
+
+Built packages land in `packaging/dist/`.
+
+## What's welcome
+
+- Bug reports (ideally with reproduction steps and the output of `lpm check` if relevant)
+- Feature requests related to packaging, installation, or runner management
+- Documentation fixes
+- Pull requests following the project's existing style
+
+## What will be closed without discussion
+
+- Any issue asking for help obtaining, installing, or identifying game files you do not legally own
+- Any link to game files, third-party `.zgp`/`.zgr` packages, or download sites, posted as a comment
+- Any feature request aimed at facilitating the sharing or distribution of games (rather than personal backup)
+
+These issues will be closed and the author blocked, without prior warning.
+
+## Reporting a bug
+
+Please include:
+
+- The exact command used (`lpm ...`)
+- The full error output
+- Your distribution, and whether Lutris is installed via Flatpak or as a native package
