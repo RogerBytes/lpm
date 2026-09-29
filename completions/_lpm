@@ -33,30 +33,30 @@ zstyle ':completion:*:*:lpm:*:stores' list-colors '=(#b)*=1;33'
 _lpm_commands() {
   local -a commands
   commands=(
-    'install:Installer un ou plusieurs jeux (.zgp)'
-    'install-runner:Installer un runner Wine/Proton (.zgr ou nom distant)'
-    'uninstall:Désinstaller un ou plusieurs jeux installés'
-    'uninstall-runner:Désinstaller un ou plusieurs runners installés'
-    'pack:Empaqueter un ou plusieurs jeux installés en .zgp'
-    'pack-runner:Empaqueter un ou plusieurs runners installés en .zgr'
-    'isolate:Isoler tout un store d'\''un giga-préfixe partagé (Epic/EA/Ubisoft/Battle.net)'
-    'list:Lister les jeux installés'
-    'list-isolable:Lister les jeux isolables (store à viser)'
-    'info:Afficher les métadonnées d'\''un jeu installé'
-    'create-prefix:Créer un ou plusieurs wineprefixes vierges'
-    'exe-install:Installer un exécutable Windows dans un wineprefix vierge'
-    'shortcut:(Re)générer les raccourcis d'\''un ou plusieurs jeux installés'
-    'icon:Récupérer une icône SteamGridDB pour un ou plusieurs jeux installés'
-    'lsfg:Activer/désactiver lsfg-vk (génération de frames) pour un ou plusieurs jeux'
-    'tools:Ouvrir un menu d'\''outils Wine pour un jeu installé (winetricks, registre, winecfg...)'
-    'killwine:Tuer immédiatement tout processus Wine/Winetricks/umu-run/Proton en cours'
-    'list-runner:Lister les runners installés'
-    'list-remote-runners:Lister les runners disponibles au téléchargement'
-    'check:Vérifier les dépendances système de lpm'
-    'lutris-version:Afficher/forcer la version Lutris (Flatpak ou natif) utilisée par lpm'
-    'log:Consulter le journal des actions de lpm'
+    'install:Install one or more games (.zgp)'
+    'install-runner:Install a Wine/Proton runner (.zgr or remote name)'
+    'uninstall:Uninstall one or more installed games'
+    'uninstall-runner:Uninstall one or more installed runners'
+    'pack:Package one or more installed games as .zgp'
+    'pack-runner:Package one or more installed runners as .zgr'
+    'isolate:Isolate a whole store out of a shared giant prefix (Epic/EA/Ubisoft/Battle.net)'
+    'list:List installed games'
+    'list-isolable:List isolable games (store to target)'
+    'info:Show metadata for an installed game'
+    'create-prefix:Create one or more blank wineprefixes'
+    'exe-install:Install a Windows executable into a blank wineprefix'
+    'shortcut:(Re)generate shortcuts for one or more installed games'
+    'icon:Fetch a SteamGridDB icon for one or more installed games'
+    'lsfg:Enable/disable lsfg-vk (frame generation) for one or more games'
+    'tools:Open a Wine tools menu for an installed game (winetricks, registry, winecfg...)'
+    'killwine:Immediately kill any running Wine/Winetricks/umu-run/Proton process'
+    'list-runner:List installed runners'
+    'list-remote-runners:List runners available for download'
+    'check:Check lpm system dependencies'
+    'lutris-version:Show/force the Lutris version (Flatpak or native) used by lpm'
+    'log:View the lpm action log'
   )
-  _describe -t commands 'commande lpm' commands
+  _describe -t commands 'lpm command' commands
 }
 
 # Slugs des jeux installés (colonne 1 de "lpm list", format "slug  Nom du jeu") -- exclut
@@ -70,7 +70,7 @@ _lpm_installed_slugs() {
   # liste est vide) : indépendant de la langue active de lpm, contrairement à un filtre sur
   # le contenu du message.
   slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
-  (( ${#slugs[@]} )) && _describe -t slugs 'jeu installé (slug)' slugs
+  (( ${#slugs[@]} )) && _describe -t slugs 'installed game (slug)' slugs
 }
 
 # Noms des runners Wine/Proton installés ("lpm list-runner", un nom par ligne). Un nom de
@@ -80,7 +80,7 @@ _lpm_installed_slugs() {
 _lpm_installed_runners() {
   local -a runners
   runners=(${(f)"$(lpm list-runner 2>/dev/null | awk 'NF==1{print $1}')"})
-  (( ${#runners[@]} )) && _describe -t runners 'runner installé' runners
+  (( ${#runners[@]} )) && _describe -t runners 'installed runner' runners
 }
 
 # Arguments acceptés par "lpm lsfg" : un ou plusieurs slugs de jeux Wine/Proton installés,
@@ -92,7 +92,7 @@ _lpm_lsfg_args() {
   actions=('on' 'off')
   slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
   _describe -t commands 'action' actions
-  (( ${#slugs[@]} )) && _describe -t slugs 'jeu installé (slug)' slugs
+  (( ${#slugs[@]} )) && _describe -t slugs 'installed game (slug)' slugs
 }
 
 # Arguments acceptés par "lpm isolate" : les 4 codes de store internes, ainsi que les slugs
@@ -106,7 +106,7 @@ _lpm_isolable_slugs() {
   stores=('egs' 'ea' 'ubisoft' 'battlenet')
   slugs=(${(f)"$(lpm list-isolable 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
   _describe -t stores 'store' stores
-  (( ${#slugs[@]} )) && _describe -t slugs 'jeu isolable (slug, retrouve son store)' slugs
+  (( ${#slugs[@]} )) && _describe -t slugs 'isolable game (slug, resolves to its store)' slugs
 }
 
 # Niveaux de compression valides (0 à 22, voir bin/lpm : "-[0-9]|-1[0-9]|-2[0-2]") --
@@ -119,92 +119,92 @@ _lpm() {
   typeset -A opt_args
 
   _arguments -C \
-    '(-v --version)'{-v,--version}'[afficher la version de lpm]' \
-    '(-h --help)'{-h,--help}'[afficher l'\''aide de lpm]' \
+    '(-v --version)'{-v,--version}'[show lpm version]' \
+    '(-h --help)'{-h,--help}'[show lpm help]' \
     '1: :_lpm_commands' \
     '*::arg:->args' && return 0
 
   case "${words[1]}" in
     install)
       _arguments \
-        '-y[installer sans demander de confirmation]' \
-        '--allow-scripts[approuver automatiquement les scripts embarqués (prelaunch_command...)]' \
-        '*:fichier .zgp:_files -g "*.zgp"'
+        '-y[install without confirmation]' \
+        '--allow-scripts[automatically approve embedded scripts (prelaunch_command...)]' \
+        '*:.zgp file:_files -g "*.zgp"'
       ;;
     install-runner)
       _arguments \
-        '-y[installer sans demander de confirmation]' \
-        '*:fichier .zgr ou nom de runner distant:_files -g "*.zgr"'
+        '-y[install without confirmation]' \
+        '*:.zgr file or remote runner name:_files -g "*.zgr"'
       ;;
     uninstall)
       _arguments \
-        '-y[désinstaller sans demander de confirmation]' \
-        '*:jeu installé:_lpm_installed_slugs'
+        '-y[uninstall without confirmation]' \
+        '*:installed game:_lpm_installed_slugs'
       ;;
     uninstall-runner)
       _arguments \
-        '-y[désinstaller sans demander de confirmation]' \
-        '*:runner installé:_lpm_installed_runners'
+        '-y[uninstall without confirmation]' \
+        '*:installed runner:_lpm_installed_runners'
       ;;
     pack)
       _arguments \
-        "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[niveau de compression (0-22)]' \
-        '*:jeu installé:_lpm_installed_slugs'
+        "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[compression level (0-22)]' \
+        '*:installed game:_lpm_installed_slugs'
       ;;
     pack-runner)
       _arguments \
-        "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[niveau de compression (0-22)]' \
-        '*:runner installé:_lpm_installed_runners'
+        "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[compression level (0-22)]' \
+        '*:installed runner:_lpm_installed_runners'
       ;;
     isolate)
       # Sans argument : sélection interactive via Zenity. Avec argument : complétion sur
       # "lpm list-isolable" (voir _lpm_isolable_slugs ci-dessus).
-      _arguments '*:jeu isolable:_lpm_isolable_slugs'
+      _arguments '*:isolable game:_lpm_isolable_slugs'
       ;;
     info)
-      _arguments '1:jeu installé:_lpm_installed_slugs'
+      _arguments '1:installed game:_lpm_installed_slugs'
       ;;
     create-prefix)
       # Noms libres ("Nom affiché" ou "Nom affiché|slug-personnalise") : pas de
       # source de complétion dynamique, juste l'option -y.
       _arguments \
-        '-y[créer sans demander de confirmation]' \
-        '*:nom du wineprefix:'
+        '-y[create without confirmation]' \
+        '*:wineprefix name:'
       ;;
     exe-install)
       # Un seul fichier attendu ("fichier[|nom[|slug]]") : la complétion ne porte
       # que sur le chemin du fichier, la partie "|nom|slug" se tape à la main.
       _arguments \
-        '-y[créer sans demander de confirmation]' \
-        '1:installateur Windows:_files -g "*.(exe|msi|bat|cmd)"'
+        '-y[create without confirmation]' \
+        '1:Windows installer:_files -g "*.(exe|msi|bat|cmd)"'
       ;;
     shortcut)
       _arguments \
-        '--all[tous les jeux Wine installés]' \
-        '*:jeu installé:_lpm_installed_slugs'
+        '--all[all installed Wine games]' \
+        '*:installed game:_lpm_installed_slugs'
       ;;
     icon)
       _arguments \
-        '--all[tous les jeux installés]' \
-        '*:jeu installé:_lpm_installed_slugs'
+        '--all[all installed games]' \
+        '*:installed game:_lpm_installed_slugs'
       ;;
     lsfg)
       # "lpm lsfg [slugs...] [on|off]" : voir _lpm_lsfg_args ci-dessus.
-      _arguments '*:jeu installé ou action:_lpm_lsfg_args'
+      _arguments '*:installed game or action:_lpm_lsfg_args'
       ;;
     tools)
       # "lpm tools [slug] [outil] [exe]" : 1er argument = slug de jeu installé, 2e =
       # outil, 3e = fichier .exe (uniquement pertinent si outil=exe).
       _arguments \
-        '1:jeu installé:_lpm_installed_slugs' \
-        '2:outil:(winetricks regedit winecfg console exe folder)' \
-        '3:exécutable:_files -g "*.exe"'
+        '1:installed game:_lpm_installed_slugs' \
+        '2:tool:(winetricks regedit winecfg console exe folder)' \
+        '3:executable:_files -g "*.exe"'
       ;;
     killwine)
-      _arguments '-y[tuer sans demander de confirmation]'
+      _arguments '-y[kill without confirmation]'
       ;;
     check)
-      _arguments '-y[répondre oui automatiquement aux invites de vérification]'
+      _arguments '-y[automatically answer yes to verification prompts]'
       ;;
     lutris-version)
       # Sans argument : affiche l'état. Sinon : force un choix ou l'efface -- jamais
@@ -213,13 +213,13 @@ _lpm() {
       ;;
     log)
       _arguments \
-        '-n[nombre de dernières lignes à afficher]:nombre de lignes:' \
-        '--all[afficher tout le journal]' \
-        '--grep[filtrer les lignes contenant un motif]:motif:' \
-        '--clear[vider le journal (confirmation demandée)]'
+        '-n[number of most recent lines to show]:number of lines:' \
+        '--all[show the whole log]' \
+        '--grep[filter lines containing a pattern]:pattern:' \
+        '--clear[clear the log (confirmation required)]'
       ;;
     list|list-isolable|list-runner|list-remote-runners)
-      _message 'aucun argument attendu'
+      _message 'no argument expected'
       ;;
   esac
 }

@@ -1,7 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=lpm
-Comment=Gestionnaire de paquets et runners pour jeux
+Comment=Package manager for games and runners
+Comment[fr]=Gestionnaire de paquets et runners pour jeux
 Exec=lpm %f
 Icon=lpm
 Categories=Game;Utility;

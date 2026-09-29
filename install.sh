@@ -18,7 +18,7 @@ APP_DESKTOP_DIR="/usr/share/applications"
 MIME_DIR="/usr/share/mime/packages"
 ZSH_COMPLETION_DIR="/usr/local/share/zsh/site-functions"
 BASH_COMPLETION_DIR="/usr/local/share/bash-completion/completions"
-MAN_DIR="/usr/local/share/man/man1"
+MAN_DIR="/usr/local/share/man"
 ICON_THEME_DIR="/usr/share/icons/hicolor"
 ICON_APPS_DIR="${ICON_THEME_DIR}/scalable/apps"
 ICON_MIMETYPES_DIR="${ICON_THEME_DIR}/scalable/mimetypes"
@@ -103,12 +103,14 @@ cat << EOF > "${MIME_FILE}"
 <?xml-stylesheet type="text/xsl" href="libxslt:shared-mime-info"?>
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-zgp-game">
-    <comment>Jeu lpm</comment>
+    <comment>lpm game</comment>
+    <comment xml:lang="fr">Jeu lpm</comment>
     <glob pattern="*.zgp"/>
     <generic-icon name="application-x-zgp-game"/>
   </mime-type>
   <mime-type type="application/x-zgr-runner">
-    <comment>Runner lpm</comment>
+    <comment>lpm runner</comment>
+    <comment xml:lang="fr">Runner lpm</comment>
     <glob pattern="*.zgr"/>
     <generic-icon name="application-x-zgr-runner"/>
   </mime-type>
@@ -125,7 +127,8 @@ cat << EOF > "${DESKTOP_FILE}"
 [Desktop Entry]
 Type=Application
 Name=lpm
-Comment=Gestionnaire de paquets et runners pour jeux
+Comment=Package manager for games and runners
+Comment[fr]=Gestionnaire de paquets et runners pour jeux
 Exec=lpm %f
 Icon=lpm
 Categories=Game;Utility;
@@ -158,14 +161,20 @@ if [[ -f "completions/lpm.bash" ]]; then
   echo "     paquet 'bash-completion' est installé sur ce système)"
 fi
 
-# 8. Page man (optionnelle : absence de "mandb" n'interrompt pas l'installation -- même
+# 8. Page man, multi-langue (anglais par défaut + variante française dans le sous-dossier
+# de locale standard "fr/man1/", sélectionnée automatiquement par "man" selon $LANG/
+# $LC_MESSAGES). Optionnelle : absence de "mandb" n'interrompt pas l'installation -- même
 # logique best-effort que update-desktop-database/update-mime-database ci-dessus ; "lpm
 # --help" reste fonctionnel dans tous les cas via son repli intégré, voir bin/lpm)
-if [[ -f "man/lpm.1" ]]; then
-  mkdir -p "${MAN_DIR}"
-  cp man/lpm.1 "${MAN_DIR}/lpm.1"
+if [[ -f "man/man1/lpm.1" ]]; then
+  mkdir -p "${MAN_DIR}/man1"
+  cp man/man1/lpm.1 "${MAN_DIR}/man1/lpm.1"
+  if [[ -f "man/fr/man1/lpm.1" ]]; then
+    mkdir -p "${MAN_DIR}/fr/man1"
+    cp man/fr/man1/lpm.1 "${MAN_DIR}/fr/man1/lpm.1"
+  fi
   mandb 2>/dev/null || true
-  echo "[OK] Page man installée dans ${MAN_DIR} ('lpm --help' l'utilisera désormais)"
+  echo "[OK] Page man (EN + FR) installée dans ${MAN_DIR} ('lpm --help' l'utilisera désormais)"
 fi
 
 echo "========================================"

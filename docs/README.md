@@ -1,5 +1,7 @@
 # Ludis Package Manager
 
+*Read this in [English](README.en.md).*
+
 Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
 
 <p align="center">

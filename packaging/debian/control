@@ -20,9 +20,8 @@ Depends: ${misc:Depends},
  shared-mime-info,
  hicolor-icon-theme
 Recommends: lutris, wine, winetricks, imagemagick, curl, xdotool, bash-completion
-Description: Gestionnaire de paquets pour Lutris
- lpm (Ludis Package Manager) permet d'empaqueter, installer et gérer des
- jeux et runners Wine/Proton pour Lutris sous forme d'archives .zgp/.zgr,
- avec prise en charge de lsfg-vk (génération de frames), l'isolation de
- giga-préfixes partagés, et l'intégration desktop (icônes, types MIME,
- raccourcis).
+Description: Package manager for Lutris
+ lpm (Ludis Package Manager) packages, installs and manages Wine/Proton
+ games and runners for Lutris as .zgp/.zgr archives, with support for
+ lsfg-vk (frame generation), shared-prefix isolation, and desktop
+ integration (icons, MIME types, shortcuts).

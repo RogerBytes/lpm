@@ -1,0 +1,321 @@
+.TH LPM 1 "2026" "lpm v0.9.2" "Ludis Package Manager"
+.SH NAME
+lpm \- package manager for Wine/Proton runners and a Lutris game library
+.SH SYNOPSIS
+.B lpm
+.RI [ command ] " [options] [arguments...]"
+.br
+.B lpm
+.I file.zgp
+| \fIfile.zgr\fR
+.br
+.B lpm
+(no argument: graphical menu)
+.SH DESCRIPTION
+.B lpm
+packages, installs, uninstalls and isolates Windows games running under Wine via
+Lutris, along with their associated Wine/Proton runners, as
+.I .zgp
+(games) and
+.I .zgr
+(runners) archives.
+.PP
+It is a strictly
+.B personal
+package manager: a game already installed under a given slug can never be overwritten by
+reinstalling the same slug (see
+.B install
+below), and no integrity check is built into the
+.IR .zgp / .zgr
+packages themselves \(em these packages are produced and consumed locally, not distributed
+publicly.
+.PP
+Launched with no argument,
+.B lpm
+opens a graphical menu (Zenity). Launched with a single argument that is a
+.I .zgp
+or
+.IR .zgr " file (double-click from a file manager), it installs it directly."
+.SH COMMANDS \(em GAMES
+.TP
+.BI "install [-y] " files.zgp...
+Installs one or more games from
+.I .zgp
+archives. Flatly refuses if the game's slug is already installed (no update path:
+uninstall then reinstall if needed).
+.TP
+.BI "uninstall [-y] " slugs...
+Uninstalls one or more installed games (Wine prefix, Lutris entry, shortcuts).
+.TP
+.BI "pack [-level] " slugs...
+Packages one or more installed games as
+.I .zgp
+archives.
+.TP
+.BI "isolate [" store ]
+Fully isolates a store living in a shared giant prefix (Epic Games Store, EA App/EA
+Desktop, Ubisoft Connect, Battle.net): every game currently in that giant prefix
+gets its own independent Wine prefix in a single pass (never just one game isolated
+while leaving the others behind).
+.I store
+can be an internal code
+.RI ( egs ", " ea ", " ubisoft ", " battlenet ),
+a common alias (e.g.
+.IR epic ", " blizzard ),
+or the slug of a game currently detected in that giant prefix (only used to resolve the
+target store -- all of its games are isolated, not just the one named). With no argument:
+interactive Zenity selection of the store to isolate among those detected (see also
+.B list-isolable
+below for the non-interactive version of this list, game by game with its associated store).
+.TP
+.B list
+Lists installed games (slug then name), one per line.
+.TP
+.B list-isolable
+Lists isolable games, i.e. currently living in a shared store giant prefix: slug, name, and
+the store to target for
+.BR isolate .
+Non-interactive equivalent of the list offered by
+.B isolate
+with no argument.
+.TP
+.BI "info " slug
+Shows the known metadata for an installed game: name, slug, Wine prefix directory,
+executable, the Wine/Proton runner version used by that game, install date, and
+isolation status (dedicated prefix, or shared prefix with the targeted store where
+applicable, see
+.BR list-isolable ).
+.TP
+.BI "create-prefix [-y] " names...
+Creates one or more blank wineprefixes, registered directly in Lutris, without going
+through an installer wizard (no script, no executable run). Reproduces Lutris's
+internal initialization mechanism (wineboot for a classic Wine runner,
+.I "umu-run createprefix"
+for a Proton one). Each
+.I name
+may be followed by a custom slug, separated by a vertical bar
+.RI ( "My Game|my-slug" ).
+With no argument: interactive selection of the runner and architecture (32/64-bit) via
+Zenity; in CLI mode, the default runner and 64-bit architecture are used.
+.TP
+.BI "exe-install [-y] " "file[|name[|slug]]"
+Creates a blank wineprefix then launches a Windows installer inside it
+.RI ( .exe / .msi / .bat / .cmd )
+in the foreground, exactly like Lutris's "Install a Windows executable" wizard.
+One file at a time only. The display name and slug may be supplied after the path,
+separated by a vertical bar; otherwise the name is derived from the file name. After
+the installer exits normally, offers to select the installed game's final executable
+(file picker inside the prefix).
+.TP
+.BI "shortcut " "slugs...|--all"
+(Re)generates the shortcuts (application menu and/or desktop) for one or more already
+installed games, or for all installed Wine games with
+.BR --all .
+Useful after changing a game's icon (see
+.B icon
+below), or for a game added to Lutris by some other means than
+.BR lpm .
+Only writes
+.I .desktop
+files: no confirmation required.
+.TP
+.BI "icon [" "slugs...|--all" ]
+Automatically fetches an icon for one or more already installed games, via
+SteamGridDB (community icons and the official "Steam Client Icon" when it exists),
+then regenerates their existing shortcuts to use it. Only games available on Steam
+are covered (no other storefront is currently supported). Requires a personal
+SteamGridDB API key, requested and saved on first use
+.RI ( "${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key" ,
+permissions restricted to the owner). With no argument: interactive selection among all
+installed games, pre-checking those that don't yet have a custom icon.
+.TP
+.BI "lsfg [" "slugs..." "] [" "on" " | " "off" ]
+Enables or disables lsfg-vk ("Lossless Scaling" frame generation) for one or more
+installed Wine/Proton games. Installs lsfg-vk automatically if missing (Flatpak extension
+.I org.freedesktop.Platform.VulkanLayer.lsfgvk
+with no password prompt, or a link to the official docs on a native package). Asks,
+on first activation, for the
+.B lsfg-vk.dll
+file from the Steam beta branch
+.I lsfg-vk
+of the "Lossless Scaling" game (Properties > Betas) \(em a file with any other name
+(notably
+.IR Lossless.dll ,
+from the normal public branch) is rejected: it does not contain the shader required by
+the lsfg-vk 2.0 scheme. On activation, copies this file into the game's prefix and adds
+.IR LSFGVK_ENV=1 ", " LSFGVK_DLL_PATH
+and
+.I LSFGVK_MULTIPLIER=2
+(only if absent) to its Lutris
+.I system.env
+; on deactivation, removes these 3 keys without ever deleting the DLL file already
+copied. With no argument: interactive Zenity selection, listing only the relevant
+Wine/Proton games (able to be enabled or disabled depending on their current state).
+.TP
+.BI "tools [" slug " [" tool " [" exe ]]]
+Opens a Wine tools menu for an already installed game
+.RI ( winetricks ", registry editor, " winecfg ", DOS console, run an ."
+.IR exe ", open the prefix folder)."
+.I tool
+can be
+.BR winetricks ", " regedit ", " winecfg ", " console ", " exe " or " folder .
+Fully command-line (no Zenity dialog) only when both
+.I slug
+and
+.I tool
+are supplied;
+.I exe
+is only used for the
+.B exe
+tool. With no argument: interactive selection of the game then the tool.
+.TP
+.BI "killwine [-y]"
+Immediately kills any running Wine, Winetricks, umu-run or Proton (launched by Lutris)
+process, regardless of the game \(em panic button for a stuck process. Any unsaved
+progress in the affected game is lost.
+.SH COMMANDS \(em RUNNERS
+.TP
+.BI "install-runner [-y] " "files.zgr|names..."
+Installs one or more Wine/Proton runners, from a local
+.I .zgr
+file or by name, in which case it is looked up in the reference GitHub release.
+.TP
+.BI "uninstall-runner [-y] " names...
+Uninstalls one or more installed runners.
+.TP
+.BI "pack-runner [-level] " names...
+Packages one or more installed runners as
+.I .zgr
+archives.
+.TP
+.B list-runner
+Lists installed runners.
+.TP
+.B list-remote-runners
+Lists runners available for download from the remote GitHub repository.
+.SH DEPENDENCIES
+.TP
+.B check
+Checks that every runner required by the installed games is actually present, and
+offers to fetch any missing ones from the lpm GitHub repository.
+.TP
+.B lutris-version " [" flatpak " | " native " | " reset "]"
+Shows the Lutris versions detected on the machine (Flatpak and/or native package),
+with their version number and an up-to-date/outdated status. If both versions are
+installed at the same time, lpm asks once which one to use and remembers that
+choice in
+.IR ~/.config/lpm/lutris-version .
+With no argument, the command shows the current state; with
+.B flatpak
+or
+.BR native ,
+it forces and saves that choice; with
+.BR reset ,
+it clears it so it is asked again automatically on the next launch if both
+versions are still present.
+.SH LOG
+Every run of
+.BR install ", " uninstall ", " pack ", " isolate " and " icon
+(success as well as failure) is logged to
+.IR $XDG_DATA_HOME/lpm/lpm.log " (by default " ~/.local/share/lpm/lpm.log ),
+one line per event, tab-separated columns: timestamp, command, status (OK/ERROR/INFO),
+detail. Useful for debugging after the fact an installation or isolation that failed.
+.PP
+Past 10000 lines, the log is automatically rotated: the current file is renamed
+.I lpm.log.1
+(overwriting any previous backup) and a fresh, empty log is started.
+.B log
+never reads
+.IR lpm.log.1 ", only the current log."
+.TP
+.B log
+Shows the last 50 lines of the log.
+.TP
+.BI "log -n " N
+Shows the last
+.I N
+lines of the log.
+.TP
+.B log --all
+Shows the whole log.
+.TP
+.BI "log --grep " pattern
+Filters log lines containing
+.IR pattern " (command, slug, status, failure reason...)."
+.TP
+.B log --clear
+Clears the current log and removes
+.I lpm.log.1
+if it exists, after interactive confirmation.
+.SH OPTIONS
+.TP
+.B \-y
+Confirms automatically, without asking for interactive confirmation. Applies to
+.BR install ", " uninstall ", " install-runner ", " uninstall-runner ", " create-prefix ", "
+.BR exe-install " and " check .
+.TP
+.B \-\-allow\-scripts
+Automatically approves the embedded launch/exit scripts
+.RI ( prelaunch_command ", etc.) found in installed "
+.I .zgp
+packages, without asking. Applies only to
+.BR install ;
+reserve for trusted packages or ones you created yourself.
+.TP
+.B \-\-ignore\-hash
+Skips the signature check (sha256) for
+.B install
+and
+.BR install-runner ,
+even if a sidecar hash file is present next to the archive.
+.TP
+.B \-\-hash
+Generates a sidecar hash file (sha256) for every archive created by
+.B pack
+or
+.BR pack-runner .
+.TP
+.BI \-level
+zstd compression level, from 0 (fast, low compression) to 22 (slow, high compression),
+for
+.B pack
+and
+.BR pack-runner .
+Given as a single glued token (e.g.
+.BR \-9 ,
+like gzip), not an option followed by a separate value.
+.TP
+.B \-\-version, \-v
+Shows the lpm version.
+.TP
+.B \-\-help, \-h
+Shows this page (or a built-in summary if the man page is not installed).
+.SH FILES
+.TP
+.I ~/Games/<slug>/
+Wine prefixes of installed games (or the custom location configured in Lutris).
+.TP
+.I ~/.local/share/lpm/lpm.log
+Action log (see
+.B LOG
+above).
+.TP
+.I ~/.local/share/lpm/lpm.log.1
+Backup of the previous log, created by automatic rotation (see
+.B LOG
+above).
+.TP
+.I ~/.config/lutris/ (native package) or ~/.var/app/net.lutris.Lutris/ (Flatpak)
+Lutris configuration and database, read and modified by lpm throughout
+installs/uninstalls/isolations.
+.TP
+.I $XDG_CONFIG_HOME/lpm/steamgriddb.key (by default ~/.config/lpm/steamgriddb.key)
+The user's personal SteamGridDB API key, used by
+.BR icon .
+Permissions restricted to the owner (600), never shared or distributed with lpm.
+.SH SEE ALSO
+The project's repository, for the full documentation (
+.IR .zgp / .zgr
+formats, details of per-store isolation, contributing translations).
+.SH AUTHOR
+Ludis Package Manager (lpm) is a personal project.

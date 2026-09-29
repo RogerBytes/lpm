@@ -2,20 +2,20 @@
 pkgname=lpm
 pkgver=0.9.2
 pkgrel=1
-pkgdesc="Gestionnaire de paquets pour Lutris (jeux et runners Wine/Proton)"
+pkgdesc="Package manager for Lutris (Wine/Proton games and runners)"
 arch=('any')
 url="https://rogerbytes.com"
-license=('MIT' 'GPL3')  # MIT : code lpm -- GPL3 : assets/icons/application-x-zg{p,r}-*.svg
-                        # (tracé repris de Mint-L-Blue, voir packaging/debian/copyright)
+license=('MIT' 'GPL3')  # MIT: lpm code -- GPL3: assets/icons/application-x-zg{p,r}-*.svg
+                        # (traced artwork from Mint-L-Blue, see packaging/debian/copyright)
 depends=('bash' 'python' 'python-yaml' 'sqlite' 'zenity' 'zstd' 'libarchive'
          'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme')
-optdepends=('lutris: gestion des jeux Lutris'
-            'wine: exécution des jeux Windows'
-            'winetricks: dépendances Windows dans les wineprefixes'
-            'imagemagick: traitement des icônes SteamGridDB'
-            'xdotool: focus automatique des fenêtres'
-            'curl: téléchargement des runners distants'
-            'bash-completion: complétion bash de lpm')
+optdepends=('lutris: manage Lutris games'
+            'wine: run Windows games'
+            'winetricks: Windows dependencies inside wineprefixes'
+            'imagemagick: SteamGridDB icon processing'
+            'xdotool: automatic window focus'
+            'curl: download remote runners'
+            'bash-completion: bash completion for lpm')
 source=("$pkgname-$pkgver.tar.gz")
 sha256sums=('SKIP')
 
@@ -36,7 +36,8 @@ package() {
 
   install -Dm644 completions/lpm.bash "$pkgdir/usr/share/bash-completion/completions/lpm"
   install -Dm644 completions/_lpm "$pkgdir/usr/share/zsh/site-functions/_lpm"
-  install -Dm644 man/lpm.1 "$pkgdir/usr/share/man/man1/lpm.1"
+  install -Dm644 man/man1/lpm.1 "$pkgdir/usr/share/man/man1/lpm.1"
+  install -Dm644 man/fr/man1/lpm.1 "$pkgdir/usr/share/man/fr/man1/lpm.1"
 
   install -Dm644 assets/icons/lpm.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/lpm.svg"
   install -Dm644 assets/icons/lpm-game-generic.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/lpm-game-generic.svg"
