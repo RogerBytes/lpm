@@ -53,7 +53,6 @@ done
 for f in lib/*.py; do
   install -Dm755 "${f}" "%{buildroot}/usr/lib/lpm/$(basename "${f}")"
 done
-install -Dm644 lib/launcher-splash-default.png "%{buildroot}/usr/lib/lpm/launcher-splash-default.png"
 
 install -d %{buildroot}/usr/lib/lpm/lang
 for f in lang/*.lang; do

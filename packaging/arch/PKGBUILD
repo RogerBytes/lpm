@@ -32,7 +32,6 @@ package() {
   for f in lib/*.py; do
     install -Dm755 "$f" "$pkgdir/usr/lib/lpm/$(basename "$f")"
   done
-  install -Dm644 lib/launcher-splash-default.png "$pkgdir/usr/lib/lpm/launcher-splash-default.png"
 
   install -d "$pkgdir/usr/lib/lpm/lang"
   for f in lang/*.lang; do
