@@ -282,7 +282,8 @@ if [[ "${will_use_zenity}" = true ]]; then
 
   runner_choice=$(zenity --list --radiolist \
     --title="$(t create_prefix.forms_title)" \
-    --text="$(t create_prefix.runner_select_text)" \
+    --text="$(t create_prefix.forms_text)
+$(t create_prefix.runner_select_text)" \
     --column="" --column="$(t create_prefix.forms_runner_label)" \
     --width=500 --height=400 \
     "${runner_rows[@]}" 2>/dev/null)
