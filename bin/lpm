@@ -61,7 +61,7 @@ print_help() {
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
     printf "  %-42s %s\n" "lpm lsfg [slugs...] [on|off]" "$(t help.games_lsfg)"
     printf "  %-42s %s\n" "" "$(t help.games_lsfg_cont)"
-    printf "  %-42s %s\n" "lpm launcher [slugs...] [on single|multi|off]" "$(t help.games_launcher)"
+    printf "  %-42s %s\n" "lpm launcher [slugs...] [on|off]" "$(t help.games_launcher)"
     printf "  %-42s %s\n" "" "$(t help.games_launcher_cont)"
     printf "  %-42s %s\n" "lpm killwine [-y]" "$(t help.games_killwine)"
     echo ""

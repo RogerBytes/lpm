@@ -1,18 +1,21 @@
 #!/bin/bash
 
-# --- lpm launcher [slug...] [on single|on multi|off] ---
+# --- lpm launcher [slug...] [on|off] ---
 #
 # Active/désactive le "LPM Launcher" (écran noir + splash + verrou manette, avec picker
 # multi-exécutable optionnel) pour un ou plusieurs jeux Wine/Proton de Lutris. Conception
 # validée en amont (voir échange complet) :
 #
-#   1. "on" prend un mode obligatoire : "single" (un seul exécutable -- l'entrée est
-#      auto-remplie depuis le game.exe/working_dir déjà configurés dans Lutris, rien à
-#      éditer à la main) ou "multi" (même entrée auto-remplie en premier, PLUS une
-#      deuxième entrée d'exemple commentée dans lpm-launcher.yml, à décommenter/adapter).
-#      Le nombre d'entrées réellement utilisées au lancement est toujours lu dynamiquement
-#      dans le YAML (jamais figé par ce choix "single"/"multi", qui ne sert qu'à préremplir
-#      le fichier de départ) : rien n'empêche d'ajouter des entrées à la main ensuite.
+#   1. "on" ne demande AUCUN choix single/multi -- ça n'avait pas de sens : le nombre
+#      d'entrées réellement utilisées au lancement est de toute façon relu dynamiquement
+#      dans le YAML à chaque lancement du jeu (voir zgl-launcher-runtime.sh), jamais figé
+#      par quoi que ce soit décidé ici. "on" écrit donc TOUJOURS la même chose : une
+#      première entrée auto-remplie depuis le game.exe/working_dir déjà configurés dans
+#      Lutris (rien à éditer à la main pour un jeu à un seul exécutable), PLUS une
+#      deuxième entrée d'exemple commentée dans lpm-launcher.yml -- à décommenter/adapter
+#      à la main si le jeu a plusieurs exécutables (épisodes, DLC, campagnes...). C'est
+#      entièrement à l'utilisateur d'ajouter ou non des entrées ensuite, lpm ne lui
+#      impose aucun choix à l'activation.
 #   2. Détection "déjà actif" : un jeu "a" le launcher si son game.exe pointe vers
 #      lpm-launch.bat -- relu directement depuis le YAML à chaque lancement de cette
 #      commande, jamais de fichier de suivi séparé (source de vérité unique).
@@ -48,22 +51,14 @@ source "${script_dir}/zgu-log-utils.sh"
 # --- 0. Mode CLI vs GUI, et validation de la syntaxe CLI ---
 will_use_zenity=true
 cli_action=""
-cli_mode=""
 cli_slugs=()
 
 if [[ ${#cli_args[@]} -gt 0 ]]; then
   will_use_zenity=false
   last_arg="${cli_args[-1]}"
-  if [[ "${last_arg}" = "off" ]]; then
-    cli_action="off"
+  if [[ "${last_arg}" = "off" ]] || [[ "${last_arg}" = "on" ]]; then
+    cli_action="${last_arg}"
     cli_slugs=("${cli_args[@]:0:$(( ${#cli_args[@]} - 1 ))}")
-  elif [[ "${last_arg}" = "single" ]] || [[ "${last_arg}" = "multi" ]]; then
-    n=${#cli_args[@]}
-    if [[ "${n}" -ge 2 ]] && [[ "${cli_args[$((n-2))]}" = "on" ]]; then
-      cli_action="on"
-      cli_mode="${last_arg}"
-      cli_slugs=("${cli_args[@]:0:$((n-2))}")
-    fi
   fi
   if [[ -z "${cli_action}" ]] || [[ ${#cli_slugs[@]} -eq 0 ]]; then
     zgu_cli_error "$(t launcher.cli_usage)"
@@ -150,10 +145,9 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# --- 2. Choix activer/désactiver, puis (si activer) single/multi ---
+# --- 2. Choix activer/désactiver ---
 if [[ -n "${cli_action}" ]]; then
   action="${cli_action}"
-  mode="${cli_mode}"
 else
   choice=$(zenity --list --radiolist \
     --title="$(t launcher.action_title)" \
@@ -168,23 +162,6 @@ else
     action="off"
   else
     exit 0
-  fi
-
-  if [[ "${action}" = "on" ]]; then
-    mode_choice=$(zenity --list --radiolist \
-      --title="$(t launcher.mode_title)" \
-      --text="$(t launcher.mode_text)" \
-      --column="" --column="$(t launcher.mode_col)" \
-      TRUE "$(t launcher.mode_single)" \
-      FALSE "$(t launcher.mode_multi)" \
-      --width=480 --height=250 2>/dev/null)
-    if [[ "${mode_choice}" = "$(t launcher.mode_single)" ]]; then
-      mode="single"
-    elif [[ "${mode_choice}" = "$(t launcher.mode_multi)" ]]; then
-      mode="multi"
-    else
-      exit 0
-    fi
   fi
 fi
 
@@ -307,7 +284,7 @@ fi
 
 # --- 4. Application : activation ---
 zgp_launcher_apply_on() {
-  local slug="$1" game_dir="$2" configpath="$3" mode_arg="$4"
+  local slug="$1" game_dir="$2" configpath="$3"
   local yml_file="${lutris_config_dir}/${configpath}.yml"
 
   if [[ ! -f "${yml_file}" ]]; then
@@ -406,14 +383,12 @@ with open(os.environ["YML_PATH"], "w") as f:
     return 1
   fi
 
-  if [[ "${mode_arg}" = "multi" ]]; then
-    {
-      echo "# $(t launcher.example_entry_comment)"
-      echo "#  - label: \"$(t launcher.example_entry_label)\""
-      echo "#    workdir: \"C:\\\\Games\\\\...\""
-      echo "#    exe: \"C:\\\\Games\\\\...\\\\jeu.exe\""
-    } >> "${game_dir}/lpm-launcher.yml"
-  fi
+  {
+    echo "# $(t launcher.example_entry_comment)"
+    echo "#  - label: \"$(t launcher.example_entry_label)\""
+    echo "#    workdir: \"C:\\\\Games\\\\...\""
+    echo "#    exe: \"C:\\\\Games\\\\...\\\\jeu.exe\""
+  } >> "${game_dir}/lpm-launcher.yml"
 
   # --- Dossiers scripts/ et splash/ ---
   mkdir -p "${game_dir}/scripts" "${game_dir}/splash"
@@ -456,7 +431,7 @@ with open(yml_path, "w") as f:
     return 1
   fi
 
-  zgu_log "launcher" "OK" "slug=${slug} action=on mode=${mode_arg}"
+  zgu_log "launcher" "OK" "slug=${slug} action=on"
   zgp_launcher_report_info "$(t launcher.setup_done "${name_by_slug[${slug}]}" "${game_dir}/lpm-launcher.yml")"
   return 0
 }
@@ -522,7 +497,7 @@ exit_code=0
 n_ok=0
 for target_slug in "${targets[@]}"; do
   if [[ "${action}" = "on" ]]; then
-    if zgp_launcher_apply_on "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}" "${mode}"; then
+    if zgp_launcher_apply_on "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}"; then
       n_ok=$(( n_ok + 1 ))
       [[ "${will_use_zenity}" = false ]] && zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "${dir_by_slug[${target_slug}]}/lpm-launcher.yml")"
     else
