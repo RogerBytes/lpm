@@ -47,7 +47,7 @@ désinstaller puis réinstaller si besoin).
 .BI "uninstall [-y] " slugs...
 Désinstalle un ou plusieurs jeux installés (préfixe Wine, entrée Lutris, raccourcis).
 .TP
-.BI "pack [-niveau] " dossiers...
+.BI "pack [-niveau] " slugs...
 Empaquette un ou plusieurs jeux installés en archives
 .IR .zgp .
 .TP
@@ -150,6 +150,28 @@ et
 Lutris ; à la désactivation, retire ces 3 clés sans jamais supprimer le fichier DLL déjà
 copié. Sans argument : sélection interactive Zenity, ne listant que les jeux Wine/Proton
 concernés (activables ou désactivables selon leur état actuel).
+.TP
+.BI "tools [" slug " [" outil " [" exe ]]]
+Ouvre un menu d'outils Wine pour un jeu déjà installé
+.RI ( winetricks ", éditeur de registre, " winecfg ", console DOS, exécuter un ."
+.IR exe ", ouvrir le dossier du préfixe)."
+.I outil
+peut être
+.BR winetricks ", " regedit ", " winecfg ", " console ", " exe " ou " folder .
+Entièrement en ligne de commande (sans dialogue Zenity) uniquement si
+.I slug
+et
+.I outil
+sont tous deux fournis ;
+.I exe
+n'est utilisé que pour l'outil
+.BR exe .
+Sans argument : sélection interactive du jeu puis de l'outil.
+.TP
+.BI "killwine [-y]"
+Tue immédiatement tout processus Wine, Winetricks, umu-run ou Proton (lancé par Lutris) en
+cours, quel que soit le jeu \(em bouton panique pour un processus bloqué. Toute progression
+non sauvegardée dans le jeu concerné est perdue.
 .SH COMMANDES \(em RUNNERS
 .TP
 .BI "install-runner [-y] " "fichiers.zgr|noms..."
@@ -239,6 +261,19 @@ Approuve automatiquement les scripts de lancement/fermeture embarqués
 installés, sans rien demander. S'applique uniquement à
 .BR install ;
 à réserver aux paquets de confiance ou créés par vous-même.
+.TP
+.B \-\-ignore\-hash
+Ignore la vérification de signature (sha256) pour
+.B install
+et
+.BR install-runner ,
+même si un fichier de hash sidecar est présent à côté de l'archive.
+.TP
+.B \-\-hash
+Génère un fichier de hash sidecar (sha256) pour chaque archive créée par
+.B pack
+ou
+.BR pack-runner .
 .TP
 .BI \-niveau
 Niveau de compression zstd, de 0 (rapide, peu compressé) à 22 (lent, très compressé),
