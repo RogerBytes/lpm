@@ -200,6 +200,13 @@ zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=fond_lance ctrl=${cont
 # (remplacé par le process lutris), le watcher continue de vivre en tâche de fond. ---
 MIN_DISPLAY_MS=1000
 
+# Marge de sécurité APRÈS la détection de la fenêtre du jeu (ou après l'attente fixe côté
+# Wayland) : la fenêtre qui vient d'apparaître n'a pas forcément fini de s'initialiser --
+# un outil de génération de frames comme LSFG, par exemple, peut provoquer un petit accroc
+# juste après l'apparition de la fenêtre. Sans cette marge, le fond disparaissait pile au
+# moment où ce genre de à-coup pouvait être visible.
+POST_WINDOW_GRACE_MS=500
+
 (
   start_ms=$(date +%s%3N 2>/dev/null || echo 0)
   max_wait_s=60
@@ -219,6 +226,10 @@ MIN_DISPLAY_MS=1000
     # fenêtres d'autres applications) -- attente fixe raisonnable.
     sleep 12
   fi
+
+  # Marge de sécurité post-détection (voir POST_WINDOW_GRACE_MS ci-dessus) -- s'applique
+  # dans tous les cas (fenêtre détectée sur X11, ou attente fixe écoulée sur Wayland).
+  sleep "$(awk -v ms="${POST_WINDOW_GRACE_MS}" 'BEGIN { printf "%.3f", ms / 1000 }')"
 
   # Durée minimum : évite un flash si le jeu démarre anormalement vite.
   if [[ "${start_ms}" != "0" ]]; then

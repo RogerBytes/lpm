@@ -81,7 +81,7 @@ TITLE_INDICATOR_GAP = 14
 # elle-même toujours plafonnée à 100% -- voir on_draw) : une bannière qui occupait pile toute
 # la largeur de l'écran touchait les deux bords, demandé en retour un peu de marge visuelle
 # de chaque côté.
-MAX_BANNER_WIDTH_FRACTION = 0.6
+MAX_BANNER_WIDTH_FRACTION = 0.5
 
 is_wayland = (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland") or bool(
     os.environ.get("WAYLAND_DISPLAY")
