@@ -1,8 +1,47 @@
 # Ludis Package Manager
 
+Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
+
+<p align="center">
+  <img src="../assets/icons/lpm.svg" width="128" height="128" alt="Icône Ludis Package Manager">
+</p>
+
+<p align="center">
+  <a href="https://github.com/RogerBytes/lpm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RogerBytes/lpm"></a>
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green">
+</p>
+
+<p align="center">
+  <a href="https://github.com/RogerBytes/lpm/releases/latest">Dernière release</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#commandes">Commandes</a> ·
+  <a href="https://github.com/RogerBytes/lpm/issues">Issues</a>
+</p>
+
 **Ludis Package Manager** vous permet de sauvegarder vos jeux Wine pour Lutris au format `.zgp` et vos runners au format `.zgr`. Il centralise l'exportation, la gestion et la suppression de vos archives, tandis que l'importation se charge de tout configurer pour que votre jeu soit immédiatement prêt à être lancé.
 
+## Fonctionnalités
+
+- Sauvegarde et restauration de vos jeux et runners Wine/Lutris sous forme d'archives portables (`.zgp` / `.zgr`), installables sur n'importe quelle machine.
+- Lanceurs (raccourcis desktop) unifiés et fiables, cohérents quel que soit votre environnement de bureau.
+- Icônes fonctionnelles pour vos jeux et runners, correctement affichées dans le menu et le gestionnaire de fichiers.
+- Utilisable en ligne de commande, ou en mode guidé (dialogues graphiques) si vous préférez ne rien taper.
+- Interface disponible en français et en anglais.
+- Complétion bash/zsh et page de manuel (`man lpm`) incluses.
+- Paquets natifs `.deb`, `.rpm` et Arch, ou installation manuelle universelle sur n'importe quelle distribution.
+
+## Démarrage rapide
+
+```bash
+lpm pack mariovania papers-please
+lpm install -y Mariovania.zgp "Papers, Please.zgp"
+```
+
+Même principe pour un runner : `lpm pack-runner <nom>` puis `lpm install-runner <fichier>.zgr`.
+
 ## Commandes
+
+Chaque commande ci-dessous fonctionne en ligne de commande explicite (avec ses arguments), ou en mode guidé (menus et dialogues graphiques) si vous la lancez sans argument.
 
 <details><summary class="button">🔍 Spoiler</summary><div class="spoiler">
 
@@ -10,7 +49,7 @@
 
 - `lpm install [-y] <fichiers.zgp...>` — Installe un ou plusieurs jeux depuis des paquets `.zgp` (local ou chemin).
 - `lpm uninstall [-y] <slugs...>` — Désinstalle un ou plusieurs jeux (supprime le préfixe, l'entrée Lutris et les raccourcis).
-- `lpm pack [-niveau] <dossiers...>` — Empaquette un ou plusieurs préfixes de jeux en `.zgp` (niveau de compression zstd optionnel, 0 à 22).
+- `lpm pack [-niveau] <slugs...>` — Empaquette un ou plusieurs jeux (par slug) en `.zgp` (niveau de compression zstd optionnel, 0 à 22).
 - `lpm list` — Liste les jeux Wine installés (slug puis nom).
 
 ### Runners
@@ -26,70 +65,7 @@
 - `lpm check` — Analyse les fichiers YAML de tous les jeux installés, compare avec les runners réellement présents, et pour chaque runner manquant tente de le récupérer automatiquement depuis la release GitHub de lpm (avec vérification SHA256). Les runners manquants introuvables sur le dépôt sont listés en fin d'exécution avec leurs jeux dépendants ; il faut alors les installer manuellement via un fichier `.zgr` (`lpm install-runner <fichier>.zgr`) ou via ProtonUp-Qt.
 - `lpm lutris-version [flatpak|native|reset]` — Affiche les versions de Lutris détectées (Flatpak et/ou paquet natif), avec leur numéro et un statut à jour/dépassé. Si les deux sont installées en même temps, lpm demande une seule fois laquelle utiliser (sinon Flatpak est prioritaire par défaut) et retient ce choix ; `flatpak`/`native` force ce choix, `reset` l'efface.
 
-Pour des exemples de commande complets, voir `docs/Tests.md`.
-
-</div></details>
-
-## Dépendances
-
-<details><summary class="button">🔍 Spoiler</summary><div class="spoiler">
-
-L'application est minimaliste mais requiert plusieurs dépendances :
-
-- Tar
-- Zstd
-- bsdtar (utilitaire `bsdtar` de la bibliothèque libarchive — utilisé pour l'extraction sécurisée des `.zgp`/`.zgr`, distincte du `tar` GNU classique)
-- Curl
-- Wget
-- Python 3 (avec le module PyYAML)
-- Sqlite3
-- Lutris
-- pv
-- grep
-- awk
-- zenity (interface graphique : menu principal, sélection de fichiers, barres de progression — requis dès qu'une commande n'est pas lancée en mode CLI strict avec cible explicite)
-
-### Ubuntu
-
-Sur une Debian / Ubuntu (et dérivées comme Linux Mint)
-
-```bash
-sudo apt install -y tar zstd curl wget python3 python3-yaml sqlite3 pv libarchive-tools zenity
-flatpak install -y flathub net.lutris.Lutris
-```
-
-Sur cinnamon il faut activer les nouvelles fenêtres lancée d'un terminal
-
-`Paramètres du système > Fenêtres > Comportement > **Cibler les nouvelles fenêtres lancées d'un terminal** (à activer).`
-
-### Arch Linux
-
-Sur une Arch Linux (et dérivées comme Manjaro)
-
-```bash
-sudo pacman -S --needed tar zstd curl wget python python-yaml sqlite pv bsdtar zenity
-flatpak install -y flathub net.lutris.Lutris
-```
-
-### Fedora
-
-Sur une Fedora (et dérivées comme RHEL)
-
-```bash
-sudo dnf install -y tar zstd curl wget python3 python3-pyyaml sqlite pv bsdtar zenity
-flatpak install -y flathub net.lutris.Lutris
-```
-
-### OpenSUSE
-
-Sur une OpenSUSE (et dérivées comme Leap)
-
-```bash
-sudo zypper install -y tar zstd curl wget python3 python3-PyYAML sqlite3 pv bsdtar zenity
-flatpak install -y flathub net.lutris.Lutris
-```
-
-> ⚠️ Le paquet `bsdtar` n'est pas officiellement disponible sur certaines versions d'openSUSE Leap (ex. 15.6) au moment de la rédaction. S'il est introuvable via `zypper`, vérifiez sur [software.opensuse.org/package/bsdtar](https://software.opensuse.org/package/bsdtar) la disponibilité pour votre version, ou passez par le dépôt communautaire indiqué sur cette page.
+Pour la liste complète et toujours à jour de toutes les commandes (raccourcis, icônes, isolation de préfixe, outils, lsfg, logs, etc.), voir `lpm --help` ou `man lpm`.
 
 </div></details>
 
@@ -97,17 +73,71 @@ flatpak install -y flathub net.lutris.Lutris
 
 <details><summary class="button">🔍 Spoiler</summary><div class="spoiler">
 
-Pour l'installer il suffit de lancer le script d'installation.
+### Debian, Ubuntu, Linux Mint (et dérivées)
 
-On le rend executable
+Téléchargez le fichier `.deb` correspondant depuis la [page des releases](https://github.com/RogerBytes/lpm/releases), puis :
+
+```bash
+sudo apt install -y ./lpm_*.deb
+```
+
+Les dépendances sont résolues automatiquement.
+
+### Fedora (et dérivées)
+
+Téléchargez le fichier `.rpm` correspondant depuis la [page des releases](https://github.com/RogerBytes/lpm/releases), puis :
+
+```bash
+sudo dnf install -y ./lpm-*.rpm
+```
+
+### Arch Linux (et dérivées)
+
+Téléchargez le fichier `.pkg.tar.zst` correspondant depuis la [page des releases](https://github.com/RogerBytes/lpm/releases), puis :
+
+```bash
+sudo pacman -U --noconfirm ./lpm-*.pkg.tar.zst
+```
+
+### Autres distributions (installation manuelle)
+
+Si votre distribution n'est pas couverte ci-dessus (par exemple openSUSE), ou si vous préférez une installation manuelle, installez d'abord les dépendances :
+
+#### Ubuntu / Debian / Linux Mint
+
+```bash
+sudo apt install -y tar zstd curl wget python3 python3-yaml sqlite3 pv libarchive-tools zenity
+flatpak install -y flathub net.lutris.Lutris
+```
+
+#### Arch Linux
+
+```bash
+sudo pacman -S --needed tar zstd curl wget python python-yaml sqlite pv bsdtar zenity
+flatpak install -y flathub net.lutris.Lutris
+```
+
+#### Fedora
+
+```bash
+sudo dnf install -y tar zstd curl wget python3 python3-pyyaml sqlite pv bsdtar zenity
+flatpak install -y flathub net.lutris.Lutris
+```
+
+#### openSUSE
+
+```bash
+sudo zypper install -y tar zstd curl wget python3 python3-PyYAML sqlite3 pv bsdtar zenity
+flatpak install -y flathub net.lutris.Lutris
+```
+
+> [!WARNING]
+> Le paquet `bsdtar` n'est pas officiellement disponible sur certaines versions d'openSUSE Leap (ex. 15.6) au moment de la rédaction. S'il est introuvable via `zypper`, vérifiez sur [software.opensuse.org/package/bsdtar](https://software.opensuse.org/package/bsdtar) la disponibilité pour votre version, ou passez par le dépôt communautaire indiqué sur cette page.
+
+Puis lancez le script d'installation :
 
 ```bash
 chmod +x ./install.sh
-```
-
-Puis on l'installe
-
-```bash
 sudo ./install.sh
 ```
 
@@ -124,6 +154,12 @@ Pour avoir une icone au lanceur, il suffit de créer un répertoire `icon` à la
 Pour tout autre fichier annexe (config manette Antimicro `.amgp`, scripts personnels...) : il suffit qu'il soit présent quelque part dans le préfixe **avant l'empaquetage** (`lpm pack`) pour être inclus dans l'archive `.zgp` et se retrouver au même endroit après réinstallation. Pour une config manette, il vous suffit ensuite de la référencer normalement dans la configuration Lutris du jeu (YAML) : le préfixe étant réécrit vers `$GAMEDIR` à l'installation, un chemin qui pointe dedans continue de fonctionner sur la machine de destination.
 
 </div></details>
+
+## Licence et contribution
+
+Ce projet est sous licence MIT (voir [`LICENSE`](../LICENSE)), à l'exception de deux fichiers d'icônes sous GPLv3. Le nom "Ludis Package Manager"/"lpm" et le logo du projet ne sont pas couverts par cette licence.
+
+Pour contribuer, signaler un bug ou proposer une fonctionnalité, voir [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Auteur
 
