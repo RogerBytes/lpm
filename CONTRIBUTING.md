@@ -11,7 +11,7 @@ Thanks for your interest in this project. Before opening an issue or a pull requ
 - `bin/lpm` — entry point script.
 - `lib/*.sh` — modules loaded by `bin/lpm` (one file per feature area: installer, packer, desktop integration, language loader, etc.).
 - `lang/*.lang` — translation strings, loaded by `lib/zgl-lang-loader.sh`.
-- `assets/icons/` — application and file-type icons. Two files are GPLv3-derived (see `LICENSE`); everything else is MIT.
+- `assets/icons/` — application and file-type icons. Three files are GPLv3-derived (see `LICENSE`); everything else is MIT.
 - `man/`, `completions/` — manual page and shell completions (bash/zsh).
 - `packaging/` — build pipeline for `.deb`, `.rpm`, and Arch packages, each built in its own Docker container. See `packaging/build.sh`.
 

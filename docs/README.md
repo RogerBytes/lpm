@@ -157,7 +157,7 @@ Pour tout autre fichier annexe (config manette Antimicro `.amgp`, scripts person
 
 ## Licence et contribution
 
-Ce projet est sous licence MIT (voir [`LICENSE`](../LICENSE)), à l'exception de deux fichiers d'icônes sous GPLv3. Le nom "Ludis Package Manager"/"lpm" et le logo du projet ne sont pas couverts par cette licence.
+Ce projet est sous licence MIT (voir [`LICENSE`](../LICENSE)), à l'exception de trois fichiers d'icônes sous GPLv3. Le nom "Ludis Package Manager"/"lpm" et le logo du projet ne sont pas couverts par cette licence.
 
 Pour contribuer, signaler un bug ou proposer une fonctionnalité, voir [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 

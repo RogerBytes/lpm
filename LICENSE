@@ -22,7 +22,7 @@ DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------
 
-Exception: two icon files
+Exception: three icon files
 
 The following files reuse vector path data from the Mint-L-Blue icon theme
 (public repository linuxmint/mint-l-icons) and remain under that theme's
@@ -31,6 +31,7 @@ NOT under the MIT license above:
 
   - assets/icons/application-x-zgp-game.svg
   - assets/icons/application-x-zgr-runner.svg
+  - assets/icons/box-bg-template.svg
 
 The full text of the GPLv3 is available at:
 https://www.gnu.org/licenses/gpl-3.0.txt
