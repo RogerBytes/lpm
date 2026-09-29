@@ -40,8 +40,12 @@ MIT license.
 
 ------------------------------------------------------------------------
 
-Project name
+Project name and logo
 
-The names "Ludis Package Manager" and "lpm" are not covered by this
-license. The MIT license grants the right to copy, modify and redistribute
-the code, but grants no rights over these names.
+The names "Ludis Package Manager" and "lpm", and the project's logo and
+application icons (including but not limited to assets/icons/lpm.svg and
+assets/icons/lpm-game-generic.svg), are not covered by this license. The
+MIT license grants the right to copy, modify and redistribute the code and
+icon files themselves, but grants no right to use these names, this logo,
+or these icons to identify, endorse, or promote any other project, fork,
+or distribution as "Ludis Package Manager" or "lpm".
