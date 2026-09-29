@@ -66,8 +66,8 @@ if [[ "${has_flatpak}" = true ]]; then
 fi
 
 # Paquet natif : en chaîne selon le gestionnaire de paquets réellement présent -- jamais une
-# valeur de repli devinée si aucun des trois ne répond (voir docs/dernière feature.md pour la
-# même philosophie ailleurs dans le projet : échouer proprement plutôt que deviner).
+# valeur de repli devinée si aucun des trois ne répond (même philosophie ailleurs dans le
+# projet : échouer proprement plutôt que deviner).
 native_version=""
 if [[ "${has_native}" = true ]]; then
   if command -v dpkg-query >/dev/null 2>&1; then

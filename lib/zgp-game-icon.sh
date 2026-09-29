@@ -236,7 +236,7 @@ else
   [[ ${#targets[@]} -eq 0 ]] && exit 0
 fi
 
-# --- 5. Clé API SteamGridDB (voir docs/dernière feature.md pour le contexte complet) ---
+# --- 5. Clé API SteamGridDB ---
 #
 # Strictement personnelle à l'utilisateur : jamais de clé partagée/embarquée dans lpm (un
 # service à 10 millions d'utilisateurs sur une seule clé serait vite bloqué), et jamais de

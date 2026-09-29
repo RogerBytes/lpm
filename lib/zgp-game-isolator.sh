@@ -5,10 +5,10 @@
 # Isole TOUT un store d'un coup : sépare chaque jeu vivant dans un giga-préfixe partagé
 # (Epic Games Store, EA App/EA Desktop, Ubisoft Connect, Battle.net) en son propre wineprefix
 # indépendant -- un jeu = un préfixe, pour chacun des jeux du store visé, jamais un seul jeu
-# isolé en laissant les autres derrière. Voir docs/dernière feature.md pour le contexte complet
-# et le détail empirique des dossiers "socle" (launcher, partagé) vs "dossier du jeu" (propre
-# au jeu) par store -- ce fichier applique les décisions déjà tranchées dans ce document, il ne
-# les rediscute pas.
+# isolé en laissant les autres derrière. Distinction centrale utilisée dans tout ce fichier :
+# le "socle" (launcher partagé -- binaires, config, credentials, session, identique et copié
+# pour chaque instance) vs le "dossier du jeu" (sous-dossier propre à un jeu précis, inclus
+# uniquement dans son instance, exclu de toutes les autres).
 #
 # --- Récupération des arguments du routeur lpm ---
 # $1 = store à isoler entièrement (optionnel) : code interne (egs/ea/ubisoft/battlenet), alias
@@ -160,9 +160,9 @@ zgp_slugify() {
 # Retourne 1 si rien de spécifique au jeu n'a été trouvé (le jeu ne peut alors pas être isolé
 # en toute sécurité : mieux vaut échouer proprement que de deviner un mauvais dossier).
 #
-# Repose sur le relevé empirique par store documenté dans docs/dernière feature.md ; certains
-# motifs (ex: Ubisoft "AppData/Roaming/<Variant>Air") n'ont pas de règle générique confirmée
-# et sont donc volontairement omis plutôt que devinés.
+# Repose sur un relevé empirique par store (motifs de dossiers observés pour chaque launcher) ;
+# certains motifs (ex: Ubisoft "AppData/Roaming/<Variant>Air") n'ont pas de règle générique
+# confirmée et sont donc volontairement omis plutôt que devinés.
 zgp_resolve_game_paths() {
   local store="$1" giga_dir="$2" game_name="$3" old_args="$4"
   local found=0 p
@@ -221,8 +221,7 @@ for path in glob.glob(os.path.join(os.environ["MANIFESTS_DIR"], "*.item")):
       fi
       # L'ID numérique (dossier data/<ID>/) est le même identifiant que celui utilisé dans
       # l'argument de lancement "uplay://launch/<ID>", déjà présent dans les args existants
-      # du jeu -- on le relit de là plutôt que de le deviner (voir docs/dernière feature.md,
-      # section Ubisoft Connect).
+      # du jeu -- on le relit de là plutôt que de le deviner.
       local uid
       uid=$(printf '%s' "${old_args}" | grep -oE 'uplay://launch/[0-9]+' | head -n1 | grep -oE '[0-9]+$')
       if [[ -n "${uid}" ]]; then
@@ -238,8 +237,8 @@ for path in glob.glob(os.path.join(os.environ["MANIFESTS_DIR"], "*.item")):
 
     battlenet)
       # Un jeu = un dossier top-level sous "Program Files (x86)/", au même niveau que
-      # "Battle.net/" (pas imbriqué dedans) -- voir docs/dernière feature.md, section
-      # Battle.net. "Battle.net" lui-même est explicitement exclu (c'est le socle).
+      # "Battle.net/" (pas imbriqué dedans). "Battle.net" lui-même est explicitement
+      # exclu (c'est le socle).
       p="drive_c/Program Files (x86)/${game_name}"
       if [[ -d "${giga_dir}/${p}" ]] && [[ "${game_name}" != "Battle.net" ]]; then
         echo "${p}"
@@ -527,8 +526,8 @@ zgp_isolate_one() {
   fi
 
   # Args de lancement (protocole propriétaire) lus depuis le YAML déjà en place -- jamais
-  # reconstruits à la main (voir docs/dernière feature.md, "Constat transversal important" :
-  # le jeu est toujours lancé via le launcher partagé + un identifiant de jeu en paramètre).
+  # reconstruits à la main (constat transversal à tous les stores gérés ici : le jeu est
+  # toujours lancé via le launcher partagé + un identifiant de jeu en paramètre).
   local old_yml="${lutris_config_dir}/${old_configpath}.yml"
   local old_args=""
   if [[ -f "${old_yml}" ]]; then
@@ -606,8 +605,7 @@ except Exception:
   # --- 1. Copie du socle (launcher, credentials, session) ---
   if [[ "${store}" = "ubisoft" ]]; then
     # Cas particulier : le socle EST "Ubisoft Game Launcher/" moins les sous-dossiers
-    # per-jeu "games/" et "data/" (traités comme dossier du jeu ci-dessous) -- voir
-    # docs/dernière feature.md, section Ubisoft Connect.
+    # per-jeu "games/" et "data/" (traités comme dossier du jeu ci-dessous).
     local ubi_root="drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher"
     local entry entry_rel
     while IFS= read -r entry; do
