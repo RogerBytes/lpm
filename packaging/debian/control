@@ -1,0 +1,28 @@
+Source: lpm
+Section: games
+Priority: optional
+Maintainer: Harry <harry.richmond@rogerbytes.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://rogerbytes.com
+
+Package: lpm
+Architecture: all
+Depends: ${misc:Depends},
+ bash,
+ python3,
+ python3-yaml,
+ sqlite3,
+ zenity,
+ zstd,
+ libarchive-tools,
+ desktop-file-utils,
+ shared-mime-info,
+ hicolor-icon-theme
+Recommends: lutris, wine, winetricks, imagemagick, curl, xdotool, bash-completion
+Description: Gestionnaire de paquets pour Lutris
+ lpm (Ludis Package Manager) permet d'empaqueter, installer et gérer des
+ jeux et runners Wine/Proton pour Lutris sous forme d'archives .zgp/.zgr,
+ avec prise en charge de lsfg-vk (génération de frames), l'isolation de
+ giga-préfixes partagés, et l'intégration desktop (icônes, types MIME,
+ raccourcis).

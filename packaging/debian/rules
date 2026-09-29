@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# lib/*.sh ne sont pas exécutables dans le dépôt (chmod fait par install.sh à l'installation
+# manuelle) -- dh_install copie en préservant les permissions source, donc on corrige ici
+# avant que dh_fixperms ne fige les droits finaux du paquet.
+override_dh_install:
+	dh_install
+	chmod +x debian/lpm/usr/lib/lpm/*.sh
+	chmod +x debian/lpm/usr/bin/lpm
+	# La complétion bash doit s'appeler exactement "lpm" (nom de la commande) : le format
+	# debian/*.install ne sait pas renommer un fichier, seulement choisir son dossier de
+	# destination -- on le copie donc ici, à la main, sous le bon nom.
+	install -Dm644 completions/lpm.bash debian/lpm/usr/share/bash-completion/completions/lpm
+
+# Rien à tester (pas de suite de tests) : no-op explicite plutôt que de laisser dh deviner.
+override_dh_auto_test:

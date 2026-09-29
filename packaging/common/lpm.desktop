@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=lpm
+Comment=Gestionnaire de paquets et runners pour jeux
+Exec=lpm %f
+Icon=lpm
+Categories=Game;Utility;
+Terminal=false
+StartupNotify=true
+MimeType=application/x-zgp-game;application/x-zgr-runner;

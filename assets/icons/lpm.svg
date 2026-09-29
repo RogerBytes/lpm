@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!--
+    Icône de l'application lpm (Ludis Package Manager).
+    Fond : reprise du dégradé jaune -> orange de l'icône système de Lutris (thème
+    Mint-L-Blue), reconstruit par échantillonnage de pixels ; voir
+    assets/icons/lutris-bg-template.svg pour le gabarit de fond seul et ses notes.
+    Proportions du carré (marge, côté, rayon d'angle) mesurées directement sur le PNG
+    original (512x512) : le carré occupe 85.55% du canevas avec un rayon d'angle à
+    ~20.66% du côté ; valeurs reprises ici pour que l'icône ne paraisse pas plus
+    "zoomée" que l'originale une fois affichée à la même taille.
+    Glyphe : paquet ouvert (Tabler Icons "package", licence MIT), blanc et plat, au
+    centre ; glyphe distinct de celui des .zgp/.zgr pour éviter toute confusion.
+    Contour : fin trait noir semi-transparent (opacité 0.4) sur le tracé du carré, mesuré
+    par échantillonnage de pixels sur l'icône système d'origine (détail de la mesure dans
+    assets/icons/lutris-bg-template.svg).
+  -->
+  <defs>
+    <linearGradient id="lutrisYellowOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FBBF00"/>
+      <stop offset="0.24" stop-color="#FBBF00"/>
+      <stop offset="1"    stop-color="#E8600E"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8.672" y="8.672" width="102.656" height="102.656" rx="21.211"
+        fill="url(#lutrisYellowOrange)"
+        stroke="#000000" stroke-opacity="0.4" stroke-width="0.35"/>
+
+  <g transform="translate(16.86,16.86) scale(3.595)" fill="none" stroke="#FFFFFF" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" />
+    <path d="M12 12l8 -4.5" />
+    <path d="M12 12l0 9" />
+    <path d="M12 12l-8 -4.5" />
+    <path d="M16 5.25l-8 4.5" />
+  </g>
+</svg>

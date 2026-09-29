@@ -1,0 +1,50 @@
+# Maintainer: Harry <harry.richmond@rogerbytes.com>
+pkgname=lpm
+pkgver=0.9.2
+pkgrel=1
+pkgdesc="Gestionnaire de paquets pour Lutris (jeux et runners Wine/Proton)"
+arch=('any')
+url="https://rogerbytes.com"
+license=('MIT' 'GPL3')  # MIT : code lpm -- GPL3 : assets/icons/application-x-zg{p,r}-*.svg
+                        # (tracé repris de Mint-L-Blue, voir packaging/debian/copyright)
+depends=('bash' 'python' 'python-yaml' 'sqlite' 'zenity' 'zstd' 'libarchive'
+         'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme')
+optdepends=('lutris: gestion des jeux Lutris'
+            'wine: exécution des jeux Windows'
+            'winetricks: dépendances Windows dans les wineprefixes'
+            'imagemagick: traitement des icônes SteamGridDB'
+            'xdotool: focus automatique des fenêtres'
+            'curl: téléchargement des runners distants'
+            'bash-completion: complétion bash de lpm')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  install -Dm755 bin/lpm "$pkgdir/usr/bin/lpm"
+
+  install -d "$pkgdir/usr/lib/lpm"
+  for f in lib/*.sh; do
+    install -Dm755 "$f" "$pkgdir/usr/lib/lpm/$(basename "$f")"
+  done
+
+  install -d "$pkgdir/usr/lib/lpm/lang"
+  for f in lang/*.lang; do
+    install -Dm644 "$f" "$pkgdir/usr/lib/lpm/lang/$(basename "$f")"
+  done
+
+  install -Dm644 completions/lpm.bash "$pkgdir/usr/share/bash-completion/completions/lpm"
+  install -Dm644 completions/_lpm "$pkgdir/usr/share/zsh/site-functions/_lpm"
+  install -Dm644 man/lpm.1 "$pkgdir/usr/share/man/man1/lpm.1"
+
+  install -Dm644 assets/icons/lpm.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/lpm.svg"
+  install -Dm644 assets/icons/lpm-game-generic.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/lpm-game-generic.svg"
+  install -Dm644 assets/icons/application-x-zgp-game.svg "$pkgdir/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgp-game.svg"
+  install -Dm644 assets/icons/application-x-zgr-runner.svg "$pkgdir/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgr-runner.svg"
+
+  install -Dm644 packaging/common/lpm.desktop "$pkgdir/usr/share/applications/lpm.desktop"
+  install -Dm644 packaging/common/lpm.xml "$pkgdir/usr/share/mime/packages/lpm.xml"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,11 @@
+bin/lpm usr/bin
+lib/*.sh usr/lib/lpm
+lang/*.lang usr/lib/lpm/lang
+completions/_lpm usr/share/zsh/vendor-completions
+man/lpm.1 usr/share/man/man1
+assets/icons/lpm.svg usr/share/icons/hicolor/scalable/apps
+assets/icons/lpm-game-generic.svg usr/share/icons/hicolor/scalable/apps
+assets/icons/application-x-zgp-game.svg usr/share/icons/hicolor/scalable/mimetypes
+assets/icons/application-x-zgr-runner.svg usr/share/icons/hicolor/scalable/mimetypes
+packaging/common/lpm.desktop usr/share/applications
+packaging/common/lpm.xml usr/share/mime/packages

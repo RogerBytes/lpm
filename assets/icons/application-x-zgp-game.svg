@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!--
+    Icône du type MIME application/x-zgp-game (fichiers .zgp ; jeux packagés par lpm).
+    Nom de fichier = nom d'icône attendu par shared-mime-info pour ce type MIME
+    ("/" du type MIME remplacé par "-").
+    Forme : silhouette de carton "package-x-generic" reprise telle quelle du thème
+    d'icônes de Harry (Mint-L-Blue, dépôt public linuxmint/mint-l-icons, licence GPLv3 ;
+    voir src/mimetypes/48/package-x-generic.svg dans ce dépôt), recolorée avec notre
+    dégradé jaune->orange (le même que lpm.svg) plutôt que le brun carton d'origine.
+    Choisie à la place d'un carré plein ou d'un coin corné "page" : la forme de boîte est
+    un repère universel de "ceci est un paquet/fichier", donc bien distincte de l'icône
+    carrée pleine de l'appli lpm elle-même, tout en restant cohérente avec le thème
+    système de Harry.
+    Glyphe : paquet ouvert (Tabler Icons "package", licence MIT, le même glyphe que
+    lpm.svg), blanc et plat ; la référence à Wine (verre plein) est réservée à .zgr, le
+    "moteur d'exécution" ; plus logique là qu'ici. Centré non pas sur le canevas entier
+    mais sur la zone utile du carton ; entre le pli du rabat (y=17.5 dans le tracé
+    d'origine, soit y=43.59 sur notre canevas 120x120, mesuré sur le rendu) et le bas du
+    carton (y=111.09 mesuré) ; soit un centre à (60, 77.34) au lieu de (60, 60).
+
+    LICENCE : ce fichier reprend un tracé GPLv3 (Mint-L-Blue), distribué sous GPLv3, PAS
+    sous la licence MIT du reste du projet lpm. Voir packaging/debian/copyright.
+  -->
+  <defs>
+    <linearGradient id="lutrisYellowOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FBBF00"/>
+      <stop offset="0.24" stop-color="#FBBF00"/>
+      <stop offset="1"    stop-color="#E8600E"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="scale(2.5)">
+    <path d="m 9.01,8.5 29.498,0 c 1.722,0 2.497,-0.287 2.992,1 l 3.002,8 0,25.674 c 0,1.553 0.103,1.316 -1.62,1.316 l -37.765,0 c -1.722,0 -1.619,0.237 -1.619,-1.316 l 0,-25.674 3.002,-8 c 0.48,-1.26 0.789,-1 2.51,-1 z"
+          fill="url(#lutrisYellowOrange)" stroke="#000000" stroke-opacity="0.4" stroke-width="0.14"/>
+    <path d="m 22,8 4,0 0,14 C 25.606,22 25.213,21.229 24.819,21.229 24.416,21.229 24.013,22 23.609,22 23.285,22 22.96,21.325 22.636,21.325 22.424,21.325 22.212,22 22,22 L 22,8 Z"
+          fill="#000000" fill-opacity="0.18"/>
+    <path d="M4.5,17.5 L43.5,17.5" stroke="#000000" stroke-opacity="0.22" stroke-width="0.14"/>
+  </g>
+
+  <g transform="translate(31.956,52.296) scale(2.337)" fill="none" stroke="#FFFFFF" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3l8 4.5l0 9l-8 4.5l-8 -4.5l0 -9l8 -4.5" />
+    <path d="M12 12l8 -4.5" />
+    <path d="M12 12l0 9" />
+    <path d="M12 12l-8 -4.5" />
+    <path d="M16 5.25l-8 4.5" />
+  </g>
+</svg>

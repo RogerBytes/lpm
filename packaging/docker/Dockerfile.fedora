@@ -1,0 +1,3 @@
+FROM fedora:latest
+RUN dnf install -y rpm-build rpmdevtools tar gzip && dnf clean all
+WORKDIR /build

@@ -1,0 +1,38 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Fond "façon icône système Lutris" (carré à bords arrondis, dégradé jaune -> orange),
+    joystick retiré. Dégradé reconstruit par échantillonnage de pixels sur l'icône réelle
+    (net.lutris.Lutris.png, thème Mint-L-Blue, 512x512) :
+      - haut (0% à ~24%) : plat, #FBBF00
+      - de ~24% à 100% : dégradé quasi linéaire jusqu'à #E8600E
+    Un fin contour noir semi-transparent souligne le tracé du carré, comme sur l'original :
+    confirmé par échantillonnage de pixels direct sur le PNG (pas au pif) ; au bord du
+    carré, la couleur passe de #F5A204 (plein) à #916002, soit un facteur ~0.59 sur chaque
+    canal, ce qui correspond à un trait noir superposé à ~41% d'opacité. Le trait mesuré
+    fait environ 1 à 1.5px de large sur le PNG 512x512 d'origine, soit ~0.3 unité une fois
+    ramené à ce canevas 120x120 (facteur d'échelle 512/120 ~ 4.267).
+
+    Proportions du carré mesurées sur ce même PNG (pas au pif) : sur un canevas 512x512,
+    le carré va de 37 à 474px (soit 438px, 85.55% du canevas) avec un rayon d'angle
+    d'environ 90.5px (20.66% du côté). Reporté ici sur un canevas 120x120 :
+    marge = 8.672, côté = 102.656, rx = 21.211.
+
+    Ce fichier n'est pas utilisé tel quel par lpm (ni installé, ni référencé par
+    install.sh) ; c'est un gabarit de réserve pour une future icône de la famille lpm :
+    dupliquer le <rect> avec ce même fill/stroke dans un nouveau fichier, puis ajouter
+    par-dessus un glyphe blanc plat centré (viewBox 24x24, formule de centrage dans un
+    carré 120x120 : translate = 60 - 12*scale, quel que soit le côté du carré puisque le
+    canevas et son centre (60,60) ne changent pas).
+  -->
+  <defs>
+    <linearGradient id="lutrisYellowOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FBBF00"/>
+      <stop offset="0.24" stop-color="#FBBF00"/>
+      <stop offset="1"    stop-color="#E8600E"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8.672" y="8.672" width="102.656" height="102.656" rx="21.211"
+        fill="url(#lutrisYellowOrange)"
+        stroke="#000000" stroke-opacity="0.4" stroke-width="0.35"/>
+</svg>

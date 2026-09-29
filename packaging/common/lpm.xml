@@ -1,0 +1,13 @@
+<?xml-stylesheet type="text/xsl" href="libxslt:shared-mime-info"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-zgp-game">
+    <comment>Jeu lpm</comment>
+    <glob pattern="*.zgp"/>
+    <generic-icon name="application-x-zgp-game"/>
+  </mime-type>
+  <mime-type type="application/x-zgr-runner">
+    <comment>Runner lpm</comment>
+    <glob pattern="*.zgr"/>
+    <generic-icon name="application-x-zgr-runner"/>
+  </mime-type>
+</mime-info>

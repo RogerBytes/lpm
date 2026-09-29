@@ -1,0 +1,4 @@
+FROM archlinux:latest
+RUN pacman -Sy --noconfirm base-devel \
+    && useradd -m builder
+WORKDIR /build

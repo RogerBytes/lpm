@@ -1,0 +1,344 @@
+#!/bin/bash
+
+# --- 0. Version ---
+readonly LPM_VERSION="v0.9.2"
+
+# --- 1. Détection automatique de l'emplacement des libs (Dev vs Global) ---
+# Deux emplacements d'installation "système" possibles selon l'origine du binaire
+# (install.sh manuel vs paquet .deb/.rpm/Arch, voir packaging/) -- en dehors de ces deux
+# cas connus, on suppose le mode dev (lancé directement depuis le dépôt).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+case "${SCRIPT_DIR}" in
+    /usr/local/bin) LIB_DIR="/usr/local/lib/lpm" ;;  # install.sh (install manuelle)
+    /usr/bin)       LIB_DIR="/usr/lib/lpm" ;;        # paquet .deb/.rpm/Arch
+    *)              LIB_DIR="${SCRIPT_DIR}/../lib" ;; # mode dev
+esac
+
+if [[ ! -d "${LIB_DIR}" ]]; then
+    # Message volontairement non localisé : le chargeur de langue vit lui-même
+    # dans lib/, impossible de le charger si ce dossier est introuvable.
+    zenity --error --text="Erreur critique : Le dossier des bibliothèques (lib) est introuvable à :\n${LIB_DIR}" 2>/dev/null
+    echo "Erreur critique : Le dossier des bibliothèques (lib) est introuvable à : ${LIB_DIR}"
+    exit 1
+fi
+
+# shellcheck source=./lib/zgl-lang-loader.sh
+source "${LIB_DIR}/zgl-lang-loader.sh"
+# shellcheck source=../lib/zgu-focus-utils.sh
+source "${LIB_DIR}/zgu-focus-utils.sh"
+
+# --- 1bis. Affichage de la version (--version / -v) ---
+if [[ "$1" = "--version" ]] || [[ "$1" = "-v" ]]; then
+    echo "lpm ${LPM_VERSION}"
+    exit 0
+fi
+
+# --- 1ter. Affichage de l'aide (--help / -h) ---
+print_help() {
+    t help.title
+    echo ""
+    t help.usage_header
+    printf "  %-38s %s\n" "lpm" "$(t help.usage_menu)"
+    printf "  %-38s %s\n" "lpm <fichier.zgp|.zgr>" "$(t help.usage_direct)"
+    echo ""
+    t help.games_header
+    printf "  %-42s %s\n" "lpm install [-y] <fichiers.zgp...>" "$(t help.games_install)"
+    printf "  %-42s %s\n" "lpm uninstall [-y] <slugs...>" "$(t help.games_uninstall)"
+    printf "  %-42s %s\n" "lpm pack [-niveau] <dossiers...>" "$(t help.games_pack)"
+    printf "  %-42s %s\n" "lpm isolate [store]" "$(t help.games_isolate)"
+    printf "  %-42s %s\n" "lpm list" "$(t help.games_list)"
+    printf "  %-42s %s\n" "lpm list-isolable" "$(t help.games_list_isolable)"
+    printf "  %-42s %s\n" "lpm info <slug>" "$(t help.games_info)"
+    printf "  %-42s %s\n" "lpm create-prefix [-y] <noms...>" "$(t help.games_create_prefix)"
+    printf "  %-42s %s\n" "" "$(t help.games_create_prefix_cont)"
+    printf "  %-42s %s\n" "lpm exe-install [-y] <fichier[|nom[|slug]]>" "$(t help.games_exe_install)"
+    printf "  %-42s %s\n" "" "$(t help.games_exe_install_cont)"
+    printf "  %-42s %s\n" "lpm shortcut <slugs...|--all>" "$(t help.games_shortcut)"
+    printf "  %-42s %s\n" "" "$(t help.games_shortcut_cont)"
+    printf "  %-42s %s\n" "lpm icon [slugs...|--all]" "$(t help.games_icon)"
+    printf "  %-42s %s\n" "lpm tools [slug] [outil] [exe]" "$(t help.games_tools)"
+    printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
+    printf "  %-42s %s\n" "lpm lsfg [slugs...] [on|off]" "$(t help.games_lsfg)"
+    printf "  %-42s %s\n" "" "$(t help.games_lsfg_cont)"
+    printf "  %-42s %s\n" "lpm killwine [-y]" "$(t help.games_killwine)"
+    echo ""
+    t help.runners_header
+    printf "  %-52s %s\n" "lpm install-runner [-y] <fichiers.zgr|noms...>" "$(t help.runners_install)"
+    printf "  %-52s %s\n" "" "$(t help.runners_install_cont)"
+    printf "  %-52s %s\n" "lpm uninstall-runner [-y] <noms...>" "$(t help.runners_uninstall)"
+    printf "  %-52s %s\n" "lpm pack-runner [-niveau] <noms...>" "$(t help.runners_pack)"
+    printf "  %-52s %s\n" "lpm list-runner" "$(t help.runners_list)"
+    printf "  %-52s %s\n" "lpm list-remote-runners" "$(t help.runners_list_remote)"
+    printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"
+    echo ""
+    t help.deps_header
+    printf "  %-36s %s\n" "lpm check" "$(t help.deps_check)"
+    printf "  %-36s %s\n" "" "$(t help.deps_check_cont1)"
+    printf "  %-36s %s\n" "" "$(t help.deps_check_cont2)"
+    printf "  %-36s %s\n" "lpm lutris-version [flatpak|native|reset]" "$(t help.lutris_version)"
+    echo ""
+    t help.log_header
+    printf "  %-36s %s\n" "lpm log [-n N]" "$(t help.log_show)"
+    printf "  %-36s %s\n" "lpm log --all" "$(t help.log_all)"
+    printf "  %-36s %s\n" "lpm log --grep <motif>" "$(t help.log_grep)"
+    printf "  %-36s %s\n" "lpm log --clear" "$(t help.log_clear)"
+    echo ""
+    t help.options_header
+    printf "  %-36s %s\n" "-y" "$(t help.opt_y)"
+    printf "  %-36s %s\n" "--allow-scripts" "$(t help.opt_allow_scripts)"
+    printf "  %-36s %s\n" "--ignore-hash" "$(t help.opt_ignore_hash)"
+    printf "  %-36s %s\n" "--hash" "$(t help.opt_hash)"
+    printf "  %-36s %s\n" "-niveau (0 à 22)" "$(t help.opt_level)"
+    printf "  %-36s %s\n" "--version, -v" "$(t help.opt_version)"
+    printf "  %-36s %s\n" "--help, -h" "$(t help.opt_help)"
+}
+
+if [[ "$1" = "--help" ]] || [[ "$1" = "-h" ]]; then
+    # Si la page man est installée (voir install.sh), elle fait référence : plus complète
+    # et déjà au format attendu par l'utilisateur (man lpm, less, recherche "/"...). Repli
+    # sur le texte intégré ci-dessus si lpm tourne depuis les sources (non installé) ou sur
+    # un système sans "man" (environnement minimal) -- --help doit toujours fonctionner.
+    if command -v man >/dev/null 2>&1 && man -w lpm >/dev/null 2>&1; then
+        exec man lpm
+    fi
+    print_help
+    exit 0
+fi
+
+# --- 2. Gestion du lancement direct par fichier (Double-clic / MimeType) ---
+# Si un seul argument est passé et que c'est un fichier valide existant (ex: double-clic sur un fichier)
+if [[ $# -eq 1 ]] && [[ -f "$1" ]]; then
+    extension="${1##*.}"
+    # shellcheck disable=SC2249 # pas de défaut voulu : une extension inconnue doit tomber
+    # dans le fallthrough documenté ci-dessous, pas être interceptée ici.
+    case "${extension}" in
+        zgp)
+            exec bash "${LIB_DIR}/zgp-game-installer.sh" "click" "" "" "" "$1"
+            ;;
+        zgr)
+            exec bash "${LIB_DIR}/zgr-runner-installer.sh" "click" "" "" "$1"
+            ;;
+    esac
+    # Ni .zgp ni .zgr : ce n'était pas une ouverture mimetype, on continue normalement vers
+    # le routage de commandes CLI ci-dessous. Sans ce fallthrough, un fichier qui existerait
+    # par coïncidence dans le répertoire courant sous le même nom qu'une sous-commande sans
+    # argument (ex: "check", "list", "list-runner", "list-remote-runners" -- les seules qui
+    # vérifient exactement $# -eq 1) interceptait la commande ici et affichait à tort
+    # "extension non supportée" au lieu de s'exécuter.
+fi
+
+# --- 3. Routage des Commandes CLI ---
+if [[ $# -gt 0 ]]; then
+    command="$1"
+    shift
+
+    confirm_flag=""
+    compression_level=""
+    allow_scripts_flag=""
+    ignore_hash_flag=""
+    generate_hash_flag=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -y)
+                confirm_flag="yes"
+                shift
+                ;;
+            --allow-scripts)
+                allow_scripts_flag="yes"
+                shift
+                ;;
+            --ignore-hash)
+                ignore_hash_flag="yes"
+                shift
+                ;;
+            --hash)
+                generate_hash_flag="yes"
+                shift
+                ;;
+            -[0-9]|-1[0-9]|-2[0-2])
+                compression_level="${1#-}"
+                shift
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
+    case "${command}" in
+        install)
+            exec bash "${LIB_DIR}/zgp-game-installer.sh" "cli" "${confirm_flag}" "${allow_scripts_flag}" "${ignore_hash_flag}" "$@"
+            ;;
+        install-runner)
+            exec bash "${LIB_DIR}/zgr-runner-installer.sh" "cli" "${confirm_flag}" "${ignore_hash_flag}" "$@"
+            ;;
+        uninstall)
+            exec bash "${LIB_DIR}/zgp-game-uninstaller.sh" "${confirm_flag}" "$@"
+            ;;
+        uninstall-runner)
+            exec bash "${LIB_DIR}/zgr-runner-uninstaller.sh" "${confirm_flag}" "$@"
+            ;;
+        pack)
+            exec bash "${LIB_DIR}/zgp-game-packer.sh" "${compression_level}" "${generate_hash_flag}" "$@"
+            ;;
+        isolate)
+            exec bash "${LIB_DIR}/zgp-game-isolator.sh" "$@"
+            ;;
+        pack-runner)
+            exec bash "${LIB_DIR}/zgr-runner-packer.sh" "${compression_level}" "${generate_hash_flag}" "$@"
+            ;;
+        create-prefix)
+            exec bash "${LIB_DIR}/zgp-prefix-creator.sh" "cli" "${confirm_flag}" "$@"
+            ;;
+        exe-install)
+            exec bash "${LIB_DIR}/zgp-exe-installer.sh" "cli" "${confirm_flag}" "$@"
+            ;;
+        shortcut)
+            exec bash "${LIB_DIR}/zgp-game-shortcutter.sh" "$@"
+            ;;
+        icon)
+            exec bash "${LIB_DIR}/zgp-game-icon.sh" "$@"
+            ;;
+        tools)
+            exec bash "${LIB_DIR}/zgp-game-tools.sh" "$@"
+            ;;
+        lsfg)
+            exec bash "${LIB_DIR}/zgl-lsfg-manager.sh" "$@"
+            ;;
+        killwine)
+            exec bash "${LIB_DIR}/zgc-wine-killer.sh" "cli" "${confirm_flag}"
+            ;;
+        check)
+            exec bash "${LIB_DIR}/zgc-dependency-checker.sh" "cli" "${confirm_flag}"
+            ;;
+        lutris-version)
+            exec bash "${LIB_DIR}/zgc-lutris-version-checker.sh" "cli" "$@"
+            ;;
+        list)
+            exec bash "${LIB_DIR}/zgp-game-lister.sh"
+            ;;
+        list-isolable)
+            exec bash "${LIB_DIR}/zgp-isolable-lister.sh"
+            ;;
+        info)
+            exec bash "${LIB_DIR}/zgp-game-info.sh" "$@"
+            ;;
+        log)
+            exec bash "${LIB_DIR}/zgp-log-viewer.sh" "$@"
+            ;;
+        list-runner)
+            exec bash "${LIB_DIR}/zgr-runner-lister.sh"
+            ;;
+        list-remote-runners)
+            exec bash "${LIB_DIR}/zgr-runner-remote-lister.sh"
+            ;;
+        *)
+            t common.unknown_command "${command}"
+            t common.unknown_command_hint
+            exit 1
+            ;;
+    esac
+fi
+
+# --- 4. Boucle principale du Menu Graphique (Lancé sans argument) ---
+opt_install_game="$(t menu.opt_install_game)"
+opt_pack_game="$(t menu.opt_pack_game)"
+opt_uninstall_game="$(t menu.opt_uninstall_game)"
+opt_create_prefix="$(t menu.opt_create_prefix)"
+opt_exe_install="$(t menu.opt_exe_install)"
+opt_shortcut="$(t menu.opt_shortcut)"
+opt_isolate="$(t menu.opt_isolate)"
+opt_icon="$(t menu.opt_icon)"
+opt_tools="$(t menu.opt_tools)"
+opt_lsfg="$(t menu.opt_lsfg)"
+opt_killwine="$(t menu.opt_killwine)"
+opt_install_runner="$(t menu.opt_install_runner)"
+opt_pack_runner="$(t menu.opt_pack_runner)"
+opt_uninstall_runner="$(t menu.opt_uninstall_runner)"
+opt_check="$(t menu.opt_check)"
+opt_lutris_version="$(t menu.opt_lutris_version)"
+
+zgu_start_focus_watcher
+
+while true; do
+    if ! choice=$(zenity --list --radiolist \
+        --title="$(t menu.title)" \
+        --text="$(t menu.text)" \
+        --column="$(t menu.col_choice)" --column="$(t menu.col_action)" \
+        FALSE "${opt_install_game}" \
+        FALSE "${opt_pack_game}" \
+        FALSE "${opt_uninstall_game}" \
+        FALSE "${opt_create_prefix}" \
+        FALSE "${opt_exe_install}" \
+        FALSE "${opt_shortcut}" \
+        FALSE "${opt_isolate}" \
+        FALSE "${opt_icon}" \
+        FALSE "${opt_tools}" \
+        FALSE "${opt_lsfg}" \
+        FALSE "${opt_killwine}" \
+        FALSE "${opt_install_runner}" \
+        FALSE "${opt_pack_runner}" \
+        FALSE "${opt_uninstall_runner}" \
+        FALSE "${opt_check}" \
+        FALSE "${opt_lutris_version}" \
+        --width=500 --height=600 2>/dev/null) || [[ -z "${choice}" ]]; then
+        exit 0
+    fi
+
+    case "${choice}" in
+        "${opt_install_game}")
+            bash "${LIB_DIR}/zgp-game-installer.sh"
+            ;;
+        "${opt_pack_game}")
+            bash "${LIB_DIR}/zgp-game-packer.sh"
+            ;;
+        "${opt_uninstall_game}")
+            bash "${LIB_DIR}/zgp-game-uninstaller.sh"
+            ;;
+        "${opt_create_prefix}")
+            bash "${LIB_DIR}/zgp-prefix-creator.sh"
+            ;;
+        "${opt_exe_install}")
+            bash "${LIB_DIR}/zgp-exe-installer.sh"
+            ;;
+        "${opt_shortcut}")
+            bash "${LIB_DIR}/zgp-game-shortcutter.sh"
+            ;;
+        "${opt_isolate}")
+            bash "${LIB_DIR}/zgp-game-isolator.sh"
+            ;;
+        "${opt_icon}")
+            bash "${LIB_DIR}/zgp-game-icon.sh"
+            ;;
+        "${opt_tools}")
+            bash "${LIB_DIR}/zgp-game-tools.sh"
+            ;;
+        "${opt_lsfg}")
+            bash "${LIB_DIR}/zgl-lsfg-manager.sh"
+            ;;
+        "${opt_killwine}")
+            bash "${LIB_DIR}/zgc-wine-killer.sh"
+            ;;
+        "${opt_install_runner}")
+            bash "${LIB_DIR}/zgr-runner-installer.sh"
+            ;;
+        "${opt_pack_runner}")
+            bash "${LIB_DIR}/zgr-runner-packer.sh"
+            ;;
+        "${opt_uninstall_runner}")
+            bash "${LIB_DIR}/zgr-runner-uninstaller.sh"
+            ;;
+        "${opt_check}")
+            bash "${LIB_DIR}/zgc-dependency-checker.sh" "gui"
+            ;;
+        "${opt_lutris_version}")
+            bash "${LIB_DIR}/zgc-lutris-version-checker.sh" "gui"
+            ;;
+        *)
+            # Choix inattendu (ne devrait pas arriver avec un --radiolist) : on ne fait
+            # rien, la boucle "while true" ci-dessus réaffiche simplement le menu.
+            ;;
+    esac
+done

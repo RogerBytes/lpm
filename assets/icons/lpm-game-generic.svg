@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!--
+    Icône de secours pour les raccourcis de jeux créés par lpm quand aucune icône n'est
+    disponible (ni icône personnalisée packagée dans le .zgp, ni icône récupérée via
+    "lpm icon"/SteamGridDB ; voir icon_path dans lib/zgu-desktop-utils.sh, qui utilisait
+    jusqu'ici l'icône système générique "applications-games").
+
+    Fond : reproduction vectorielle fidèle du fond de l'icône système "applications-games"
+    du thème d'icônes de Harry (Mint-L-Blue, dépôt public linuxmint/mint-l-icons, licence
+    GPLv3) ; carré arrondi, dégradé gris (#363636 haut ; #202020 bas), liseré clair haut/bas
+    qui s'estompe à chaque extrémité, contour sombre. Toutes les mesures viennent d'un
+    échantillonnage de pixels sur applications-games.png (512x512, pas au pif) ; voir
+    proportions identiques au carré déjà mesuré sur lutris-bg-template.svg.
+
+    Glyphe : manette de jeu (Tabler Icons "device-gamepad", licence MIT) à la place du
+    glyphe alien d'origine ; symbole neutre "jeu/manette" qui ne prête pas à confusion
+    avec le glyphe "paquet" de lpm/.zgp ni le "verre" de .zgr, et reste pertinent même si un
+    raccourci lance autre chose qu'un jeu au sens strict.
+  -->
+  <defs>
+    <linearGradient id="gamesGray" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#363636"/>
+      <stop offset="1" stop-color="#202020"/>
+    </linearGradient>
+    <linearGradient id="highlightFade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="0.82" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="1"    stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8.672" y="8.672" width="102.656" height="102.656" rx="21.211"
+        fill="url(#gamesGray)"
+        stroke="#000000" stroke-opacity="0.65" stroke-width="0.35"/>
+
+  <!-- liseré clair du haut : uniquement le segment droit (entre le début des deux arrondis),
+       jamais sur la courbe elle-même ; s'estompe jusqu'à zéro à chaque extrémité (gradient
+       sur le trait), au lieu de s'arrêter net -->
+  <path d="M 29.883 9.872 L 90.117 9.872"
+        fill="none" stroke="url(#highlightFade)" stroke-opacity="0.16" stroke-width="0.4"/>
+  <!-- liseré clair du bas : idem, symétrique -->
+  <path d="M 29.883 110.128 L 90.117 110.128"
+        fill="none" stroke="url(#highlightFade)" stroke-opacity="0.18" stroke-width="0.4"/>
+
+  <!-- Glyphe manette de jeu, centré sur (60,60), formule translate = 60 - 12*scale -->
+  <g transform="translate(16.86,16.86) scale(3.595)" fill="none" stroke="#FFFFFF" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 8a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2l0 -8" />
+    <path d="M6 12h4m-2 -2v4" />
+    <path d="M15 11l0 .01" />
+    <path d="M18 13l0 .01" />
+  </g>
+</svg>

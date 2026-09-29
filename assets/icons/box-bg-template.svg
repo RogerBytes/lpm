@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!--
+    Gabarit de fond "carton" pour les icônes de fichiers lpm (.zgp / .zgr), vierge (sans
+    glyphe), pour validation avant d'y coller un glyphe.
+
+    Silhouette reprise telle quelle (coordonnées non modifiées) du thème d'icônes de Harry
+    (Mint-L-Blue), depuis le dépôt public linuxmint/mint-l-icons (licence GPLv3),
+    src/mimetypes/48/package-x-generic.svg : path87 (corps du carton) + path91 (ligne
+    d'adhésif). Viewport d'origine 48x48, mis à l'échelle x2.5 pour remplir notre canevas
+    120x120 (48 * 2.5 = 120), sans autre transformation ; la marge/proportions internes du
+    tracé d'origine sont conservées telles quelles.
+
+    Recoloration : dégradé jaune->orange (le même que lpm.svg et lutris-bg-template.svg),
+    à la place du brun carton d'origine du thème. Un fin contour noir semi-transparent
+    (opacité 0.4) souligne le tracé, cohérent avec le reste de la famille d'icônes lpm ;
+    la ligne d'adhésif est un simple fill noir semi-transparent (opacité 0.18) par-dessus.
+    Trait de pli du rabat : sur l'icône d'origine, un rectangle interne (path93, coin haut
+    à y=17.5) souligne la ligne où le rabat du dessus (vu légèrement de biais, d'où les
+    coins coupés en diagonale) rejoint la face avant du carton ; repris ici comme un simple
+    trait horizontal (mêmes coordonnées x=4.5 à x=43.5, y=17.5 en unités du tracé
+    d'origine), en noir semi-transparent, plus discret que le contour principal.
+
+    Choisie à la place d'un carré plein (lpm.svg) ou d'un coin corné "page" : la forme de
+    boîte est un repère universel de "ceci est un paquet/fichier", donc bien distincte de
+    l'icône carrée pleine de l'appli lpm elle-même, tout en restant cohérente avec le thème
+    système de Harry.
+
+    Ce fichier n'est pas utilisé tel quel par lpm (ni installé, ni référencé par
+    install.sh) ; c'est un gabarit de réserve, à dupliquer avec ce même fond pour y coller
+    un glyphe blanc plat centré (viewBox 24x24, formule de centrage dans un canevas
+    120x120 : translate = 60 - 12*scale, quel que soit le contenu du fond puisque le
+    canevas et son centre (60,60) ne changent pas).
+  -->
+  <defs>
+    <linearGradient id="lutrisYellowOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#FBBF00"/>
+      <stop offset="0.24" stop-color="#FBBF00"/>
+      <stop offset="1"    stop-color="#E8600E"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="scale(2.5)">
+    <path d="m 9.01,8.5 29.498,0 c 1.722,0 2.497,-0.287 2.992,1 l 3.002,8 0,25.674 c 0,1.553 0.103,1.316 -1.62,1.316 l -37.765,0 c -1.722,0 -1.619,0.237 -1.619,-1.316 l 0,-25.674 3.002,-8 c 0.48,-1.26 0.789,-1 2.51,-1 z"
+          fill="url(#lutrisYellowOrange)" stroke="#000000" stroke-opacity="0.4" stroke-width="0.14"/>
+    <path d="m 22,8 4,0 0,14 C 25.606,22 25.213,21.229 24.819,21.229 24.416,21.229 24.013,22 23.609,22 23.285,22 22.96,21.325 22.636,21.325 22.424,21.325 22.212,22 22,22 L 22,8 Z"
+          fill="#000000" fill-opacity="0.18"/>
+    <path d="M4.5,17.5 L43.5,17.5" stroke="#000000" stroke-opacity="0.22" stroke-width="0.14"/>
+  </g>
+</svg>
