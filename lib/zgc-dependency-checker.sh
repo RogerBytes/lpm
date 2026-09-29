@@ -13,6 +13,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 source "${script_dir}/zgu-progress-utils.sh"
 # shellcheck source=./zgu-focus-utils.sh
 source "${script_dir}/zgu-focus-utils.sh"
+# shellcheck source=./zgu-lsfg-utils.sh
+source "${script_dir}/zgu-lsfg-utils.sh"
 
 # --- Récupération des arguments du routeur lpm ---
 # $1 = mode ("cli" depuis le terminal, "gui" ou vide depuis le menu Zenity)
@@ -45,6 +47,18 @@ say_err() {
   else
     zenity --error --text="$1" --width=450 2>/dev/null
   fi
+}
+
+# Présence d'AntimicroX (fork maintenu du projet "antimicro", voir
+# https://github.com/AntiMicroX/antimicrox) : binaire natif sous l'un ou l'autre nom (l'ancien
+# "antimicro" original n'est plus maintenu mais reste installable sur certaines distros), ou
+# application Flatpak "io.github.antimicrox.antimicrox" (id vérifié sur Flathub). Présence
+# uniquement, comme zgu_lsfg_vk_present : aucune vérification de version.
+zgu_antimicro_present() {
+  command -v antimicrox >/dev/null 2>&1 && return 0
+  command -v antimicro >/dev/null 2>&1 && return 0
+  flatpak list --app --columns=application 2>/dev/null | grep -qx "io.github.antimicrox.antimicrox" && return 0
+  return 1
 }
 
 # 1. Vérification des dépendances nécessaires
@@ -135,6 +149,13 @@ games_list=$(sqlite3 "${lutris_db}" "SELECT name || char(31) || slug || char(31)
 declare -A games_needing_runner   # runner_name -> "jeu1, jeu2, ..."
 required_runners=()
 
+# Jeux référençant lsfg-vk (LSFGVK_ENV=1 dans system.env) et/ou AntimicroX (clé
+# system.antimicro_config, gérée nativement par Lutris) -- alimentés dans la MÊME boucle que
+# la lecture du runner requis ci-dessous, pour ne lire chaque YAML qu'une seule fois (un
+# python3 par jeu, pas trois).
+lsfg_games=()
+antimicro_games=()
+
 while IFS=$'\x1f' read -r game_name game_slug configpath; do
   [[ -z "${game_slug}" ]] && continue
   [[ -z "${configpath}" ]] && continue
@@ -142,16 +163,26 @@ while IFS=$'\x1f' read -r game_name game_slug configpath; do
   yml_path="${lutris_config_dir}/${configpath}.yml"
   [[ -f "${yml_path}" ]] || continue
 
-  required_runner=$(YML_PATH="${yml_path}" python3 -c '
+  yml_fields=$(YML_PATH="${yml_path}" python3 -c '
 import os, yaml
 try:
     with open(os.environ["YML_PATH"], "r") as f:
         data = yaml.safe_load(f)
     if isinstance(data, dict):
-        print(data.get("wine", {}).get("version", ""))
+        wine_version = data.get("wine", {}).get("version", "")
+        system = data.get("system") or {}
+        env = system.get("env") or {}
+        lsfg_on = "1" if str(env.get("LSFGVK_ENV", "")) == "1" else ""
+        antimicro_on = "1" if system.get("antimicro_config") else ""
+        print(f"{wine_version}\x1f{lsfg_on}\x1f{antimicro_on}")
 except Exception:
     pass
 ' 2>/dev/null)
+
+  IFS=$'\x1f' read -r required_runner lsfg_on antimicro_on <<< "${yml_fields}"
+
+  [[ -n "${lsfg_on}" ]] && lsfg_games+=("${game_name}")
+  [[ -n "${antimicro_on}" ]] && antimicro_games+=("${game_name}")
 
   [[ -z "${required_runner}" ]] && continue
 
@@ -176,6 +207,105 @@ except Exception:
     games_needing_runner["${required_runner}"]="${games_needing_runner[${required_runner}]}, ${game_name}"
   fi
 done <<< "${games_list}"
+
+# ---------------------------------------------------------------------------------------------
+# 3bis. Vérification lsfg-vk et AntimicroX -- placée AVANT les "exit 0" anticipés de la
+# section runners ci-dessous : ces deux dépendances sont indépendantes des runners (un jeu
+# peut avoir son runner présent et lsfg-vk/AntimicroX absent, ou l'inverse), donc ce bloc ne
+# doit jamais être court-circuité par un "aucun runner requis"/"tous les runners présents".
+# Chacune des deux n'est vérifiée que si au moins un jeu installé la référence réellement
+# (LSFGVK_ENV=1 pour lsfg-vk, system.antimicro_config pour AntimicroX) : comme pour les
+# runners, on ne signale jamais une dépendance que l'utilisateur n'utilise pas.
+# ---------------------------------------------------------------------------------------------
+
+if [[ ${#lsfg_games[@]} -gt 0 ]]; then
+  lutris_is_flatpak_bool=false
+  [[ "${lutris_version}" = "flatpak" ]] && lutris_is_flatpak_bool=true
+
+  if ! zgu_lsfg_vk_present "${lutris_is_flatpak_bool}"; then
+    lsfg_game_list=$(IFS=', '; echo "${lsfg_games[*]}")
+
+    if [[ "${mode}" = "cli" ]]; then
+      t check.lsfg_missing_cli "${lsfg_game_list}"
+    else
+      say "$(t check.lsfg_missing_gui "${lsfg_game_list}")"
+    fi
+
+    if [[ "${lutris_is_flatpak_bool}" = true ]]; then
+      lsfg_runtime_version=$(zgu_lsfg_resolve_freedesktop_runtime_version)
+      if [[ -z "${lsfg_runtime_version}" ]]; then
+        say_err "$(t lsfg.flatpak_runtime_unknown)"
+      else
+        lsfg_do_install=false
+        if [[ "${mode}" = "cli" ]]; then
+          t lsfg.install_flatpak_confirm_cli "${lsfg_runtime_version}"
+          read -r -p "$(t lsfg.confirm_prompt_cli)" lsfg_response
+          [[ "${lsfg_response}" =~ ^[oOyY] ]] && lsfg_do_install=true
+        else
+          if zenity --question --title="$(t lsfg.install_title)" \
+            --text="$(t lsfg.install_flatpak_confirm "${lsfg_runtime_version}")" \
+            --ok-label="$(t lsfg.btn_validate)" --cancel-label="$(t lsfg.btn_cancel)" \
+            --width=480 2>/dev/null; then
+            lsfg_do_install=true
+          fi
+        fi
+
+        if [[ "${lsfg_do_install}" = true ]]; then
+          lsfg_install_err=$(zgu_lsfg_install_flatpak_do "${lsfg_runtime_version}")
+          if [[ $? -eq 0 ]]; then
+            say "$(t check.lsfg_installed_success)"
+          else
+            say_err "$(t lsfg.flatpak_install_failed "${lsfg_install_err}")"
+          fi
+        fi
+      fi
+    else
+      # Natif : pas d'install auto possible (pas de paquet universel lsfg-vk), même limite
+      # que "lpm lsfg" -- on se contente d'indiquer où trouver les instructions.
+      say "$(t check.lsfg_native_hint)"
+    fi
+  fi
+fi
+
+if [[ ${#antimicro_games[@]} -gt 0 ]]; then
+  if ! zgu_antimicro_present; then
+    antimicro_game_list=$(IFS=', '; echo "${antimicro_games[*]}")
+
+    if [[ "${mode}" = "cli" ]]; then
+      t check.antimicro_missing_cli "${antimicro_game_list}"
+    else
+      say "$(t check.antimicro_missing_gui "${antimicro_game_list}")"
+    fi
+
+    if command -v flatpak >/dev/null 2>&1; then
+      antimicro_do_install=false
+      if [[ "${mode}" = "cli" ]]; then
+        t check.antimicro_install_offer_cli
+        read -r -p "$(t lsfg.confirm_prompt_cli)" antimicro_response
+        [[ "${antimicro_response}" =~ ^[oOyY] ]] && antimicro_do_install=true
+      else
+        if zenity --question --title="$(t check.antimicro_install_title)" \
+          --text="$(t check.antimicro_install_offer_gui)" \
+          --ok-label="$(t lsfg.btn_validate)" --cancel-label="$(t lsfg.btn_cancel)" \
+          --width=480 2>/dev/null; then
+          antimicro_do_install=true
+        fi
+      fi
+
+      if [[ "${antimicro_do_install}" = true ]]; then
+        flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1
+        antimicro_install_err=$(flatpak install --user -y flathub io.github.antimicrox.antimicrox 2>&1 >/dev/null)
+        if [[ $? -eq 0 ]]; then
+          say "$(t check.antimicro_installed_success)"
+        else
+          say_err "$(t check.antimicro_install_failed "${antimicro_install_err}")"
+        fi
+      fi
+    else
+      say "$(t check.antimicro_no_flatpak_hint)"
+    fi
+  fi
+fi
 
 if [[ ${#required_runners[@]} -eq 0 ]]; then
   say "$(t check.no_games_reference_runner)"

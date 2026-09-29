@@ -65,6 +65,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 source "${script_dir}/zgu-checklist-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-lsfg-utils.sh
+source "${script_dir}/zgu-lsfg-utils.sh"
 
 # --- 0. Mode CLI vs GUI, et validation de la syntaxe CLI ---
 will_use_zenity=true
@@ -152,64 +154,16 @@ if [[ ! -f "${lutris_db}" ]]; then
 fi
 
 # --- 2. Détection de lsfg-vk installé (présence uniquement, voir avertissement en tête
-# de fichier sur la limite de cette vérification) ---
+# de fichier sur la limite de cette vérification). Fonctions partagées avec "lpm check",
+# voir zgu-lsfg-utils.sh (sourcé plus haut). ---
 zgp_lsfg_vk_present() {
-  if [[ "${lutris_is_flatpak}" = true ]]; then
-    flatpak list --runtime --columns=application 2>/dev/null | grep -qx "org.freedesktop.Platform.VulkanLayer.lsfgvk"
-    return $?
-  fi
-
-  local dir f
-  for dir in \
-    "${HOME}/.local/share/vulkan/implicit_layer.d" \
-    "/usr/share/vulkan/implicit_layer.d" \
-    "/usr/local/share/vulkan/implicit_layer.d" \
-    "/etc/vulkan/implicit_layer.d"; do
-    [[ -d "${dir}" ]] || continue
-    f=$(find "${dir}" -maxdepth 1 -type f -iname "*lsfg*" -print -quit 2>/dev/null)
-    [[ -n "${f}" ]] && return 0
-  done
-  return 1
+  zgu_lsfg_vk_present "${lutris_is_flatpak}"
 }
 
 # --- 3. Installation de lsfg-vk si absente ---
-#
-# Le layer VulkanLayer.lsfgvk n'est publié QUE pour des versions de "org.freedesktop.Platform"
-# (23.08/24.08/25.08). Mais Lutris (comme beaucoup d'applis GNOME) tourne sur
-# "org.gnome.Platform/x86_64/<version GNOME, ex: 49>", pas directement sur
-# org.freedesktop.Platform -- et CE runtime GNOME n'expose, via "flatpak info", AUCUNE ligne
-# "Runtime:" permettant de retrouver la version freedesktop sous-jacente (vérifié en
-# conditions réelles : ce champ n'existe tout simplement pas pour un runtime, seulement pour
-# une appli). Pas de mapping GNOME-vers-freedesktop fiable et documenté non plus (change à
-# chaque cycle de sortie) -- deviner serait aussi fragile que le premier essai raté.
-#
-# Solution retenue, vérifiée en conditions réelles : réutiliser la version freedesktop d'une
-# extension VulkanLayer DÉJÀ installée sur la machine (ex: org.freedesktop.Platform.
-# VulkanLayer.MangoHud, très répandue) -- la preuve la plus fiable qui soit qu'un layer
-# freedesktop de cette version fonctionne déjà avec ce runtime GNOME/KDE précis, sur cette
-# machine précise, sans avoir à deviner de correspondance théorique. À défaut, repli sur la
-# version la plus récente de org.freedesktop.Platform réellement installée (system ou user) :
-# une base déjà présente sur la machine, jamais une version choisie au hasard.
-zgp_lsfg_resolve_freedesktop_runtime_version() {
-  local existing latest
-  existing=$(flatpak list --runtime --columns=application,branch 2>/dev/null | awk -F'\t' '$1 ~ /^org\.freedesktop\.Platform\.VulkanLayer\./ {print $2; exit}')
-  if [[ -n "${existing}" ]]; then
-    echo "${existing}"
-    return 0
-  fi
-
-  latest=$(flatpak list --runtime --columns=application,branch 2>/dev/null | awk -F'\t' '$1 == "org.freedesktop.Platform" {print $2}' | sort -V | tail -n1)
-  if [[ -n "${latest}" ]]; then
-    echo "${latest}"
-    return 0
-  fi
-
-  return 1
-}
-
 zgp_lsfg_install_flatpak() {
   local runtime_version
-  runtime_version=$(zgp_lsfg_resolve_freedesktop_runtime_version)
+  runtime_version=$(zgu_lsfg_resolve_freedesktop_runtime_version)
 
   if [[ -z "${runtime_version}" ]]; then
     zgp_lsfg_report_error_early "$(t lsfg.flatpak_runtime_unknown)"
@@ -230,16 +184,8 @@ zgp_lsfg_install_flatpak() {
     [[ "${response}" =~ ^[oOyY] ]] || return 1
   fi
 
-  # "flatpak install --user" échoue silencieusement en "No remote refs found" si aucun
-  # dépôt --user (Flathub) n'est configuré à ce niveau -- cas fréquent sur une machine où
-  # Flathub n'a été ajouté qu'en système (--system) au moment de l'install de Lutris, pas
-  # en --user : les deux dépôts sont indépendants dans Flatpak. On s'assure donc que le
-  # dépôt Flathub --user existe (idempotent, "--if-not-exists" ne fait rien s'il est déjà
-  # là) avant de tenter l'install, plutôt que de deviner et d'échouer sans piste.
-  flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1
-
   local install_err
-  install_err=$(flatpak install --user -y flathub "org.freedesktop.Platform.VulkanLayer.lsfgvk//${runtime_version}" 2>&1 >/dev/null)
+  install_err=$(zgu_lsfg_install_flatpak_do "${runtime_version}")
   if [[ $? -ne 0 ]]; then
     zgp_lsfg_report_error_early "$(t lsfg.flatpak_install_failed "${install_err}")"
     return 1

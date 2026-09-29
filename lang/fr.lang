@@ -99,6 +99,18 @@ check.detail_label=Détail :
 check.unresolved_detail_item= - %s : requis par %s
 check.manual_install_hint=Pour chacun : installez-le via un fichier .zgr (lpm install-runner <fichier>.zgr), ou via ProtonUp-Qt.
 check.unresolved_gui_title=Runners manquants
+check.lsfg_missing_cli=lsfg-vk n'est pas installé, mais il est activé pour : %s
+check.lsfg_missing_gui=lsfg-vk n'est pas installé, mais il est activé pour : %s
+check.lsfg_installed_success=lsfg-vk a été installé avec succès.
+check.lsfg_native_hint=Lancez 'lpm lsfg' pour obtenir les instructions d'installation adaptées à votre distribution.
+check.antimicro_missing_cli=AntimicroX n'est pas installé, mais il est référencé par : %s
+check.antimicro_missing_gui=AntimicroX n'est pas installé, mais il est référencé par : %s
+check.antimicro_install_title=Installation d'AntimicroX
+check.antimicro_install_offer_cli=Installer AntimicroX depuis Flathub maintenant ? Aucun mot de passe ne sera demandé.
+check.antimicro_install_offer_gui=AntimicroX est introuvable. L'installer depuis Flathub maintenant ? Aucun mot de passe ne sera demandé.
+check.antimicro_installed_success=AntimicroX a été installé avec succès.
+check.antimicro_install_failed=Erreur : l'installation Flatpak d'AntimicroX a échoué.\n%s
+check.antimicro_no_flatpak_hint=Flatpak n'est pas disponible pour l'installer automatiquement. Installez AntimicroX via le gestionnaire de paquets de votre distribution, ou consultez https://antimicrox.github.io/guide/installation.html
 
 # --- lpm lutris-version ---
 lutris_version.zenity_missing=Erreur : 'zenity' n'est pas installé pour l'interface graphique.
