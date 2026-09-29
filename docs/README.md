@@ -8,7 +8,7 @@ Back up, transfer and reinstall your Wine/Lutris games in one click.
 
 <p align="center">
   <a href="https://github.com/RogerBytes/lpm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RogerBytes/lpm"></a>
-  <a href="LICENCE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-green"></a>
 </p>
 
 <p align="center">
@@ -158,7 +158,7 @@ For any other extra file (Antimicro `.amgp` controller config, personal scripts.
 
 ## License and contributing
 
-This project is licensed under the MIT license (see [`LICENSE`](./LICENSE)), except for three icon files under GPLv3. The name "Ludis Package Manager"/"lpm" and the project logo are not covered by this license.
+This project is licensed under the MIT license (see [`LICENSE`](LICENSE)), except for three icon files under GPLv3. The name "Ludis Package Manager"/"lpm" and the project logo are not covered by this license.
 
 To contribute, report a bug, or suggest a feature, see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
