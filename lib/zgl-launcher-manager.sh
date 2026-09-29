@@ -23,10 +23,12 @@
 #      lpm-launcher.yml), convertit les chemins natifs Linux en chemins Windows (C:\...)
 #      via winepath -w -- nécessaire uniquement pour l'entrée auto-remplie, l'utilisateur
 #      tape lui-même en Windows pour toute entrée ajoutée à la main. Crée
-#      $GAMEDIR/scripts/lpm-launcher.sh (relais, appelle zgl-launcher-runtime.sh) et
-#      $GAMEDIR/splash/splash.png (image par défaut, copiée seulement si absente -- ne
-#      jamais écraser une personnalisation existante). Branche system.prelaunch_command et
-#      règle game.exe sur lpm-launch.bat.
+#      $GAMEDIR/scripts/lpm-launcher.sh (relais, appelle zgl-launcher-runtime.sh). AUCUNE
+#      image splash par défaut n'est copiée : l'absence de $GAMEDIR/splash/splash.png
+#      signifie "écran de chargement noir uni" pour l'orchestrateur (voir
+#      lib/zgl-launcher-orchestrator.sh) -- un splash.png déjà présent (personnalisation
+#      existante) n'est jamais touché. Branche system.prelaunch_command et règle game.exe
+#      sur lpm-launch.bat.
 #   4. Désactivation : restaure l'exe d'origine depuis "original_exe", retire
 #      system.prelaunch_command (seulement s'il référence bien notre script relais),
 #      affiche une alerte invitant à vérifier l'exécutable dans Lutris. Ne supprime JAMAIS
@@ -431,8 +433,18 @@ with open(os.environ["YML_PATH"], "w") as f:
     echo "#    exe: \"C:\\\\Games\\\\...\\\\jeu.exe\""
   } >> "${game_dir}/lpm-launcher.yml"
 
-  # --- Dossiers scripts/ et splash/ ---
-  mkdir -p "${game_dir}/scripts" "${game_dir}/splash"
+  # --- Dossier scripts/ ---
+  #
+  # AUCUNE image splash par défaut n'est plus copiée ici : depuis l'introduction de
+  # l'orchestrateur (lib/zgl-launcher-orchestrator.sh), l'absence de
+  # "${game_dir}/splash/splash.png" signifie explicitement "écran de chargement noir uni"
+  # -- copier une image par défaut ici irait à l'encontre de ce choix pour tout jeu activant
+  # le LPM Launcher pour la première fois. Le dossier splash/ lui-même n'est donc plus créé
+  # d'office non plus : il est créé par l'orchestrateur au moment où une vraie image y est
+  # déposée par l'utilisateur (ou jamais, si le noir uni convient). Un splash.png déjà
+  # présent (personnalisation existante, ou dossier splash/ d'un jeu activé avant ce
+  # changement) n'est jamais touché ni supprimé par "lpm launcher ... on".
+  mkdir -p "${game_dir}/scripts"
 
   cat > "${game_dir}/scripts/lpm-launcher.sh" <<EOF
 #!/bin/bash
@@ -441,10 +453,6 @@ with open(os.environ["YML_PATH"], "w") as f:
 exec bash "${script_dir}/zgl-launcher-runtime.sh" "${game_dir}"
 EOF
   chmod +x "${game_dir}/scripts/lpm-launcher.sh"
-
-  if [[ ! -f "${game_dir}/splash/splash.png" ]]; then
-    cp -f -- "${script_dir}/launcher-splash-default.png" "${game_dir}/splash/splash.png" 2>/dev/null
-  fi
 
   # --- Branchement dans la config Lutris : game.exe + system.prelaunch_command ---
   #

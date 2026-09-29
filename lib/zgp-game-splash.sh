@@ -12,7 +12,9 @@
 # "lpm icon" (voir zgp-game-icon.sh, dont ce fichier reprend la structure quasi à l'identique)
 # -- seule fonctionnalité qui dépend d'un service tiers (réseau + clé API), une panne de
 # SteamGridDB ou l'absence de clé ne doit jamais bloquer l'activation du launcher, qui reste
-# 100% autonome grâce à l'image par défaut embarquée (lib/launcher-splash-default.png).
+# 100% autonome sans cette commande : "lpm launcher ... on" ne pose plus aucune image par
+# défaut, l'absence de $GAMEDIR/splash/splash.png donnant simplement un écran de chargement
+# noir uni côté orchestrateur (voir zgl-launcher-manager.sh / zgl-launcher-orchestrator.sh).
 #
 # Indépendant de l'état d'activation du launcher : $GAMEDIR/splash/ est créé ici si absent,
 # que "lpm launcher ... on" ait déjà été lancé pour ce jeu ou non -- rien n'oblige à activer
@@ -20,8 +22,8 @@
 #
 # $1, $2... = slugs de jeux cibles en CLI, ou "--all" pour tous les jeux éligibles. Vide =>
 # mode interactif Zenity, liste à cocher de tous les jeux installés, pré-cochant uniquement
-# ceux qui n'ont pas encore de bannière personnalisée (voir zgp_splash_has_custom_splash plus
-# bas -- une bannière identique à celle embarquée par défaut compte comme "pas personnalisée").
+# ceux qui n'ont pas encore de bannière (voir zgp_splash_has_custom_splash plus bas -- simple
+# présence de $GAMEDIR/splash/splash.png, plus aucune image par défaut embarquée à comparer).
 cli_targets=("$@")
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -167,15 +169,14 @@ if [[ ${#sorted_slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Une bannière compte comme "personnalisée" si $GAMEDIR/splash/splash.png existe ET diffère
-# (comparaison binaire) de l'image par défaut embarquée -- une simple présence ne suffit pas :
-# "lpm launcher ... on" copie déjà l'image par défaut dans ce même fichier si absent, donc la
-# plupart des jeux ont un splash.png qui n'a en réalité jamais été choisi par l'utilisateur.
+# Une bannière compte comme "personnalisée" dès que $GAMEDIR/splash/splash.png existe :
+# plus aucune image par défaut n'est embarquée/copiée nulle part dans le projet (voir
+# zgl-launcher-manager.sh), donc une simple présence suffit -- pas de comparaison binaire à
+# faire, ce fichier n'a jamais pu être posé que par l'utilisateur lui-même (à la main, ou via
+# "lpm splash").
 zgp_splash_has_custom_splash() {
   local f="${1}/splash/splash.png"
-  [[ -f "${f}" ]] || return 1
-  cmp -s "${f}" "${script_dir}/launcher-splash-default.png" && return 1
-  return 0
+  [[ -f "${f}" ]]
 }
 
 # --- 4. Sélection des jeux cibles ---
