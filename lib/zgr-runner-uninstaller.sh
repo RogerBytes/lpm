@@ -28,6 +28,19 @@ lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 uninstall_runner_display_mode="gui"
 [[ ${#cli_runners[@]} -gt 0 ]] && uninstall_runner_display_mode="cli"
 lutris_version=$(zgu_resolve_lutris_version "${uninstall_runner_display_mode}" "" "${lutris_package_runner_dir}")
+if [[ -z "${lutris_version}" ]]; then
+  # Détection explicite (alignée sur les autres scripts de lib/, ex. zgr-runner-packer.sh) :
+  # un repli silencieux vers le chemin natif par défaut donnerait un message "dossier
+  # introuvable" plus loin dans le script, bien moins clair que la vraie cause (Lutris non
+  # installé). Réutilise les clés pack_runner.lutris_missing_* (même message, cohérence
+  # avec le reste du projet plutôt que dupliquer une clé identique).
+  if [[ ${#cli_runners[@]} -gt 0 ]]; then
+    zgu_cli_error "$(t pack_runner.lutris_missing_cli)"
+  else
+    zenity --error --text="$(t pack_runner.lutris_missing_gui)" 2>/dev/null
+  fi
+  exit 1
+fi
 case "${lutris_version}" in
   flatpak) runner_dir="${lutris_flatpak_runner_dir}" ;;
   native) runner_dir="${lutris_package_runner_dir}" ;;

@@ -192,18 +192,7 @@ if [[ ${#cli_games[@]} -gt 0 ]]; then
     if [[ -n "${found_name}" ]]; then
       games_to_delete+=("${found_name}")
     else
-      # Recherche par correspondance partielle de slug
-      matched_name=""
-      for g_name in "${!slug_by_name[@]}"; do
-        if [[ "${slug_by_name[${g_name}]}" = "${target_slug}" ]]; then
-          matched_name="${g_name}"
-          break
-        fi
-      done
-      
-      if [[ -n "${matched_name}" ]]; then
-        games_to_delete+=("${matched_name}")
-      elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
+      if [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
         zgu_cli_error "$(t uninstall_game.slug_blacklisted "${target_slug}")"
         exit 1
       else
@@ -328,7 +317,7 @@ if [[ ${#cli_games[@]} -gt 0 ]]; then
     # Lutris elle-même (donc fiables en pratique), mais toute valeur interpolée dans une
     # requête SQL doit l'être de façon homogène dans tout le projet.
     safe_game_slug="${game_slug//\'/\'\'}"
-    prefix_dir=$(sqlite3 "${lutris_db}" "SELECT directory FROM games WHERE slug='${safe_game_slug}';")
+    prefix_dir=$(sqlite3 "${lutris_db}" "SELECT directory FROM games WHERE slug='${safe_game_slug}' AND runner='wine' LIMIT 1;")
     [[ -z "${prefix_dir}" ]] && prefix_dir="${dir_by_name[${game_name}]}"
 
     # A. Suppression du préfixe physique sur le disque
@@ -393,7 +382,7 @@ else
       esac
 
       safe_game_slug="${game_slug//\'/\'\'}"
-      prefix_dir=$(sqlite3 "${lutris_db}" "SELECT directory FROM games WHERE slug='${safe_game_slug}';")
+      prefix_dir=$(sqlite3 "${lutris_db}" "SELECT directory FROM games WHERE slug='${safe_game_slug}' AND runner='wine' LIMIT 1;")
       [[ -z "${prefix_dir}" ]] && prefix_dir="${dir_by_name[${game_name}]}"
 
       if ! safe_delete_prefix_dir "${prefix_dir}"; then

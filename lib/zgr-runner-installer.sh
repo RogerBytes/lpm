@@ -243,7 +243,7 @@ if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
 
   for target in "${cli_targets[@]}"; do
     if [[ -f "${target}" ]]; then
-      runner_name=$(basename "${target}" .zgr)
+      runner_name=$(basename -- "${target}" .zgr)
       runner_source["${runner_name}"]="local"
       runner_archive["${runner_name}"]="${target}"
     else

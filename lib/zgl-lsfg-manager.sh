@@ -529,15 +529,13 @@ try:
 except Exception as e:
     print(str(e))
     raise SystemExit(1)
-' 2>/tmp/lpm-lsfg-err.$$
+' 2>/dev/null
   local py_status=$?
   if [[ "${py_status}" -ne 0 ]]; then
     zgp_lsfg_report_error_early "$(t lsfg.yaml_patch_failed "${slug}")"
     zgu_log "lsfg" "ERREUR" "slug=${slug} raison=patch_yaml_echoue"
-    rm -f "/tmp/lpm-lsfg-err.$$"
     return 1
   fi
-  rm -f "/tmp/lpm-lsfg-err.$$"
 
   zgu_log "lsfg" "OK" "slug=${slug} action=${mode}"
   return 0

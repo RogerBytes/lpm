@@ -43,7 +43,7 @@ will_use_zenity=true
 [[ "${mode}" = "cli" ]] && will_use_zenity=false
 
 if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  t game_tools.zenity_missing
+  zgu_cli_error "$(t game_tools.zenity_missing)"
   exit 1
 fi
 if [[ "${will_use_zenity}" = true ]]; then
