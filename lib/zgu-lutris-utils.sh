@@ -21,22 +21,31 @@ check_flatpak_lutris_installed() {
 }
 
 # Retourne 0 (vrai) si Lutris semble installé en paquet natif (par opposition à Flatpak),
-# 1 (faux) sinon. Cette détection centralisée combine trois signaux (command -v lutris,
-# existence de pga.db, existence du dossier des runners Wine natif) : se limiter à un seul
-# signal laisserait passer les cas où le binaire "lutris" n'est pas dans le PATH (installation
-# non standard, profil résiduel après désinstallation, etc.), et une détection incohérente
-# entre les fichiers de lib/ ferait échouer certaines commandes de lpm avec "Lutris introuvable"
-# alors que d'autres fonctionneraient, pour la même machine dans le même état.
+# 1 (faux) sinon.
 #
-# Chaque appelant passe les chemins qu'il a sous la main (chaîne vide pour ceux qu'il n'a
-# pas) ; n'importe quel signal positif suffit à confirmer une installation native.
+# ANCIENNE VERSION (bug corrigé) : combinait "command -v lutris" avec l'existence de pga.db
+# et du dossier des runners Wine natifs -- l'idée étant qu'un signal seul (le PATH) laisserait
+# passer une installation non standard. Problème réel, remonté par un utilisateur : désinstaller
+# le paquet natif (apt/dnf/pacman) ne touche JAMAIS à "~/.local/share/lutris/" -- c'est un
+# dossier de données UTILISATEUR, jamais géré par un gestionnaire de paquets, sur aucune
+# distro. pga.db et runners/wine y restent donc orphelins indéfiniment après désinstallation,
+# et les deux signaux "fichiers résiduels" restaient vrais pour toujours -- lpm continuait de
+# croire Lutris natif installé alors qu'il avait été retiré, avec Flatpak comme seule version
+# restante (confirmé réel : un utilisateur a désinstallé le paquet natif, gardé Flatpak, et
+# lpm continuait de lui proposer le choix "les deux versions sont installées").
+#
+# Nouvelle détection : uniquement l'EXÉCUTABLE réel, présent sur le disque -- dans le PATH
+# (cas normal), ou à un des emplacements standards des paquets Lutris (Debian/RPM/Arch)
+# même si le PATH ne le contient pas (installation non standard). Jamais de fichier de
+# données : seule la présence du binaire lui-même signale une installation encore active.
 check_native_lutris_installed() {
-  local package_db="$1"
-  local package_runner_dir="$2"
-
   command -v lutris >/dev/null 2>&1 && return 0
-  [[ -n "${package_db}" ]] && [[ -f "${package_db}" ]] && return 0
-  [[ -n "${package_runner_dir}" ]] && [[ -d "${package_runner_dir}" ]] && return 0
+
+  local candidate
+  for candidate in /usr/bin/lutris /usr/local/bin/lutris /usr/games/lutris /opt/lutris/bin/lutris; do
+    [[ -x "${candidate}" ]] && return 0
+  done
+
   return 1
 }
 
