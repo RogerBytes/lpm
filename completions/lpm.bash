@@ -27,7 +27,7 @@ _lpm_installed_runners() {
 
 _lpm_commands="install install-runner uninstall uninstall-runner pack pack-runner \
 isolate list list-isolable info create-prefix exe-install shortcut icon lsfg \
-list-runner list-remote-runners check lutris-version log"
+tools killwine list-runner list-remote-runners check lutris-version log"
 
 # Niveaux de compression valides (0 à 22, voir bin/lpm : "-[0-9]|-1[0-9]|-2[0-2]") --
 # un token collé ("-9", comme gzip), pas une option suivie d'une valeur séparée.
@@ -122,6 +122,27 @@ _lpm() {
       # complété peut être un slug ou l'action selon où on en est ; on propose les
       # deux ensembles à chaque position, comme pour les autres sous-commandes ici.
       COMPREPLY=($(compgen -W "on off $(_lpm_installed_slugs)" -- "${cur}"))
+      ;;
+    tools)
+      # "lpm tools [slug] [outil] [exe]" : 1er argument = slug de jeu installé, 2e =
+      # outil (winetricks|regedit|winecfg|console|exe|folder), 3e = fichier .exe
+      # (uniquement pertinent si outil=exe).
+      case "${COMP_CWORD}" in
+        2)
+          COMPREPLY=($(compgen -W "$(_lpm_installed_slugs)" -- "${cur}"))
+          ;;
+        3)
+          COMPREPLY=($(compgen -W "winetricks regedit winecfg console exe folder" -- "${cur}"))
+          ;;
+        4)
+          if [[ "${prev}" != -* ]]; then
+            COMPREPLY=($(compgen -f -X '!*.exe' -- "${cur}"))
+          fi
+          ;;
+      esac
+      ;;
+    killwine)
+      COMPREPLY=($(compgen -W "-y" -- "${cur}"))
       ;;
     check)
       COMPREPLY=($(compgen -W "-y" -- "${cur}"))
