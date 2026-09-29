@@ -16,7 +16,7 @@ Back up, transfer and reinstall your Wine/Lutris games in one click.
   <a href="#installation">Installation</a> ·
   <a href="#commands">Commands</a> ·
   <a href="https://github.com/RogerBytes/lpm/issues">Issues</a> ·
-  <a href="docs/Lisez-Moi.md">Français</a>
+  <a href="docs/Lisez-Moi.md">French ReadMe</a>
 </p>
 
 **Ludis Package Manager** lets you back up your Wine games for Lutris as `.zgp` archives and your runners as `.zgr` archives. It centralizes exporting, managing and deleting your archives, while importing takes care of setting everything up so your game is ready to launch right away.
