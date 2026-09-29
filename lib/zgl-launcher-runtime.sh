@@ -21,7 +21,10 @@
 # fichier de contrôle déjà ouvert (chemin fixe, dérivé de "gamedir" -- IDENTIQUE au calcul
 # fait par l'orchestrateur, les deux scripts partent de la même résolution "directory" de la
 # base Lutris, voir zgp-game-shortcutter.sh / zgl-launcher-manager.sh) pour y écrire
-# IND_HIDE/IND_SHOW autour du picker -- jamais pour le créer, jamais pour le fermer. S'il
+# IND_HIDE/IND_SHOW autour du picker -- jamais pour le créer, jamais pour le fermer. Si le
+# jeu a plusieurs entrées, ce script remplace aussi le titre affiché (ligne 3 du fichier de
+# contrôle, posé au nom du jeu par l'orchestrateur) par le libellé de l'entrée choisie, une
+# fois le picker résolu -- un jeu à une seule entrée garde le nom du jeu tel quel. S'il
 # n'existe pas (jeu lancé autrement que via le raccourci lpm, ou écran de chargement
 # désactivé pour ce jeu via ".lpm-no-loadingscreen"), le picker fonctionne quand même, juste
 # sans fond derrière -- dégradation gracieuse, jamais une erreur.
@@ -125,16 +128,44 @@ bat_path="${bat_path_yaml:-${gamedir}/lpm-launch.bat}"
 ctrl_key=$(printf '%s' "${gamedir}" | sha256sum | cut -c1-24)
 control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
+# Relit les lignes 1 (fond) et 3 (titre) telles quelles depuis le fichier de contrôle --
+# utilisé par set_indicator/set_title ci-dessous pour ne modifier QUE la ligne qui les
+# concerne, sans jamais effacer l'autre (l'orchestrateur est seul à écrire la ligne 1, ce
+# script est seul à écrire les lignes 2 et 3, mais les trois doivent survivre à chaque
+# réécriture du fichier, qui remplace tout son contenu).
+read_ctrl_lines() {
+  local mapfile_lines=()
+  mapfile -t mapfile_lines < "${control_file}" 2>/dev/null
+  ctrl_bg_line="${mapfile_lines[0]:-NONE}"
+  ctrl_title_line="${mapfile_lines[2]:-}"
+  [[ -z "${ctrl_bg_line}" ]] && ctrl_bg_line="NONE"
+}
+
 set_indicator() {
   # Best-effort : le fichier de contrôle peut ne pas exister (jeu lancé autrement que via
   # le raccourci lpm, ou écran de chargement désactivé pour ce jeu) -- dans ce cas, on ne
   # touche à rien, le picker s'affiche quand même, juste sans fond derrière.
   [[ -f "${control_file}" ]] || return 0
-  local bg_line
-  bg_line=$(head -n 1 "${control_file}" 2>/dev/null)
-  [[ -z "${bg_line}" ]] && bg_line="NONE"
+  local ctrl_bg_line ctrl_title_line
+  read_ctrl_lines
   {
-    printf '%s\n' "${bg_line}"
+    printf '%s\n' "${ctrl_bg_line}"
+    printf '%s\n' "$1"
+    printf '%s\n' "${ctrl_title_line}"
+  } > "${control_file}" 2>/dev/null
+}
+
+set_title() {
+  # Même principe : remplace uniquement la ligne 3 (titre), préserve le fond et l'état de
+  # l'indicateur tels qu'ils sont au moment de l'appel.
+  [[ -f "${control_file}" ]] || return 0
+  local ctrl_bg_line ctrl_title_line ctrl_indicator_line
+  read_ctrl_lines
+  ctrl_indicator_line=$(sed -n '2p' "${control_file}" 2>/dev/null)
+  [[ -z "${ctrl_indicator_line}" ]] && ctrl_indicator_line="IND_SHOW"
+  {
+    printf '%s\n' "${ctrl_bg_line}"
+    printf '%s\n' "${ctrl_indicator_line}"
     printf '%s\n' "$1"
   } > "${control_file}" 2>/dev/null
 }
@@ -189,6 +220,14 @@ fi
 
 chosen_workdir="${entry_workdirs[${chosen_idx}]}"
 chosen_exe="${entry_exes[${chosen_idx}]}"
+
+# Titre affiché sur l'écran de chargement (voir zgu-launcher-blackscreen.py) : remplacé par
+# le libellé de l'entrée choisie SEULEMENT si le jeu a plusieurs entrées LPM Launcher
+# actives -- un jeu "normal" (une seule entrée, jamais de picker) garde le nom du jeu déjà
+# posé par l'orchestrateur, plus pertinent ici qu'un libellé générique ("Lancement"/"Launch").
+if [[ ${#entry_labels[@]} -gt 1 ]]; then
+  set_title "${entry_labels[${chosen_idx}]}"
+fi
 
 # --- 3. Écriture de lpm-launch.bat (vidé puis réécrit, voir modèle validé par
 # l'utilisateur -- start "" avec titre vide, pas d'appel direct, pour gérer proprement les

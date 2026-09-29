@@ -117,19 +117,27 @@ if [[ -z "${game_id}" ]]; then
   launch_lutris
 fi
 
-row=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || directory FROM games WHERE id = ${game_id} AND runner = 'wine' LIMIT 1;" 2>/dev/null)
+row=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || directory || char(31) || name FROM games WHERE id = ${game_id} AND runner = 'wine' LIMIT 1;" 2>/dev/null)
 
 if [[ -z "${row}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=jeu_introuvable_en_base"
   launch_lutris
 fi
 
-IFS=$'\x1f' read -r slug game_dir <<< "${row}"
+IFS=$'\x1f' read -r slug game_dir game_name <<< "${row}"
 
 if [[ -z "${slug}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=slug_vide_en_base"
   launch_lutris
 fi
+
+# Titre affiché dans le coin bas-droite de l'écran de chargement (voir
+# zgu-launcher-blackscreen.py) : le nom du jeu tel quel par défaut -- remplacé par
+# zgl-launcher-runtime.sh une fois le picker résolu, SEULEMENT si le jeu a plusieurs
+# entrées LPM Launcher actives (voir ce script). \n/\r retirés : "name" vient de la base
+# Lutris (donc potentiellement forgé par un tiers, paquet .zgp partagé), et le protocole du
+# fichier de contrôle est ligne par ligne.
+title_text="${game_name//[$'\n\r']/}"
 
 # Chemin Games personnalisé (si défini dans Lutris) : même repli que zgp-game-shortcutter.sh
 # / zgp-game-installer.sh, utilisé seulement si "directory" est vide en base.
@@ -167,6 +175,7 @@ bg_state="NONE"
 {
   printf '%s\n' "${bg_state}"
   printf '%s\n' "IND_SHOW"
+  printf '%s\n' "${title_text}"
 } > "${control_file}" 2>/dev/null
 
 indicator_text="$(t launcher.loading_text)"

@@ -262,7 +262,7 @@ zgp_sgdb_ensure_key() {
   while true; do
     if [[ "${will_use_zenity}" = true ]]; then
       [[ "${first_try}" = false ]] && zenity --error --text="$(t splash.key_invalid)" 2>/dev/null
-      command -v xdg-open >/dev/null 2>&1 && xdg-open "https://www.steamgriddb.com/profile/preferences" >/dev/null 2>&1 &
+      command -v xdg-open >/dev/null 2>&1 && xdg-open "https://www.steamgriddb.com/profile/preferences/api" >/dev/null 2>&1 &
       candidate=$(zenity --entry --title="$(t splash.key_title)" --text="$(t splash.key_text)" --width=500 2>/dev/null)
     else
       [[ "${first_try}" = false ]] && t splash.key_invalid >&2
