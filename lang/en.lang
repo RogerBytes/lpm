@@ -720,7 +720,7 @@ wine_killer.nothing_running_cli=No Wine/Proton process running.
 help.games_lsfg=lpm lsfg [slugs...] [on|off]
 help.games_lsfg_cont=Enable/disable lsfg-vk (frame generation) for one or more games
 menu.opt_lsfg=⚡ Configure lsfg-vk (frame generation)
-menu.opt_launcher=🎮 Configure the LPM Launcher (splash + episode picker)
+menu.opt_launcher=🎮 Configure the LPM Launcher (multi-executable picker)
 lsfg.cli_usage=Usage: lpm lsfg <slug...> on|off
 lsfg.zenity_missing=Error: "zenity" is required for graphical mode.
 lsfg.cmd_missing=Error: the "%s" command is required and was not found.
@@ -816,7 +816,7 @@ launcher.picker_column=Choose
 launcher.runtime_error=LPM Launcher error: %s
 launcher.loading_text=Loading...
 launcher.launch_timeout_warning=Launch seems to be taking longer than expected -- check Lutris
-help.games_launcher=Enable/disable a splash screen + optional multi-executable picker for a game
+help.games_launcher=Enable/disable a multi-executable picker for a game
 help.games_launcher_cont=  (single or multiple executables: episodes, DLC, bonus content...)
 
 splash.cmd_missing=Error: '%s' is not installed on this system.

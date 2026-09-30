@@ -720,7 +720,7 @@ wine_killer.nothing_running_cli=Aucun process Wine/Proton en cours.
 help.games_lsfg=lpm lsfg [slugs...] [on|off]
 help.games_lsfg_cont=Active/désactive lsfg-vk (génération de frames) pour un ou plusieurs jeux
 menu.opt_lsfg=⚡ Configurer lsfg-vk (génération de frames)
-menu.opt_launcher=🎮 Configurer le LPM Launcher (écran de chargement + sélecteur)
+menu.opt_launcher=🎮 Configurer le LPM Launcher (sélecteur multi-exécutable)
 lsfg.cli_usage=Usage : lpm lsfg <slug...> on|off
 lsfg.zenity_missing=Erreur : "zenity" est requis pour le mode graphique.
 lsfg.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
@@ -816,7 +816,7 @@ launcher.picker_column=Choisir
 launcher.runtime_error=Erreur LPM Launcher : %s
 launcher.loading_text=Chargement...
 launcher.launch_timeout_warning=Le lancement semble anormalement long -- vérifiez Lutris
-help.games_launcher=Active/désactive un écran de chargement + sélecteur multi-exécutable pour un jeu
+help.games_launcher=Active/désactive un sélecteur multi-exécutable pour un jeu
 help.games_launcher_cont=  (un seul exécutable ou plusieurs : épisodes, DLC, contenu bonus...)
 
 splash.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
