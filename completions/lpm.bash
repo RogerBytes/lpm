@@ -26,8 +26,8 @@ _lpm_installed_runners() {
 }
 
 _lpm_commands="install install-runner uninstall uninstall-runner pack pack-runner \
-isolate list list-isolable info create-prefix exe-install shortcut icon lsfg \
-tools killwine list-runner list-remote-runners check lutris-version log"
+isolate list list-isolable info create-prefix exe-install shortcut icon splash lsfg \
+launcher tools killwine list-runner list-remote-runners check lutris-version log"
 
 # Niveaux de compression valides (0 à 22, voir bin/lpm : "-[0-9]|-1[0-9]|-2[0-2]") --
 # un token collé ("-9", comme gzip), pas une option suivie d'une valeur séparée.
@@ -75,10 +75,10 @@ _lpm() {
       COMPREPLY=($(compgen -W "-y $(_lpm_installed_runners)" -- "${cur}"))
       ;;
     pack)
-      COMPREPLY=($(compgen -W "${_lpm_compression_opts} $(_lpm_installed_slugs)" -- "${cur}"))
+      COMPREPLY=($(compgen -W "--all ${_lpm_compression_opts} $(_lpm_installed_slugs)" -- "${cur}"))
       ;;
     pack-runner)
-      COMPREPLY=($(compgen -W "${_lpm_compression_opts} $(_lpm_installed_runners)" -- "${cur}"))
+      COMPREPLY=($(compgen -W "--all ${_lpm_compression_opts} $(_lpm_installed_runners)" -- "${cur}"))
       ;;
     isolate)
       # "isolate" opère par STORE, pas par jeu : on propose les codes de store connus, ainsi
@@ -112,15 +112,17 @@ _lpm() {
         done
       fi
       ;;
-    shortcut|icon)
+    shortcut|icon|splash)
       # "--all" ou une liste de slugs de jeux déjà installés.
       COMPREPLY=($(compgen -W "--all $(_lpm_installed_slugs)" -- "${cur}"))
       ;;
-    lsfg)
-      # "lpm lsfg [slugs...] [on|off]" : slugs de jeux Wine/Proton installés, plus
-      # "on"/"off" en dernière position (voir zgl-lsfg-manager.sh). Le dernier mot
-      # complété peut être un slug ou l'action selon où on en est ; on propose les
-      # deux ensembles à chaque position, comme pour les autres sous-commandes ici.
+    lsfg|launcher)
+      # "lpm lsfg [slugs...] [on|off]" et "lpm launcher [slugs...] [on|off]" : slugs de
+      # jeux Wine/Proton installés, plus "on"/"off" en dernière position (voir
+      # zgl-lsfg-manager.sh / zgl-launcher-manager.sh, même schéma d'arguments pour les
+      # deux commandes). Le dernier mot complété peut être un slug ou l'action selon où
+      # on en est ; on propose les deux ensembles à chaque position, comme pour les
+      # autres sous-commandes ici.
       COMPREPLY=($(compgen -W "on off $(_lpm_installed_slugs)" -- "${cur}"))
       ;;
     tools)

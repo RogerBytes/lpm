@@ -47,7 +47,9 @@ _lpm_commands() {
     'exe-install:Install a Windows executable into a blank wineprefix'
     'shortcut:(Re)generate shortcuts for one or more installed games'
     'icon:Fetch a SteamGridDB icon for one or more installed games'
+    'splash:Fetch a SteamGridDB loading-screen banner for one or more installed games'
     'lsfg:Enable/disable lsfg-vk (frame generation) for one or more games'
+    'launcher:Enable/disable the LPM Launcher multi-executable picker for one or more games'
     'tools:Open a Wine tools menu for an installed game (winetricks, registry, winecfg...)'
     'killwine:Immediately kill any running Wine/Winetricks/umu-run/Proton process'
     'list-runner:List installed runners'
@@ -88,6 +90,19 @@ _lpm_installed_runners() {
 # _lpm_isolable_slugs ci-dessous (deux _describe combinés dans une seule fonction), plutôt
 # que deux specs "*:" séparées dans _arguments qui ne se combinent pas correctement en zsh.
 _lpm_lsfg_args() {
+  local -a actions slugs
+  actions=('on' 'off')
+  slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
+  _describe -t commands 'action' actions
+  (( ${#slugs[@]} )) && _describe -t slugs 'installed game (slug)' slugs
+}
+
+# Arguments acceptés par "lpm launcher" : même schéma que "lpm lsfg" ci-dessus (un ou
+# plusieurs slugs de jeux Wine/Proton installés, puis "on" ou "off" en dernière
+# position -- voir zgl-launcher-manager.sh). Fonction dédiée plutôt qu'une réutilisation
+# directe de _lpm_lsfg_args, pour rester cohérent avec le reste de ce fichier (une
+# fonction par sous-commande) même si le corps est identique.
+_lpm_launcher_args() {
   local -a actions slugs
   actions=('on' 'off')
   slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
@@ -148,11 +163,13 @@ _lpm() {
       ;;
     pack)
       _arguments \
+        '--all[package all installed games]' \
         "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[compression level (0-22)]' \
         '*:installed game:_lpm_installed_slugs'
       ;;
     pack-runner)
       _arguments \
+        '--all[package all installed runners]' \
         "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[compression level (0-22)]' \
         '*:installed runner:_lpm_installed_runners'
       ;;
@@ -188,9 +205,18 @@ _lpm() {
         '--all[all installed games]' \
         '*:installed game:_lpm_installed_slugs'
       ;;
+    splash)
+      _arguments \
+        '--all[all installed games]' \
+        '*:installed game:_lpm_installed_slugs'
+      ;;
     lsfg)
       # "lpm lsfg [slugs...] [on|off]" : voir _lpm_lsfg_args ci-dessus.
       _arguments '*:installed game or action:_lpm_lsfg_args'
+      ;;
+    launcher)
+      # "lpm launcher [slugs...] [on|off]" : voir _lpm_launcher_args ci-dessus.
+      _arguments '*:installed game or action:_lpm_launcher_args'
       ;;
     tools)
       # "lpm tools [slug] [outil] [exe]" : 1er argument = slug de jeu installé, 2e =
