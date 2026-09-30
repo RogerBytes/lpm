@@ -278,9 +278,7 @@ def ensure_zenity_armed():
                 Atspi.generate_mouse_event(x, y, "b1c")
                 time.sleep(0.45)
                 Atspi.generate_mouse_event(x, y, "b1c")
-                sys.stderr.write(f"[DEBUG] double clic d'armement envoyé sur {cell.get_name()!r} ({x},{y}), pid={pid}\n")
-            except Exception as exc:
-                sys.stderr.write(f"[DEBUG] échec du clic d'armement: {exc}\n")
+            except Exception:
                 return
             if pid is not None:
                 ARMED_PIDS.add(pid)
@@ -321,14 +319,11 @@ def click_default_zenity_button():
     du focus clavier ni de l'ordre/nombre de boutons. Best-effort total : ne fait rien si
     AT-SPI est indisponible, si aucune appli zenity n'est trouvée, ou sur toute erreur."""
     if Atspi is None:
-        sys.stderr.write("[DEBUG] click_default_zenity_button: Atspi est None (import échoué)\n")
         return
     time.sleep(CONFIRM_CLICK_DELAY)
     try:
         desktop = Atspi.get_desktop(0)
         n = desktop.get_child_count()
-        sys.stderr.write(f"[DEBUG] {n} application(s) trouvée(s) sur le bureau AT-SPI\n")
-        zenity_found = False
         for i in range(n):
             app = desktop.get_child_at_index(i)
             if app is None:
@@ -336,22 +331,15 @@ def click_default_zenity_button():
             name = (app.get_name() or "").lower()
             if "zenity" not in name:
                 continue
-            zenity_found = True
             button = _find_confirm_button(app)
             if button is not None:
-                sys.stderr.write(f"[DEBUG] bouton trouvé: {button.get_name()!r} -> clic\n")
                 try:
                     button.do_action(0)
-                    sys.stderr.write("[DEBUG] do_action(0) exécuté sans exception\n")
-                except Exception as exc:
-                    sys.stderr.write(f"[DEBUG] do_action a levé une exception: {exc}\n")
+                except Exception:
+                    pass
                 return
-            else:
-                sys.stderr.write("[DEBUG] appli zenity trouvée mais aucun bouton correspondant à CONFIRM_BUTTON_LABELS\n")
-        if not zenity_found:
-            sys.stderr.write("[DEBUG] aucune application 'zenity' trouvée via AT-SPI\n")
-    except Exception as exc:
-        sys.stderr.write(f"[DEBUG] exception dans click_default_zenity_button: {exc}\n")
+    except Exception:
+        pass  # best-effort : jamais fatal pour le pont
 
 
 def release_all():
@@ -496,16 +484,10 @@ def main():
             try:
                 for event in dev.read():
                     if event.type == ecodes.EV_KEY and event.value == 1:
-                        sys.stderr.write(f"[DEBUG] bouton pressé, code={event.code}"
-                                          f" (BTN_CONFIRM={BTN_CONFIRM}, BTN_CANCEL={BTN_CANCEL},"
-                                          f" BTN_CHECK_CODES={sorted(BTN_CHECK_CODES)})\n")
                         key_sequence = BUTTON_KEY_MAP.get(event.code)
                         if key_sequence is not None:
-                            sys.stderr.write(f"[DEBUG] séquence de touches envoyée: {key_sequence}\n")
                             for key_name in key_sequence:
                                 send_key(key_name)
-                        else:
-                            sys.stderr.write("[DEBUG] code non reconnu dans BUTTON_KEY_MAP -- aucune touche envoyée\n")
                         extra_action = BUTTON_EXTRA_ACTION.get(event.code)
                         if extra_action is not None:
                             extra_action()
