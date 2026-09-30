@@ -460,6 +460,14 @@ if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
   python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" >/dev/null 2>&1 &
   disown $! 2>/dev/null
+
+  # --- Combo manette "changer de fenêtre" (Alt+Tab) -- voir zgu-gamepad-alttab-watcher.py.
+  # Contrairement au combo quitter ci-dessus, celui-ci tourne pendant TOUTE la session de
+  # jeu (pas de coup unique) -- même logique de "pkill" avant relance pour éviter une
+  # instance orpheline d'une partie précédente.
+  pkill -f "zgu-gamepad-alttab-watcher.py" 2>/dev/null
+  python3 "${script_dir}/zgu-gamepad-alttab-watcher.py" "${session_kind}" >/dev/null 2>&1 &
+  disown $! 2>/dev/null
 fi
 
 launch_lutris

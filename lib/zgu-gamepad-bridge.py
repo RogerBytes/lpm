@@ -1,76 +1,78 @@
 #!/usr/bin/env python3
-# --- lpm launcher : pont manette -> clavier, avec verrou exclusif sur la manette ---
+# --- lpm launcher : pont manette -> clavier, via SDL2 (SANS verrou exclusif) ---
 #
 # Usage : zgu-gamepad-bridge.py <x11|wayland>
 #
-# (Renommé depuis zgu-launcher-gamepad-bridge.py : à l'origine spawné uniquement par
-# l'orchestrateur de l'écran de chargement, ce pont est maintenant aussi démarré par
-# bin/lpm pour toute la session interactive -- voir zgu-gamepad-nav-utils.sh -- donc son
-# nom ne doit plus être spécifique au "launcher".)
+# HISTORIQUE -- pourquoi ce n'est PLUS de l'evdev+grab() : la version précédente ouvrait
+# chaque manette en evdev brut et la verrouillait avec InputDevice.grab() (EVIOCGRAB), pour
+# empêcher tout autre programme de recevoir ses événements pendant la navigation dans les
+# menus lpm. Ça marchait, mais en s'appuyant sur les noms symboliques evdev (BTN_SOUTH,
+# BTN_WEST, ABS_X...) -- qui ne correspondent pas forcément aux boutons physiques réels
+# selon la manette (constaté en pratique sur une 8BitDo SN30 Pro+, voir l'historique de
+# zgu-gamepad-exit-watcher.py). Décision explicite (demandée) : migrer vers SDL2, qui
+# traduit chaque manette reconnue -- via sa base "gamecontrollerdb.txt", bundlée avec lpm,
+# voir lib/data/ -- vers un layout standardisé fixe, valable sur un très grand nombre de
+# modèles sans capture manuelle par matériel.
 #
-# Deux rôles en un seul processus, indissociables (voir l'échange qui a mené à ce choix) :
+# COMPROMIS ACCEPTÉ (délibéré, pas un oubli) : SDL2 ne verrouille jamais un périphérique en
+# exclusivité (EVIOCGRAB) -- il se contente de s'enregistrer comme UN lecteur de plus. Ce
+# pont n'a donc plus d'exclusivité : un autre programme qui lirait la manette au niveau
+# matériel en parallèle (AntiMicro, un frontend resté ouvert en arrière-plan...) continue
+# de recevoir ses événements pendant que ce pont traduit les mêmes appuis en touches
+# clavier pour la navigation des menus lpm. EVIOCGRAB et la traduction universelle
+# multi-manette de SDL2 sont mutuellement exclusifs sur un même périphérique (une fois
+# grabbé, plus aucun autre lecteur -- y compris une instance SDL2 -- ne reçoit quoi que ce
+# soit) : il fallait choisir l'un des deux, la portabilité multi-manette a été choisie.
 #
-#   1. VERROU EXCLUSIF : chaque manette détectée est ouverte en lecture directe via evdev
-#      (/dev/input/event*) et verrouillée avec InputDevice.grab() (ioctl EVIOCGRAB du noyau
-#      Linux) -- tant que ce processus tourne, AUCUN autre programme sur la machine (un
-#      frontend façon Batocera qui lirait la manette au niveau matériel, par exemple) ne
-#      reçoit ses événements, même si ce même frontend est resté ouvert en arrière-plan
-#      derrière l'écran noir ou un des menus lpm. C'est délibérément evdev/EVIOCGRAB plutôt
-#      que SDL2 : SDL2 ne s'enregistre que comme UN lecteur de plus du périphérique, sans
-#      empêcher les autres -- EVIOCGRAB est le mécanisme noyau standard pour une exclusivité
-#      réelle.
+# PONT VERS LE CLAVIER : les boutons/axes standardisés SDL2 sont traduits en appuis clavier
+# injectés dans la fenêtre ayant le focus, via xdotool (X11) ou ydotool (Wayland, jeu de
+# touches plus limité -- voir KEY_MAP ci-dessous) -- Zenity navigue déjà nativement au
+# clavier (--list, --checklist, --entry...), donc aucune logique de menu à réécrire ici,
+# seulement une traduction d'événements. Le focus de la fenêtre Zenity elle-même est déjà
+# assuré par zgu-focus-utils.sh (sourcé par le script bash appelant), pas le problème de ce
+# script.
 #
-#   2. PONT VERS LE CLAVIER : les mêmes événements, une fois captés, sont traduits en
-#      appuis clavier injectés dans la fenêtre ayant le focus, via xdotool (X11) ou ydotool
-#      (Wayland, jeu de touches plus limité -- voir KEY_MAP ci-dessous) -- Zenity navigue
-#      déjà nativement au clavier (--list, --checklist, --entry...), donc aucune logique de
-#      menu à réécrire ici, seulement une traduction d'événements. Le focus de la fenêtre
-#      Zenity elle-même est déjà assuré par zgu-focus-utils.sh (sourcé par le script bash
-#      appelant), pas le problème de ce script.
+# Traductions manette -> clavier (boutons/axes standardisés SDL2) :
+#   Stick gauche vertical / D-pad vertical   -> Haut / Bas      (déplacement dans une liste)
+#   Stick gauche horizontal / D-pad horizontal -> Gauche / Droite (déplacement horizontal)
+#   A                                        -> Entrée           (valider)
+#   B                                        -> Échap             (annuler/fermer)
+#   X                                        -> Gauche puis Espace (cocher/décocher une case
+#                                                                    radio/checklist -- voir
+#                                                                    note ci-dessous)
+#   LEFTSHOULDER (L1)                        -> Maj+Tab           (champ précédent)
+#   RIGHTSHOULDER (R1)                       -> Tab               (champ suivant)
 #
-# Traductions manette -> clavier :
-#   Stick gauche / D-pad vertical   -> Haut / Bas          (déplacement dans une liste)
-#   Stick gauche / D-pad horizontal -> Gauche / Droite      (déplacement horizontal, onglets)
-#   BTN_SOUTH ("A")                 -> Entrée               (valider)
-#   BTN_EAST  ("B")                 -> Échap                (annuler/fermer)
-#   BTN_WEST  ("X")                 -> Gauche puis Espace   (cocher/décocher une case radio/
-#                                                             checklist -- voir note ci-dessous)
-#   BTN_TL (gâchette gauche)        -> Maj+Tab              (champ précédent)
-#   BTN_TR (gâchette droite)        -> Tab                  (champ suivant)
-#
-# Pourquoi "Gauche puis Espace" pour BTN_WEST : dans un zenity --radiolist/--checklist, la
-# colonne case à cocher (tout à gauche) et la colonne texte ont chacune leur propre "focus
-# cellule" au sein de la ligne survolée -- Haut/Bas ne déplacent que la ligne, pas cette
-# cellule. Par défaut le focus cellule est sur la colonne texte, donc Espace seul ne coche
-# rien tant qu'un clic souris n'a pas explicitement déplacé ce focus sur la colonne case (et
-# il y reste ensuite). Envoyer Gauche avant Espace déplace ce focus sur la colonne case (la
-# plus à gauche) à chaque pression, sans jamais dépendre d'un clic souris préalable -- sans
+# Pourquoi "Gauche puis Espace" pour X : dans un zenity --radiolist/--checklist, la colonne
+# case à cocher (tout à gauche) et la colonne texte ont chacune leur propre "focus cellule"
+# au sein de la ligne survolée -- Haut/Bas ne déplacent que la ligne, pas cette cellule. Par
+# défaut le focus cellule est sur la colonne texte, donc Espace seul ne coche rien tant
+# qu'un clic souris n'a pas explicitement déplacé ce focus sur la colonne case (et il y
+# reste ensuite). Envoyer Gauche avant Espace déplace ce focus sur la colonne case (la plus
+# à gauche) à chaque pression, sans jamais dépendre d'un clic souris préalable -- sans
 # risque : Gauche sur une colonne déjà la plus à gauche ne fait rien.
 #
-# Détection des manettes : tout périphérique evdev exposant BTN_SOUTH (bouton "A"/face sud,
-# présent sur toutes les manettes standard, manettes Xbox/PlayStation/Switch Pro incluses)
-# OU un stick gauche (ABS_X/ABS_Y) est considéré comme une manette. Un nouveau périphérique
-# branché après le démarrage n'est PAS détecté à chaud (scan une seule fois au lancement) :
-# limitation acceptée, le cas d'usage est "la manette est déjà branchée avant de lancer lpm
-# ou le jeu", pas un branchement à chaud en cours de session.
+# Détection des manettes : tout périphérique que SDL2 reconnaît comme "game controller"
+# (SDL_IsGameController, via sa base de mappings). Un nouveau périphérique branché après le
+# démarrage n'est PAS détecté à chaud (scan une seule fois au lancement) : limitation
+# acceptée, le cas d'usage est "la manette est déjà branchée avant de lancer lpm ou le jeu",
+# pas un branchement à chaud en cours de session.
 #
-# Arrêt : SIGTERM (envoyé par le script bash appelant) -- chaque manette est proprement
-# dégrappée (ungrab) avant de quitter, jamais laissée verrouillée si ce script est tué
-# brutalement d'une autre façon (SIGKILL) : filet de sécurité, le bash appelant ne doit
-# normalement jamais avoir besoin d'un SIGKILL ici.
+# Arrêt : SIGTERM (envoyé par le script bash appelant) -- proprement, ferme les manettes
+# ouvertes avant de quitter.
+#
+# DÉPENDANCE SYSTÈME : libSDL2 (paquet "libsdl2-2.0-0" sur Debian/Ubuntu, "sdl2" sur Arch,
+# "SDL2" sur Fedora) -- même bibliothèque que zgu-gamepad-exit-watcher.py, pas de dépendance
+# Python supplémentaire.
 
 import sys
 import os
 import signal
 import subprocess
 import shutil
-
-try:
-    import evdev
-    from evdev import InputDevice, ecodes
-except Exception as exc:  # pragma: no cover - dépendance système absente
-    sys.stderr.write("zgu-gamepad-bridge: python3-evdev indisponible (%s)\n" % exc)
-    sys.exit(1)
+import time
+import ctypes
+import ctypes.util
 
 if len(sys.argv) < 2 or sys.argv[1] not in ("x11", "wayland"):
     sys.stderr.write("Usage: zgu-gamepad-bridge.py <x11|wayland>\n")
@@ -78,13 +80,91 @@ if len(sys.argv) < 2 or sys.argv[1] not in ("x11", "wayland"):
 
 SESSION_KIND = sys.argv[1]
 
-AXIS_THRESHOLD = 0.5  # fraction de l'amplitude min/max avant de considérer l'axe "poussé"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+GAMECONTROLLERDB_PATH = os.path.join(SCRIPT_DIR, "data", "gamecontrollerdb.txt")
 
-# --- Table de traduction touche logique -> commande xdotool / séquence ydotool ---
-# ydotool ne prend pas de noms de touches symboliques : il faut ses propres codes clavier
-# Linux (linux/input-event-codes.h), envoyés comme "code:etat" (1=pressé, 0=relâché) --
-# jeu volontairement restreint à ce qui est réellement utile ici (pas de couverture
-# complète du clavier, ydotool + Wayland restent le chemin "best effort" du projet).
+AXIS_THRESHOLD = int(32767 * 0.5)  # même seuil (50% de la course) que l'ancienne version
+POLL_INTERVAL_SECONDS = 0.02
+
+running = True
+
+
+def handle_signal(_signum, _frame):
+    global running
+    running = False
+
+
+signal.signal(signal.SIGTERM, handle_signal)
+signal.signal(signal.SIGINT, handle_signal)
+
+
+# --- Chargement de libSDL2 (identique à zgu-gamepad-exit-watcher.py) -----------------------
+def _load_sdl2():
+    names = []
+    found = ctypes.util.find_library("SDL2")
+    if found:
+        names.append(found)
+    names += ["libSDL2-2.0.so.0", "libSDL2-2.0.so", "SDL2"]
+    for name in names:
+        try:
+            return ctypes.CDLL(name)
+        except OSError:
+            continue
+    return None
+
+
+sdl = _load_sdl2()
+if sdl is None:
+    sys.stderr.write(
+        "zgu-gamepad-bridge: libSDL2 introuvable "
+        "(paquet manquant : libsdl2-2.0-0 / sdl2 / SDL2)\n"
+    )
+    sys.exit(1)
+
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
+
+SDL_INIT_JOYSTICK = 0x00000200
+SDL_INIT_GAMECONTROLLER = 0x00002000
+SDL_INIT_EVENTS = 0x00004000
+
+sdl.SDL_Init.restype = ctypes.c_int
+sdl.SDL_Init.argtypes = [ctypes.c_uint32]
+sdl.SDL_Quit.restype = None
+sdl.SDL_GetError.restype = ctypes.c_char_p
+sdl.SDL_NumJoysticks.restype = ctypes.c_int
+sdl.SDL_IsGameController.restype = ctypes.c_int
+sdl.SDL_IsGameController.argtypes = [ctypes.c_int]
+sdl.SDL_GameControllerOpen.restype = ctypes.c_void_p
+sdl.SDL_GameControllerOpen.argtypes = [ctypes.c_int]
+sdl.SDL_GameControllerClose.restype = None
+sdl.SDL_GameControllerClose.argtypes = [ctypes.c_void_p]
+sdl.SDL_GameControllerUpdate.restype = None
+sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
+sdl.SDL_GameControllerGetButton.argtypes = [ctypes.c_void_p, ctypes.c_int]
+sdl.SDL_GameControllerGetAxis.restype = ctypes.c_int16
+sdl.SDL_GameControllerGetAxis.argtypes = [ctypes.c_void_p, ctypes.c_int]
+
+# Optionnel -- voir zgu-gamepad-exit-watcher.py : ce symbole n'est pas exporté par toutes
+# les versions/distributions de libSDL2 (constaté absent sur Ubuntu 2.30.0). Résolution
+# défensive, jamais fatale.
+_add_mappings_from_file = getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None)
+if _add_mappings_from_file is not None:
+    _add_mappings_from_file.restype = ctypes.c_int
+    _add_mappings_from_file.argtypes = [ctypes.c_char_p]
+
+if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
+    sys.stderr.write(
+        "zgu-gamepad-bridge: SDL_Init a échoué (%s)\n"
+        % sdl.SDL_GetError().decode("utf-8", "replace")
+    )
+    sys.exit(1)
+
+if _add_mappings_from_file is not None and os.path.isfile(GAMECONTROLLERDB_PATH):
+    _add_mappings_from_file(GAMECONTROLLERDB_PATH.encode("utf-8"))
+
+
+# --- Table de traduction touche logique -> commande xdotool / séquence ydotool ------------
 KEY_MAP = {
     "Return":     {"xdotool": "Return",     "ydotool": ["28:1", "28:0"]},
     "Escape":     {"xdotool": "Escape",     "ydotool": ["1:1", "1:0"]},
@@ -97,31 +177,7 @@ KEY_MAP = {
     "shift+Tab":  {"xdotool": "shift+Tab",  "ydotool": ["42:1", "15:1", "15:0", "42:0"]},
 }
 
-grabbed_devices = []
-running = True
 
-
-def find_gamepads():
-    pads = []
-    for path in evdev.list_devices():
-        try:
-            dev = InputDevice(path)
-            caps = dev.capabilities()
-            keys = caps.get(ecodes.EV_KEY, [])
-            abs_axes = [a for a, _ in caps.get(ecodes.EV_ABS, [])]
-            if ecodes.BTN_SOUTH in keys or (ecodes.ABS_X in abs_axes and ecodes.ABS_Y in abs_axes):
-                pads.append(dev)
-            else:
-                dev.close()
-        except Exception:
-            continue
-    return pads
-
-
-# Chemin de xdotool : direct, ou via "/run/host" -- même situation que zgu-focus-
-# utils.sh (voir ce fichier) : ce pont peut tourner dans un script invoqué par un
-# Lutris Flatpak dont le bac à sable ne contient pas xdotool lui-même, seulement
-# visible via "/run/host" une fois "host"/"host-os" accordé. Résolu une seule fois.
 def _resolve_xdotool():
     if shutil.which("xdotool"):
         return "xdotool"
@@ -148,138 +204,107 @@ def send_key(key_name):
         pass  # best-effort : un appui manqué ne doit jamais faire planter le pont
 
 
-def release_all():
-    for dev in grabbed_devices:
-        try:
-            dev.ungrab()
-        except Exception:
-            pass
-        try:
-            dev.close()
-        except Exception:
-            pass
+# --- Boutons/axes standardisés SDL2 (valeurs numériques fixes de l'API C, voir
+# SDL_gamecontroller.h -- mêmes constantes que zgu-gamepad-exit-watcher.py) ---
+SDL_CONTROLLER_BUTTON_A = 0
+SDL_CONTROLLER_BUTTON_B = 1
+SDL_CONTROLLER_BUTTON_X = 2
+SDL_CONTROLLER_BUTTON_LEFTSHOULDER = 9
+SDL_CONTROLLER_BUTTON_RIGHTSHOULDER = 10
+SDL_CONTROLLER_BUTTON_DPAD_UP = 11
+SDL_CONTROLLER_BUTTON_DPAD_DOWN = 12
+SDL_CONTROLLER_BUTTON_DPAD_LEFT = 13
+SDL_CONTROLLER_BUTTON_DPAD_RIGHT = 14
+SDL_CONTROLLER_AXIS_LEFTX = 0
+SDL_CONTROLLER_AXIS_LEFTY = 1
 
+# Chaque bouton associe une SÉQUENCE de touches (une liste, envoyées dans l'ordre) --
+# nécessaire pour X (voir note plus haut : Gauche doit précéder Espace à chaque pression).
+BUTTON_KEY_MAP = {
+    SDL_CONTROLLER_BUTTON_A: ["Return"],
+    SDL_CONTROLLER_BUTTON_B: ["Escape"],
+    SDL_CONTROLLER_BUTTON_X: ["Left", "space"],
+    SDL_CONTROLLER_BUTTON_LEFTSHOULDER: ["shift+Tab"],
+    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: ["Tab"],
+}
 
-def handle_signal(_signum, _frame):
-    global running
-    running = False
-
-
-signal.signal(signal.SIGTERM, handle_signal)
-signal.signal(signal.SIGINT, handle_signal)
-
-
-def axis_range(dev, code):
-    info = dev.absinfo(code)
-    return info.min, info.max
-
-
-# --- Boutons face -> touche logique : plusieurs noms evdev possibles par bouton (alias
-# selon le pilote/la manette), on prend le premier disponible et on retombe sur None si
-# aucun n'existe sur cette version d'evdev (défensif, jamais rencontré en pratique). ---
-def resolve_button_code(*names):
-    for name in names:
-        code = getattr(ecodes, name, None)
-        if code is not None:
-            return code
-    return None
-
-
-BTN_CONFIRM = resolve_button_code("BTN_SOUTH", "BTN_A")
-BTN_CANCEL = resolve_button_code("BTN_EAST", "BTN_B")
-BTN_CHECK = resolve_button_code("BTN_WEST", "BTN_X")
-BTN_PREV_FIELD = resolve_button_code("BTN_TL")
-BTN_NEXT_FIELD = resolve_button_code("BTN_TR")
-
-# Chaque bouton associe une SÉQUENCE de touches (une liste, envoyées dans l'ordre) plutôt
-# qu'une touche unique -- nécessaire pour BTN_CHECK (voir note plus haut : Gauche doit
-# précéder Espace à chaque pression, pour ne jamais dépendre d'un focus déjà en place).
-BUTTON_KEY_MAP = {}
-if BTN_CONFIRM is not None:
-    BUTTON_KEY_MAP[BTN_CONFIRM] = ["Return"]
-if BTN_CANCEL is not None:
-    BUTTON_KEY_MAP[BTN_CANCEL] = ["Escape"]
-if BTN_CHECK is not None:
-    BUTTON_KEY_MAP[BTN_CHECK] = ["Left", "space"]
-if BTN_PREV_FIELD is not None:
-    BUTTON_KEY_MAP[BTN_PREV_FIELD] = ["shift+Tab"]
-if BTN_NEXT_FIELD is not None:
-    BUTTON_KEY_MAP[BTN_NEXT_FIELD] = ["Tab"]
-
-# --- Axes -> paire (touche négative, touche positive) ---
-AXIS_KEY_MAP = {
-    ecodes.ABS_Y: ("Up", "Down"),
-    ecodes.ABS_HAT0Y: ("Up", "Down"),
-    ecodes.ABS_X: ("Left", "Right"),
-    ecodes.ABS_HAT0X: ("Left", "Right"),
+# D-pad ET stick gauche partagent les mêmes touches logiques -- chacun est suivi
+# indépendamment (clé "dpad_y"/"stick_y"/etc.) pour ne pas mélanger leurs fronts montants.
+DPAD_BUTTON_KEYS = {
+    "y": (SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN, "Up", "Down"),
+    "x": (SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT, "Left", "Right"),
+}
+STICK_AXIS_KEYS = {
+    "y": (SDL_CONTROLLER_AXIS_LEFTY, "Up", "Down"),
+    "x": (SDL_CONTROLLER_AXIS_LEFTX, "Left", "Right"),
 }
 
 
+def find_controllers():
+    pads = []
+    for i in range(sdl.SDL_NumJoysticks()):
+        if sdl.SDL_IsGameController(i):
+            handle = sdl.SDL_GameControllerOpen(i)
+            if handle:
+                pads.append(handle)
+    return pads
+
+
 def main():
-    pads = find_gamepads()
+    pads = find_controllers()
     if not pads:
-        # Pas de manette détectée : rien à verrouiller ni à traduire, sortie silencieuse
-        # (le clavier/la souris continuent de fonctionner normalement sans ce script).
+        # Pas de manette reconnue : rien à traduire, sortie silencieuse (le clavier/la
+        # souris continuent de fonctionner normalement sans ce script).
+        sdl.SDL_Quit()
         sys.exit(0)
 
-    for dev in pads:
-        try:
-            dev.grab()
-            grabbed_devices.append(dev)
-        except Exception:
-            pass  # déjà verrouillée par un autre processus, ou permissions insuffisantes
+    prev_buttons = {pad: {code: 0 for code in BUTTON_KEY_MAP} for pad in pads}
+    prev_dpad_dir = {pad: {"x": 0, "y": 0} for pad in pads}
+    prev_stick_dir = {pad: {"x": 0, "y": 0} for pad in pads}
 
-    if not grabbed_devices:
-        sys.exit(0)
+    try:
+        while running:
+            sdl.SDL_GameControllerUpdate()
 
-    axis_ranges = {}
-    for dev in grabbed_devices:
-        for code in AXIS_KEY_MAP:
+            for pad in pads:
+                # Boutons simples (front montant uniquement, comme event.value == 1 avant).
+                for code, key_sequence in BUTTON_KEY_MAP.items():
+                    value = sdl.SDL_GameControllerGetButton(pad, code)
+                    if value and not prev_buttons[pad][code]:
+                        for key_name in key_sequence:
+                            send_key(key_name)
+                    prev_buttons[pad][code] = value
+
+                # D-pad (boutons dédiés, mais mêmes touches logiques que le stick).
+                for axis_name, (neg_code, pos_code, neg_key, pos_key) in DPAD_BUTTON_KEYS.items():
+                    neg = sdl.SDL_GameControllerGetButton(pad, neg_code)
+                    pos = sdl.SDL_GameControllerGetButton(pad, pos_code)
+                    direction = -1 if neg else (1 if pos else 0)
+                    if direction != prev_dpad_dir[pad][axis_name] and direction != 0:
+                        send_key(neg_key if direction < 0 else pos_key)
+                    prev_dpad_dir[pad][axis_name] = direction
+
+                # Stick gauche (axe analogique, seuillé comme avant -- 50% de la course).
+                for axis_name, (axis_code, neg_key, pos_key) in STICK_AXIS_KEYS.items():
+                    value = sdl.SDL_GameControllerGetAxis(pad, axis_code)
+                    if value <= -AXIS_THRESHOLD:
+                        direction = -1
+                    elif value >= AXIS_THRESHOLD:
+                        direction = 1
+                    else:
+                        direction = 0
+                    if direction != prev_stick_dir[pad][axis_name] and direction != 0:
+                        send_key(neg_key if direction < 0 else pos_key)
+                    prev_stick_dir[pad][axis_name] = direction
+
+            time.sleep(POLL_INTERVAL_SECONDS)
+    finally:
+        for pad in pads:
             try:
-                axis_ranges[(dev.path, code)] = axis_range(dev, code)
+                sdl.SDL_GameControllerClose(pad)
             except Exception:
                 pass
-
-    last_axis_dir = {}
-
-    import select
-    device_map = {dev.fd: dev for dev in grabbed_devices}
-
-    while running:
-        try:
-            r, _, _ = select.select(device_map.keys(), [], [], 0.2)
-        except (OSError, ValueError):
-            break
-
-        for fd in r:
-            dev = device_map.get(fd)
-            if dev is None:
-                continue
-            try:
-                for event in dev.read():
-                    if event.type == ecodes.EV_KEY and event.value == 1:
-                        key_sequence = BUTTON_KEY_MAP.get(event.code)
-                        if key_sequence is not None:
-                            for key_name in key_sequence:
-                                send_key(key_name)
-                    elif event.type == ecodes.EV_ABS and event.code in AXIS_KEY_MAP:
-                        key = (dev.path, event.code)
-                        lo, hi = axis_ranges.get(key, (-32768, 32767))
-                        span = (hi - lo) or 1
-                        normalized = (event.value - lo) / span * 2 - 1  # -1..1
-                        direction = 0
-                        if normalized < -AXIS_THRESHOLD:
-                            direction = -1
-                        elif normalized > AXIS_THRESHOLD:
-                            direction = 1
-                        if direction != last_axis_dir.get(key, 0) and direction != 0:
-                            neg_key, pos_key = AXIS_KEY_MAP[event.code]
-                            send_key(neg_key if direction < 0 else pos_key)
-                        last_axis_dir[key] = direction
-            except (OSError, BlockingIOError):
-                continue
-
-    release_all()
+        sdl.SDL_Quit()
 
 
 if __name__ == "__main__":
