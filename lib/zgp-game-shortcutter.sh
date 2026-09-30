@@ -113,7 +113,16 @@ fi
 # 3. Récupération des jeux Wine depuis la BDD Lutris (id inclus : nécessaire pour construire
 # "lutris:rungameid/<id>" dans le raccourci ; configpath inclus : nécessaire pour retrouver le
 # YAML de config du jeu -- voir zgu_write_game_shortcut)
-games_list=$(sqlite3 "${lutris_db}" "SELECT id || char(31) || name || char(31) || slug || char(31) || directory || char(31) || executable || char(31) || configpath FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
+#
+# COALESCE(...,'') sur CHAQUE colonne, indispensable : en SQLite, NULL || quoi que ce soit
+# renvoie NULL pour toute la concaténation -- un jeu dont "executable" est encore vide (préfixe
+# tout juste (re)créé dans Lutris, .exe pas encore configuré) faisait donc disparaître TOUTE la
+# ligne (sqlite3 l'affiche comme une ligne vide, ensuite sautée par "[[ -z "${game_name}" ]] &&
+# continue" ci-dessous) -- le jeu restait bien visible dans "lpm list" (qui ne lit pas
+# "executable"), mais devenait introuvable pour "lpm shortcut", avec l'erreur "Jeu introuvable"
+# alors qu'il existe bien en base. Même motif déjà correctement traité dans zgp-game-icon.sh
+# pour cette même liste de colonnes -- oubli isolé à ce script-ci.
+games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
 
 if [[ -z "${games_list}" ]]; then
   if [[ ${#cli_targets[@]} -gt 0 ]]; then

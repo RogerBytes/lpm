@@ -103,14 +103,8 @@ check.lsfg_missing_cli=lsfg-vk is not installed, but is enabled for: %s
 check.lsfg_missing_gui=lsfg-vk is not installed, but is enabled for: %s
 check.lsfg_installed_success=lsfg-vk was installed successfully.
 check.lsfg_native_hint=Run 'lpm lsfg' to get installation instructions for your distribution.
-check.antimicro_missing_cli=AntimicroX is not installed, but is referenced by: %s
-check.antimicro_missing_gui=AntimicroX is not installed, but is referenced by: %s
-check.antimicro_install_title=AntimicroX installation
-check.antimicro_install_offer_cli=Install AntimicroX from Flathub now? No password will be required.
-check.antimicro_install_offer_gui=AntimicroX was not found. Install it from Flathub now? No password will be required.
-check.antimicro_installed_success=AntimicroX was installed successfully.
-check.antimicro_install_failed=Error: Flatpak installation of AntimicroX failed.\n%s
-check.antimicro_no_flatpak_hint=Flatpak is not available to install it automatically. Install AntimicroX via your distribution's package manager, or see https://antimicrox.github.io/guide/installation.html
+check.antimicro_missing_cli=AntimicroX is not installed, but is referenced by: %s. Install it via your distribution's package manager, via Flatpak, or see https://antimicrox.github.io/guide/installation.html
+check.antimicro_missing_gui=AntimicroX is not installed, but is referenced by: %s. Install it via your distribution's package manager, via Flatpak, or see https://antimicrox.github.io/guide/installation.html
 check.xdotool_missing=Recommended: 'xdotool' is not installed. It is used to force-focus dialog windows, for gamepad navigation, and to detect when a launched game's window actually appears (loading screen). Install it via your distribution's package manager.
 
 # --- lpm lutris-version ---

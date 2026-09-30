@@ -103,14 +103,8 @@ check.lsfg_missing_cli=lsfg-vk n'est pas installé, mais il est activé pour : %
 check.lsfg_missing_gui=lsfg-vk n'est pas installé, mais il est activé pour : %s
 check.lsfg_installed_success=lsfg-vk a été installé avec succès.
 check.lsfg_native_hint=Lancez 'lpm lsfg' pour obtenir les instructions d'installation adaptées à votre distribution.
-check.antimicro_missing_cli=AntimicroX n'est pas installé, mais il est référencé par : %s
-check.antimicro_missing_gui=AntimicroX n'est pas installé, mais il est référencé par : %s
-check.antimicro_install_title=Installation d'AntimicroX
-check.antimicro_install_offer_cli=Installer AntimicroX depuis Flathub maintenant ? Aucun mot de passe ne sera demandé.
-check.antimicro_install_offer_gui=AntimicroX est introuvable. L'installer depuis Flathub maintenant ? Aucun mot de passe ne sera demandé.
-check.antimicro_installed_success=AntimicroX a été installé avec succès.
-check.antimicro_install_failed=Erreur : l'installation Flatpak d'AntimicroX a échoué.\n%s
-check.antimicro_no_flatpak_hint=Flatpak n'est pas disponible pour l'installer automatiquement. Installez AntimicroX via le gestionnaire de paquets de votre distribution, ou consultez https://antimicrox.github.io/guide/installation.html
+check.antimicro_missing_cli=AntimicroX n'est pas installé, mais il est référencé par : %s. Installez-le via le gestionnaire de paquets de votre distribution, en Flatpak, ou consultez https://antimicrox.github.io/guide/installation.html
+check.antimicro_missing_gui=AntimicroX n'est pas installé, mais il est référencé par : %s. Installez-le via le gestionnaire de paquets de votre distribution, en Flatpak, ou consultez https://antimicrox.github.io/guide/installation.html
 check.xdotool_missing=Recommandé : 'xdotool' n'est pas installé. Il est utilisé pour forcer le focus des fenêtres de dialogue, pour la navigation manette, et pour détecter quand la fenêtre d'un jeu lancé apparaît réellement (écran de chargement). Installez-le via le gestionnaire de paquets de votre distribution.
 
 # --- lpm lutris-version ---

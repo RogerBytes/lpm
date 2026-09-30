@@ -293,34 +293,6 @@ if [[ ${#antimicro_games[@]} -gt 0 ]]; then
     else
       say "$(t check.antimicro_missing_gui "${antimicro_game_list}")"
     fi
-
-    if command -v flatpak >/dev/null 2>&1; then
-      antimicro_do_install=false
-      if [[ "${mode}" = "cli" ]]; then
-        t check.antimicro_install_offer_cli
-        read -r -p "$(t lsfg.confirm_prompt_cli)" antimicro_response
-        [[ "${antimicro_response}" =~ ^[oOyY] ]] && antimicro_do_install=true
-      else
-        if zenity --question --title="$(t check.antimicro_install_title)" \
-          --text="$(t check.antimicro_install_offer_gui)" \
-          --ok-label="$(t lsfg.btn_validate)" --cancel-label="$(t lsfg.btn_cancel)" \
-          --width=480 2>/dev/null; then
-          antimicro_do_install=true
-        fi
-      fi
-
-      if [[ "${antimicro_do_install}" = true ]]; then
-        flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1
-        antimicro_install_err=$(flatpak install --user -y flathub io.github.antimicrox.antimicrox 2>&1 >/dev/null)
-        if [[ $? -eq 0 ]]; then
-          say "$(t check.antimicro_installed_success)"
-        else
-          say_err "$(t check.antimicro_install_failed "${antimicro_install_err}")"
-        fi
-      fi
-    else
-      say "$(t check.antimicro_no_flatpak_hint)"
-    fi
   fi
 fi
 
