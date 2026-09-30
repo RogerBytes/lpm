@@ -248,6 +248,13 @@ fi
 # n'existe pas, la vérification d'existence se fait côté Python.
 logo_image="${game_dir}/splash/logo.png"
 
+# Connu à l'avance (voir bloc YAML plus haut, "will_show_picker") : "1" si ce jeu n'a
+# qu'une seule entrée (ou aucune) -- donc aucun libellé ne sera jamais affiché sur l'écran
+# de chargement -- voir <no_label> dans l'en-tête de zgu-launcher-blackscreen.py, qui
+# recentre alors la bannière au lieu de réserver une bande qui resterait vide.
+no_label_flag="1"
+[[ "${will_show_picker}" = true ]] && no_label_flag="0"
+
 {
   printf '%s\n' "${bg_state}"
   printf '%s\n' "IND_SHOW"
@@ -260,7 +267,7 @@ indicator_text="$(t launcher.loading_text)"
 blackscreen_pid=""
 bridge_pid=""
 
-python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" "${logo_image}" >/dev/null 2>&1 &
+python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 

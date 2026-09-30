@@ -2,7 +2,7 @@
 # --- lpm launcher : fenêtre noire plein écran + image de splash + indicateur, avec vraie
 # transparence ---
 #
-# Usage : zgu-launcher-blackscreen.py <control_file> [<indicator_text>] [<logo_png>]
+# Usage : zgu-launcher-blackscreen.py <control_file> [<indicator_text>] [<logo_png>] [<no_label>]
 #
 # <control_file> est un fichier texte de QUATRE lignes que le script relit en boucle (toutes
 # les 150ms, même technique de sondage que zgu-focus-utils.sh) :
@@ -31,6 +31,17 @@
 #   <logo_png>) -- n'apparaît qu'UNE FOIS le choix fait dans le picker (voir
 #   zgl-launcher-orchestrator.sh), reste vide/absent tant qu'aucun choix n'a encore été
 #   validé (jeu à une seule entrée, ou picker pas encore résolu).
+#
+# <no_label> (4ème argument, optionnel, CLI -- comme <logo_png>, ne change jamais une fois
+# le script lancé) : "1" si CE lancement n'affichera JAMAIS de libellé d'entrée (jeu à une
+# seule entrée LPM Launcher, ou aucune entrée du tout -- donc jamais de picker) -- connu à
+# l'avance par zgl-launcher-orchestrator.sh (son "will_show_picker"), avant même le premier
+# affichage du fond. Dans ce cas, la bande réservée au libellé (LABEL_ZONE_HEIGHT) est
+# purement et simplement supprimée -- pas juste vide : la bannière remonte et se recentre
+# dans tout l'espace qui lui reste sous le logo/titre, au lieu de rester poussée plus bas
+# comme si une bande vide l'attendait encore. Absent ou "0" (défaut) : comportement
+# inchangé, la bande reste réservée (cas normal -- picker multi-entrées, où un libellé PEUT
+# apparaître une fois le choix fait).
 #
 # <logo_png> (3ème argument, optionnel, CLI -- PAS dans le fichier de contrôle : ne change
 # jamais une fois le script lancé, contrairement aux 4 lignes ci-dessus) : logo transparent
@@ -87,6 +98,7 @@ if len(sys.argv) < 2:
 CONTROL_FILE = sys.argv[1]
 INDICATOR_TEXT = sys.argv[2] if len(sys.argv) > 2 else ""
 LOGO_PATH = sys.argv[3] if len(sys.argv) > 3 else ""
+NO_LABEL = (sys.argv[4] if len(sys.argv) > 4 else "0") == "1"
 POLL_MS = 150
 SPIN_TICK_MS = 60
 
@@ -113,7 +125,7 @@ PICKER_BOX_HEIGHT = 680
 TOP_ZONE_MAX_WIDTH_FRACTION = 0.29
 TOP_ZONE_MIN_MARGIN = 24
 LOGO_VERTICAL_OFFSET = 30  # décalé vers le bas par rapport au centre de sa zone
-TOP_TITLE_FONT_SIZE = 42  # bien plus gros que l'ancien emplacement bas-droite (27px)
+TOP_TITLE_FONT_SIZE = 84  # doublé (demandé) par rapport aux 42px précédents
 TOP_TITLE_BOTTOM_PADDING = 48  # remonté par rapport au bas de sa zone -- pas collé dessus
 
 # Bande dédiée au libellé du picker, juste sous la zone du logo -- toujours réservée (vide
@@ -132,7 +144,7 @@ CURSOR_IDLE_S = 1.0
 # elle-même toujours plafonnée à 100% -- voir on_draw) : une bannière qui occupait pile toute
 # la largeur de l'écran touchait les deux bords, demandé en retour un peu de marge visuelle
 # de chaque côté.
-MAX_BANNER_WIDTH_FRACTION = 0.75
+MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30  # remontée légère par rapport au centre de sa bande, pas replaquée en haut
 
 is_wayland = (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland") or bool(
@@ -218,9 +230,12 @@ class BlackWindow(Gtk.Window):
             self.logo_draw_y = max(TOP_ZONE_MIN_MARGIN, min(draw_y, max_draw_y))
 
         # Bande du libellé, puis bannière : tout ce qui est sous la zone du logo -- voir
-        # LABEL_ZONE_HEIGHT plus haut.
+        # LABEL_ZONE_HEIGHT plus haut. Supprimée entièrement (hauteur 0) si NO_LABEL : ce
+        # lancement n'affichera jamais de libellé (voir <no_label> dans l'en-tête de
+        # fichier) -- la bannière récupère alors tout cet espace au lieu de rester poussée
+        # plus bas par une bande qui resterait vide de toute façon.
         self.label_zone_top = self.zone_top_y
-        self.label_zone_bottom = self.zone_top_y + LABEL_ZONE_HEIGHT
+        self.label_zone_bottom = self.zone_top_y + (0 if NO_LABEL else LABEL_ZONE_HEIGHT)
         self.banner_zone_top = self.label_zone_bottom
         self.banner_zone_height = max(0, monitor_geom.height - self.banner_zone_top)
 
