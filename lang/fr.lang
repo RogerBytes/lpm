@@ -690,7 +690,7 @@ game_tools.launched_cli=Lancé pour %s.
 game_tools.exe_selection_title=Choisir un exécutable à lancer dans le prefixe
 game_tools.exe_not_found_gui=Erreur : fichier introuvable : %s
 game_tools.exe_not_found_cli=Erreur : fichier introuvable : %s
-game_tools.invalid_tool_cli=Erreur : outil inconnu '%s' (attendu : winetricks, regedit, winecfg, console, exe, folder ou favorite).
+game_tools.invalid_tool_cli=Erreur : outil inconnu '%s' (attendu : winetricks, regedit, winecfg, console, exe ou folder).
 game_tools.action_title=Outils Wine -- %s
 game_tools.action_text=Que voulez-vous faire ?
 game_tools.action_col=Outil
@@ -700,20 +700,8 @@ game_tools.action_winecfg=Configuration Wine (winecfg)
 game_tools.action_console=Console DOS (cmd)
 game_tools.action_exe=Exécuter un exécutable dans le prefixe
 game_tools.action_folder=Ouvrir le dossier du prefixe
-game_tools.action_favorite=Ajouter un dossier favori (fenêtres Windows Ouvrir/Enregistrer)
-game_tools.favorite_selection_title=Choisir le dossier favori (fenêtres Ouvrir/Enregistrer Windows)
-game_tools.favorite_not_found_gui=Erreur : dossier introuvable : %s
-game_tools.favorite_not_found_cli=Erreur : dossier introuvable : %s
-game_tools.favorite_winepath_missing_gui=Erreur : impossible de trouver "winepath" (ni à côté du runner Wine de ce jeu, ni dans le PATH).
-game_tools.favorite_winepath_missing_cli=Erreur : impossible de trouver "winepath" (ni à côté du runner Wine de ce jeu, ni dans le PATH).
-game_tools.favorite_winepath_failed_gui=Erreur : impossible de convertir le chemin %s en chemin Windows.
-game_tools.favorite_winepath_failed_cli=Erreur : impossible de convertir le chemin %s en chemin Windows.
-game_tools.favorite_reg_failed_gui=Erreur : l'écriture dans le registre Wine a échoué.
-game_tools.favorite_reg_failed_cli=Erreur : l'écriture dans le registre Wine a échoué.
-game_tools.favorite_saved_gui=Dossier favori enregistré : %s\n\nIl apparaîtra dans les fenêtres Windows "Ouvrir"/"Enregistrer" de ce jeu (accès rapide/favoris). Certains logiciels ignorent cette liste et ne l'afficheront pas.
-game_tools.favorite_saved_cli=Dossier favori enregistré pour %s : %s
-help.games_tools=Ouvre un menu d'outils Wine pour un jeu (winetricks, registre, winecfg, console, exécuter un .exe, ouvrir le dossier, ajouter un dossier favori)
-help.games_tools_cont=outil : winetricks|regedit|winecfg|console|exe|folder|favorite (CLI pur si slug ET outil fournis)
+help.games_tools=Ouvre un menu d'outils Wine pour un jeu (winetricks, registre, winecfg, console, exécuter un .exe, ouvrir le dossier)
+help.games_tools_cont=outil : winetricks|regedit|winecfg|console|exe|folder (CLI pur si slug ET outil fournis)
 help.games_killwine=Tue immédiatement tout process Wine/Winetricks/umu-run/Proton en cours (bouton panique pour un process bloqué)
 menu.opt_killwine=🛑 Tuer tous les process Wine/Proton en cours
 
@@ -732,7 +720,7 @@ wine_killer.nothing_running_cli=Aucun process Wine/Proton en cours.
 help.games_lsfg=lpm lsfg [slugs...] [on|off]
 help.games_lsfg_cont=Active/désactive lsfg-vk (génération de frames) pour un ou plusieurs jeux
 menu.opt_lsfg=⚡ Configurer lsfg-vk (génération de frames)
-menu.opt_launcher=🎮 Configurer le LPM Launcher (sélecteur multi-exécutable)
+menu.opt_launcher=🎮 Configurer le LPM Launcher (écran de chargement + sélecteur)
 lsfg.cli_usage=Usage : lpm lsfg <slug...> on|off
 lsfg.zenity_missing=Erreur : "zenity" est requis pour le mode graphique.
 lsfg.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
@@ -815,20 +803,29 @@ launcher.default_prompt=Lequel voulez-vous lancer ?
 launcher.example_entry_comment=Décommentez et adaptez pour ajouter une autre entrée :
 launcher.example_entry_label=Exemple
 launcher.setup_done=LPM Launcher activé pour "%s".\nÉditez ce fichier pour ajouter ou modifier des entrées :\n%s
-launcher.flatpak_permission_hint=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le sélecteur multi-exécutable (le jeu se lance normalement, mais avec son exécutable habituel plutôt que celui choisi). Si ça arrive, exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_question=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le sélecteur multi-exécutable. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.setup_done_title=LPM Launcher activé
+launcher.open_folder_button=Ouvrir le dossier
+launcher.close_button=Fermer
+launcher.flatpak_permission_hint=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher (le jeu se lance normalement, mais sans l'écran de chargement). Si ça arrive, exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_question=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.flatpak_permission_applied_ok=Permission Flatpak appliquée avec succès.
 launcher.flatpak_permission_applied_fail=Échec de l'application automatique de la permission Flatpak. Applique-la toi-même :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_hint_hostos=Lutris est installé en Flatpak, et lpm est installé sous %s (dans /usr) : Flatpak refuse de partager un chemin précis situé sous /usr, même via "override" -- seule la permission large "host-os" fonctionne dans ce cas. Si le LPM Launcher échoue silencieusement (le picker de choix ne s'affiche jamais), exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
+launcher.flatpak_permission_question_hostos=Lutris est installé en Flatpak, et lpm est installé sous %s (dans /usr) : Flatpak refuse de partager un chemin précis situé sous /usr, même via "override" -- seule la permission large "host-os" fonctionne dans ce cas. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
+launcher.flatpak_permission_applied_fail_hostos=Échec de l'application automatique de la permission Flatpak. Applique-la toi-même :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.launcher_yml_missing=Erreur : lpm-launcher.yml introuvable pour "%s" -- impossible de restaurer l'exécutable d'origine.
 launcher.no_original_exe=Erreur : aucun exécutable d'origine sauvegardé pour "%s".
 launcher.teardown_done=LPM Launcher désactivé pour "%s". L'exécutable d'origine a été restauré -- vérifiez-le dans les réglages du jeu dans Lutris.
 launcher.done_one_on_cli=%s : activé. Éditez %s pour ajouter ou modifier des entrées.
 launcher.done_one_off_cli=%s : désactivé.
 launcher.picker_column=Choisir
+launcher.picker_validate_button=Lancer
+launcher.picker_cancel_button=Annuler
 launcher.runtime_error=Erreur LPM Launcher : %s
+launcher.runtime_sandbox_unreachable=Le LPM Launcher n'a pas pu démarrer : "%s" n'est pas visible depuis le bac à sable Flatpak de Lutris. Le jeu va se lancer sans le menu de choix. Corrigez avec :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.loading_text=Chargement...
 launcher.launch_timeout_warning=Le lancement semble anormalement long -- vérifiez Lutris
-help.games_launcher=Active/désactive un sélecteur multi-exécutable pour un jeu
+help.games_launcher=Active/désactive un écran de chargement + sélecteur multi-exécutable pour un jeu
 help.games_launcher_cont=  (un seul exécutable ou plusieurs : épisodes, DLC, contenu bonus...)
 
 splash.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
@@ -868,5 +865,5 @@ splash.done_cli=Bannière de chargement définie pour %s.
 splash.errors_gui_title=Erreurs de récupération de bannières
 splash.errors_gui_intro=Un ou plusieurs jeux n'ont pas pu obtenir de bannière. Rien n'a été changé pour eux :
 splash.done_gui=Terminé : %s jeu(x) traité(s).
-help.games_splash=Récupère automatiquement une large bannière de chargement ("Hero") depuis SteamGridDB (nécessite une clé API personnelle gratuite) pour l'écran de chargement
+help.games_splash=Récupère automatiquement une large bannière de chargement ("Hero") depuis SteamGridDB (nécessite une clé API personnelle gratuite) pour l'écran de chargement du LPM Launcher
 menu.opt_splash=🏞️ Récupérer une bannière de chargement (SteamGridDB)

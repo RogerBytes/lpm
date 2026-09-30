@@ -74,7 +74,7 @@ display_mode="gui"
 zgp_launcher_report_error_early() {
   local msg="$1"
   if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zgu_gui_error "${msg}"
+    zenity --error --text="${msg}" 2>/dev/null
   fi
   echo "${msg}" >&2
 }
@@ -102,7 +102,7 @@ for cmd in python3 sqlite3; do
 done
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t launcher.pyyaml_missing_gui)"
+    zenity --error --text="$(t launcher.pyyaml_missing_gui)" 2>/dev/null
   fi
   zgu_cli_error "$(t launcher.pyyaml_missing_cli)"
   exit 1
@@ -450,7 +450,48 @@ with open(os.environ["YML_PATH"], "w") as f:
 #!/bin/bash
 # Relais généré par "lpm launcher" -- ne modifie jamais ce fichier à la main, il est
 # réécrit à chaque (ré)activation. La vraie logique vit dans l'installation de lpm.
-exec bash "${script_dir}/zgl-launcher-runtime.sh" "${game_dir}"
+#
+# Ce relais vit TOUJOURS sous \$HOME (donc visible même dans le bac à sable d'un Lutris
+# Flatpak qui ne partage pas "/usr" par défaut). Le vrai script ("${script_dir}/
+# zgl-launcher-runtime.sh") peut lui être invisible dans ce bac à sable si lpm est
+# installé sous /usr -- MÊME quand la permission "host"/"host-os" est accordée à
+# Lutris : cette permission ne remplace PAS le "/usr" du bac à sable (qui reste
+# TOUJOURS celui du runtime Flatpak, jamais celui de l'hôte, pour la compatibilité des
+# bibliothèques) -- elle rend le "/usr" de l'hôte visible à un AUTRE endroit,
+# "/run/host/usr" (confirmé : c'est le comportement documenté de Flatpak pour "host"/
+# "host-os"). Donc on essaie le chemin direct, PUIS ce second chemin avant d'abandonner.
+# Si aucun des deux ne marche, RIEN n'était loggué avant ce correctif -- ce bloc écrit
+# directement une ligne dans lpm.log (même format que zgu_log, mais sans dépendre du
+# reste de l'installation lpm, justement injoignable dans ce cas précis) pour que
+# "lpm log --grep launcher-runtime" dise clairement que le picker n'a pas pu
+# s'afficher, et pourquoi.
+runtime_script=""
+for candidate in "${script_dir}/zgl-launcher-runtime.sh" "/run/host${script_dir}/zgl-launcher-runtime.sh"; do
+  if [[ -r "\${candidate}" ]]; then
+    runtime_script="\${candidate}"
+    break
+  fi
+done
+
+if [[ -z "\${runtime_script}" ]]; then
+  # Chemin EN DUR sur \$HOME, jamais via \$XDG_DATA_HOME : Lutris en Flatpak redéfinit
+  # cette variable vers son propre dossier de données privé (confirmé réel :
+  # "XDG_DATA_HOME=~/.var/app/net.lutris.Lutris/data" dans son environnement) -- si ce
+  # relais héritait de cette valeur, la ligne serait écrite dans un fichier que "lpm
+  # log" ne lit jamais. lpm.log doit rester au même endroit partout, qu'on l'écrive
+  # depuis un shell normal ou depuis l'intérieur d'un bac à sable Flatpak.
+  log_dir="\${HOME}/.local/share/lpm"
+  mkdir -p "\${log_dir}" 2>/dev/null
+  printf '%s\t%s\t%s\t%s\n' \
+    "\$(date +%FT%T%z 2>/dev/null)" "launcher-runtime" "ERREUR" \
+    "gamedir=${game_dir} raison=runtime_introuvable_bac_a_sable script_dir=${script_dir}" \
+    >> "\${log_dir}/lpm.log" 2>/dev/null
+  command -v zenity >/dev/null 2>&1 && zenity --error --width=550 \
+    --text="$(t launcher.runtime_sandbox_unreachable "${script_dir}")" 2>/dev/null &
+  exit 0
+fi
+
+exec bash "\${runtime_script}" "${game_dir}"
 EOF
   chmod +x "${game_dir}/scripts/lpm-launcher.sh"
 
@@ -494,28 +535,55 @@ with open(yml_path, "w") as f:
   fi
 
   zgu_log "launcher" "OK" "slug=${slug} action=on"
-  zgp_launcher_report_info "$(t launcher.setup_done "${name_by_slug[${slug}]}" "${game_dir}/lpm-launcher.yml")"
+
+  # Propose d'ouvrir directement le dossier contenant lpm-launcher.yml -- ce fichier est
+  # celui que l'utilisateur doit éditer à la main pour ajouter/adapter des entrées, et
+  # rien avant ça ne lui montrait ce dossier autrement qu'en texte dans un message.
+  # Uniquement en mode GUI (jamais en CLI pur, même logique partout ailleurs dans lpm :
+  # pas de fenêtre Zenity si slug ET action sont déjà fournis en ligne de commande) -- le
+  # chemin est déjà donné tel quel par zgu_cli_ok dans la boucle appelante en mode CLI.
+  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
+    if zenity --question \
+        --title="$(t launcher.setup_done_title)" \
+        --text="$(t launcher.setup_done "${name_by_slug[${slug}]}" "${game_dir}/lpm-launcher.yml")" \
+        --ok-label="$(t launcher.open_folder_button)" \
+        --cancel-label="$(t launcher.close_button)" \
+        --width=500 2>/dev/null; then
+      setsid xdg-open "${game_dir}" >/dev/null 2>&1 </dev/null &
+      disown
+    fi
+  fi
 
   # --- Lutris Flatpak : rappel de permission, best-effort ---
   #
   # Un Lutris installé en Flatpak tourne dans un bac à sable qui ne voit PAS forcément
   # "/usr/lib/lpm" (ou l'installation de lpm en cours d'exécution, quel que soit son
-  # emplacement réel) -- confirmé réel : sans "host"/"host:ro" ni ce chemin précis dans les
-  # permissions Flatpak accordées, le relais ($GAMEDIR/scripts/lpm-launcher.sh, TOUJOURS
-  # visible car sous $HOME) ne peut pas atteindre le vrai script runtime, et échoue
-  # silencieusement -- rien dans le log de lpm, rien à l'écran, juste le jeu qui se lance
-  # sans launcher, sans erreur visible. "flatpak info --show-permissions" est la seule
-  # façon fiable de vérifier ça (voir doc Flatpak officielle : un chemin précis accordé via
-  # "--filesystem=" est monté au MÊME chemin dans le bac à sable, jamais sous "/run/host/"
-  # sauf pour les permissions larges "host"/"host-os"/"host-etc"). Simple rappel
-  # informatif, jamais bloquant -- la commande reste utilisable telle quelle si ce rappel
-  # ne s'affiche pas correctement pour une raison ou une autre (flatpak absent, etc.).
+  # emplacement réel) -- sans permission adéquate, le relais ($GAMEDIR/scripts/
+  # lpm-launcher.sh, TOUJOURS visible car sous $HOME) ne peut pas atteindre le vrai
+  # script runtime, et échouait silencieusement avant le correctif ci-dessus (qui logue
+  # désormais ce cas précis dans lpm.log, voir plus haut).
+  #
+  # IMPORTANT (confirmé réel : "Not sharing "/usr/lib/lpm" with sandbox: Path "/usr" is
+  # reserved by Flatpak") -- Flatpak refuse TOUJOURS un "--filesystem=<chemin>" précis
+  # quand ce chemin est sous /usr, même après un "override" qui a l'air d'avoir réussi
+  # (la commande elle-même ne renvoie aucune erreur, seul le montage réel au lancement
+  # est refusé). Installer lpm sous /usr (cas par défaut de install.sh, /usr/local/
+  # lib/lpm) rend donc l'ancien rappel ("--filesystem=${script_dir}:ro") inefficace : la
+  # seule permission qui fonctionne pour un chemin sous /usr est la permission large
+  # "host"/"host-os" (voir doc Flatpak : elle monte le vrai système hôte tel quel,
+  # contournant la restriction propre aux chemins /usr précis). Donc : si lpm est
+  # installé sous /usr, on demande/applique "host-os" ; sinon (install non standard
+  # hors /usr), le chemin précis reste suffisant et plus restrictif, donc préféré.
+  # Simple rappel informatif, jamais bloquant.
   if [[ "${version}" = "flatpak" ]] && command -v flatpak >/dev/null 2>&1; then
-    local fp_perms="" fp_ok=false
+    local fp_perms="" fp_ok=false fp_needs_hostos=false
     fp_perms=$(flatpak info --show-permissions net.lutris.Lutris 2>/dev/null)
-    if printf '%s' "${fp_perms}" | grep -Eq "filesystems=.*host(:ro)?(;|$)"; then
+    case "${script_dir}" in
+      /usr/*) fp_needs_hostos=true ;;
+    esac
+    if printf '%s' "${fp_perms}" | grep -Eq "filesystems=.*host(-os)?(:ro)?(;|$)"; then
       fp_ok=true
-    elif printf '%s' "${fp_perms}" | grep -qF "${script_dir}"; then
+    elif [[ "${fp_needs_hostos}" = false ]] && printf '%s' "${fp_perms}" | grep -qF "${script_dir}"; then
       fp_ok=true
     fi
     if [[ "${fp_ok}" = false ]]; then
@@ -524,7 +592,11 @@ with open(yml_path, "w") as f:
       # rappel manuel (ancien comportement) si la confirmation est refusée, ou si aucun
       # moyen de la demander n'est disponible (ni zenity, ni terminal interactif).
       local flatpak_question apply_now=false
-      flatpak_question="$(t launcher.flatpak_permission_question "${script_dir}")"
+      if [[ "${fp_needs_hostos}" = true ]]; then
+        flatpak_question="$(t launcher.flatpak_permission_question_hostos "${script_dir}")"
+      else
+        flatpak_question="$(t launcher.flatpak_permission_question "${script_dir}")"
+      fi
 
       if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
         zenity --question --text="${flatpak_question}" --width=550 2>/dev/null && apply_now=true
@@ -536,7 +608,9 @@ with open(yml_path, "w") as f:
       fi
 
       if [[ "${apply_now}" = true ]]; then
-        if flatpak override --user net.lutris.Lutris --filesystem="${script_dir}:ro" >/dev/null 2>&1; then
+        local override_target="${script_dir}"
+        [[ "${fp_needs_hostos}" = true ]] && override_target="host-os"
+        if flatpak override --user net.lutris.Lutris --filesystem="${override_target}:ro" >/dev/null 2>&1; then
           local ok_msg
           ok_msg="$(t launcher.flatpak_permission_applied_ok)"
           if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
@@ -544,20 +618,28 @@ with open(yml_path, "w") as f:
           else
             echo "${ok_msg}" >&2
           fi
-          zgu_log "launcher" "OK" "slug=${slug} action=flatpak_override_applique"
+          zgu_log "launcher" "OK" "slug=${slug} action=flatpak_override_applique cible=${override_target}"
         else
           local fail_msg
-          fail_msg="$(t launcher.flatpak_permission_applied_fail "${script_dir}")"
+          if [[ "${fp_needs_hostos}" = true ]]; then
+            fail_msg="$(t launcher.flatpak_permission_applied_fail_hostos)"
+          else
+            fail_msg="$(t launcher.flatpak_permission_applied_fail "${script_dir}")"
+          fi
           if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
             zenity --error --text="${fail_msg}" --width=550 2>/dev/null
           else
             echo "${fail_msg}" >&2
           fi
-          zgu_log "launcher" "ERREUR" "slug=${slug} raison=flatpak_override_echoue"
+          zgu_log "launcher" "ERREUR" "slug=${slug} raison=flatpak_override_echoue cible=${override_target}"
         fi
       else
         local flatpak_hint
-        flatpak_hint="$(t launcher.flatpak_permission_hint "${script_dir}")"
+        if [[ "${fp_needs_hostos}" = true ]]; then
+          flatpak_hint="$(t launcher.flatpak_permission_hint_hostos "${script_dir}")"
+        else
+          flatpak_hint="$(t launcher.flatpak_permission_hint "${script_dir}")"
+        fi
         if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
           zenity --info --text="${flatpak_hint}" --width=550 2>/dev/null
         else

@@ -47,6 +47,8 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-focus-utils.sh
 source "${script_dir}/zgu-focus-utils.sh"
+# shellcheck source=./zgu-gamepad-nav-utils.sh
+source "${script_dir}/zgu-gamepad-nav-utils.sh"
 
 bail() {
   local msg="$1"
@@ -174,45 +176,90 @@ set_title() {
 chosen_workdir="" chosen_exe=""
 
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
-  set_indicator "IND_HIDE"
-  zgu_start_focus_watcher
+  # Choix déjà fait par l'orchestrateur (cas normal, lancement via le raccourci lpm) --
+  # voir zgl-launcher-orchestrator.sh : c'est LUI qui affiche désormais le picker, sur la
+  # machine hôte, AVANT même de lancer Lutris -- jamais ce script-ci, qui tourne (pour un
+  # Lutris Flatpak) à l'intérieur de son bac à sable, où ni la manette ni même la souris
+  # n'atteignaient fiablement Zenity malgré plusieurs contournements successifs (voir
+  # l'échange qui a mené à ce choix).
+  #
+  # PAS sous /tmp (confirmé réel : le bac à sable Flatpak de Lutris a son PROPRE /tmp,
+  # totalement invisible depuis l'hôte et réciproquement -- ni directement, ni via
+  # "/run/host/tmp", qui n'existe pas du tout, contrairement à "/run/host/usr". Le
+  # fichier de choix doit donc vivre dans "${gamedir}", qui LUI est forcément visible des
+  # deux côtés : Lutris a besoin d'y lire/écrire pour lancer le jeu, avec ou sans Flatpak.
+  choice_file="${gamedir}/.lpm-launcher-choice"
 
-  zenity_values=()
-  for lbl in "${entry_labels[@]}"; do
-    zenity_values+=("${lbl}")
-  done
+  if [[ -f "${choice_file}" ]]; then
+    selection=$(cat "${choice_file}" 2>/dev/null)
+    rm -f "${choice_file}" 2>/dev/null
 
-  selection=$(zenity --list \
-    --title="${title}" \
-    --text="${prompt}" \
-    --column="$(t launcher.picker_column)" \
-    "${zenity_values[@]}" \
-    --width=500 --height=400 2>/dev/null)
-
-  zgu_stop_focus_watcher 2>/dev/null
-  set_indicator "IND_SHOW"
-
-  chosen_idx=-1
-  if [[ -n "${selection}" ]]; then
-    for i in "${!entry_labels[@]}"; do
-      if [[ "${entry_labels[$i]}" = "${selection}" ]]; then
-        chosen_idx="${i}"
-        break
-      fi
-    done
-  fi
-
-  if [[ "${chosen_idx}" -eq -1 ]]; then
-    # Picker annulé (fenêtre fermée sans choix) : par sécurité, on NE TOUCHE PAS à
-    # lpm-launch.bat -- s'il existe déjà (lancement précédent), le jeu relance le même
-    # épisode que la dernière fois plutôt que de rester avec un .bat vide ou incohérent.
-    # S'il n'existe pas encore (tout premier lancement jamais validé), on retombe sur la
-    # première entrée du YAML plutôt que de ne rien lancer du tout.
-    zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
-    if [[ -f "${bat_path}" ]]; then
-      exit 0
+    chosen_idx=-1
+    if [[ -n "${selection}" ]]; then
+      for i in "${!entry_labels[@]}"; do
+        if [[ "${entry_labels[$i]}" = "${selection}" ]]; then
+          chosen_idx="${i}"
+          break
+        fi
+      done
     fi
-    chosen_idx=0
+
+    if [[ "${chosen_idx}" -eq -1 ]]; then
+      # Picker annulé côté orchestrateur, ou libellé introuvable (YAML modifié entre les
+      # deux) : même repli que ci-dessous.
+      zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
+      if [[ -f "${bat_path}" ]]; then
+        exit 0
+      fi
+      chosen_idx=0
+    fi
+  else
+    # --- Repli : l'orchestrateur n'a pas tourné (raccourci lpm contourné, jeu lancé
+    # autrement) -- ce script affiche son propre picker, comme avant l'introduction du
+    # fichier de choix, en mode dégradé (manette/focus best-effort, pas garantis fiables
+    # dans un Lutris Flatpak). ---
+    set_indicator "IND_HIDE"
+    zgu_start_focus_watcher
+    zgu_start_gamepad_nav
+
+    zenity_values=()
+    for lbl in "${entry_labels[@]}"; do
+      zenity_values+=("${lbl}")
+    done
+
+    selection=$(zenity --list \
+      --title="${title}" \
+      --text="${prompt}" \
+      --column="$(t launcher.picker_column)" \
+      "${zenity_values[@]}" \
+      --width=500 --height=400 2>/dev/null)
+
+    zgu_stop_gamepad_nav 2>/dev/null
+    zgu_stop_focus_watcher 2>/dev/null
+    set_indicator "IND_SHOW"
+
+    chosen_idx=-1
+    if [[ -n "${selection}" ]]; then
+      for i in "${!entry_labels[@]}"; do
+        if [[ "${entry_labels[$i]}" = "${selection}" ]]; then
+          chosen_idx="${i}"
+          break
+        fi
+      done
+    fi
+
+    if [[ "${chosen_idx}" -eq -1 ]]; then
+      # Picker annulé (fenêtre fermée sans choix) : par sécurité, on NE TOUCHE PAS à
+      # lpm-launch.bat -- s'il existe déjà (lancement précédent), le jeu relance le même
+      # épisode que la dernière fois plutôt que de rester avec un .bat vide ou incohérent.
+      # S'il n'existe pas encore (tout premier lancement jamais validé), on retombe sur la
+      # première entrée du YAML plutôt que de ne rien lancer du tout.
+      zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
+      if [[ -f "${bat_path}" ]]; then
+        exit 0
+      fi
+      chosen_idx=0
+    fi
   fi
 else
   chosen_idx=0

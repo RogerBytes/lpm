@@ -46,27 +46,42 @@
 
 ZGU_FOCUS_WATCHER_PID=""
 
+# Chemin de xdotool : direct, ou via "/run/host" si lpm tourne dans un script invoqué
+# par un Lutris Flatpak dont le bac à sable ne contient pas xdotool lui-même (confirmé
+# réel : absent du PATH du bac à sable, mais présent sur l'hôte et visible via
+# "/run/host" une fois "host"/"host-os" accordé -- même situation que
+# zgl-launcher-runtime.sh pour se retrouver lui-même, voir "lpm launcher ... on").
+_zgu_xdotool_bin() {
+  if command -v xdotool >/dev/null 2>&1; then
+    echo "xdotool"
+  elif [[ -x /run/host/usr/bin/xdotool ]]; then
+    echo "/run/host/usr/bin/xdotool"
+  fi
+}
+
 # zgu_start_focus_watcher -- à appeler une fois, juste avant la première fenêtre
 # Zenity d'un script interactif. Le processus de surveillance tourne jusqu'à
 # zgu_stop_focus_watcher (ou la fin du script si l'appelant oublie de l'appeler : le
 # trap EXIT posé ici s'en charge).
 zgu_start_focus_watcher() {
-  command -v xdotool >/dev/null 2>&1 || return 0
+  local xdotool_bin
+  xdotool_bin="$(_zgu_xdotool_bin)"
+  [[ -n "${xdotool_bin}" ]] || return 0
   [[ -n "${ZGU_FOCUS_WATCHER_PID}" ]] && return 0 # déjà démarré
 
   (
     confirmed_wid=""
     while true; do
-      wid=$(xdotool search --class "zenity" 2>/dev/null | tail -1)
+      wid=$("${xdotool_bin}" search --class "zenity" 2>/dev/null | tail -1)
       if [[ -n "${wid}" ]]; then
         if [[ "${wid}" != "${confirmed_wid}" ]]; then
-          active_wid=$(xdotool getactivewindow 2>/dev/null)
+          active_wid=$("${xdotool_bin}" getactivewindow 2>/dev/null)
           if [[ "${wid}" = "${active_wid}" ]]; then
             # Focus confirmé pour cette fenêtre précise : on arrête de la forcer,
             # elle se comporte désormais comme une fenêtre normale.
             confirmed_wid="${wid}"
           else
-            xdotool windowactivate "${wid}" 2>/dev/null
+            "${xdotool_bin}" windowactivate "${wid}" 2>/dev/null
           fi
         fi
       else

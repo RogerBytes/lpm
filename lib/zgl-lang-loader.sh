@@ -24,9 +24,15 @@
 _lpm_lang_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "${_lpm_lang_script_dir}" in
-    /usr/local/lib/lpm) LANG_DIR="/usr/local/lib/lpm/lang" ;;
-    /usr/lib/lpm)       LANG_DIR="/usr/lib/lpm/lang" ;;
-    *)                  LANG_DIR="${_lpm_lang_script_dir}/../lang" ;;
+    /usr/local/lib/lpm)             LANG_DIR="/usr/local/lib/lpm/lang" ;;
+    /usr/lib/lpm)                   LANG_DIR="/usr/lib/lpm/lang" ;;
+    # Ajouté pour zgl-launcher-runtime.sh invoqué via le repli "/run/host/..." (voir
+    # "lpm launcher ... on", cas Lutris Flatpak avec lpm installé sous /usr) : MÊME
+    # dossier d'install, juste vu depuis l'intérieur du bac à sable -- même règle
+    # (lang/ est un sous-dossier direct), donc PAS besoin de "../lang" ici non plus.
+    /run/host/usr/local/lib/lpm)    LANG_DIR="/run/host/usr/local/lib/lpm/lang" ;;
+    /run/host/usr/lib/lpm)          LANG_DIR="/run/host/usr/lib/lpm/lang" ;;
+    *)                              LANG_DIR="${_lpm_lang_script_dir}/../lang" ;;
 esac
 
 declare -gA STRINGS=()

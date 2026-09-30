@@ -31,9 +31,7 @@
 # Traductions manette -> clavier :
 #   Stick gauche / D-pad vertical   -> Haut / Bas          (déplacement dans une liste)
 #   Stick gauche / D-pad horizontal -> Gauche / Droite      (déplacement horizontal, onglets)
-#   BTN_SOUTH ("A")                 -> Entrée, PUIS clic direct sur le bouton par défaut
-#                                       de la boîte de dialogue (voir note "VALIDATION" ci-
-#                                       dessous -- ce n'est PAS juste "Entrée")
+#   BTN_SOUTH ("A")                 -> Entrée               (valider)
 #   BTN_EAST  ("B")                 -> Échap                (annuler/fermer)
 #   BTN_WEST  ("X")                 -> Gauche puis Espace   (cocher/décocher une case radio/
 #                                                             checklist -- voir note ci-dessous)
@@ -49,36 +47,6 @@
 # plus à gauche) à chaque pression, sans jamais dépendre d'un clic souris préalable -- sans
 # risque : Gauche sur une colonne déjà la plus à gauche ne fait rien.
 #
-# ARMEMENT CLAVIER (tous boutons) -- découverte clé, vérifiée en test réel avec Harry :
-# une zenity --radiolist/--checklist fraîchement affichée n'accepte AUCUNE interaction
-# clavier sur sa liste (Espace/Entrée ne cochent/sélectionnent rien) tant qu'un vrai
-# événement pointeur n'a pas eu lieu sur elle au moins une fois -- comportement de
-# GtkTreeView, pas un bug de lpm ni du bridge. Un clic SIMULÉ (via AT-SPI, XTest) a le même
-# effet qu'un clic réel (vérifié). Solution : à chaque nouvelle fenêtre zenity détectée
-# (par pid, une fois chacune -- voir ARMED_PIDS/ensure_zenity_armed), le bridge simule un
-# clic sur la cellule TEXTE (jamais la case à cocher) de la première ligne, avant tout
-# traitement d'appui manette. Best-effort : si AT-SPI est indisponible, cette étape est
-# simplement sautée (le pont reste utilisable pour Haut/Bas/Échap, mais Espace/Entrée ne
-# fonctionneront pas tant qu'un clic réel n'aura pas eu lieu par ailleurs).
-#
-# VALIDATION (BTN_SOUTH / "A") -- pourquoi "Espace" + clic direct, pas juste "Entrée" :
-# une fois la liste armée (voir ci-dessus), c'est "Espace" qui pose le point radio / coche
-# la case sur la ligne survolée (vérifié en test réel -- "Entrée" seul seul seul n'a pas le
-# même effet sur ce zenity). Mais quelle que soit la touche, elle ne fait jamais que ça :
-# jamais transmise au bouton de validation de la fenêtre ("Valider"), sauf si le focus
-# clavier y est explicitement (ce qui ne s'obtient normalement qu'en tabulant depuis la
-# liste -- compter les Tab nécessaires est fragile, dépend du nombre/ordre des boutons de
-# chaque écran). Solution retenue, testée fonctionnelle : après "Espace", on clique
-# DIRECTEMENT sur le bouton de validation via AT-SPI, repéré par son libellé
-# (CONFIRM_BUTTON_LABELS ci-dessous). L'état GTK IS_DEFAULT a été essayé en premier et
-# écarté : testé en réel, aucun bouton ne le porte sur ce zenity (ni "Valider" ni
-# "Annuler") -- abandonné pour le matching par libellé, moins "élégant" mais vérifié
-# fonctionnel. Couvre pour l'instant les deux langues implémentées (FR "Valider", EN "OK"
-# -- le libellé par défaut de zenity) ; ajouter un libellé dans CONFIRM_BUTTON_LABELS le
-# jour où une langue supplémentaire est ajoutée au projet. Best-effort : si AT-SPI est
-# indisponible ou ne trouve aucun bouton correspondant, on ne fait rien de plus (l'appui
-# "Espace" seul reste envoyé, comme avant).
-#
 # Détection des manettes : tout périphérique evdev exposant BTN_SOUTH (bouton "A"/face sud,
 # présent sur toutes les manettes standard, manettes Xbox/PlayStation/Switch Pro incluses)
 # OU un stick gauche (ABS_X/ABS_Y) est considéré comme une manette. Un nouveau périphérique
@@ -92,10 +60,10 @@
 # normalement jamais avoir besoin d'un SIGKILL ici.
 
 import sys
+import os
 import signal
 import subprocess
 import shutil
-import time
 
 try:
     import evdev
@@ -103,16 +71,6 @@ try:
 except Exception as exc:  # pragma: no cover - dépendance système absente
     sys.stderr.write("zgu-gamepad-bridge: python3-evdev indisponible (%s)\n" % exc)
     sys.exit(1)
-
-# AT-SPI est utilisé uniquement pour le clic direct sur le bouton par défaut (BTN_SOUTH) --
-# absence tolérée : le pont reste utilisable (Haut/Bas/Entrée brut/Échap/etc.), seule la
-# validation "un seul bouton" perd son clic direct et retombe sur l'Entrée simple.
-try:
-    import gi
-    gi.require_version("Atspi", "2.0")
-    from gi.repository import Atspi
-except Exception:
-    Atspi = None
 
 if len(sys.argv) < 2 or sys.argv[1] not in ("x11", "wayland"):
     sys.stderr.write("Usage: zgu-gamepad-bridge.py <x11|wayland>\n")
@@ -160,186 +118,34 @@ def find_gamepads():
     return pads
 
 
+# Chemin de xdotool : direct, ou via "/run/host" -- même situation que zgu-focus-
+# utils.sh (voir ce fichier) : ce pont peut tourner dans un script invoqué par un
+# Lutris Flatpak dont le bac à sable ne contient pas xdotool lui-même, seulement
+# visible via "/run/host" une fois "host"/"host-os" accordé. Résolu une seule fois.
+def _resolve_xdotool():
+    if shutil.which("xdotool"):
+        return "xdotool"
+    if os.access("/run/host/usr/bin/xdotool", os.X_OK):
+        return "/run/host/usr/bin/xdotool"
+    return None
+
+
+XDOTOOL_BIN = _resolve_xdotool()
+
+
 def send_key(key_name):
     mapping = KEY_MAP.get(key_name)
     if mapping is None:
         return
     try:
-        if SESSION_KIND == "x11" and shutil.which("xdotool"):
-            subprocess.run(["xdotool", "key", mapping["xdotool"]], check=False,
+        if SESSION_KIND == "x11" and XDOTOOL_BIN:
+            subprocess.run([XDOTOOL_BIN, "key", mapping["xdotool"]], check=False,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif shutil.which("ydotool"):
             subprocess.run(["ydotool", "key", *mapping["ydotool"]], check=False,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass  # best-effort : un appui manqué ne doit jamais faire planter le pont
-
-
-# Libellés du bouton de validation reconnus, tous les langages actuellement gérés par le
-# projet (voir note "VALIDATION" en tête de fichier) -- "OK" est le libellé par défaut de
-# zenity quand bin/lpm ne le surcharge pas explicitement en anglais.
-CONFIRM_BUTTON_LABELS = ("Valider", "OK")
-
-# Délai (secondes) laissé à zenity/GTK pour traiter l'appui "Entrée" (poser le point radio
-# / cocher la case) avant qu'on aille chercher et cliquer le bouton de validation --
-# constaté en test réel : xdotool rend la main dès que le serveur X a reçu l'événement
-# synthétique, pas une fois que l'appli l'a effectivement traité. Sans ce délai, le clic
-# AT-SPI part trop tôt et voit "rien n'est sélectionné" (lpm se ferme au lieu d'ouvrir le
-# sous-menu attendu). Valeur choisie généreuse mais imperceptible à l'usage.
-CONFIRM_CLICK_DELAY = 0.08
-
-
-def _find_table(acc):
-    """Parcourt récursivement l'arbre AT-SPI et renvoie le premier accessible de rôle
-    'table' (la liste --radiolist/--checklist), ou None. Best-effort."""
-    try:
-        if acc.get_role_name() == "table":
-            return acc
-    except Exception:
-        pass
-    try:
-        n = acc.get_child_count()
-    except Exception:
-        return None
-    for i in range(n):
-        try:
-            child = acc.get_child_at_index(i)
-        except Exception:
-            continue
-        if child is None:
-            continue
-        found = _find_table(child)
-        if found is not None:
-            return found
-    return None
-
-
-# PIDs des fenêtres zenity déjà "armées" (voir note ARMEMENT CLAVIER en tête de fichier) --
-# un seul clic d'armement par fenêtre, jamais répété une fois fait (inutile, et éviterait
-# de re-cliquer sans arrêt sur la première ligne à chaque appui).
-ARMED_PIDS = set()
-
-# Index, dans les enfants du 'table' AT-SPI, de la cellule TEXTE (pas la case à cocher) de
-# la première ligne -- structure constatée en test réel : 0=en-tête colonne "Choix",
-# 1=en-tête colonne "Action", 2=case à cocher ligne 0, 3=texte ligne 0. On clique
-# volontairement sur le texte, jamais la case, pour ne jamais cocher/sélectionner quoi que
-# ce soit par accident en armant la fenêtre.
-FIRST_ROW_TEXT_CELL_INDEX = 3
-
-
-def ensure_zenity_armed():
-    """Simule un clic (AT-SPI) sur la cellule texte de la première ligne de la fenêtre
-    zenity actuellement affichée, une seule fois par fenêtre (par pid), pour débloquer les
-    interactions clavier (Espace/Entrée) sur sa liste -- voir note ARMEMENT CLAVIER en
-    tête de fichier. Best-effort total : ne fait rien si AT-SPI est indisponible, si
-    aucune appli zenity n'est trouvée, ou sur toute erreur."""
-    if Atspi is None:
-        return
-    try:
-        desktop = Atspi.get_desktop(0)
-        for i in range(desktop.get_child_count()):
-            app = desktop.get_child_at_index(i)
-            if app is None:
-                continue
-            name = (app.get_name() or "").lower()
-            if "zenity" not in name:
-                continue
-            try:
-                pid = app.get_process_id()
-            except Exception:
-                pid = None
-            if pid is not None and pid in ARMED_PIDS:
-                return
-            table = _find_table(app)
-            if table is None:
-                return
-            try:
-                if table.get_child_count() <= FIRST_ROW_TEXT_CELL_INDEX:
-                    return
-                cell = table.get_child_at_index(FIRST_ROW_TEXT_CELL_INDEX)
-            except Exception:
-                return
-            if cell is None:
-                return
-            try:
-                ext = cell.get_extents(Atspi.CoordType.SCREEN)
-                x = ext.x + ext.width // 2
-                y = ext.y + ext.height // 2
-                # DEUX clics, pas un seul : sur une checklist, un clic sur une ligne coche
-                # ou décoche sa case QUELLE QUE SOIT la colonne cliquée (constaté par
-                # Harry, prémisse acquise -- pas seulement la colonne case comme supposé
-                # au départ). Cliquer une seule fois changerait donc l'état initial d'une
-                # case par accident. Deux clics sur le même point ramènent cet état à son
-                # point de départ (coché->décoché->coché ou l'inverse). Le délai entre les
-                # deux (au-delà du délai de détection du double-clic de GTK, ~400ms) est
-                # volontaire : un vrai double-clic sur une ligne zenity valide directement
-                # la fenêtre (comme Entrée), ce qu'on veut éviter à tout prix ici -- deux
-                # clics simples espacés n'ont pas cet effet.
-                Atspi.generate_mouse_event(x, y, "b1c")
-                time.sleep(0.45)
-                Atspi.generate_mouse_event(x, y, "b1c")
-            except Exception:
-                return
-            if pid is not None:
-                ARMED_PIDS.add(pid)
-            return
-    except Exception:
-        pass  # best-effort : jamais fatal pour le pont
-
-
-def _find_confirm_button(acc):
-    """Parcourt récursivement l'arbre AT-SPI d'un accessible et renvoie le premier
-    'push button' dont le libellé correspond à CONFIRM_BUTTON_LABELS, ou None.
-    Best-effort : toute erreur d'un noeud est ignorée, jamais fatale."""
-    try:
-        if acc.get_role_name() == "push button" and acc.get_name() in CONFIRM_BUTTON_LABELS:
-            return acc
-    except Exception:
-        pass
-    try:
-        n = acc.get_child_count()
-    except Exception:
-        return None
-    for i in range(n):
-        try:
-            child = acc.get_child_at_index(i)
-        except Exception:
-            continue
-        if child is None:
-            continue
-        found = _find_confirm_button(child)
-        if found is not None:
-            return found
-    return None
-
-
-def click_default_zenity_button():
-    """Cherche la fenêtre zenity actuellement affichée et clique directement sur son
-    bouton de validation (repéré par libellé, voir CONFIRM_BUTTON_LABELS), sans dépendre
-    du focus clavier ni de l'ordre/nombre de boutons. Best-effort total : ne fait rien si
-    AT-SPI est indisponible, si aucune appli zenity n'est trouvée, ou sur toute erreur."""
-    if Atspi is None:
-        return
-    time.sleep(CONFIRM_CLICK_DELAY)
-    try:
-        desktop = Atspi.get_desktop(0)
-        n = desktop.get_child_count()
-        for i in range(n):
-            app = desktop.get_child_at_index(i)
-            if app is None:
-                continue
-            name = (app.get_name() or "").lower()
-            if "zenity" not in name:
-                continue
-            button = _find_confirm_button(app)
-            if button is not None:
-                try:
-                    button.do_action(0)
-                except Exception:
-                    pass
-                return
-    except Exception:
-        pass  # best-effort : jamais fatal pour le pont
 
 
 def release_all():
@@ -381,50 +187,24 @@ def resolve_button_code(*names):
 
 BTN_CONFIRM = resolve_button_code("BTN_SOUTH", "BTN_A")
 BTN_CANCEL = resolve_button_code("BTN_EAST", "BTN_B")
+BTN_CHECK = resolve_button_code("BTN_WEST", "BTN_X")
 BTN_PREV_FIELD = resolve_button_code("BTN_TL")
 BTN_NEXT_FIELD = resolve_button_code("BTN_TR")
 
-# BUG CORRIGÉ : resolve_button_code() ne renvoie qu'UN SEUL code (le premier nom
-# existant), donc "BTN_WEST" (toujours défini par evdev) l'emportait systématiquement et
-# "BTN_C" n'était jamais retenu même en le passant en argument -- alors que certaines
-# manettes (constaté par Harry sur une 8BitDo SN30 Pro+) remontent leur bouton face ouest
-# ("X") comme BTN_C (306) plutôt que BTN_WEST (308), héritage de la nomenclature evdev des
-# manettes Sega Genesis à 6 boutons, réutilisée par certains pilotes/modes génériques.
-# Cette fois on collecte TOUS les codes candidats qui existent réellement sur cette
-# version d'evdev, et on les mappe TOUS vers la même action -- BTN_WEST/BTN_X pour les
-# manettes standard, BTN_C en plus pour celles qui l'utilisent à la place.
-BTN_CHECK_CODES = {
-    code for code in (
-        getattr(ecodes, "BTN_WEST", None),
-        getattr(ecodes, "BTN_X", None),
-        getattr(ecodes, "BTN_C", None),
-    )
-    if code is not None
-}
-
 # Chaque bouton associe une SÉQUENCE de touches (une liste, envoyées dans l'ordre) plutôt
-# qu'une touche unique -- nécessaire pour le bouton "check" (voir note plus haut : Gauche
-# doit précéder Espace à chaque pression, pour ne jamais dépendre d'un focus déjà en place).
+# qu'une touche unique -- nécessaire pour BTN_CHECK (voir note plus haut : Gauche doit
+# précéder Espace à chaque pression, pour ne jamais dépendre d'un focus déjà en place).
 BUTTON_KEY_MAP = {}
 if BTN_CONFIRM is not None:
-    # "space" et non "Return" : vérifié en test réel, c'est Espace qui pose le point radio
-    # / coche la case une fois la liste armée (voir note ARMEMENT CLAVIER) -- "Return" seul
-    # n'a pas cet effet sur ce zenity.
-    BUTTON_KEY_MAP[BTN_CONFIRM] = ["space"]
+    BUTTON_KEY_MAP[BTN_CONFIRM] = ["Return"]
 if BTN_CANCEL is not None:
     BUTTON_KEY_MAP[BTN_CANCEL] = ["Escape"]
-for _code in BTN_CHECK_CODES:
-    BUTTON_KEY_MAP[_code] = ["Left", "space"]
+if BTN_CHECK is not None:
+    BUTTON_KEY_MAP[BTN_CHECK] = ["Left", "space"]
 if BTN_PREV_FIELD is not None:
     BUTTON_KEY_MAP[BTN_PREV_FIELD] = ["shift+Tab"]
 if BTN_NEXT_FIELD is not None:
     BUTTON_KEY_MAP[BTN_NEXT_FIELD] = ["Tab"]
-
-# Actions supplémentaires à exécuter après la séquence de touches d'un bouton -- seul
-# BTN_CONFIRM en a besoin pour l'instant (voir note "VALIDATION" en tête de fichier).
-BUTTON_EXTRA_ACTION = {}
-if BTN_CONFIRM is not None:
-    BUTTON_EXTRA_ACTION[BTN_CONFIRM] = click_default_zenity_button
 
 # --- Axes -> paire (touche négative, touche positive) ---
 AXIS_KEY_MAP = {
@@ -466,12 +246,6 @@ def main():
     device_map = {dev.fd: dev for dev in grabbed_devices}
 
     while running:
-        # Vérifié à chaque tour de boucle (~5x/seconde, indépendamment des appuis manette)
-        # plutôt que sur le premier appui de bouton : sinon, si l'utilisateur a déjà navigué
-        # avec les flèches avant ce premier appui, le clic d'armement (sur la 1ère ligne)
-        # annulerait sa navigation. Ici, une nouvelle fenêtre est armée quasi immédiatement
-        # après son apparition, bien avant qu'une navigation ait pu avoir lieu.
-        ensure_zenity_armed()
         try:
             r, _, _ = select.select(device_map.keys(), [], [], 0.2)
         except (OSError, ValueError):
@@ -488,9 +262,6 @@ def main():
                         if key_sequence is not None:
                             for key_name in key_sequence:
                                 send_key(key_name)
-                        extra_action = BUTTON_EXTRA_ACTION.get(event.code)
-                        if extra_action is not None:
-                            extra_action()
                     elif event.type == ecodes.EV_ABS and event.code in AXIS_KEY_MAP:
                         key = (dev.path, event.code)
                         lo, hi = axis_ranges.get(key, (-32768, 32767))

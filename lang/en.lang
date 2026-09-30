@@ -690,7 +690,7 @@ game_tools.launched_cli=Launched for %s.
 game_tools.exe_selection_title=Choose an executable to run in the prefix
 game_tools.exe_not_found_gui=Error: file not found: %s
 game_tools.exe_not_found_cli=Error: file not found: %s
-game_tools.invalid_tool_cli=Error: unknown tool '%s' (expected: winetricks, regedit, winecfg, console, exe, folder or favorite).
+game_tools.invalid_tool_cli=Error: unknown tool '%s' (expected: winetricks, regedit, winecfg, console, exe or folder).
 game_tools.action_title=Wine tools -- %s
 game_tools.action_text=What do you want to do?
 game_tools.action_col=Tool
@@ -700,20 +700,8 @@ game_tools.action_winecfg=Wine configuration (winecfg)
 game_tools.action_console=DOS console (cmd)
 game_tools.action_exe=Run an executable in the prefix
 game_tools.action_folder=Open the prefix folder
-game_tools.action_favorite=Add a favorite folder (Windows Open/Save dialogs)
-game_tools.favorite_selection_title=Choose the favorite folder (Windows Open/Save dialogs)
-game_tools.favorite_not_found_gui=Error: folder not found: %s
-game_tools.favorite_not_found_cli=Error: folder not found: %s
-game_tools.favorite_winepath_missing_gui=Error: cannot find "winepath" (neither next to this game's Wine runner, nor in PATH).
-game_tools.favorite_winepath_missing_cli=Error: cannot find "winepath" (neither next to this game's Wine runner, nor in PATH).
-game_tools.favorite_winepath_failed_gui=Error: could not convert path %s to a Windows path.
-game_tools.favorite_winepath_failed_cli=Error: could not convert path %s to a Windows path.
-game_tools.favorite_reg_failed_gui=Error: writing to the Wine registry failed.
-game_tools.favorite_reg_failed_cli=Error: writing to the Wine registry failed.
-game_tools.favorite_saved_gui=Favorite folder saved: %s\n\nIt will show up in this game's Windows "Open"/"Save" dialogs (quick access/favorites). Some software ignores this list and won't display it.
-game_tools.favorite_saved_cli=Favorite folder saved for %s: %s
-help.games_tools=Opens a Wine tools menu for a game (winetricks, registry, winecfg, console, run an .exe, open the folder, add a favorite folder)
-help.games_tools_cont=tool: winetricks|regedit|winecfg|console|exe|folder|favorite (pure CLI if both slug AND tool are given)
+help.games_tools=Opens a Wine tools menu for a game (winetricks, registry, winecfg, console, run an .exe, open the folder)
+help.games_tools_cont=tool: winetricks|regedit|winecfg|console|exe|folder (pure CLI if both slug AND tool are given)
 help.games_killwine=Immediately kills every running Wine/Winetricks/umu-run/Proton process (panic button for a stuck process)
 menu.opt_killwine=🛑 Kill all running Wine/Proton processes
 
@@ -732,7 +720,7 @@ wine_killer.nothing_running_cli=No Wine/Proton process running.
 help.games_lsfg=lpm lsfg [slugs...] [on|off]
 help.games_lsfg_cont=Enable/disable lsfg-vk (frame generation) for one or more games
 menu.opt_lsfg=⚡ Configure lsfg-vk (frame generation)
-menu.opt_launcher=🎮 Configure the LPM Launcher (multi-executable picker)
+menu.opt_launcher=🎮 Configure the LPM Launcher (splash + episode picker)
 lsfg.cli_usage=Usage: lpm lsfg <slug...> on|off
 lsfg.zenity_missing=Error: "zenity" is required for graphical mode.
 lsfg.cmd_missing=Error: the "%s" command is required and was not found.
@@ -815,20 +803,29 @@ launcher.default_prompt=Which one do you want to launch?
 launcher.example_entry_comment=Uncomment and adapt to add another entry:
 launcher.example_entry_label=Example
 launcher.setup_done=LPM Launcher enabled for "%s".\nEdit this file to add or change entries:\n%s
-launcher.flatpak_permission_hint=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the multi-executable picker silently fail to apply (the game launches normally, but with its usual executable instead of the chosen one). If that happens, run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_question=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the multi-executable picker silently fail to apply. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.setup_done_title=LPM Launcher enabled
+launcher.open_folder_button=Open folder
+launcher.close_button=Close
+launcher.flatpak_permission_hint=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start (game launches normally, without the loading screen). If that happens, run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_question=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.flatpak_permission_applied_ok=Flatpak permission applied successfully.
 launcher.flatpak_permission_applied_fail=Automatic Flatpak permission fix failed. Apply it yourself:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_hint_hostos=Lutris is installed via Flatpak, and lpm is installed under %s (inside /usr): Flatpak always refuses to share a specific path located under /usr, even via "override" -- only the broad "host-os" permission works in this case. If the LPM Launcher silently fails to start (the picker never appears), run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
+launcher.flatpak_permission_question_hostos=Lutris is installed via Flatpak, and lpm is installed under %s (inside /usr): Flatpak always refuses to share a specific path located under /usr, even via "override" -- only the broad "host-os" permission works in this case. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
+launcher.flatpak_permission_applied_fail_hostos=Automatic Flatpak permission fix failed. Apply it yourself:\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.launcher_yml_missing=Error: lpm-launcher.yml not found for "%s" -- cannot restore the original executable.
 launcher.no_original_exe=Error: no original executable saved for "%s".
 launcher.teardown_done=LPM Launcher disabled for "%s". The original executable has been restored -- please double-check it in Lutris's game settings.
 launcher.done_one_on_cli=%s: enabled. Edit %s to add or change entries.
 launcher.done_one_off_cli=%s: disabled.
 launcher.picker_column=Choose
+launcher.picker_validate_button=Launch
+launcher.picker_cancel_button=Cancel
 launcher.runtime_error=LPM Launcher error: %s
+launcher.runtime_sandbox_unreachable=The LPM Launcher could not start: "%s" is not visible from Lutris's Flatpak sandbox. The game will launch without the picker menu. Fix it with:\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.loading_text=Loading...
 launcher.launch_timeout_warning=Launch seems to be taking longer than expected -- check Lutris
-help.games_launcher=Enable/disable a multi-executable picker for a game
+help.games_launcher=Enable/disable a splash screen + optional multi-executable picker for a game
 help.games_launcher_cont=  (single or multiple executables: episodes, DLC, bonus content...)
 
 splash.cmd_missing=Error: '%s' is not installed on this system.
@@ -868,5 +865,5 @@ splash.done_cli=Splash banner set for %s.
 splash.errors_gui_title=Splash banner fetch errors
 splash.errors_gui_intro=One or more games could not get a splash banner. Nothing was changed for them:
 splash.done_gui=Done: %s game(s) processed.
-help.games_splash=Fetches a wide splash banner ("Hero" image) automatically from SteamGridDB (requires a free personal API key) for the loading screen
+help.games_splash=Fetches a wide splash banner ("Hero" image) automatically from SteamGridDB (requires a free personal API key) for the LPM Launcher's loading screen
 menu.opt_splash=🏞️ Fetch a splash banner (SteamGridDB)

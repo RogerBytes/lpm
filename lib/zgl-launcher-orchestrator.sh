@@ -54,6 +54,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-focus-utils.sh
+source "${script_dir}/zgu-focus-utils.sh"
 
 # --- Commande Lutris finale : strictement celle utilisée en Exec= avant l'orchestrateur ---
 launch_lutris() {
@@ -148,8 +150,17 @@ if [[ -f "${lutris_system_file}" ]]; then
 fi
 [[ -z "${game_dir}" ]] && game_dir="${games_dir}/${slug}"
 
+# --- Fichier de contrôle à chemin FIXE (dérivé de game_dir, pas de mktemp aléatoire) --
+# -- pour que zgl-launcher-runtime.sh (lancé séparément, plus tard, par Lutris) retrouve le
+# même fichier sans qu'aucune donnée n'ait besoin de circuler explicitement entre les deux
+# scripts. sha256sum de game_dir plutôt que son basename : robuste même si le nom du
+# répertoire du jeu ne correspond pas exactement au slug (colonne "directory" de Lutris).
+ctrl_key=$(printf '%s' "${game_dir}" | sha256sum | cut -c1-24)
+control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
+
 # --- Écran de chargement désactivé pour ce jeu, ou dossier introuvable : lancement direct,
-# rien d'autre. ---
+# rien d'autre (donc aussi pas de picker LPM Launcher -- voir zgl-launcher-runtime.sh pour
+# son propre repli dans ce cas précis, en mode dégradé). ---
 if [[ ! -d "${game_dir}" ]] || [[ -f "${game_dir}/.lpm-no-loadingscreen" ]]; then
   launch_lutris
 fi
@@ -159,18 +170,73 @@ if [[ "${XDG_SESSION_TYPE,,}" = "wayland" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]];
   session_kind="wayland"
 fi
 
-# --- Fichier de contrôle à chemin FIXE (dérivé de game_dir, pas de mktemp aléatoire) --
-# -- pour que zgl-launcher-runtime.sh (lancé séparément, plus tard, par Lutris) retrouve le
-# même fichier sans qu'aucune donnée n'ait besoin de circuler explicitement entre les deux
-# scripts. sha256sum de game_dir plutôt que son basename : robuste même si le nom du
-# répertoire du jeu ne correspond pas exactement au slug (colonne "directory" de Lutris).
-ctrl_key=$(printf '%s' "${game_dir}" | sha256sum | cut -c1-24)
-control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
+# --- LPM Launcher (picker multi-entrées) : le YAML est lu ICI, AVANT même le premier
+# affichage du fond, uniquement pour savoir si un picker va être montré -- pas encore
+# pour l'afficher (la manette n'est pas encore démarrée à ce stade, voir plus bas). Sert
+# à décider le fond INITIAL juste en dessous : si un picker va suivre, le splash ne doit
+# apparaître qu'APRÈS le choix, jamais avant pour disparaître aussitôt (clignotement
+# constaté, corrigé ici plutôt que côté fond, qui ne peut pas deviner à l'avance).
+launcher_yml="${game_dir}/lpm-launcher.yml"
+# PAS sous /tmp : le /tmp du bac à sable Flatpak de Lutris est totalement invisible
+# depuis l'hôte (confirmé réel), donc zgl-launcher-runtime.sh (qui tourne DEDANS pour un
+# Lutris Flatpak) ne trouverait jamais ce fichier écrit ICI, sur l'hôte. "${game_dir}"
+# est lui forcément visible des deux côtés -- voir zgl-launcher-runtime.sh.
+launcher_choice_file="${game_dir}/.lpm-launcher-choice"
+rm -f "${launcher_choice_file}" 2>/dev/null
 
-# --- Fond : image splash si présente, sinon noir uni ---
+picker_title="" picker_prompt=""
+entry_labels=()
+will_show_picker=false
+
+if [[ -f "${launcher_yml}" ]] && [[ "${has_display}" = true ]] \
+    && command -v python3 >/dev/null 2>&1; then
+  parsed=$(YML_PATH="${launcher_yml}" python3 -c '
+import os, sys, yaml
+
+try:
+    with open(os.environ["YML_PATH"], "r") as f:
+        data = yaml.safe_load(f) or {}
+except Exception:
+    sys.exit(1)
+
+if not isinstance(data, dict):
+    sys.exit(1)
+
+title = str(data.get("title") or "")
+prompt = str(data.get("prompt") or "")
+entries = data.get("entries") or []
+if not isinstance(entries, list):
+    sys.exit(1)
+
+print("TITLE\x1f" + title.replace("\x1f", " ").replace("\n", " "))
+print("PROMPT\x1f" + prompt.replace("\x1f", " ").replace("\n", " "))
+for e in entries:
+    if not isinstance(e, dict):
+        continue
+    label = str(e.get("label") or "").replace("\x1f", " ").replace("\n", " ")
+    if not label:
+        continue
+    print("ENTRY\x1f" + label)
+' 2>/dev/null)
+
+  while IFS=$'\x1f' read -r kind a; do
+    case "${kind}" in
+      TITLE) picker_title="${a}" ;;
+      PROMPT) picker_prompt="${a}" ;;
+      ENTRY)  entry_labels+=("${a}") ;;
+    esac
+  done <<< "${parsed}"
+
+  [[ ${#entry_labels[@]} -gt 1 ]] && will_show_picker=true
+fi
+
+# --- Fond : image splash si présente, sinon noir uni -- SAUF si un picker va être
+# montré, auquel cas NONE jusqu'au choix (voir bloc ci-dessus). ---
 splash_image="${game_dir}/splash/splash.png"
 bg_state="NONE"
-[[ -f "${splash_image}" ]] && bg_state="${splash_image}"
+if [[ "${will_show_picker}" = false ]] && [[ -f "${splash_image}" ]]; then
+  bg_state="${splash_image}"
+fi
 
 {
   printf '%s\n' "${bg_state}"
@@ -187,13 +253,97 @@ python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicat
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
+# Démarré ICI, AVANT le picker LPM Launcher ci-dessous (pas seulement pour le jeu une
+# fois lancé) : la manette doit déjà être captée quand le picker s'affiche, par-dessus ce
+# même fond noir/splash -- pas un second bac à sable ou pont séparé pour ça.
 python3 "${script_dir}/zgu-gamepad-bridge.py" "${session_kind}" >/dev/null 2>&1 &
 bridge_pid=$!
 disown "${bridge_pid}" 2>/dev/null
 
-sleep 0.3  # laisse le temps au fond de s'afficher avant que Lutris ne fasse quoi que ce soit
+sleep 0.3  # laisse le temps au fond de s'afficher avant que Lutris (ou le picker) ne fasse quoi que ce soit
 
 zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=fond_lance ctrl=${control_file}"
+
+# --- LPM Launcher (picker multi-entrées) : résolu ICI, sur la machine hôte, PAS par
+# zgl-launcher-runtime.sh (lancé plus tard par Lutris) -- ce dernier tourne, pour un
+# Lutris Flatpak, à l'intérieur de son bac à sable, où ni la manette ni même la souris
+# n'atteignaient fiablement Zenity, malgré plusieurs contournements successifs (voir
+# l'échange qui a mené à ce choix). Le choix est donc fait ICI -- exactement comme le
+# menu interactif de lpm, qui n'a jamais eu ce problème pour la même raison : hors de
+# tout bac à sable, et avec le même pont manette déjà démarré ci-dessus -- et transmis à
+# zgl-launcher-runtime.sh via un fichier à chemin fixe, dérivé de game_dir comme le
+# fichier de contrôle. Ce dernier n'a alors plus qu'à le lire et écrire lpm-launch.bat,
+# sans jamais avoir besoin d'afficher quoi que ce soit lui-même dans le cas normal (son
+# propre picker reste en repli, voir ce script, pour le cas où CE script-ci n'aurait pas
+# tourné -- raccourci lpm contourné, jeu lancé autrement).
+#
+# YAML déjà lu plus haut (entry_labels/picker_title/picker_prompt/will_show_picker),
+# avant même le premier affichage du fond -- voir ce bloc pour pourquoi.
+if [[ "${will_show_picker}" = true ]]; then
+    # IND_HIDE : dit aussi au fond noir/splash de passer SOUS le picker le temps du choix
+    # (voir zgu-launcher-blackscreen.py) -- sans ça, son "keep_above" le remet toujours
+    # par-dessus. Fond déjà "NONE" depuis le tout premier affichage (voir plus haut) --
+    # rien à changer ici, juste l'indicateur. Titre inchangé à ce stade.
+    {
+      printf '%s\n' "NONE"
+      printf '%s\n' "IND_HIDE"
+      printf '%s\n' "${title_text}"
+    } > "${control_file}" 2>/dev/null
+
+    # Laisse le temps au fond (sondage toutes les 150ms, voir zgu-launcher-blackscreen.py)
+    # de lever son "keep_above" AVANT que le picker n'apparaisse -- sinon sa fenêtre se
+    # retrouve créée pendant que le fond est encore sur le calque "toujours au-dessus", et
+    # rien ne la fait remonter par-dessus ensuite (constaté réel : le focus peut être
+    # confirmé côté WM sans que la fenêtre soit visuellement remontée au-dessus d'un
+    # "always on top").
+    sleep 0.3
+
+    # Picker maison (zgu-launcher-picker.py), PAS Zenity : boutons Valider/Annuler définis
+    # PAR CE SCRIPT (jamais ceux, imposés, de Zenity), ni croix de fermeture -- accessible
+    # au clavier (flèches/Entrée/Échap), à la manette (A/B) ET à la souris (clic, double-
+    # clic, ou les deux boutons) -- voir ce script pour le détail. Sa propre fenêtre se
+    # maintient elle-même au-dessus (set_keep_above(True) et grab_focus() dans le script),
+    # plus besoin du va-et-vient xdotool de zgu-focus-utils.sh ici.
+    selection=$(python3 "${script_dir}/zgu-launcher-picker.py" \
+      "${picker_title}" "${picker_prompt}" \
+      "$(t launcher.picker_validate_button)" "$(t launcher.picker_cancel_button)" \
+      "${entry_labels[@]}" 2>/dev/null)
+    picker_rc=$?
+
+    if [[ "${picker_rc}" -ne 0 ]] || [[ -z "${selection}" ]]; then
+      # Annulé (bouton Annuler, Échap, bouton B, ou fermeture de la fenêtre -- toutes
+      # traitées pareil, voir zgu-launcher-picker.py) OU erreur du picker : le flux est
+      # arrêté ENTIÈREMENT, le jeu n'est PAS lancé. Avec Zenity, "Annuler" finissait quand
+      # même par lancer le jeu (rien ne distinguait vraiment annulé de "choix par défaut") --
+      # constaté réel, corrigé ici : annuler doit vouloir dire annuler.
+      rm -f "${launcher_choice_file}" 2>/dev/null
+      zgu_log "launcher-orchestrator" "INFO" "slug=${slug} raison=picker_annule action=arret_complet"
+      echo "STOP" > "${control_file}" 2>/dev/null
+      [[ -n "${bridge_pid}" ]] && kill "${bridge_pid}" 2>/dev/null
+      sleep 0.3
+      [[ -n "${blackscreen_pid}" ]] && kill "${blackscreen_pid}" 2>/dev/null
+      rm -f "${control_file}" 2>/dev/null
+      exit 0
+    fi
+
+    # Écrit ce fichier dès qu'un choix a été validé : sa seule PRÉSENCE dit à
+    # zgl-launcher-runtime.sh que CE script a bien tourné et pris la décision -- absence =
+    # repli sur son propre picker (voir plus haut), jamais une case à part à gérer côté
+    # runtime.
+    printf '%s' "${selection}" > "${launcher_choice_file}" 2>/dev/null
+
+    # Fond APRÈS le choix : le splash (s'il existe) n'apparaît qu'à partir de maintenant --
+    # jamais avant le picker (voir plus haut pourquoi bg_state valait "NONE" jusqu'ici).
+    post_choice_bg="NONE"
+    [[ -f "${splash_image}" ]] && post_choice_bg="${splash_image}"
+
+    {
+      printf '%s\n' "${post_choice_bg}"
+      printf '%s\n' "IND_SHOW"
+      printf '%s\n' "${selection//[$'\n\r']/}"
+    } > "${control_file}" 2>/dev/null
+    zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choix entree=${selection}"
+fi
 
 # --- Watcher détaché : détection de la fenêtre du jeu + durée minimum d'affichage, puis
 # nettoyage complet -- tourne indépendamment, CE script fait "exec" juste après et disparaît

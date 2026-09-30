@@ -74,7 +74,7 @@ FONT_SIZE = 16
 
 # Titre (nom du jeu / libellé d'entrée) : même coin, juste au-dessus de l'indicateur, plus
 # gros -- voir l'en-tête de fichier.
-TITLE_FONT_SIZE = 22
+TITLE_FONT_SIZE = 27
 TITLE_INDICATOR_GAP = 14
 
 # Réduction volontaire de la largeur maximale d'une bannière (indépendante de la hauteur,
@@ -116,17 +116,7 @@ class BlackWindow(Gtk.Window):
         self.set_decorated(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        # "keep_above" seulement sur X11 : là-bas, la vraie fenêtre du jeu est détectée
-        # (xdotool, voir zgl-launcher-orchestrator.sh) et fait disparaître ce fond dès
-        # qu'elle apparaît -- aucun risque à rester "toujours au-dessus" en attendant.
-        # Sur Wayland, cette détection n'existe pas : l'orchestrateur attend un délai fixe
-        # de 12s avant de fermer ce fond, qui resterait donc au-dessus du jeu déjà ouvert
-        # et jouable pendant tout ce temps si on le forçait ici aussi. Sans "keep_above",
-        # l'empilement normal des fenêtres s'applique : ce fond apparaît au-dessus de ce
-        # qui existait avant lui, mais toute fenêtre ouverte APRÈS lui (le jeu) passera
-        # normalement par-dessus, sans attendre ce délai.
-        if not is_wayland:
-            self.set_keep_above(True)
+        self.set_keep_above(True)
         self.set_app_paintable(True)
         self.current_surface = None
 
@@ -277,7 +267,12 @@ def poll_control_file():
     if indicator_state != last_indicator_state:
         last_indicator_state = indicator_state
         show_indicator[0] = (indicator_state != "IND_HIDE")
+        # IND_HIDE veut aussi dire "un picker est affiché par-dessus" (voir
+        # zgl-launcher-orchestrator.sh) : le fond doit alors passer SOUS lui, sinon
+        # keep_above (mis pour rester au-dessus du bureau/des autres fenêtres) le
+        # recouvre aussi. Remis au-dessus dès IND_SHOW (picker refermé).
         for win in windows:
+            win.set_keep_above(show_indicator[0])
             win.queue_draw()
 
     if title_state != last_title_state:

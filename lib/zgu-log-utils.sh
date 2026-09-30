@@ -12,8 +12,14 @@
 # stdout/stderr, seulement les décisions clé (début de commande, succès/échec par
 # élément traité, avec la raison).
 #
-# Emplacement XDG : $XDG_DATA_HOME/lpm/lpm.log (repli ~/.local/share/lpm/lpm.log),
-# cohérent avec l'emplacement déjà utilisé par les données Lutris elles-mêmes.
+# Emplacement : TOUJOURS ~/.local/share/lpm/lpm.log, EN DUR sur $HOME -- jamais via
+# $XDG_DATA_HOME. Certains scripts lpm (zgl-launcher-runtime.sh, entre autres) sont
+# invoqués comme "system.prelaunch_command" par Lutris et héritent donc de SON
+# environnement -- un Lutris installé en Flatpak redéfinit $XDG_DATA_HOME vers son
+# propre dossier de données privé (confirmé réel : "~/.var/app/net.lutris.Lutris/
+# data"). Avec un repli dynamique "${XDG_DATA_HOME:-...}", ces scripts écriraient
+# alors dans un fichier différent de celui que "lpm log" lit dans un shell normal --
+# le journal doit rester le même fichier partout, quel que soit qui l'écrit.
 #
 # Rotation : au-delà de ZGU_LOG_MAX_LINES lignes, lpm.log est renommé lpm.log.1 (en
 # écrasant un éventuel lpm.log.1 précédent -- un seul niveau de sauvegarde, pas une
@@ -28,7 +34,7 @@
 # d'où le "|| true"/"|| return 0" systématique ci-dessous -- le journal est un
 # outil de confort, pas une garantie, sa perte ne doit pas dégrader le service.
 
-ZGU_LOG_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/lpm"
+ZGU_LOG_DIR="${HOME}/.local/share/lpm"
 ZGU_LOG_FILE="${ZGU_LOG_DIR}/lpm.log"
 ZGU_LOG_MAX_LINES=10000
 
