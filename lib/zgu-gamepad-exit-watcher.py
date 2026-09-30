@@ -143,8 +143,17 @@ sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
 sdl.SDL_GameControllerGetButton.argtypes = [ctypes.c_void_p, ctypes.c_int]
 sdl.SDL_GameControllerGetAxis.restype = ctypes.c_int16
 sdl.SDL_GameControllerGetAxis.argtypes = [ctypes.c_void_p, ctypes.c_int]
-sdl.SDL_GameControllerAddMappingsFromFile.restype = ctypes.c_int
-sdl.SDL_GameControllerAddMappingsFromFile.argtypes = [ctypes.c_char_p]
+# SDL_GameControllerAddMappingsFromFile est optionnel : selon la distribution/version exacte
+# de libSDL2, ce symbole n'est pas toujours exporté tel quel (constaté : absent de la
+# libSDL2-2.0.so.0 2.30.0 d'Ubuntu, alors que toutes les fonctions ci-dessus le sont) --
+# résolution défensive via getattr plutôt qu'un accès direct, pour ne jamais planter au
+# démarrage si ce symbole précis manque. Dans ce cas on se contente de la base interne déjà
+# embarquée dans la libSDL2 installée -- pas de couverture bundlée en plus, mais pas de
+# plantage non plus.
+_add_mappings_from_file = getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None)
+if _add_mappings_from_file is not None:
+    _add_mappings_from_file.restype = ctypes.c_int
+    _add_mappings_from_file.argtypes = [ctypes.c_char_p]
 
 if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
     sys.stderr.write(
@@ -156,10 +165,15 @@ if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) !
 # Charge la base communautaire bundlée -- donne à SDL2 le mapping standardisé pour un très
 # grand nombre de manettes connues (dont la 8BitDo SN30 Pro+), plutôt que de dépendre
 # uniquement de la base déjà embarquée dans la libSDL2 installée sur le système (variable
-# selon la distribution/version). Absence du fichier : pas fatal, juste moins de couverture
-# (repli sur la base interne de la libSDL2 installée).
-if os.path.isfile(GAMECONTROLLERDB_PATH):
-    sdl.SDL_GameControllerAddMappingsFromFile(GAMECONTROLLERDB_PATH.encode("utf-8"))
+# selon la distribution/version). Absence du fichier ou du symbole : pas fatal, juste moins
+# de couverture (repli sur la base interne de la libSDL2 installée).
+if _add_mappings_from_file is not None and os.path.isfile(GAMECONTROLLERDB_PATH):
+    _add_mappings_from_file(GAMECONTROLLERDB_PATH.encode("utf-8"))
+elif _add_mappings_from_file is None:
+    sys.stderr.write(
+        "zgu-gamepad-exit-watcher: SDL_GameControllerAddMappingsFromFile indisponible dans "
+        "cette libSDL2 -- base bundlée ignorée, repli sur la base interne de la lib installée.\n"
+    )
 
 
 def _resolve_xdotool():
