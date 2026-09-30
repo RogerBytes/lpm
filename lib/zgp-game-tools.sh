@@ -94,7 +94,7 @@ game_tools_display_mode="gui"
 [[ "${will_use_zenity}" = false ]] && game_tools_display_mode="cli"
 lutris_version=$(zgu_resolve_lutris_version "${game_tools_display_mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${lutris_version}" ]]; then
-  zenity --error --text="$(t game_tools.lutris_missing_gui)" 2>/dev/null
+  zgu_gui_error "$(t game_tools.lutris_missing_gui)"
   zgu_cli_error "$(t game_tools.lutris_missing_cli)"
   exit 1
 fi
@@ -203,7 +203,7 @@ fi
 
 prefix_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
 if [[ -z "${prefix_dir}" ]]; then
-  zenity --error --text="$(t game_tools.prefix_not_found_gui "${target_name}")" 2>/dev/null
+  zgu_gui_error "$(t game_tools.prefix_not_found_gui "${target_name}")"
   zgu_cli_error "$(t game_tools.prefix_not_found_cli "${target_name}")"
   exit 1
 fi
@@ -267,7 +267,7 @@ fi
 
 wine_bin=$(zgu_get_wine_binary "${runner_dir}" "${wine_version}")
 if [[ -z "${wine_bin}" ]]; then
-  zenity --error --text="$(t game_tools.runner_missing_gui "${wine_version}")" 2>/dev/null
+  zgu_gui_error "$(t game_tools.runner_missing_gui "${wine_version}")"
   zgu_cli_error "$(t game_tools.runner_missing_cli "${wine_version}")"
   exit 1
 fi
@@ -315,12 +315,12 @@ zgt_already_running() {
 
 run_winetricks() {
   if [[ -z "${winetricks_bin}" ]]; then
-    zenity --error --text="$(t game_tools.winetricks_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t game_tools.winetricks_missing_gui)"
     zgu_cli_error "$(t game_tools.winetricks_missing_cli)"
     return 1
   fi
   if zgt_already_running "${winetricks_bin}"; then
-    zenity --error --text="$(t game_tools.already_running_gui "${target_name}")" 2>/dev/null
+    zgu_gui_error "$(t game_tools.already_running_gui "${target_name}")"
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
@@ -330,7 +330,7 @@ run_winetricks() {
 
 run_regedit() {
   if zgt_already_running 'regedit\.exe'; then
-    zenity --error --text="$(t game_tools.already_running_gui "${target_name}")" 2>/dev/null
+    zgu_gui_error "$(t game_tools.already_running_gui "${target_name}")"
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
@@ -340,7 +340,7 @@ run_regedit() {
 
 run_winecfg() {
   if zgt_already_running 'winecfg\.exe'; then
-    zenity --error --text="$(t game_tools.already_running_gui "${target_name}")" 2>/dev/null
+    zgu_gui_error "$(t game_tools.already_running_gui "${target_name}")"
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
@@ -398,7 +398,7 @@ run_exe() {
     [[ -z "${exe_path}" ]] && return 0
   fi
   if [[ ! -f "${exe_path}" ]]; then
-    zenity --error --text="$(t game_tools.exe_not_found_gui "${exe_path}")" 2>/dev/null
+    zgu_gui_error "$(t game_tools.exe_not_found_gui "${exe_path}")"
     zgu_cli_error "$(t game_tools.exe_not_found_cli "${exe_path}")"
     return 1
   fi

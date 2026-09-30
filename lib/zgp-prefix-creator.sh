@@ -67,7 +67,7 @@ fi
 
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t create_prefix.pyyaml_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.pyyaml_missing_gui)"
   fi
   zgu_cli_error "$(t create_prefix.pyyaml_missing_cli)"
   exit 1
@@ -108,7 +108,7 @@ prefix_creator_display_mode="gui"
 [[ "${mode}" = "cli" ]] && prefix_creator_display_mode="cli"
 version=$(zgu_resolve_lutris_version "${prefix_creator_display_mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${version}" ]]; then
-  zenity --error --text="$(t create_prefix.lutris_missing_gui)" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.lutris_missing_gui)"
   t create_prefix.lutris_missing_cli
   exit 1
 fi
@@ -145,7 +145,7 @@ mkdir -p "$(dirname "${lutris_db}")"
 mkdir -p "${games_dir}"
 
 if [[ ! -d "${runner_dir}" ]]; then
-  zenity --error --text="$(t create_prefix.no_runners_found "${runner_dir}")" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
   zgu_cli_error "$(t create_prefix.no_runners_found_cli "${runner_dir}")"
   exit 1
 fi
@@ -251,7 +251,7 @@ arch_choice="win64"
 if [[ "${will_use_zenity}" = true ]]; then
   mapfile -t usable_runners < <(zgp_list_usable_runners)
   if [[ ${#usable_runners[@]} -eq 0 ]]; then
-    zenity --error --text="$(t create_prefix.no_runners_found "${runner_dir}")" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
     exit 1
   fi
 
@@ -309,7 +309,7 @@ fi
 
 runner_type=$(zgp_detect_runner_type "${runner_dir}/${runner_choice}")
 if [[ "${runner_type}" = "unknown" ]]; then
-  zenity --error --text="$(t create_prefix.unknown_runner_type "${runner_choice}")" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.unknown_runner_type "${runner_choice}")"
   zgu_cli_error "$(t create_prefix.unknown_runner_type_cli "${runner_choice}")"
   exit 1
 fi
@@ -317,7 +317,7 @@ fi
 umu_run_path=""
 if [[ "${runner_type}" = "proton" ]]; then
   if ! umu_run_path=$(zgp_find_umu_run); then
-    zenity --error --text="$(t create_prefix.umu_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.umu_missing_gui)"
     zgu_cli_error "$(t create_prefix.umu_missing_cli)"
     exit 1
   fi
@@ -349,7 +349,7 @@ else
 fi
 
 if [[ ${#raw_names[@]} -eq 0 ]]; then
-  zenity --error --text="$(t create_prefix.no_names_error)" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.no_names_error)"
   zgu_cli_error "$(t create_prefix.no_names_error_cli)"
   exit 1
 fi
@@ -470,7 +470,7 @@ if [[ "${will_use_zenity}" = true ]]; then
   done
 
   if [[ -n "${duplicate_found}" ]]; then
-    zenity --error --text="$(t create_prefix.duplicate_slug_error "${duplicate_found}")" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.duplicate_slug_error "${duplicate_found}")"
     exit 1
   fi
 

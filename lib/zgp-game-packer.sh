@@ -64,7 +64,7 @@ if [[ -z "${lutris_version}" ]]; then
   if [[ ${#cli_games[@]} -gt 0 ]]; then
     zgu_cli_error "$(t pack_game.lutris_missing_cli)"
   else
-    zenity --error --text="$(t pack_game.lutris_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t pack_game.lutris_missing_gui)"
   fi
   exit 1
 fi
@@ -135,7 +135,7 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ ${#cli_games[@]} -gt 0 ]]; then
     zgu_cli_error "$(t pack_game.pyyaml_missing_cli)"
   else
-    zenity --error --text="$(t pack_game.pyyaml_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t pack_game.pyyaml_missing_gui)"
   fi
   exit 1
 fi
@@ -145,7 +145,7 @@ if [[ ! -d "${GAMES_DIR}" ]]; then
     zgu_cli_error "$(t pack_game.games_dir_missing "${GAMES_DIR}")"
     exit 1
   else
-    zenity --error --text="$(t pack_game.games_dir_missing "${GAMES_DIR}")" 2>/dev/null
+    zgu_gui_error "$(t pack_game.games_dir_missing "${GAMES_DIR}")"
     exit 1
   fi
 fi
@@ -308,6 +308,9 @@ else
   for game_real_name in "${games_to_export[@]}"; do
     archive_path="${OUTPUT_DIR}/${game_real_name}.zgp"
     if [[ -f "${archive_path}" ]]; then
+      # Appel Zenity avec --width=450, hors du gabarit standard de zgu_gui_error : on logue
+      # explicitement ici plutôt que de passer par elle, même effet, sans perdre --width.
+      zgu_log "zgp-game-packer" "ERREUR" "$(t pack_game.archive_exists_gui "${game_real_name}")"
       zenity --error \
         --title="$(t pack_game.archive_exists_title)" \
         --text="$(t pack_game.archive_exists_gui "${game_real_name}")" \
@@ -596,7 +599,7 @@ except Exception as e:
     elif [[ "${compress_status}" -ne 0 ]]; then
       [[ "${pack_using_batch}" = true ]] && zgu_batch_progress_close
       zgu_log "pack" "ERREUR" "slug=${game_slug} nom=${game_real_name} raison=compression_echouee code=${compress_status}"
-      zenity --error --text="$(t pack_game.compression_error "${ARCHIVE_NAME}")" 2>/dev/null
+      zgu_gui_error "$(t pack_game.compression_error "${ARCHIVE_NAME}")"
       exit 1
     fi
 

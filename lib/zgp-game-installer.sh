@@ -100,7 +100,7 @@ fi
 # l'installation se poursuivait avant en silence avec un exécutable Lutris vide.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t install_game.pyyaml_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t install_game.pyyaml_missing_gui)"
   fi
   zgu_cli_error "$(t install_game.pyyaml_missing_cli)"
   exit 1
@@ -119,7 +119,7 @@ install_game_display_mode="gui"
 [[ "${mode}" = "cli" ]] && install_game_display_mode="cli"
 version=$(zgu_resolve_lutris_version "${install_game_display_mode}" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
-  zenity --error --text="$(t install_game.lutris_missing_gui)" 2>/dev/null
+  zgu_gui_error "$(t install_game.lutris_missing_gui)"
   t install_game.lutris_missing_cli
   exit 1
 fi
@@ -461,7 +461,7 @@ for name in "${games_to_install[@]}"; do
     if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
       echo "${err_msg}" >&2
     else
-      zenity --error --title="$(t install_game.corrupt_archive_title)" --text="${err_msg}" 2>/dev/null
+      zgu_gui_error "${err_msg}" "$(t install_game.corrupt_archive_title)"
     fi
     zgu_log "install" "ERREUR" "fichier=${name} raison=archive_corrompue code=${tar_exit}"
     rm -rf "${temp_extract_dir}"
@@ -538,7 +538,7 @@ for name in "${games_to_install[@]}"; do
     if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
       echo "${err_msg}" >&2
     else
-      zenity --error --title="$(t install_game.already_installed_title)" --text="${err_msg}" 2>/dev/null
+      zgu_gui_error "${err_msg}" "$(t install_game.already_installed_title)"
     fi
     zgu_log "install" "ERREUR" "fichier=${name} slug=${slug} raison=deja_installe"
     rm -rf "${temp_extract_dir}"
@@ -551,7 +551,7 @@ for name in "${games_to_install[@]}"; do
     if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
       echo "${err_msg}" >&2
     else
-      zenity --error --title="$(t install_game.move_failed_title)" --text="${err_msg}" 2>/dev/null
+      zgu_gui_error "${err_msg}" "$(t install_game.move_failed_title)"
     fi
     zgu_log "install" "ERREUR" "fichier=${name} slug=${slug} raison=deplacement_echoue"
     rm -rf "${temp_extract_dir}"

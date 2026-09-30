@@ -61,7 +61,7 @@ fi
 
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t create_prefix.pyyaml_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.pyyaml_missing_gui)"
   fi
   zgu_cli_error "$(t create_prefix.pyyaml_missing_cli)"
   exit 1
@@ -96,7 +96,7 @@ exe_install_display_mode="gui"
 [[ "${mode}" = "cli" ]] && exe_install_display_mode="cli"
 version=$(zgu_resolve_lutris_version "${exe_install_display_mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${version}" ]]; then
-  zenity --error --text="$(t create_prefix.lutris_missing_gui)" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.lutris_missing_gui)"
   t create_prefix.lutris_missing_cli
   exit 1
 fi
@@ -133,7 +133,7 @@ mkdir -p "$(dirname "${lutris_db}")"
 mkdir -p "${games_dir}"
 
 if [[ ! -d "${runner_dir}" ]]; then
-  zenity --error --text="$(t create_prefix.no_runners_found "${runner_dir}")" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
   zgu_cli_error "$(t create_prefix.no_runners_found_cli "${runner_dir}")"
   exit 1
 fi
@@ -211,7 +211,7 @@ arch_choice="win64"
 if [[ "${will_use_zenity}" = true ]]; then
   mapfile -t usable_runners < <(zgp_list_usable_runners)
   if [[ ${#usable_runners[@]} -eq 0 ]]; then
-    zenity --error --text="$(t create_prefix.no_runners_found "${runner_dir}")" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
     exit 1
   fi
 
@@ -266,7 +266,7 @@ fi
 
 runner_type=$(zgp_detect_runner_type "${runner_dir}/${runner_choice}")
 if [[ "${runner_type}" = "unknown" ]]; then
-  zenity --error --text="$(t create_prefix.unknown_runner_type "${runner_choice}")" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.unknown_runner_type "${runner_choice}")"
   zgu_cli_error "$(t create_prefix.unknown_runner_type_cli "${runner_choice}")"
   exit 1
 fi
@@ -274,7 +274,7 @@ fi
 umu_run_path=""
 if [[ "${runner_type}" = "proton" ]]; then
   if ! umu_run_path=$(zgp_find_umu_run); then
-    zenity --error --text="$(t create_prefix.umu_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t create_prefix.umu_missing_gui)"
     zgu_cli_error "$(t create_prefix.umu_missing_cli)"
     exit 1
   fi
@@ -359,13 +359,13 @@ fi
 exe_path="${exe_path/#\~/${HOME}}"
 
 if [[ -z "${exe_path}" ]] || [[ ! -f "${exe_path}" ]]; then
-  zenity --error --text="$(t exe_install.exe_not_found_gui "${exe_path}")" 2>/dev/null
+  zgu_gui_error "$(t exe_install.exe_not_found_gui "${exe_path}")"
   zgu_cli_error "$(t exe_install.exe_not_found_cli "${exe_path}")"
   exit 1
 fi
 
 if [[ -z "${display_name}" ]]; then
-  zenity --error --text="$(t create_prefix.no_names_error)" 2>/dev/null
+  zgu_gui_error "$(t create_prefix.no_names_error)"
   zgu_cli_error "$(t create_prefix.no_names_error_cli)"
   exit 1
 fi
@@ -397,7 +397,7 @@ done
 prefix_dir="${games_dir}/${final_slug}"
 
 if [[ -d "${prefix_dir}" ]]; then
-  zenity --error --text="$(t exe_install.prefix_exists_gui "${prefix_dir}")" 2>/dev/null
+  zgu_gui_error "$(t exe_install.prefix_exists_gui "${prefix_dir}")"
   zgu_cli_error "$(t exe_install.prefix_exists_cli "${prefix_dir}")"
   exit 1
 fi
@@ -450,7 +450,7 @@ else
 fi
 
 if ! zgp_wait_for_prefix "${prefix_dir}"; then
-  zenity --error --text="$(t exe_install.init_failed_gui)" 2>/dev/null
+  zgu_gui_error "$(t exe_install.init_failed_gui)"
   zgu_cli_error "$(t exe_install.init_failed_cli)"
   rm -rf "${prefix_dir}"
   exit 1

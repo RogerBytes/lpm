@@ -51,7 +51,7 @@ if ! command -v sqlite3 >/dev/null 2>&1; then
   if [[ ${#cli_targets[@]} -gt 0 ]]; then
     zgu_cli_error "$(t shortcut.sqlite_missing)"
   else
-    zenity --error --text="$(t shortcut.sqlite_missing)" 2>/dev/null
+    zgu_gui_error "$(t shortcut.sqlite_missing)"
   fi
   exit 1
 fi
@@ -65,7 +65,7 @@ if [[ -z "${version}" ]]; then
   if [[ ${#cli_targets[@]} -gt 0 ]]; then
     zgu_cli_error "$(t shortcut.lutris_missing)"
   else
-    zenity --error --text="$(t shortcut.lutris_missing)" 2>/dev/null
+    zgu_gui_error "$(t shortcut.lutris_missing)"
   fi
   exit 1
 fi
@@ -105,7 +105,7 @@ if [[ ! -f "${lutris_db}" ]]; then
   if [[ ${#cli_targets[@]} -gt 0 ]]; then
     zgu_cli_error "$(t shortcut.db_missing "${lutris_db}")"
   else
-    zenity --error --text="$(t shortcut.db_missing "${lutris_db}")" 2>/dev/null
+    zgu_gui_error "$(t shortcut.db_missing "${lutris_db}")"
   fi
   exit 1
 fi

@@ -56,7 +56,7 @@ if [[ -z "${lutris_version}" ]]; then
   if [[ ${#cli_runners[@]} -gt 0 ]]; then
     zgu_cli_error "$(t pack_runner.lutris_missing_cli)"
   else
-    zenity --error --text="$(t pack_runner.lutris_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t pack_runner.lutris_missing_gui)"
   fi
   exit 1
 fi
@@ -69,7 +69,7 @@ if [[ ! -d "${runner_dir}" ]]; then
   if [[ ${#cli_runners[@]} -gt 0 ]]; then
     zgu_cli_error "$(t pack_runner.dir_missing_cli "${runner_dir}")"
   else
-    zenity --error --text="$(t pack_runner.dir_missing_gui "${runner_dir}")" 2>/dev/null
+    zgu_gui_error "$(t pack_runner.dir_missing_gui "${runner_dir}")"
   fi
   exit 1
 fi
@@ -287,7 +287,7 @@ for runner in "${runners_to_export[@]}"; do
       exit 0
     elif [[ "${compress_status}" -ne 0 ]]; then
       [[ "${pack_using_batch}" = true ]] && zgu_batch_progress_close
-      zenity --error --text="$(t pack_runner.compression_error "${ARCHIVE_NAME}")" 2>/dev/null
+      zgu_gui_error "$(t pack_runner.compression_error "${ARCHIVE_NAME}")"
       exit 1
     fi
 

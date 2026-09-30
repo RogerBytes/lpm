@@ -135,17 +135,17 @@ fi
 # deux cas. bsdtar lit le zstd nativement (libzstd liée en dur), zstd externe n'est donc plus
 # nécessaire pour ce script.
 if ! command -v bsdtar >/dev/null 2>&1; then
-  zenity --error --text="$(t install_runner.bsdtar_missing_gui)" 2>/dev/null || t install_runner.bsdtar_missing_fallback
+  zgu_gui_error "$(t install_runner.bsdtar_missing_gui)" || t install_runner.bsdtar_missing_fallback
   exit 1
 fi
 
 if ! command -v pv >/dev/null 2>&1; then
-  zenity --error --text="$(t install_runner.pv_missing_gui)" 2>/dev/null || t install_runner.pv_missing_fallback
+  zgu_gui_error "$(t install_runner.pv_missing_gui)" || t install_runner.pv_missing_fallback
   exit 1
 fi
 
 if ! command -v sha256sum >/dev/null 2>&1; then
-  zenity --error --text="$(t install_runner.sha256sum_missing_gui)" 2>/dev/null || t install_runner.sha256sum_missing_fallback
+  zgu_gui_error "$(t install_runner.sha256sum_missing_gui)" || t install_runner.sha256sum_missing_fallback
   exit 1
 fi
 
@@ -155,7 +155,7 @@ install_runner_display_mode="gui"
 [[ "${mode}" = "cli" ]] && install_runner_display_mode="cli"
 version=$(zgu_resolve_lutris_version "${install_runner_display_mode}" "" "${lutris_package_runner_dir}")
 if [[ -z "${version}" ]]; then
-  zenity --error --text="$(t install_runner.lutris_missing_gui)" 2>/dev/null
+  zgu_gui_error "$(t install_runner.lutris_missing_gui)"
   t install_runner.lutris_missing_cli
   exit 1
 fi
@@ -225,7 +225,7 @@ extract_runner_with_progress() {
     rm -rf "${target_dir}"
     return 2
   elif [[ "${status}" -ne 0 ]]; then
-    zenity --error --title="$(t install_runner.corrupt_archive_title)" --text="$(t install_runner.corrupt_archive_gui "${runner_name}" "${ZGU_LAST_TAR_EXIT:-1}")" 2>/dev/null
+    zgu_gui_error "$(t install_runner.corrupt_archive_gui "${runner_name}" "${ZGU_LAST_TAR_EXIT:-1}")" "$(t install_runner.corrupt_archive_title)"
     rm -rf "${target_dir}"
     return 1
   fi
@@ -647,7 +647,7 @@ for runner_name in "${runners_to_install[@]}"; do
     fi
 
     if [[ ${#ext_file_or_url_by_name[@]} -eq 0 ]]; then
-      zenity --error --text="$(t install_runner.no_valid_found_gui)" 2>/dev/null
+      zgu_gui_error "$(t install_runner.no_valid_found_gui)"
       continue
     fi
 
@@ -735,7 +735,7 @@ for runner_name in "${runners_to_install[@]}"; do
     download_runner "${download_url}" "${archive_path}" "${runner_name}" "${size_by_name[${runner_name}]}" "${item_text}"
 
     if [[ ! -f "${archive_path}" ]] || [[ ! -s "${archive_path}" ]] || ! bsdtar -tf "${archive_path}" >/dev/null 2>&1; then
-      zenity --error --text="$(t install_runner.download_or_archive_invalid_gui "${runner_name}")" 2>/dev/null
+      zgu_gui_error "$(t install_runner.download_or_archive_invalid_gui "${runner_name}")"
       continue
     fi
 
@@ -748,7 +748,7 @@ for runner_name in "${runners_to_install[@]}"; do
     fi
 
     if ! zgu_sha256_matches "${archive_path}" "${expected_digest}"; then
-      zenity --error --text="$(t install_runner.checksum_invalid_gui "${runner_name}")" 2>/dev/null
+      zgu_gui_error "$(t install_runner.checksum_invalid_gui "${runner_name}")"
       rm -f "${archive_path}"
       continue
     fi

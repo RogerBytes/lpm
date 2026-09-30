@@ -32,6 +32,9 @@ say() {
 }
 
 say_err() {
+  # Point de passage unique pour toutes les erreurs de ce script (cli et gui) : un seul
+  # "zgu_log" ici couvre les deux modes, pas besoin d'un par site d'appel.
+  zgu_log "zgc-lutris-version-checker" "ERREUR" "$1"
   if [[ "${mode}" = "cli" ]]; then
     echo "$1" >&2
   else

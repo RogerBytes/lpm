@@ -92,7 +92,7 @@ display_mode="gui"
 zgp_lsfg_report_error_early() {
   local msg="$1"
   if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zenity --error --text="${msg}" 2>/dev/null
+    zgu_gui_error "${msg}"
   fi
   echo "${msg}" >&2
 }
@@ -110,7 +110,7 @@ for cmd in python3 sqlite3; do
 done
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t lsfg.pyyaml_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t lsfg.pyyaml_missing_gui)"
   fi
   zgu_cli_error "$(t lsfg.pyyaml_missing_cli)"
   exit 1

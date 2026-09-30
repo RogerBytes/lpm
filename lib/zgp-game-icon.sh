@@ -45,7 +45,7 @@ sgdb_key=""
 zgp_icon_report_error_early() {
   local msg="$1"
   if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zenity --error --text="${msg}" 2>/dev/null
+    zgu_gui_error "${msg}"
   fi
   echo "${msg}" >&2
 }
@@ -271,7 +271,7 @@ zgp_sgdb_ensure_key() {
   local candidate first_try=true
   while true; do
     if [[ "${will_use_zenity}" = true ]]; then
-      [[ "${first_try}" = false ]] && zenity --error --text="$(t icon.key_invalid)" 2>/dev/null
+      [[ "${first_try}" = false ]] && zgu_gui_error "$(t icon.key_invalid)"
       command -v xdg-open >/dev/null 2>&1 && xdg-open "https://www.steamgriddb.com/profile/preferences/api" >/dev/null 2>&1 &
       candidate=$(zenity --entry --title="$(t icon.key_title)" --text="$(t icon.key_text)" --width=500 2>/dev/null)
     else

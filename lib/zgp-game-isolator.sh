@@ -62,7 +62,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t isolate.pyyaml_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t isolate.pyyaml_missing_gui)"
   fi
   zgu_cli_error "$(t isolate.pyyaml_missing_cli)"
   exit 1
@@ -90,7 +90,7 @@ isolate_display_mode="gui"
 version=$(zgu_resolve_lutris_version "${isolate_display_mode}" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t isolate.lutris_missing_gui)" 2>/dev/null
+    zgu_gui_error "$(t isolate.lutris_missing_gui)"
   fi
   zgu_cli_error "$(t isolate.lutris_missing_cli)"
   exit 1
@@ -121,7 +121,7 @@ fi
 
 if [[ ! -f "${lutris_db}" ]]; then
   if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t isolate.db_missing "${lutris_db}")" 2>/dev/null
+    zgu_gui_error "$(t isolate.db_missing "${lutris_db}")"
   fi
   zgu_cli_error "$(t isolate.db_missing "${lutris_db}")"
   exit 1
