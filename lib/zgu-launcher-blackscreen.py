@@ -146,6 +146,7 @@ CURSOR_IDLE_S = 1.0
 # de chaque côté.
 MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30  # remontée légère par rapport au centre de sa bande, pas replaquée en haut
+BANNER_EXTRA_LIFT_NO_LABEL = 10  # remontée EN PLUS, seulement si NO_LABEL (voir on_draw)
 
 is_wayland = (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland") or bool(
     os.environ.get("WAYLAND_DISPLAY")
@@ -296,7 +297,12 @@ class BlackWindow(Gtk.Window):
             )
             off_x = (win_alloc.width - img_w * scale) / 2
             off_y = self.banner_zone_top + (self.banner_zone_height - img_h * scale) / 2
-            off_y = max(self.banner_zone_top, off_y - BANNER_VERTICAL_LIFT)
+            # Remontée en plus UNIQUEMENT si NO_LABEL (une seule entrée, ou pas de LPM
+            # Launcher du tout -- jamais de bande de libellé réservée dans ce cas, voir
+            # <no_label> dans l'en-tête de fichier) -- demandé explicitement, distinct de
+            # BANNER_VERTICAL_LIFT qui s'applique dans tous les cas.
+            extra_lift = BANNER_EXTRA_LIFT_NO_LABEL if NO_LABEL else 0
+            off_y = max(self.banner_zone_top, off_y - BANNER_VERTICAL_LIFT - extra_lift)
             cr.translate(off_x, off_y)
             cr.scale(scale, scale)
             cr.set_source_surface(self.current_surface, 0, 0)
