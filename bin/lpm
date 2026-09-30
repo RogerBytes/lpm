@@ -306,7 +306,7 @@ while true; do
         FALSE "${opt_uninstall_runner}" \
         FALSE "${opt_check}" \
         FALSE "${opt_lutris_version}" \
-        --width=550 --height=640 2>/dev/null) || [[ -z "${choice}" ]]; then
+        --width=570 --height=640 2>/dev/null) || [[ -z "${choice}" ]]; then
         exit 0
     fi
 

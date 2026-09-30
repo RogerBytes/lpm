@@ -116,7 +116,17 @@ class BlackWindow(Gtk.Window):
         self.set_decorated(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        self.set_keep_above(True)
+        # "keep_above" seulement sur X11 : là-bas, la vraie fenêtre du jeu est détectée
+        # (xdotool, voir zgl-launcher-orchestrator.sh) et fait disparaître ce fond dès
+        # qu'elle apparaît -- aucun risque à rester "toujours au-dessus" en attendant.
+        # Sur Wayland, cette détection n'existe pas : l'orchestrateur attend un délai fixe
+        # de 12s avant de fermer ce fond, qui resterait donc au-dessus du jeu déjà ouvert
+        # et jouable pendant tout ce temps si on le forçait ici aussi. Sans "keep_above",
+        # l'empilement normal des fenêtres s'applique : ce fond apparaît au-dessus de ce
+        # qui existait avant lui, mais toute fenêtre ouverte APRÈS lui (le jeu) passera
+        # normalement par-dessus, sans attendre ce délai.
+        if not is_wayland:
+            self.set_keep_above(True)
         self.set_app_paintable(True)
         self.current_surface = None
 
