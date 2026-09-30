@@ -428,7 +428,7 @@ zgp_logo_process_one() {
         done <<< "${search_results}"
 
         chosen_game_id=$(zenity --list --radiolist \
-          --title="$(t logo.pick_game_title)" \
+          --title="$(t logo.pick_game_title "${g_name}")" \
           --text="$(t logo.pick_game_text "${g_name}")" \
           --column="" --column="ID" --column="$(t logo.pick_game_col)" \
           --hide-column=2 --print-column=2 \

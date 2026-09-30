@@ -399,6 +399,20 @@ print(version)
 
   bat_path_linux="${bat_dir}/lpm-launch.bat"
 
+  # Écrit lpm-launch.bat DÈS CETTE ACTIVATION -- pas seulement au premier lancement réel
+  # (voir zgl-launcher-runtime.sh, qui le réécrira de toute façon avec l'entrée alors
+  # choisie). Nécessaire : "game.exe" est pointé vers ce chemin plus bas, DANS CETTE MÊME
+  # activation -- si le fichier n'existe pas encore à ce moment-là, Lutris le signale comme
+  # introuvable/bugue (constaté réel) avant même le premier lancement. Contenu identique au
+  # modèle utilisé par zgl-launcher-runtime.sh, avec l'entrée auto-remplie par défaut
+  # (win_workdir/win_exe, résolus plus haut).
+  mkdir -p "${bat_dir}" 2>/dev/null
+  {
+    printf '@echo off\r\n'
+    printf 'cd /d "%s"\r\n' "${win_workdir}"
+    printf 'start "" "%s"\r\n' "${win_exe}"
+  } > "${bat_path_linux}" 2>/dev/null
+
   # --- Écriture de lpm-launcher.yml (entrée auto-remplie + repli exemple commenté) ---
   local default_label
   default_label="$(t launcher.default_entry_label)"
