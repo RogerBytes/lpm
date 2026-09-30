@@ -126,19 +126,23 @@ _lpm() {
       COMPREPLY=($(compgen -W "on off $(_lpm_installed_slugs)" -- "${cur}"))
       ;;
     tools)
-      # "lpm tools [slug] [outil] [exe]" : 1er argument = slug de jeu installé, 2e =
-      # outil (winetricks|regedit|winecfg|console|exe|folder), 3e = fichier .exe
-      # (uniquement pertinent si outil=exe).
+      # "lpm tools [slug] [outil] [exe|dossier]" : 1er argument = slug de jeu installé,
+      # 2e = outil (winetricks|regedit|winecfg|console|exe|folder|favorite), 3e = fichier
+      # .exe (si outil=exe) ou dossier réel (si outil=favorite) -- sans intérêt pour les
+      # 4 autres outils.
       case "${COMP_CWORD}" in
         2)
           COMPREPLY=($(compgen -W "$(_lpm_installed_slugs)" -- "${cur}"))
           ;;
         3)
-          COMPREPLY=($(compgen -W "winetricks regedit winecfg console exe folder" -- "${cur}"))
+          COMPREPLY=($(compgen -W "winetricks regedit winecfg console exe folder favorite" -- "${cur}"))
           ;;
         4)
           if [[ "${prev}" != -* ]]; then
-            COMPREPLY=($(compgen -f -X '!*.exe' -- "${cur}"))
+            case "${words[3]:-}" in
+              exe) COMPREPLY=($(compgen -f -X '!*.exe' -- "${cur}")) ;;
+              favorite) COMPREPLY=($(compgen -d -- "${cur}")) ;;
+            esac
           fi
           ;;
       esac

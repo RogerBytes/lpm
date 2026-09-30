@@ -173,22 +173,37 @@ Lutris ; à la désactivation, retire ces 3 clés sans jamais supprimer le fichi
 copié. Sans argument : sélection interactive Zenity, ne listant que les jeux Wine/Proton
 concernés (activables ou désactivables selon leur état actuel).
 .TP
-.BI "tools [" slug " [" outil " [" exe ]]]
+.BI "tools [" slug " [" outil " [" exe|dossier ]]]
 Ouvre un menu d'outils Wine pour un jeu déjà installé
 .RI ( winetricks ", éditeur de registre, " winecfg ", console DOS, exécuter un ."
-.IR exe ", ouvrir le dossier du préfixe)."
+.IR exe ", ouvrir le dossier du préfixe, ajouter un dossier favori aux fenêtres"
+Ouvrir/Enregistrer de Windows).
 .I outil
 peut être
-.BR winetricks ", " regedit ", " winecfg ", " console ", " exe " ou " folder .
+.BR winetricks ", " regedit ", " winecfg ", " console ", " exe ", " folder " ou " favorite .
 Entièrement en ligne de commande (sans dialogue Zenity) uniquement si
 .I slug
 et
 .I outil
 sont tous deux fournis ;
-.I exe
-n'est utilisé que pour l'outil
-.BR exe .
-Sans argument : sélection interactive du jeu puis de l'outil.
+.I exe|dossier
+n'est utilisé que pour les outils
+.BR exe " et " favorite
+(l'exécutable à lancer, ou le dossier réel côté hôte à ajouter comme favori, selon le
+cas). Sans argument : sélection interactive du jeu puis de l'outil.
+.BR favorite " écrit une seule entrée (" Place0 ,
+écrasée à chaque utilisation \(em choix délibéré, cet outil reste volontairement un
+simple "choisis un dossier", pas un gestionnaire de plusieurs favoris) dans la barre de
+lieux ("Places Bar") classique du registre Wine de ce jeu
+.RI ( "HKCU\eSoftware\eMicrosoft\eWindows\eCurrentVersion\ePolicies\eComdlg32\ePlacesbar" ),
+lue par les fenêtres Ouvrir/Enregistrer natives de Wine exactement comme sur un vrai
+Windows (5 emplacements maximum,
+.IR Place0 " à " Place4 ,
+lpm n'utilise jamais que le premier). Le dossier choisi est converti en chemin côté
+Windows (via le lecteur
+.IR Z: )
+avant d'être écrit. Certains logiciels ignorent cette barre de lieux classique et
+n'afficheront pas le favori ; impossible à contourner depuis lpm.
 .TP
 .BI "launcher [" "slugs...] [" "on" " | " "off" ]
 Active ou désactive le sélecteur multi-exécutable "LPM Launcher" pour un ou plusieurs

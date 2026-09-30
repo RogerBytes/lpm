@@ -172,22 +172,35 @@ and
 copied. With no argument: interactive Zenity selection, listing only the relevant
 Wine/Proton games (able to be enabled or disabled depending on their current state).
 .TP
-.BI "tools [" slug " [" tool " [" exe ]]]
+.BI "tools [" slug " [" tool " [" exe|dir ]]]
 Opens a Wine tools menu for an already installed game
 .RI ( winetricks ", registry editor, " winecfg ", DOS console, run an ."
-.IR exe ", open the prefix folder)."
+.IR exe ", open the prefix folder, add a favorite folder to Windows' Open/Save dialogs)."
 .I tool
 can be
-.BR winetricks ", " regedit ", " winecfg ", " console ", " exe " or " folder .
+.BR winetricks ", " regedit ", " winecfg ", " console ", " exe ", " folder " or " favorite .
 Fully command-line (no Zenity dialog) only when both
 .I slug
 and
 .I tool
 are supplied;
-.I exe
+.I exe|dir
 is only used for the
-.B exe
-tool. With no argument: interactive selection of the game then the tool.
+.BR exe " and " favorite
+tools (the executable to run, or the real, host-side directory to add as a favorite,
+respectively). With no argument: interactive selection of the game then the tool.
+.BR favorite " writes a single entry (" Place0 ,
+overwritten on every use \(em by design, this stays a one-shot "pick a folder" tool,
+not a manager for several favorites) into the classic Windows Places Bar of that game's
+own Wine registry
+.RI ( "HKCU\eSoftware\eMicrosoft\eWindows\eCurrentVersion\ePolicies\eComdlg32\ePlacesbar" ),
+which Wine's native Open/Save dialogs read exactly like real Windows (5 slots max,
+.IR Place0 " to " Place4 ,
+lpm only ever uses the first). The chosen directory is converted to its Windows-side
+path (through the
+.I Z:
+drive) before being written. Some software ignores this classic Places Bar and won't
+show the favorite; this cannot be worked around from lpm.
 .TP
 .BI "launcher [" "slugs...] [" "on" " | " "off" ]
 Enables or disables the "LPM Launcher" multi-executable picker for one or more

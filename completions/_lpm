@@ -129,6 +129,18 @@ _lpm_isolable_slugs() {
 # énuméré ci-dessous directement dans _lpm() comme 23 options mutuellement exclusives.
 _lpm_compression_opts=(-0 -1 -2 -3 -4 -5 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22)
 
+# 3e argument de "lpm tools" : un fichier .exe si l'outil choisi est "exe", un dossier
+# réel si c'est "favorite" -- sans intérêt pour les 4 autres outils. zsh ne sait pas
+# conditionner le type du 3e argument sur la valeur du 2e dans une seule spec
+# _arguments statique, donc on propose les deux types de complétion ensemble via
+# _alternative ; sans consequence, zgp-game-tools.sh ignore de toute façon l'argument
+# qui ne correspond pas à l'outil réellement choisi.
+_lpm_tools_arg3() {
+  _alternative \
+    'files:executable:_files -g "*.exe"' \
+    'dirs:folder:_files -/'
+}
+
 _lpm() {
   local curcontext="$curcontext" state line
   typeset -A opt_args
@@ -219,12 +231,13 @@ _lpm() {
       _arguments '*:installed game or action:_lpm_launcher_args'
       ;;
     tools)
-      # "lpm tools [slug] [outil] [exe]" : 1er argument = slug de jeu installé, 2e =
-      # outil, 3e = fichier .exe (uniquement pertinent si outil=exe).
+      # "lpm tools [slug] [outil] [exe|dossier]" : 1er argument = slug de jeu installé,
+      # 2e = outil, 3e = fichier .exe (si outil=exe) ou dossier réel (si outil=favorite),
+      # voir _lpm_tools_arg3 ci-dessus.
       _arguments \
         '1:installed game:_lpm_installed_slugs' \
-        '2:tool:(winetricks regedit winecfg console exe folder)' \
-        '3:executable:_files -g "*.exe"'
+        '2:tool:(winetricks regedit winecfg console exe folder favorite)' \
+        '3:executable or folder:_lpm_tools_arg3'
       ;;
     killwine)
       _arguments '-y[kill without confirmation]'
