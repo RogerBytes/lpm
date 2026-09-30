@@ -482,7 +482,7 @@ zgp_splash_process_one() {
 
     local chosen_idx
     chosen_idx=$(zenity --list --imagelist \
-      --title="$(t splash.pick_banner_title)" \
+      --title="$(t splash.pick_banner_title "${g_name}")" \
       --text="$(t splash.pick_banner_text "${g_name}")" \
       --column="$(t splash.pick_banner_col_preview)" --column="$(t splash.pick_banner_col_num)" \
       --print-column=2 \

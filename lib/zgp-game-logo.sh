@@ -524,7 +524,7 @@ zgp_logo_process_one() {
 
       local chosen_idx
       chosen_idx=$(zenity --list --imagelist \
-        --title="$(t logo.pick_logo_title)" \
+        --title="$(t logo.pick_logo_title "${g_name}")" \
         --text="$(t logo.pick_logo_text "${g_name}")" \
         --column="$(t logo.pick_logo_col_preview)" --column="$(t logo.pick_logo_col_num)" \
         --print-column=2 \

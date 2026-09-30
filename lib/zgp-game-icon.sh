@@ -648,7 +648,7 @@ zgp_icon_process_one() {
 
     local chosen_idx
     chosen_idx=$(zenity --list --imagelist \
-      --title="$(t icon.pick_icon_title)" \
+      --title="$(t icon.pick_icon_title "${g_name}")" \
       --text="$(t icon.pick_icon_text "${g_name}")" \
       --column="$(t icon.pick_icon_col_preview)" --column="$(t icon.pick_icon_col_num)" \
       --print-column=2 \
