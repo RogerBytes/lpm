@@ -255,6 +255,13 @@ logo_image="${game_dir}/splash/logo.png"
 no_label_flag="1"
 [[ "${will_show_picker}" = true ]] && no_label_flag="0"
 
+# Connu à l'avance aussi : "1" si ce jeu affichera une bannière (splash.png présent) --
+# voir <has_banner> dans l'en-tête de zgu-launcher-blackscreen.py. Ne sert qu'en
+# combinaison avec no_label_flag="1" ci-dessus (tant qu'un picker reste possible, la
+# disposition ne change jamais, quelle que soit cette valeur).
+has_banner_flag="0"
+[[ -f "${splash_image}" ]] && has_banner_flag="1"
+
 {
   printf '%s\n' "${bg_state}"
   printf '%s\n' "IND_SHOW"
@@ -267,7 +274,7 @@ indicator_text="$(t launcher.loading_text)"
 blackscreen_pid=""
 bridge_pid=""
 
-python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" >/dev/null 2>&1 &
+python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 

@@ -2,7 +2,7 @@
 # --- lpm launcher : fenêtre noire plein écran + image de splash + indicateur, avec vraie
 # transparence ---
 #
-# Usage : zgu-launcher-blackscreen.py <control_file> [<indicator_text>] [<logo_png>] [<no_label>]
+# Usage : zgu-launcher-blackscreen.py <control_file> [<indicator_text>] [<logo_png>] [<no_label>] [<has_banner>]
 #
 # <control_file> est un fichier texte de QUATRE lignes que le script relit en boucle (toutes
 # les 150ms, même technique de sondage que zgu-focus-utils.sh) :
@@ -42,6 +42,21 @@
 # comme si une bande vide l'attendait encore. Absent ou "0" (défaut) : comportement
 # inchangé, la bande reste réservée (cas normal -- picker multi-entrées, où un libellé PEUT
 # apparaître une fois le choix fait).
+#
+# <has_banner> (5ème argument, optionnel, CLI) : "1" si CE lancement affichera une bannière
+# (splash.png présent) -- ne concerne QUE le cas NO_LABEL="1" ci-dessus : tant qu'un picker
+# reste possible pour ce jeu, la disposition ne change JAMAIS (voir plus bas), donc
+# <has_banner> est alors ignoré. Sous NO_LABEL="1", change où logo/titre se centrent :
+#   NO_LABEL=1, has_banner=0 (logo seul, ou titre seul) : centré sur TOUTE la hauteur de
+#     l'écran -- aucun picker ne viendra jamais recouvrir quoi que ce soit ici, donc plus
+#     besoin de se confiner à la zone du haut habituelle.
+#   NO_LABEL=1, has_banner=1 (logo+bannière, ou titre+bannière) : centré entre le haut de
+#     l'écran et la bannière -- même zone du haut qu'avant, comportement inchangé.
+#   NO_LABEL=0 (picker possible, quel que soit <has_banner>) : comportement TOUJOURS
+#     inchangé -- zone du haut fixe, libellé dessous, comme avant cette fonctionnalité --
+#     voir l'échange qui a mené à ce choix : la zone du haut existe justement pour que
+#     logo/titre ne recouvrent jamais le picker pendant qu'il est affiché ; l'étendre tant
+#     qu'un picker reste possible pour ce jeu réintroduirait ce risque.
 #
 # <logo_png> (3ème argument, optionnel, CLI -- PAS dans le fichier de contrôle : ne change
 # jamais une fois le script lancé, contrairement aux 4 lignes ci-dessus) : logo transparent
@@ -99,6 +114,7 @@ CONTROL_FILE = sys.argv[1]
 INDICATOR_TEXT = sys.argv[2] if len(sys.argv) > 2 else ""
 LOGO_PATH = sys.argv[3] if len(sys.argv) > 3 else ""
 NO_LABEL = (sys.argv[4] if len(sys.argv) > 4 else "0") == "1"
+HAS_BANNER = (sys.argv[5] if len(sys.argv) > 5 else "0") == "1"
 POLL_MS = 150
 SPIN_TICK_MS = 60
 
@@ -146,7 +162,7 @@ CURSOR_IDLE_S = 1.0
 # de chaque côté.
 MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30  # remontée légère par rapport au centre de sa bande, pas replaquée en haut
-BANNER_EXTRA_LIFT_NO_LABEL = 10  # remontée EN PLUS, seulement si NO_LABEL (voir on_draw)
+BANNER_EXTRA_LIFT_NO_LABEL = 15  # remontée EN PLUS, seulement si NO_LABEL (voir on_draw)
 
 is_wayland = (os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland") or bool(
     os.environ.get("WAYLAND_DISPLAY")
@@ -211,8 +227,21 @@ class BlackWindow(Gtk.Window):
             except Exception:
                 self.logo_surface = None
 
+        # Limite basse de la zone du haut (logo ET titre de secours, voir plus bas) : la
+        # zone habituelle (self.zone_top_y, bornée par PICKER_BOX_HEIGHT) tant qu'un picker
+        # reste possible pour ce jeu (NO_LABEL=0 -- jamais changé, voir <has_banner> dans
+        # l'en-tête de fichier) ou si une bannière doit partager l'écran avec le logo/titre
+        # (NO_LABEL=1 + HAS_BANNER=1 -- inchangé aussi, "entre le haut de l'écran et la
+        # bannière" correspond déjà exactement à cette même zone). Étendue à tout l'écran
+        # UNIQUEMENT si NO_LABEL=1 ET qu'aucune bannière n'existe -- aucun picker, aucune
+        # bannière à partager, rien ne justifie plus de rester confiné à cette zone.
+        top_zone_bottom = self.zone_top_y
+        top_zone_expanded = NO_LABEL and not HAS_BANNER
+        if top_zone_expanded:
+            top_zone_bottom = monitor_geom.height
+
         if self.logo_surface is not None:
-            usable_h = max(0, self.zone_top_y - 2 * TOP_ZONE_MIN_MARGIN)
+            usable_h = max(0, top_zone_bottom - 2 * TOP_ZONE_MIN_MARGIN)
             img_w = self.logo_surface.get_width()
             img_h = self.logo_surface.get_height()
             max_w = monitor_geom.width * TOP_ZONE_MAX_WIDTH_FRACTION
@@ -226,9 +255,20 @@ class BlackWindow(Gtk.Window):
             self.logo_draw_w = img_w * scale
             self.logo_draw_h = img_h * scale
             self.logo_draw_x = (monitor_geom.width - self.logo_draw_w) / 2
-            draw_y = (self.zone_top_y - self.logo_draw_h) / 2 + LOGO_VERTICAL_OFFSET
-            max_draw_y = self.zone_top_y - self.logo_draw_h - TOP_ZONE_MIN_MARGIN
+            # Le décalage vers le bas (LOGO_VERTICAL_OFFSET) ne s'applique QUE dans la zone
+            # habituelle -- en zone étendue (plein écran), "centré" veut dire centré, sans
+            # biais (demandé explicitement).
+            offset = 0 if top_zone_expanded else LOGO_VERTICAL_OFFSET
+            draw_y = (top_zone_bottom - self.logo_draw_h) / 2 + offset
+            max_draw_y = top_zone_bottom - self.logo_draw_h - TOP_ZONE_MIN_MARGIN
             self.logo_draw_y = max(TOP_ZONE_MIN_MARGIN, min(draw_y, max_draw_y))
+
+        # Titre de secours (voir draw_top_title) : mêmes bornes que le logo ci-dessus --
+        # centré dans la zone (habituelle ou étendue) si NO_LABEL=1, sinon collé vers le bas
+        # de la zone habituelle comme avant (comportement inchangé tant qu'un picker reste
+        # possible pour ce jeu).
+        self.title_zone_bottom = top_zone_bottom
+        self.title_centered = NO_LABEL
 
         # Bande du libellé, puis bannière : tout ce qui est sous la zone du logo -- voir
         # LABEL_ZONE_HEIGHT plus haut. Supprimée entièrement (hauteur 0) si NO_LABEL : ce
@@ -378,17 +418,25 @@ class BlackWindow(Gtk.Window):
         cr.restore()
 
     def draw_top_title(self, cr, win_alloc):
-        """Titre (nom du jeu) -- repli utilisé UNIQUEMENT quand aucun logo n'a été fourni,
-        à la même place que celui-ci aurait occupée (voir l'en-tête de fichier) : centré
-        horizontalement, mais collé vers le BAS de la zone (pas centré verticalement dedans)
-        -- pour ne pas créer un grand vide entre lui et la bande du libellé juste en
-        dessous."""
+        """Titre (nom du jeu) -- repli utilisé UNIQUEMENT quand aucun logo n'a été fourni, à
+        la même place que celui-ci aurait occupée (voir l'en-tête de fichier) : centré
+        horizontalement toujours. Verticalement, deux cas (voir self.title_centered/
+        self.title_zone_bottom, posés dans __init__) :
+          - self.title_centered (NO_LABEL=1) : centré dans sa zone (habituelle si une
+            bannière existe, étendue à tout l'écran sinon -- voir <has_banner> dans l'en-tête
+            de fichier).
+          - sinon (picker possible pour ce jeu) : collé vers le BAS de la zone habituelle,
+            comme avant cette fonctionnalité -- pour ne pas créer un grand vide entre lui et
+            la bande du libellé juste en dessous."""
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
         cr.set_font_size(TOP_TITLE_FONT_SIZE)
         extents = cr.text_extents(title_text[0])
 
         title_x = (win_alloc.width - extents.width) / 2
-        title_baseline_y = self.zone_top_y - TOP_TITLE_BOTTOM_PADDING
+        if self.title_centered:
+            title_baseline_y = (self.title_zone_bottom + extents.height) / 2
+        else:
+            title_baseline_y = self.title_zone_bottom - TOP_TITLE_BOTTOM_PADDING
 
         cr.set_source_rgba(1, 1, 1, 1)
         cr.move_to(title_x, title_baseline_y)
