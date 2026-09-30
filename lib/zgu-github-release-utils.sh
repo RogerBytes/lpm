@@ -17,7 +17,7 @@
 # dépôt/une autre release de runners. zgc-dependency-checker.sh, zgr-runner-installer.sh
 # et zgr-runner-remote-lister.sh sourcent ce fichier et réutilisent cette même constante.
 # shellcheck disable=SC2034 # lue par les scripts qui sourcent ce fichier (ex: zgc-dependency-checker.sh)
-readonly GITHUB_RELEASE_URL="https://github.com/RogerBytes/Mintage/releases/tag/zgr-pkg"
+readonly GITHUB_RELEASE_URL="https://github.com/RogerBytes/lpm/releases/tag/zgr-pkg"
 
 # Convertit l'URL d'une page de release GitHub (.../releases/tag/<tag>) en URL d'API
 # (https://api.github.com/repos/<owner>/<repo>/releases/tags/<tag>).
