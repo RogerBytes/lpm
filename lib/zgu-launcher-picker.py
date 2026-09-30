@@ -33,6 +33,7 @@
 
 import math
 import sys
+import time
 
 try:
     import gi
@@ -69,7 +70,22 @@ CORNER_RADIUS = 10
 # les applications GTK de la machine. Le balisage Pango, lui, s'applique directement sur
 # les attributs de rendu du texte -- il gagne quoi qu'il arrive, indépendamment de tout
 # CSS concurrent.
-ENTRY_FONT_SIZE_PX = 45
+ENTRY_FONT_SIZE_PX = 25
+
+# Décalage vertical vers le bas par rapport au centre exact de l'écran -- demandé pour
+# laisser un peu plus d'air au-dessus du picker (là où logo/titre s'affichent, voir
+# zgu-launcher-blackscreen.py). "Gtk.WindowPosition.CENTER_ALWAYS" ne permet pas de décalage
+# -- remplacé par un centrage manuel (move() explicite, voir PickerWindow.__init__) avec cet
+# écart ajouté.
+PICKER_VERTICAL_OFFSET = 50
+
+
+# Curseur souris auto-masqué après ce délai d'inactivité (souris immobile) -- même
+# comportement que zgu-launcher-blackscreen.py, voir ce fichier pour le détail. Ici, EN
+# PLUS : masqué INSTANTANÉMENT dès un appui clavier/manette (voir on_key_press/
+# on_listbox_key_press), puisque cette fenêtre reçoit bien le focus clavier -- contrairement
+# à l'écran noir, qui ne peut compter que sur le délai.
+CURSOR_IDLE_S = 1.0
 
 
 def _entry_markup(text):
@@ -128,14 +144,37 @@ class PickerWindow(Gtk.Window):
         if visual is not None:
             self.set_visual(visual)
         self.set_keep_above(True)  # toujours au-dessus, y compris de l'écran noir/splash
-        self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
-        self.set_default_size(900, 680)
+
+        win_w, win_h = 900, 680
+        self.set_default_size(win_w, win_h)
+
+        # Centrage manuel plutôt que CENTER_ALWAYS -- voir PICKER_VERTICAL_OFFSET plus haut :
+        # centré horizontalement, mais décalé vers le bas verticalement par rapport au centre
+        # exact de l'écran.
+        self.set_position(Gtk.WindowPosition.NONE)
+        display = Gdk.Display.get_default()
+        monitor = display.get_primary_monitor() if display is not None else None
+        if monitor is None and display is not None and display.get_n_monitors() > 0:
+            monitor = display.get_monitor(0)
+        if monitor is not None:
+            geom = monitor.get_geometry()
+            pos_x = geom.x + int((geom.width - win_w) / 2)
+            pos_y = geom.y + int((geom.height - win_h) / 2) + PICKER_VERTICAL_OFFSET
+            self.move(pos_x, pos_y)
+
         self.get_style_context().add_class("lpm-picker")
 
         self.connect("delete-event", self.on_delete_event)
         # Échap : géré au niveau de la FENÊTRE, quel que soit le widget qui a le focus --
         # annuler doit marcher de partout.
         self.connect("key-press-event", self.on_key_press)
+
+        # Curseur souris auto-masqué -- voir CURSOR_IDLE_S plus haut.
+        self.add_events(Gdk.EventMask.POINTER_MOTION_MASK)
+        self.connect("motion-notify-event", self.on_motion)
+        self.last_motion_ts = time.monotonic()
+        self.cursor_hidden = False
+        self.blank_cursor = None
         # Fond + bordure dessinés à la main (voir la constante BG_COLOR/BORDER_COLOR plus
         # haut) : "app_paintable" désactive le rendu CSS automatique du fond de la fenêtre,
         # donc "background-color"/"border" en CSS ne s'appliquaient plus du tout une fois
@@ -219,6 +258,31 @@ class PickerWindow(Gtk.Window):
             self.listbox.select_row(first_row)
         self.listbox.grab_focus()
 
+    def on_motion(self, _widget, _event):
+        self.last_motion_ts = time.monotonic()
+        if self.cursor_hidden:
+            self.show_cursor()
+        return False
+
+    def show_cursor(self):
+        gdk_win = self.get_window()
+        if gdk_win is not None:
+            gdk_win.set_cursor(None)
+        self.cursor_hidden = False
+
+    def hide_cursor(self):
+        gdk_win = self.get_window()
+        if gdk_win is None:
+            return
+        if self.blank_cursor is None:
+            self.blank_cursor = Gdk.Cursor.new_for_display(self.get_display(), Gdk.CursorType.BLANK_CURSOR)
+        gdk_win.set_cursor(self.blank_cursor)
+        self.cursor_hidden = True
+
+    def maybe_hide_cursor_if_idle(self):
+        if not self.cursor_hidden and (time.monotonic() - self.last_motion_ts) >= CURSOR_IDLE_S:
+            self.hide_cursor()
+
     def on_draw_background(self, widget, cr):
         alloc = widget.get_allocation()
         w, h = alloc.width, alloc.height
@@ -253,6 +317,11 @@ class PickerWindow(Gtk.Window):
         return True
 
     def on_key_press(self, _widget, event):
+        # Tout appui clavier/manette (les deux arrivent ici de la même façon, la manette
+        # n'étant qu'un injecteur de touches -- voir zgu-gamepad-bridge.py) masque le
+        # curseur IMMÉDIATEMENT, sans attendre le délai d'inactivité -- voir CURSOR_IDLE_S.
+        if not self.cursor_hidden:
+            self.hide_cursor()
         if event.keyval == Gdk.KEY_Escape:
             self.cancelled = True
             Gtk.main_quit()
@@ -291,6 +360,7 @@ def main():
     )
 
     win = PickerWindow()
+    GLib.timeout_add(200, lambda: (win.maybe_hide_cursor_if_idle(), True)[1])
     Gtk.main()
 
     if win.cancelled:

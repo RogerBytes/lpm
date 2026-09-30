@@ -238,10 +238,21 @@ if [[ "${will_show_picker}" = false ]] && [[ -f "${splash_image}" ]]; then
   bg_state="${splash_image}"
 fi
 
+# --- Logo : à côté du splash (même dossier). Dessiné DIRECTEMENT par
+# zgu-launcher-blackscreen.py dans sa propre fenêtre (voir son en-tête de fichier) --
+# PAS de process séparé : le picker ne recouvre jamais cette zone (en haut de l'écran,
+# au-dessus de son propre encadré toujours centré), donc pas besoin d'une fenêtre "toujours
+# au sommet" en plus -- ça évite tous les problèmes de calques/focus d'un essai précédent
+# (fenêtre logo séparée, voir l'historique). Si absent, zgu-launcher-blackscreen.py affiche
+# le titre à cet emplacement à la place (voir son en-tête de fichier) -- passé même s'il
+# n'existe pas, la vérification d'existence se fait côté Python.
+logo_image="${game_dir}/splash/logo.png"
+
 {
   printf '%s\n' "${bg_state}"
   printf '%s\n' "IND_SHOW"
   printf '%s\n' "${title_text}"
+  printf '%s\n' ""
 } > "${control_file}" 2>/dev/null
 
 indicator_text="$(t launcher.loading_text)"
@@ -249,7 +260,7 @@ indicator_text="$(t launcher.loading_text)"
 blackscreen_pid=""
 bridge_pid=""
 
-python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" >/dev/null 2>&1 &
+python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" "${logo_image}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
@@ -288,6 +299,7 @@ if [[ "${will_show_picker}" = true ]]; then
       printf '%s\n' "NONE"
       printf '%s\n' "IND_HIDE"
       printf '%s\n' "${title_text}"
+      printf '%s\n' ""
     } > "${control_file}" 2>/dev/null
 
     # Laisse le temps au fond (sondage toutes les 150ms, voir zgu-launcher-blackscreen.py)
@@ -337,9 +349,12 @@ if [[ "${will_show_picker}" = true ]]; then
     post_choice_bg="NONE"
     [[ -f "${splash_image}" ]] && post_choice_bg="${splash_image}"
 
+    # Titre INCHANGÉ (toujours le nom du jeu, voir zgu-launcher-blackscreen.py) : le
+    # libellé choisi vient s'ajouter EN PLUS, sur sa propre ligne, jamais à sa place.
     {
       printf '%s\n' "${post_choice_bg}"
       printf '%s\n' "IND_SHOW"
+      printf '%s\n' "${title_text}"
       printf '%s\n' "${selection//[$'\n\r']/}"
     } > "${control_file}" 2>/dev/null
     zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choix entree=${selection}"

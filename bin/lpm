@@ -47,7 +47,7 @@ print_help() {
     t help.games_header
     printf "  %-42s %s\n" "lpm install [-y] <fichiers.zgp...>" "$(t help.games_install)"
     printf "  %-42s %s\n" "lpm uninstall [-y] <slugs...>" "$(t help.games_uninstall)"
-    printf "  %-42s %s\n" "lpm pack [-niveau] <dossiers...|--all>" "$(t help.games_pack)"
+    printf "  %-42s %s\n" "lpm pack [-niveau] <dossiers...>" "$(t help.games_pack)"
     printf "  %-42s %s\n" "lpm isolate [store]" "$(t help.games_isolate)"
     printf "  %-42s %s\n" "lpm list" "$(t help.games_list)"
     printf "  %-42s %s\n" "lpm list-isolable" "$(t help.games_list_isolable)"
@@ -60,6 +60,7 @@ print_help() {
     printf "  %-42s %s\n" "" "$(t help.games_shortcut_cont)"
     printf "  %-42s %s\n" "lpm icon [slugs...|--all]" "$(t help.games_icon)"
     printf "  %-42s %s\n" "lpm splash [slugs...|--all]" "$(t help.games_splash)"
+    printf "  %-42s %s\n" "lpm logo [slugs...|--all]" "$(t help.games_logo)"
     printf "  %-42s %s\n" "lpm tools [slug] [outil] [exe]" "$(t help.games_tools)"
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
     printf "  %-42s %s\n" "lpm lsfg [slugs...] [on|off]" "$(t help.games_lsfg)"
@@ -72,7 +73,7 @@ print_help() {
     printf "  %-52s %s\n" "lpm install-runner [-y] <fichiers.zgr|noms...>" "$(t help.runners_install)"
     printf "  %-52s %s\n" "" "$(t help.runners_install_cont)"
     printf "  %-52s %s\n" "lpm uninstall-runner [-y] <noms...>" "$(t help.runners_uninstall)"
-    printf "  %-52s %s\n" "lpm pack-runner [-niveau] <noms...|--all>" "$(t help.runners_pack)"
+    printf "  %-52s %s\n" "lpm pack-runner [-niveau] <noms...>" "$(t help.runners_pack)"
     printf "  %-52s %s\n" "lpm list-runner" "$(t help.runners_list)"
     printf "  %-52s %s\n" "lpm list-remote-runners" "$(t help.runners_list_remote)"
     printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"
@@ -209,6 +210,9 @@ if [[ $# -gt 0 ]]; then
         splash)
             exec bash "${LIB_DIR}/zgp-game-splash.sh" "$@"
             ;;
+        logo)
+            exec bash "${LIB_DIR}/zgp-game-logo.sh" "$@"
+            ;;
         tools)
             exec bash "${LIB_DIR}/zgp-game-tools.sh" "$@"
             ;;
@@ -263,6 +267,7 @@ opt_shortcut="$(t menu.opt_shortcut)"
 opt_isolate="$(t menu.opt_isolate)"
 opt_icon="$(t menu.opt_icon)"
 opt_splash="$(t menu.opt_splash)"
+opt_logo="$(t menu.opt_logo)"
 opt_tools="$(t menu.opt_tools)"
 opt_lsfg="$(t menu.opt_lsfg)"
 opt_launcher="$(t menu.opt_launcher)"
@@ -274,14 +279,7 @@ opt_check="$(t menu.opt_check)"
 opt_lutris_version="$(t menu.opt_lutris_version)"
 
 zgu_start_focus_watcher
-# zgu_start_gamepad_nav désactivé ici : sur ce menu (radiolist/checklist), une manette
-# branchée déclenchait un clic simulé automatique et silencieux à chaque écran (nécessaire
-# pour débloquer Espace/Entrée sur la liste, limitation de zenity/GTK face aux événements
-# simulés) -- visible et déroutant pour QUICONQUE a une manette branchée, même sans
-# vouloir s'en servir ("le curseur qui bouge seul"). Le support manette reste pleinement
-# fonctionnel pour le LPM Launcher (zgl-launcher-orchestrator.sh, point de démarrage
-# séparé et indépendant de celui-ci), qui n'a pas ce problème de visibilité.
-# zgu_start_gamepad_nav
+zgu_start_gamepad_nav
 
 while true; do
     if ! choice=$(zenity --list --radiolist \
@@ -297,6 +295,7 @@ while true; do
         FALSE "${opt_isolate}" \
         FALSE "${opt_icon}" \
         FALSE "${opt_splash}" \
+        FALSE "${opt_logo}" \
         FALSE "${opt_tools}" \
         FALSE "${opt_lsfg}" \
         FALSE "${opt_launcher}" \
@@ -306,7 +305,7 @@ while true; do
         FALSE "${opt_uninstall_runner}" \
         FALSE "${opt_check}" \
         FALSE "${opt_lutris_version}" \
-        --width=570 --height=640 2>/dev/null) || [[ -z "${choice}" ]]; then
+        --width=500 --height=600 2>/dev/null) || [[ -z "${choice}" ]]; then
         exit 0
     fi
 
@@ -337,6 +336,9 @@ while true; do
             ;;
         "${opt_splash}")
             bash "${LIB_DIR}/zgp-game-splash.sh"
+            ;;
+        "${opt_logo}")
+            bash "${LIB_DIR}/zgp-game-logo.sh"
             ;;
         "${opt_tools}")
             bash "${LIB_DIR}/zgp-game-tools.sh"
