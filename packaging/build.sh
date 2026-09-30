@@ -14,6 +14,15 @@ DIST_DIR="${SCRIPT_DIR}/dist"
 mkdir -p "${DIST_DIR}"
 chmod 777 "${DIST_DIR}"   # écrit par root (deb/rpm) ET par l'utilisateur non-root du conteneur Arch
 
+# UID/GID de l'utilisateur hôte : les paquets sont construits en root dans les conteneurs
+# (nécessaire pour dpkg-buildpackage/rpmbuild, et pour installer les dépendances pacman côté
+# Arch), donc sans ce chown de rattrapage, les fichiers copiés dans /dist appartiennent à
+# root:root côté hôte -- lisibles mais pas modifiables/supprimables sans sudo par l'utilisateur
+# normal (le "cadenas" affiché par les gestionnaires de fichiers). Le chown se fait DEPUIS le
+# conteneur (juste après chaque cp), où root a le droit de changer le propriétaire.
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
+
 VERSION="$(grep -oP 'LPM_VERSION="v\K[^"]+' "${PROJECT_ROOT}/bin/lpm")"
 echo "Version détectée : ${VERSION}"
 
@@ -22,7 +31,8 @@ build_deb() {
   echo "--- Préparation de l'image (téléchargement + outils, peut prendre plusieurs minutes la 1ère fois) ---"
   docker build -t lpm-builder-debian -f "${SCRIPT_DIR}/docker/Dockerfile.debian" "${SCRIPT_DIR}/docker"
   echo "--- Construction du paquet ---"
-  docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" -e VERSION="${VERSION}" lpm-builder-debian \
+  docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
+    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-debian \
     bash -c '
       set -e
       rm -rf /build && mkdir -p /build && cp -a /src/. /build/
@@ -34,6 +44,7 @@ build_deb() {
       sed -i "s/^lpm (\([^)]*\))/lpm (${VERSION}-1)/" debian/changelog
       dpkg-buildpackage -us -uc -b
       cp ../lpm_*.deb /dist/
+      chown "${HOST_UID}:${HOST_GID}" /dist/lpm_*.deb
     '
   echo "[OK] .deb -> ${DIST_DIR}"
 }
@@ -43,7 +54,8 @@ build_rpm() {
   echo "--- Préparation de l'image (téléchargement + outils, peut prendre plusieurs minutes la 1ère fois) ---"
   docker build -t lpm-builder-fedora -f "${SCRIPT_DIR}/docker/Dockerfile.fedora" "${SCRIPT_DIR}/docker"
   echo "--- Construction du paquet ---"
-  docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" -e VERSION="${VERSION}" lpm-builder-fedora \
+  docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
+    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-fedora \
     bash -c '
       set -e
       rpmdev-setuptree
@@ -53,6 +65,7 @@ build_rpm() {
       sed "s/^Version:.*/Version:        ${VERSION}/" /src/packaging/rpm/lpm.spec > ~/rpmbuild/SPECS/lpm.spec
       rpmbuild -bb ~/rpmbuild/SPECS/lpm.spec
       cp ~/rpmbuild/RPMS/noarch/*.rpm /dist/
+      chown "${HOST_UID}:${HOST_GID}" /dist/*.rpm
     '
   echo "[OK] .rpm -> ${DIST_DIR}"
 }
@@ -67,7 +80,8 @@ build_arch() {
   # (installation des dépendances, lues directement dans le PKGBUILD -- source unique de
   # vérité, jamais dupliquées ici), puis on bascule sur l'utilisateur non privilégié
   # "builder" seulement pour la compilation elle-même.
-  docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" -e VERSION="${VERSION}" lpm-builder-arch \
+  docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
+    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-arch \
     bash -c '
       set -e
       source /src/packaging/arch/PKGBUILD
@@ -82,6 +96,7 @@ build_arch() {
 
       su - builder -c "cd /build/pkg && makepkg --noconfirm --skipinteg"
       cp ./*.pkg.tar.zst /dist/
+      chown "${HOST_UID}:${HOST_GID}" /dist/*.pkg.tar.zst
     '
   echo "[OK] paquet Arch -> ${DIST_DIR}"
 }
