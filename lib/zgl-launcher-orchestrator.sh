@@ -445,4 +445,21 @@ POST_WINDOW_GRACE_MS=500
 ) </dev/null >/dev/null 2>&1 &
 disown $! 2>/dev/null
 
+# --- Combo manette "quitter le jeu" (Alt+F4) -- voir zgu-gamepad-exit-watcher.py pour le
+# détail complet (pourquoi un script à part du pont manette, pourquoi pas de grab(), pourquoi
+# pas de filet de sécurité). Lancé ICI, juste avant de passer la main à Lutris ("exec" un peu
+# plus bas ne rend jamais la main -- l'orchestrateur perd alors toute trace du jeu, donc ce
+# surveillant doit déjà tourner avant ce point, pas après).
+#
+# "pkill" avant de relancer : ce script s'arrête tout seul une fois le combo utilisé, mais
+# PAS si le jeu est quitté autrement (aucun moyen de le détecter depuis ici, voir le fichier)
+# -- sans ce nettoyage, une instance orpheline d'une partie précédente resterait active en
+# plus de la nouvelle. Suppose un seul jeu à la fois (cohérent avec le reste de lpm, jamais
+# pensé pour plusieurs parties simultanées).
+if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
+  pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
+  python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" >/dev/null 2>&1 &
+  disown $! 2>/dev/null
+fi
+
 launch_lutris

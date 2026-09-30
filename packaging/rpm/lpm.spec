@@ -13,6 +13,7 @@ Requires:       python3
 Requires:       python3-pyyaml
 Requires:       python3-gobject
 Requires:       python3-evdev
+Requires:       SDL2
 Requires:       sqlite
 Requires:       zenity
 Requires:       zstd
@@ -54,6 +55,11 @@ for f in lib/*.py; do
   install -Dm755 "${f}" "%{buildroot}/usr/lib/lpm/$(basename "${f}")"
 done
 
+install -d %{buildroot}/usr/lib/lpm/data
+for f in lib/data/*; do
+  install -Dm644 "${f}" "%{buildroot}/usr/lib/lpm/data/$(basename "${f}")"
+done
+
 install -d %{buildroot}/usr/lib/lpm/lang
 for f in lang/*.lang; do
   install -Dm644 "${f}" "%{buildroot}/usr/lib/lpm/lang/$(basename "${f}")"
@@ -76,6 +82,7 @@ install -Dm644 packaging/common/lpm.xml %{buildroot}/usr/share/mime/packages/lpm
 %license LICENSE
 /usr/bin/lpm
 /usr/lib/lpm/
+/usr/lib/lpm/data/
 /usr/share/bash-completion/completions/lpm
 /usr/share/zsh/site-functions/_lpm
 /usr/share/man/man1/lpm.1*
