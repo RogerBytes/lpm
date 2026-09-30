@@ -635,6 +635,14 @@ except Exception:
       ln -sf "." "${prefix_dir}/pfx"
     fi
 
+    # Filet de sécurité pour une archive plus ancienne encore packagée avant ce nettoyage
+    # (voir zgp-game-packer.sh) : "Local Settings" peut contenir un résidu de migration
+    # Proton ("Application Data BACKUP" non vide) qui ferait échouer la migration automatique
+    # au premier lancement avec "Directory not empty". Supprimé sans condition, comme au pack.
+    if [[ -e "${prefix_dir}/drive_c/users/steamuser/Local Settings" || -L "${prefix_dir}/drive_c/users/steamuser/Local Settings" ]]; then
+      rm -rf -- "${prefix_dir}/drive_c/users/steamuser/Local Settings"
+    fi
+
     t install_game.registering_lutris
     safe_name="${game_real_name//\'/\'\'}"
     # slug et config_id dérivent du nom du dossier extrait de l'archive .zgp (voir plus haut :

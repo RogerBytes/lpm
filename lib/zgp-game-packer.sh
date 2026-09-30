@@ -384,6 +384,17 @@ for game_real_name in "${games_to_export[@]}"; do
     [[ -L "${WINEPREFIX_DIR}/drive_c/users/steamuser/${link_name}" ]] && unlink "${WINEPREFIX_DIR}/drive_c/users/steamuser/${link_name}"
   done
 
+  # "Local Settings" (ancien chemin XP : Local Settings/Application Data, Temp, History...)
+  # est entièrement reconstruit par Proton/Wine à la prochaine initialisation du préfixe.
+  # S'il survit à l'empaquetage, il peut contenir à la fois "Application Data" (vrai dossier,
+  # pas encore migré) ET "Application Data BACKUP" (résidu d'une migration Proton déjà faite
+  # avant le pack) : à la réinstallation, Proton retente sa migration automatique et échoue
+  # avec "Directory not empty" car la destination existe déjà et n'est pas vide. Supprimé sans
+  # condition (comme les liens ci-dessus) pour repartir sur une migration propre à chaque
+  # install, plutôt que de traquer un par un tous les sous-dossiers/BACKUP qu'il peut contenir.
+  [[ -e "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings" || -L "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings" ]] \
+    && rm -rf -- "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings"
+
   [[ -d "${WINEPREFIX_DIR}/drive_c/ProgramData/Package Cache/" ]] && rm -rf -- "${WINEPREFIX_DIR}/drive_c/ProgramData/Package Cache/"*
   [[ -d "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp" ]] && rm -rf -- "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp/"*
   [[ -d "${WINEPREFIX_DIR}/drive_c" ]] && mkdir -p "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp"
