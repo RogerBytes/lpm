@@ -47,7 +47,7 @@ print_help() {
     t help.games_header
     printf "  %-42s %s\n" "lpm install [-y] <fichiers.zgp...>" "$(t help.games_install)"
     printf "  %-42s %s\n" "lpm uninstall [-y] <slugs...>" "$(t help.games_uninstall)"
-    printf "  %-42s %s\n" "lpm pack [-niveau] <dossiers...>" "$(t help.games_pack)"
+    printf "  %-42s %s\n" "lpm pack [-niveau] <dossiers...|--all>" "$(t help.games_pack)"
     printf "  %-42s %s\n" "lpm isolate [store]" "$(t help.games_isolate)"
     printf "  %-42s %s\n" "lpm list" "$(t help.games_list)"
     printf "  %-42s %s\n" "lpm list-isolable" "$(t help.games_list_isolable)"
@@ -72,7 +72,7 @@ print_help() {
     printf "  %-52s %s\n" "lpm install-runner [-y] <fichiers.zgr|noms...>" "$(t help.runners_install)"
     printf "  %-52s %s\n" "" "$(t help.runners_install_cont)"
     printf "  %-52s %s\n" "lpm uninstall-runner [-y] <noms...>" "$(t help.runners_uninstall)"
-    printf "  %-52s %s\n" "lpm pack-runner [-niveau] <noms...>" "$(t help.runners_pack)"
+    printf "  %-52s %s\n" "lpm pack-runner [-niveau] <noms...|--all>" "$(t help.runners_pack)"
     printf "  %-52s %s\n" "lpm list-runner" "$(t help.runners_list)"
     printf "  %-52s %s\n" "lpm list-remote-runners" "$(t help.runners_list_remote)"
     printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"

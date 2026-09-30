@@ -76,6 +76,24 @@ fi
 
 cd "${runner_dir}" || exit 1
 
+# --all (CLI uniquement) : remplace le seul argument "--all" par la liste triée de tous
+# les dossiers de runners présents sur le disque -- même source (nullglob + tri) que la
+# liste proposée en mode interactif juste en dessous. La boucle CLI n'a ensuite besoin
+# d'aucun changement : chaque nom existe forcément (on vient de le lister), donc la
+# vérification [[ -d ... ]] passera toujours ; seule la vérification anti-conflit
+# (archive .zgr déjà existante) s'applique encore normalement.
+if [[ ${#cli_runners[@]} -eq 1 ]] && [[ "${cli_runners[0]}" = "--all" ]]; then
+  shopt -s nullglob
+  all_runner_dirs=( */ )
+  shopt -u nullglob
+  mapfile -t all_sorted_runners < <(printf '%s\n' "${all_runner_dirs[@]}" | sed 's#/$##' | sort)
+  if [[ ${#all_sorted_runners[@]} -eq 0 ]]; then
+    zgu_cli_error "$(t pack_runner.no_runner_found "${runner_dir}")"
+    exit 1
+  fi
+  cli_runners=("${all_sorted_runners[@]}")
+fi
+
 declare -A path_by_runner
 runners_to_export=()
 

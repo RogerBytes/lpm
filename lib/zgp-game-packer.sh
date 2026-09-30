@@ -190,6 +190,26 @@ resolve_prefix_dir_by_slug() {
   echo "${real_dir}"
 }
 
+# --all (CLI uniquement) : remplace le seul argument "--all" par la liste triée de tous
+# les slugs de jeux wine non blacklistés, connue via pga.db -- exactement la même source
+# que la liste proposée en mode interactif. La boucle CLI ci-dessous n'a ensuite besoin
+# d'aucun changement : elle retraite chaque slug comme si l'utilisateur l'avait tapé.
+if [[ ${#cli_games[@]} -eq 1 ]] && [[ "${cli_games[0]}" = "--all" ]]; then
+  all_wine_slugs=()
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
+    while IFS= read -r all_slug; do
+      [[ -z "${all_slug}" ]] && continue
+      [[ -n "${blacklisted_slugs[${all_slug}]:-}" ]] && continue
+      all_wine_slugs+=("${all_slug}")
+    done < <(sqlite3 "${lutris_db_path}" "SELECT slug FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
+  fi
+  if [[ ${#all_wine_slugs[@]} -eq 0 ]]; then
+    zgu_cli_error "$(t pack_game.no_prefix_found "${GAMES_DIR}")"
+    exit 1
+  fi
+  cli_games=("${all_wine_slugs[@]}")
+fi
+
 # --- Mode CLI vs Mode Interactif ---
 if [[ ${#cli_games[@]} -gt 0 ]]; then
   # --- MODE CLI (Pas de Zenity, 100% Terminal) ---
