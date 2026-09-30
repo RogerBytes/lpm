@@ -116,7 +116,11 @@ ci-dessous), ou pour un jeu ajouté à Lutris par un autre moyen que
 .BR lpm .
 N'écrit que des fichiers
 .I .desktop
-: aucune confirmation requise.
+: aucune confirmation requise. L'écran de chargement par jeu (voir
+.B FICHIERS
+ci-dessous) reste activé par défaut ; le désactiver pour un jeu n'a pas de drapeau CLI
+dédié pour l'instant \(em décocher la case correspondante dans la liste Zenity
+interactive, ou supprimer à la main le fichier marqueur en mode CLI.
 .TP
 .BI "icon [" "slugs...|--all" ]
 Récupère automatiquement une icône pour un ou plusieurs jeux déjà installés, via
@@ -128,6 +132,24 @@ premier usage
 .RI ( "${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key" ,
 permissions restreintes au propriétaire). Sans argument : sélection interactive parmi tous
 les jeux installés, en précochant ceux qui n'ont pas encore d'icône personnalisée.
+.TP
+.BI "splash [" "slugs...|--all" ]
+Récupère automatiquement une large bannière de chargement (image "Hero", distincte de
+l'icône carrée récupérée par
+.BR icon )
+pour un ou plusieurs jeux déjà installés, via SteamGridDB, et l'enregistre sous
+.IR "$GAMEDIR/splash/splash.png" .
+C'est cette image que l'écran de chargement (voir
+.B FICHIERS
+ci-dessous) affiche en plein écran pendant le lancement du jeu ; en son absence, l'écran
+de chargement est un simple écran noir uni. Indépendant du fait que
+.B launcher
+ci-dessous soit activé pour ce jeu, et utilise la même clé API SteamGridDB personnelle
+que
+.BR icon .
+Uniquement les jeux disponibles sur Steam sont couverts. Sans argument : sélection
+interactive parmi tous les jeux installés, en précochant ceux qui n'ont pas encore de
+bannière personnalisée.
 .TP
 .BI "lsfg [" "slugs..." "] [" "on" " | " "off" ]
 Active ou désactive lsfg-vk (génération de frames "Lossless Scaling") pour un ou plusieurs
@@ -167,6 +189,21 @@ sont tous deux fournis ;
 n'est utilisé que pour l'outil
 .BR exe .
 Sans argument : sélection interactive du jeu puis de l'outil.
+.TP
+.BI "launcher [" "slugs...] [" "on" " | " "off" ]
+Active ou désactive le sélecteur multi-exécutable "LPM Launcher" pour un ou plusieurs
+jeux Wine/Proton installés : un jeu ayant plusieurs exécutables (épisodes, DLC, contenu
+bonus...) peut alors proposer un choix à chaque lancement, relu depuis son
+.I lpm-launcher.yml
+à chaque démarrage (jamais figé une fois pour toutes à l'activation). Entièrement
+indépendant de l'écran de chargement par jeu (voir
+.B splash
+ci-dessus et
+.B FICHIERS
+ci-dessous) : l'écran de chargement s'affiche pour un raccourci que le launcher soit
+activé ou non pour ce jeu, et désactiver le launcher ne supprime jamais un
+.IR lpm-launcher.yml / splash.png
+déjà présent. Sans argument : sélection interactive Zenity.
 .TP
 .BI "killwine [-y]"
 Tue immédiatement tout processus Wine, Winetricks, umu-run ou Proton (lancé par Lutris) en
@@ -212,13 +249,19 @@ elle force et sauvegarde ce choix ; avec
 elle l'efface pour redemander automatiquement au prochain lancement si les deux
 versions sont encore présentes.
 .SH JOURNAL
-Chaque exécution de
-.BR install ", " uninstall ", " pack ", " isolate " et " icon
-(succès comme échec) est journalisée dans
+Journalisé dans
 .IR $XDG_DATA_HOME/lpm/lpm.log " (par défaut " ~/.local/share/lpm/lpm.log ),
 une ligne par événement, colonnes séparées par une tabulation : horodatage, commande,
-statut (OK/ERREUR/INFO), détail. Utile pour déboguer a posteriori une installation ou
-une isolation qui a échoué.
+statut (OK/ERREUR/INFO), détail. Un succès est journalisé pour
+.BR install ", " uninstall ", " pack ", " isolate " et " icon .
+Un échec est journalisé pour pratiquement toutes les commandes de
+.BR lpm ,
+en CLI comme en interface graphique \(em seules les commandes purement en lecture
+.RB ( list ", " list-isolable ", " list-runner ", " list-remote-runners ", " info " et "
+.BR log " elle-même)"
+n'écrivent jamais dans le journal, faute d'avoir quoi que ce soit à y rapporter. Utile
+pour déboguer a posteriori une installation, une isolation ou toute autre action qui a
+échoué.
 .PP
 Au-delà de 10000 lignes, le journal est automatiquement tourné : le fichier courant est
 renommé
@@ -252,7 +295,7 @@ s'il existe, après confirmation interactive.
 .B \-y
 Confirme automatiquement, sans demander de confirmation interactive. S'applique à
 .BR install ", " uninstall ", " install-runner ", " uninstall-runner ", " create-prefix ", "
-.BR exe-install " et " check .
+.BR exe-install ", " check " et " killwine .
 .TP
 .B \-\-allow\-scripts
 Approuve automatiquement les scripts de lancement/fermeture embarqués
@@ -294,6 +337,25 @@ Affiche cette page (ou un résumé intégré si la page man n'est pas installée
 .TP
 .I ~/Games/<slug>/
 Préfixes Wine des jeux installés (ou l'emplacement personnalisé configuré dans Lutris).
+.TP
+.I <dossier_jeu>/.lpm-no-loadingscreen
+Fichier marqueur : sa présence désactive l'écran de chargement pour les raccourcis de ce
+jeu (voir
+.B shortcut
+ci-dessus). Absent par défaut (écran de chargement affiché), basculé par la case "écran
+de chargement" au moment de
+.BR shortcut " / " install ", ou supprimé/créé à la main en mode CLI."
+.TP
+.I <dossier_jeu>/splash/splash.png
+Bannière d'écran de chargement personnalisée pour ce jeu, récupérée par
+.B splash
+ci-dessus (ou ajoutée à la main). Un simple écran noir uni est utilisé en son absence.
+.TP
+.I <dossier_jeu>/lpm-launcher.yml
+Configuration par jeu du sélecteur multi-exécutable, écrite par
+.B launcher
+ci-dessus ; liste les entrées proposées à chaque lancement, relue en direct à chaque
+fois.
 .TP
 .I ~/.local/share/lpm/lpm.log
 Journal des actions (voir

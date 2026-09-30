@@ -803,8 +803,8 @@ launcher.default_prompt=Lequel voulez-vous lancer ?
 launcher.example_entry_comment=Décommentez et adaptez pour ajouter une autre entrée :
 launcher.example_entry_label=Exemple
 launcher.setup_done=LPM Launcher activé pour "%s".\nÉditez ce fichier pour ajouter ou modifier des entrées :\n%s
-launcher.flatpak_permission_hint=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher (le jeu se lance normalement, mais sans l'écran de chargement). Si ça arrive, exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_question=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_hint=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le sélecteur multi-exécutable (le jeu se lance normalement, mais avec son exécutable habituel plutôt que celui choisi). Si ça arrive, exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_question=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le sélecteur multi-exécutable. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.flatpak_permission_applied_ok=Permission Flatpak appliquée avec succès.
 launcher.flatpak_permission_applied_fail=Échec de l'application automatique de la permission Flatpak. Applique-la toi-même :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.launcher_yml_missing=Erreur : lpm-launcher.yml introuvable pour "%s" -- impossible de restaurer l'exécutable d'origine.
@@ -856,5 +856,5 @@ splash.done_cli=Bannière de chargement définie pour %s.
 splash.errors_gui_title=Erreurs de récupération de bannières
 splash.errors_gui_intro=Un ou plusieurs jeux n'ont pas pu obtenir de bannière. Rien n'a été changé pour eux :
 splash.done_gui=Terminé : %s jeu(x) traité(s).
-help.games_splash=Récupère automatiquement une large bannière de chargement ("Hero") depuis SteamGridDB (nécessite une clé API personnelle gratuite) pour l'écran de chargement du LPM Launcher
+help.games_splash=Récupère automatiquement une large bannière de chargement ("Hero") depuis SteamGridDB (nécessite une clé API personnelle gratuite) pour l'écran de chargement
 menu.opt_splash=🏞️ Récupérer une bannière de chargement (SteamGridDB)

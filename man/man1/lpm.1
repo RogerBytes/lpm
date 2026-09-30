@@ -117,7 +117,11 @@ below), or for a game added to Lutris by some other means than
 .BR lpm .
 Only writes
 .I .desktop
-files: no confirmation required.
+files: no confirmation required. The per-game loading screen (see
+.B FILES
+below) is left enabled by default; disabling it for one game has no dedicated CLI flag
+for now \(em uncheck it in the interactive Zenity checklist, or delete the marker file
+by hand in CLI mode.
 .TP
 .BI "icon [" "slugs...|--all" ]
 Automatically fetches an icon for one or more already installed games, via
@@ -128,6 +132,22 @@ SteamGridDB API key, requested and saved on first use
 .RI ( "${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key" ,
 permissions restricted to the owner). With no argument: interactive selection among all
 installed games, pre-checking those that don't yet have a custom icon.
+.TP
+.BI "splash [" "slugs...|--all" ]
+Automatically fetches a wide loading-screen banner ("Hero" image, distinct from the
+square icon fetched by
+.BR icon )
+for one or more already installed games, via SteamGridDB, and stores it as
+.IR "$GAMEDIR/splash/splash.png" .
+This is the image the loading screen (see
+.B FILES
+below) shows full-screen while the game starts; with no banner, the loading screen is
+a plain black screen instead. Independent of whether the
+.B launcher
+below is enabled for the game, and uses the same personal SteamGridDB API key as
+.BR icon .
+Only games available on Steam are covered. With no argument: interactive selection
+among all installed games, pre-checking those that don't yet have a custom banner.
 .TP
 .BI "lsfg [" "slugs..." "] [" "on" " | " "off" ]
 Enables or disables lsfg-vk ("Lossless Scaling" frame generation) for one or more
@@ -168,6 +188,22 @@ are supplied;
 is only used for the
 .B exe
 tool. With no argument: interactive selection of the game then the tool.
+.TP
+.BI "launcher [" "slugs...] [" "on" " | " "off" ]
+Enables or disables the "LPM Launcher" multi-executable picker for one or more
+installed Wine/Proton games: a game with several executables (episodes, DLC, bonus
+content...) can then offer a choice of which one to run at each launch, re-read from
+its
+.I lpm-launcher.yml
+every time it starts (never fixed once and for all at activation). Fully independent
+of the per-game loading screen (see
+.B splash
+above and
+.B FILES
+below): the loading screen is shown for a shortcut regardless of whether the launcher
+is enabled for that game, and disabling the launcher never removes an existing
+.IR lpm-launcher.yml / splash.png .
+With no argument: interactive Zenity selection.
 .TP
 .BI "killwine [-y]"
 Immediately kills any running Wine, Winetricks, umu-run or Proton (launched by Lutris)
@@ -214,12 +250,18 @@ it forces and saves that choice; with
 it clears it so it is asked again automatically on the next launch if both
 versions are still present.
 .SH LOG
-Every run of
-.BR install ", " uninstall ", " pack ", " isolate " and " icon
-(success as well as failure) is logged to
+Logged to
 .IR $XDG_DATA_HOME/lpm/lpm.log " (by default " ~/.local/share/lpm/lpm.log ),
 one line per event, tab-separated columns: timestamp, command, status (OK/ERROR/INFO),
-detail. Useful for debugging after the fact an installation or isolation that failed.
+detail. A success is logged for
+.BR install ", " uninstall ", " pack ", " isolate " and " icon .
+A failure is logged for essentially every
+.B lpm
+command, in both CLI and graphical mode \(em only the purely read-only commands
+.RB ( list ", " list-isolable ", " list-runner ", " list-remote-runners ", " info " and "
+.BR log " itself)"
+never write to the log, since they have nothing to report back. Useful for debugging
+after the fact an installation, isolation or any other action that failed.
 .PP
 Past 10000 lines, the log is automatically rotated: the current file is renamed
 .I lpm.log.1
@@ -252,7 +294,7 @@ if it exists, after interactive confirmation.
 .B \-y
 Confirms automatically, without asking for interactive confirmation. Applies to
 .BR install ", " uninstall ", " install-runner ", " uninstall-runner ", " create-prefix ", "
-.BR exe-install " and " check .
+.BR exe-install ", " check " and " killwine .
 .TP
 .B \-\-allow\-scripts
 Automatically approves the embedded launch/exit scripts
@@ -294,6 +336,25 @@ Shows this page (or a built-in summary if the man page is not installed).
 .TP
 .I ~/Games/<slug>/
 Wine prefixes of installed games (or the custom location configured in Lutris).
+.TP
+.I <game_dir>/.lpm-no-loadingscreen
+Marker file: when present, the loading screen is skipped for this game's shortcuts
+(see
+.B shortcut
+above). Absent by default (loading screen shown), toggled by the "loading screen"
+checkbox at
+.BR shortcut " / " install " time, or removed/created by hand in CLI mode."
+.TP
+.I <game_dir>/splash/splash.png
+Custom loading-screen banner for this game, fetched by
+.B splash
+above (or added by hand). A plain black screen is used instead when this file is
+absent.
+.TP
+.I <game_dir>/lpm-launcher.yml
+Per-game configuration for the multi-executable picker, written by
+.B launcher
+above; lists the entries offered at each launch, re-read live every time.
 .TP
 .I ~/.local/share/lpm/lpm.log
 Action log (see

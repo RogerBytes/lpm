@@ -803,8 +803,8 @@ launcher.default_prompt=Which one do you want to launch?
 launcher.example_entry_comment=Uncomment and adapt to add another entry:
 launcher.example_entry_label=Example
 launcher.setup_done=LPM Launcher enabled for "%s".\nEdit this file to add or change entries:\n%s
-launcher.flatpak_permission_hint=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start (game launches normally, without the loading screen). If that happens, run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_question=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_hint=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the multi-executable picker silently fail to apply (the game launches normally, but with its usual executable instead of the chosen one). If that happens, run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
+launcher.flatpak_permission_question=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the multi-executable picker silently fail to apply. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.flatpak_permission_applied_ok=Flatpak permission applied successfully.
 launcher.flatpak_permission_applied_fail=Automatic Flatpak permission fix failed. Apply it yourself:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
 launcher.launcher_yml_missing=Error: lpm-launcher.yml not found for "%s" -- cannot restore the original executable.
@@ -856,5 +856,5 @@ splash.done_cli=Splash banner set for %s.
 splash.errors_gui_title=Splash banner fetch errors
 splash.errors_gui_intro=One or more games could not get a splash banner. Nothing was changed for them:
 splash.done_gui=Done: %s game(s) processed.
-help.games_splash=Fetches a wide splash banner ("Hero" image) automatically from SteamGridDB (requires a free personal API key) for the LPM Launcher's loading screen
+help.games_splash=Fetches a wide splash banner ("Hero" image) automatically from SteamGridDB (requires a free personal API key) for the loading screen
 menu.opt_splash=🏞️ Fetch a splash banner (SteamGridDB)
