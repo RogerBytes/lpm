@@ -274,7 +274,14 @@ opt_check="$(t menu.opt_check)"
 opt_lutris_version="$(t menu.opt_lutris_version)"
 
 zgu_start_focus_watcher
-zgu_start_gamepad_nav
+# zgu_start_gamepad_nav désactivé ici : sur ce menu (radiolist/checklist), une manette
+# branchée déclenchait un clic simulé automatique et silencieux à chaque écran (nécessaire
+# pour débloquer Espace/Entrée sur la liste, limitation de zenity/GTK face aux événements
+# simulés) -- visible et déroutant pour QUICONQUE a une manette branchée, même sans
+# vouloir s'en servir ("le curseur qui bouge seul"). Le support manette reste pleinement
+# fonctionnel pour le LPM Launcher (zgl-launcher-orchestrator.sh, point de démarrage
+# séparé et indépendant de celui-ci), qui n'a pas ce problème de visibilité.
+# zgu_start_gamepad_nav
 
 while true; do
     if ! choice=$(zenity --list --radiolist \
