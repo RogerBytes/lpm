@@ -1,9 +1,9 @@
-# Ludis Package Manager
+# Ludis Prefix Manager
 
 Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
 
 <p align="center">
-  <img src="../assets/icons/lpm.svg" width="128" height="128" alt="Icône Ludis Package Manager">
+  <img src="../assets/icons/lpm.svg" width="128" height="128" alt="Icône Ludis Prefix Manager">
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@ Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
   <a href="https://github.com/RogerBytes/lpm/issues">Issues</a>
 </p>
 
-**Ludis Package Manager** vous permet de sauvegarder vos jeux Wine pour Lutris au format `.zgp` et vos runners au format `.zgr`. Il centralise l'exportation, la gestion et la suppression de vos archives, tandis que l'importation se charge de tout configurer pour que votre jeu soit immédiatement prêt à être lancé.
+**Ludis Prefix Manager** vous permet de sauvegarder vos jeux Wine pour Lutris au format `.zgp` et vos runners au format `.zgr`. Il centralise l'exportation, la gestion et la suppression de vos archives, tandis que l'importation se charge de tout configurer pour que votre jeu soit immédiatement prêt à être lancé.
 
 ## Fonctionnalités
 
@@ -157,7 +157,7 @@ Pour tout autre fichier annexe (config manette Antimicro `.amgp`, scripts person
 
 ## Licence et contribution
 
-Ce projet est sous licence MIT (voir [`LICENSE`](../LICENSE)), à l'exception de trois fichiers d'icônes sous GPLv3. Le nom "Ludis Package Manager"/"lpm" et le logo du projet ne sont pas couverts par cette licence.
+Ce projet est sous licence MIT (voir [`LICENSE`](../LICENSE)), à l'exception de trois fichiers d'icônes sous GPLv3. Le nom "Ludis Prefix Manager"/"lpm" et le logo du projet ne sont pas couverts par cette licence.
 
 Pour contribuer, signaler un bug ou proposer une fonctionnalité, voir [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 

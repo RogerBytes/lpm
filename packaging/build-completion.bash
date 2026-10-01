@@ -9,7 +9,7 @@
 #   source packaging/build-completion.bash
 #
 # Usage permanent (à chaque nouveau terminal), ajouter dans ~/.bashrc :
-#   source "/chemin/complet/vers/Ludis Package Manager/packaging/build-completion.bash"
+#   source "/chemin/complet/vers/Ludis Prefix Manager/packaging/build-completion.bash"
 
 _lpm_build_sh_complete() {
   local cur

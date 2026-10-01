@@ -143,8 +143,8 @@ cat << EOF > "${DESKTOP_FILE}"
 [Desktop Entry]
 Type=Application
 Name=lpm
-Comment=Package manager for games and runners
-Comment[fr]=Gestionnaire de paquets et runners pour jeux
+Comment=Prefix manager for Lutris games and runners
+Comment[fr]=Gestionnaire de préfixes et runners pour Lutris
 Exec=lpm %f
 Icon=lpm
 Categories=Game;Utility;

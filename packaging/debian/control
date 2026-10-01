@@ -24,8 +24,8 @@ Depends: ${misc:Depends},
  gir1.2-gtk-4.0 (>= 4.10),
  gir1.2-adw-1 (>= 1.4)
 Recommends: lutris, wine, winetricks, imagemagick, curl, xdotool, ydotool, bash-completion
-Description: Package manager for Lutris
- lpm (Ludis Package Manager) packages, installs and manages Wine/Proton
+Description: Prefix manager for Lutris
+ lpm (Ludis Prefix Manager) packages, installs and manages Wine/Proton
  games and runners for Lutris as .zgp/.zgr archives, with support for
  lsfg-vk (frame generation), shared-prefix isolation, and desktop
  integration (icons, MIME types, shortcuts).

@@ -1,4 +1,4 @@
-# Ludis Package Manager - English (mandatory base language, all keys must exist here)
+# Ludis Prefix Manager - English (mandatory base language, all keys must exist here)
 
 # --- Common (bin/lpm) ---
 common.unknown_command=Unknown command: %s
@@ -403,7 +403,7 @@ install_runner.checksum_missing_gui=Warning: GitHub did not provide a SHA256 che
 install_runner.cancel_title=Cancelled
 install_runner.import_cancelled_text=The import was cancelled.
 install_runner.notify_body_final=All selected runners were successfully installed!
-menu.title=Ludis Package Manager
+menu.title=Ludis Prefix Manager
 menu.text=Select an action to perform:
 menu.col_choice=Choice
 menu.col_action=Action
@@ -418,7 +418,7 @@ menu.opt_pack_runner=📦 Package a runner (as .zgr)
 menu.opt_uninstall_runner=🗑️ Uninstall a runner
 menu.opt_check=🔍 Check dependencies (runners)
 menu.opt_lutris_version=🎮 Lutris version in use
-help.title=Ludis Package Manager (lpm) — Wine game and runner manager for Lutris
+help.title=Ludis Prefix Manager (lpm) — Wine game and runner manager for Lutris
 help.usage_header=Usage:
 help.usage_menu=Opens the graphical menu (Zenity)
 help.usage_direct=Installs the file directly (double-click)
@@ -496,7 +496,7 @@ create_prefix.summary_title=Prefix creation
 create_prefix.summary_created=%d prefix(es) created.
 create_prefix.summary_skipped=%d skipped (a prefix with that slug already existed).
 create_prefix.summary_failed=%d failed (timed out waiting for the prefix to initialize).
-create_prefix.notify_title=Ludis Package Manager
+create_prefix.notify_title=Ludis Prefix Manager
 create_prefix.notify_body=%d empty prefix(es) created.
 
 exe_install.browse_title=Choose the installer file

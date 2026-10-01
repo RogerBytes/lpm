@@ -1,9 +1,9 @@
-# Ludis Package Manager
+# Ludis Prefix Manager
 
 Back up, transfer and reinstall your Wine/Lutris games in one click.
 
 <p align="center">
-  <img src="./assets/icons/lpm.svg" width="128" height="128" alt="Ludis Package Manager icon">
+  <img src="./assets/icons/lpm.svg" width="128" height="128" alt="Ludis Prefix Manager icon">
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@ Back up, transfer and reinstall your Wine/Lutris games in one click.
   <a href="docs/Lisez-Moi.md">French ReadMe</a>
 </p>
 
-**Ludis Package Manager** lets you back up your Wine games for Lutris as `.zgp` archives and your runners as `.zgr` archives. It centralizes exporting, managing and deleting your archives, while importing takes care of setting everything up so your game is ready to launch right away.
+**Ludis Prefix Manager** lets you back up your Wine games for Lutris as `.zgp` archives and your runners as `.zgr` archives. It centralizes exporting, managing and deleting your archives, while importing takes care of setting everything up so your game is ready to launch right away.
 
 ## Features
 
@@ -158,7 +158,7 @@ For any other extra file (Antimicro `.amgp` controller config, personal scripts.
 
 ## License and contributing
 
-This project is licensed under the MIT license (see [`LICENSE`](LICENSE)), except for three icon files under GPLv3. The name "Ludis Package Manager"/"lpm" and the project logo are not covered by this license.
+This project is licensed under the MIT license (see [`LICENSE`](LICENSE)), except for three icon files under GPLv3. The name "Ludis Prefix Manager"/"lpm" and the project logo are not covered by this license.
 
 To contribute, report a bug, or suggest a feature, see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 

@@ -805,7 +805,7 @@ class MainWindow(Adw.ApplicationWindow):
 
         sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         sidebar_header = Adw.HeaderBar(show_end_title_buttons=False)
-        sidebar_header.set_title_widget(Adw.WindowTitle(title="lpm", subtitle="Ludis Package Manager"))
+        sidebar_header.set_title_widget(Adw.WindowTitle(title="lpm", subtitle="Ludis Prefix Manager"))
         sidebar_box.append(sidebar_header)
 
         sidebar_scroller = Gtk.ScrolledWindow(vexpand=True)

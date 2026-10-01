@@ -1,4 +1,4 @@
-# Contributing to Ludis Package Manager
+# Contributing to Ludis Prefix Manager
 
 Thanks for your interest in this project. Before opening an issue or a pull request, please read the following.
 

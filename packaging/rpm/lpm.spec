@@ -1,7 +1,7 @@
 Name:           lpm
 Version:        0.9.3
 Release:        1%{?dist}
-Summary:        Package manager for Lutris
+Summary:        Prefix manager for Lutris
 
 License:        MIT AND GPL-3.0-or-later
 URL:            https://rogerbytes.com
@@ -32,7 +32,7 @@ Recommends:     ydotool
 Recommends:     bash-completion
 
 %description
-lpm (Ludis Package Manager) packages, installs and manages Wine/Proton
+lpm (Ludis Prefix Manager) packages, installs and manages Wine/Proton
 games and runners for Lutris as .zgp/.zgr archives, with support for
 lsfg-vk (frame generation), shared-prefix isolation, and desktop
 integration (icons, MIME types, shortcuts).

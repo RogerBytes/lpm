@@ -2,7 +2,7 @@
 pkgname=lpm
 pkgver=0.9.3
 pkgrel=1
-pkgdesc="Package manager for Lutris (Wine/Proton games and runners)"
+pkgdesc="Prefix manager for Lutris (Wine/Proton games and runners)"
 arch=('any')
 url="https://rogerbytes.com"
 license=('MIT' 'GPL3')  # MIT: lpm code -- GPL3: assets/icons/application-x-zg{p,r}-*.svg
