@@ -31,24 +31,12 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-cli-utils.sh
 source "${script_dir}/zgu-cli-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 
-# $1 = mode ("cli" = commande terminal explicite, vide/absent = menu interactif Zenity)
-# $2 = confirm_flag ("yes" si -y)
-mode="${1:-}"
-confirm_flag="${2:-}"
-
-will_use_zenity=true
-[[ "${mode}" = "cli" ]] && will_use_zenity=false
-
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t game_tools.zenity_missing)"
-  exit 1
-fi
-if [[ "${will_use_zenity}" = true ]]; then
-  zgu_start_focus_watcher
-fi
+# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
+#      en position pour rester cohérent avec les autres scripts de lib/, mais sa valeur
+#      n'est plus lue ici)
+shift || true
+confirm_flag="${1:-}"
 
 if ! command -v pgrep >/dev/null 2>&1; then
   zgu_cli_error "$(t wine_killer.pgrep_missing)"
@@ -57,23 +45,16 @@ fi
 
 # --- Confirmation (action destructive et irréversible : coupe tout jeu Wine en cours,
 # progression non sauvegardée perdue) ---
-if [[ "${will_use_zenity}" = true ]]; then
-  if ! zenity --question --title="$(t wine_killer.confirm_title)" \
-    --text="$(t wine_killer.confirm_text)" --width=480 2>/dev/null; then
-    exit 0
-  fi
-else
-  if [[ "${confirm_flag}" != "yes" ]]; then
-    t wine_killer.confirm_cli_header
-    read -r -p "$(t wine_killer.confirm_cli_prompt)" response
-    case "${response}" in
-      [oOyY]) : ;;
-      *)
-        t wine_killer.cancelled_cli
-        exit 0
-        ;;
-    esac
-  fi
+if [[ "${confirm_flag}" != "yes" ]]; then
+  t wine_killer.confirm_cli_header
+  read -r -p "$(t wine_killer.confirm_cli_prompt)" response
+  case "${response}" in
+    [oOyY]) : ;;
+    *)
+      t wine_killer.cancelled_cli
+      exit 0
+      ;;
+  esac
 fi
 
 # --- Chemins des runners Lutris (Flatpak ET paquet natif vérifiés systématiquement,
@@ -181,19 +162,11 @@ while IFS= read -r pid; do
 done < <(pgrep -f -- "proton" 2>/dev/null)
 total_killed=$((total_killed + proton_killed))
 
-if [[ "${will_use_zenity}" = true ]]; then
-  if [[ "${total_killed}" -gt 0 ]]; then
-    zenity --info --text="$(t wine_killer.done_gui "${total_killed}")" 2>/dev/null
-    notify-send "$(t wine_killer.notify_title)" "$(t wine_killer.done_gui "${total_killed}")" 2>/dev/null
-  else
-    zenity --info --text="$(t wine_killer.nothing_running_gui)" 2>/dev/null
-  fi
+if [[ "${total_killed}" -gt 0 ]]; then
+  zgu_cli_ok "$(t wine_killer.done_cli "${total_killed}")"
+  notify-send "$(t wine_killer.notify_title)" "$(t wine_killer.done_gui "${total_killed}")" 2>/dev/null
 else
-  if [[ "${total_killed}" -gt 0 ]]; then
-    zgu_cli_ok "$(t wine_killer.done_cli "${total_killed}")"
-  else
-    zgu_cli_ok "$(t wine_killer.nothing_running_cli)"
-  fi
+  zgu_cli_ok "$(t wine_killer.nothing_running_cli)"
 fi
 
 exit 0

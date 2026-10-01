@@ -9,25 +9,19 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
-# shellcheck source=./zgu-progress-utils.sh
-source "${script_dir}/zgu-progress-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
 # --- Analyse des arguments transmis par bin/lpm ---
-# $1 = mode ("click" = double-clic depuis le gestionnaire de fichiers, "cli" = commande
-#      terminal explicite, vide/absent = menu interactif Zenity sans cible)
+# $1 = mode (toujours "cli" désormais : bin/lpm n'a plus aucun point d'entrée interactif --
+#      conservé en position pour rester cohérent avec les autres scripts de lib/, mais sa
+#      valeur n'est plus lue ici)
 # $2 = confirm_flag ("yes" si -y)
 # $3 = allow_scripts_flag ("yes" si --allow-scripts)
 # $4 = ignore_hash_flag ("yes" si --ignore-hash)
 # $5, $6... = cibles (fichiers .zgp)
-mode="${1:-}"
 shift || true
 confirm_flag="${1:-}"
 shift || true
@@ -36,8 +30,6 @@ shift || true
 ignore_hash_flag="${1:-}"
 shift || true
 cli_targets=("$@")
-is_double_click=false
-[[ "${mode}" = "click" ]] && is_double_click=true
 
 # Configuration des chemins
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
@@ -73,21 +65,6 @@ for cmd in sqlite3 pv bsdtar; do
   fi
 done
 
-# zenity n'est requis que si on va effectivement afficher une fenêtre : c'est le cas
-# partout SAUF en mode CLI strict avec au moins une cible fournie sur la ligne de commande.
-will_use_zenity=true
-if [[ "${mode}" = "cli" ]] && [[ ${#cli_targets[@]} -gt 0 ]]; then
-  will_use_zenity=false
-fi
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  t install_game.zenity_missing
-  exit 1
-fi
-
-if [[ "${will_use_zenity}" = true ]]; then
-  zgu_start_focus_watcher
-fi
-
 # python3 lui-même est requis, distinctement de PyYAML ci-dessous : sans cette vérification
 # séparée, une machine sans python3 du tout recevait le même message "PyYAML manquant" qu'une
 # machine avec python3 mais sans le module, ce qui égarait l'utilisateur sur la vraie cause.
@@ -99,9 +76,6 @@ fi
 # PyYAML est utilisé pour lire/écrire le YAML embarqué (zgp-game-config.yml) : sans lui,
 # l'installation se poursuivait avant en silence avec un exécutable Lutris vide.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t install_game.pyyaml_missing_gui)"
-  fi
   zgu_cli_error "$(t install_game.pyyaml_missing_cli)"
   exit 1
 fi
@@ -115,11 +89,8 @@ pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
 # 3. Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout
 # aussi le cas des deux installées en même temps)
-install_game_display_mode="gui"
-[[ "${mode}" = "cli" ]] && install_game_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${install_game_display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
-  zgu_gui_error "$(t install_game.lutris_missing_gui)"
   t install_game.lutris_missing_cli
   exit 1
 fi
@@ -175,133 +146,39 @@ create_desktop=false
 # (toujours "true", sans équivalent --no-menu/--no-desktop).
 loadingscreen_enabled=true
 
-# Gestion Mode CLI strict vs Mode Interactif / Double-clic
-if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
-  # --- MODE CLI STRICT (depuis le terminal avec ou sans -y) ---
-  for target in "${cli_targets[@]}"; do
-    if [[ -f "${target}" ]]; then
-      filename=$(basename "${target}" .zgp)
-      games_to_install+=("${filename}")
-      filepath_by_name["${filename}"]="${target}"
-    else
-      zgu_cli_error "$(t install_game.file_not_found "${target}")"
-      exit 1
-    fi
-  done
-
-  # Gestion de la confirmation interactive si le flag -y n'est pas présent
-  if [[ "${confirm_flag}" != "yes" ]]; then
-    t install_game.confirm_cli_header
-    for name in "${games_to_install[@]}"; do
-      t install_game.confirm_cli_item "${name}" "${filepath_by_name[${name}]}"
-    done
-    read -r -p "$(t install_game.confirm_cli_prompt)" response
-    case "${response}" in
-      [nN])
-        t install_game.cancelled_cli
-        exit 0
-        ;;
-      *)
-        ;;
-    esac
-  fi
-
-  create_menu=true
-  create_desktop=true
-else
-  # --- MODE INTERACTIF / DOUBLE-CLIC (Avec interface graphique Zenity) ---
-  search_dir="."
-  targeted_file=""
-  if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = true ]]; then
-    search_dir="$(dirname "${cli_targets[0]}")"
-    targeted_file="${cli_targets[0]}"
+# Mode CLI strict uniquement (depuis le terminal avec ou sans -y) : bin/lpm n'a plus aucun
+# point d'entrée interactif, donc l'ancien menu Zenity/sélecteur de fichier/case à cocher
+# (mode menu ou double-clic) a été retiré ici.
+for target in "${cli_targets[@]}"; do
+  if [[ -f "${target}" ]]; then
+    filename=$(basename "${target}" .zgp)
+    games_to_install+=("${filename}")
+    filepath_by_name["${filename}"]="${target}"
   else
-    if ! selected_file=$(zenity --file-selection --title="$(t install_game.file_selection_title)" --file-filter="$(t install_game.file_selection_filter_name) (*.zgp) | *.zgp" 2>/dev/null) || [[ -z "${selected_file}" ]]; then
-        exit 0
-    fi
-    search_dir="$(dirname "${selected_file}")"
-    targeted_file="${selected_file}"
+    zgu_cli_error "$(t install_game.file_not_found "${target}")"
+    exit 1
   fi
+done
 
-  shopt -s nullglob
-  zgp_files=("${search_dir}"/*.zgp)
-
-  if [[ ${#zgp_files[@]} -eq 0 ]]; then
-      zenity --info --text="$(t install_game.no_zgp_found)" 2>/dev/null
-      exit 0
-  fi
-
-  # Seul le jeu explicitement ciblé (celui double-cliqué dans le gestionnaire de fichiers, ou
-  # celui choisi dans le sélecteur de fichier ci-dessus) est précoché ; les autres .zgp trouvés
-  # dans le même répertoire restent visibles dans la liste mais décochés, pour qu'on puisse les
-  # ajouter à la sélection sans que le simple fait d'en avoir d'autres à côté les installe tous
-  # par défaut. Avant ce correctif, ils étaient tous précochés systématiquement.
-  targeted_filename="$(basename "${targeted_file}" .zgp)"
-  checklist_values=()
-  for file in "${zgp_files[@]}"; do
-    filename=$(basename "${file}" .zgp)
-    filepath_by_name["${filename}"]="${file}"
-    if [[ "${filename}" == "${targeted_filename}" ]]; then
-      checklist_values+=( "TRUE" "${filename}" )
-    else
-      checklist_values+=( "FALSE" "${filename}" )
-    fi
+# Gestion de la confirmation interactive si le flag -y n'est pas présent
+if [[ "${confirm_flag}" != "yes" ]]; then
+  t install_game.confirm_cli_header
+  for name in "${games_to_install[@]}"; do
+    t install_game.confirm_cli_item "${name}" "${filepath_by_name[${name}]}"
   done
-
-  opt_menu_label="$(t install_game.shortcuts_opt_menu)"
-  opt_desktop_label="$(t install_game.shortcuts_opt_desktop)"
-  opt_allow_scripts_label="$(t install_game.shortcuts_opt_allow_scripts)"
-  # Même case, même libellé que l'écran équivalent de zgp-game-shortcutter.sh -- cochée par
-  # défaut (TRUE), contrairement à opt_allow_scripts_label juste au-dessus : voir
-  # lib/zgl-launcher-orchestrator.sh pour la conception, l'écran de chargement est une
-  # amélioration cosmétique par défaut, pas une décision de sécurité à activer avec prudence.
-  opt_loadingscreen_label="$(t install_game.shortcuts_opt_loadingscreen)"
-
-  # Quatrième option ajoutée à cet écran (déjà affiché une fois par lot, en mode menu ET
-  # double-clic) plutôt qu'un nouvel écran séparé : décochée par défaut (FALSE) pour
-  # opt_allow_scripts_label -- contrairement aux raccourcis, accepter des scripts automatiques
-  # est une décision de sécurité qui ne doit jamais être activée par mégarde.
-  # Code de sortie vérifié explicitement (comme pour zenity --file-selection plus haut) : sans
-  # ça, un clic sur "Annuler" ici renvoyait une chaîne vide en stdout -- indiscernable d'un OK
-  # avec toutes les cases décochées -- et le flux continuait tout droit vers la sélection des
-  # jeux puis l'installation, au lieu de s'arrêter net comme l'utilisateur s'y attendait.
-  if ! shortcuts_options=$(zenity --list --checklist --title="$(t install_game.shortcuts_title)" --text="$(t install_game.shortcuts_text)" --column="$(t install_game.shortcuts_col_create)" --column="$(t install_game.shortcuts_col_location)" --separator=$'\x1f' TRUE "${opt_menu_label}" TRUE "${opt_desktop_label}" TRUE "${opt_loadingscreen_label}" FALSE "${opt_allow_scripts_label}" --width=500 --height=300 2>/dev/null); then
-    exit 0
-  fi
-
-  if [[ "${shortcuts_options}" == *"${opt_menu_label}"* ]]; then
-    create_menu=true
-  fi
-  if [[ "${shortcuts_options}" == *"${opt_desktop_label}"* ]]; then
-    create_desktop=true
-  fi
-  loadingscreen_enabled=false
-  if [[ "${shortcuts_options}" == *"${opt_loadingscreen_label}"* ]]; then
-    loadingscreen_enabled=true
-  fi
-  if [[ "${shortcuts_options}" == *"${opt_allow_scripts_label}"* ]]; then
-    allow_scripts_flag="yes"
-  fi
-
-  # Bouton "Tout cocher/décocher" en plus de la liste (voir zgu-checklist-utils.sh). États
-  # individuels (zgu_gui_checklist_with_states, pas zgu_gui_checklist_toggle_all) puisque seul
-  # le jeu ciblé est précoché par défaut désormais, pas tous les .zgp du dossier -- voir
-  # checklist_values ci-dessus. Le bouton "Tout cocher/décocher" reste disponible pour cocher
-  # d'un coup tous les jeux trouvés si c'est bien ce qu'on veut.
-  selected_games=$(zgu_gui_checklist_with_states 1 \
-    "$(t install_game.select_title)" \
-    "$(t install_game.select_text)" \
-    600 400 \
-    "$(t install_game.select_col_install)" "$(t install_game.select_col_game)" \
-    -- \
-    "${checklist_values[@]}")
-
-  if [[ -z "${selected_games}" ]]; then
-    exit 0
-  fi
-
-  IFS=$'\x1f' read -r -a games_to_install <<< "${selected_games}"
+  read -r -p "$(t install_game.confirm_cli_prompt)" response
+  case "${response}" in
+    [nN])
+      t install_game.cancelled_cli
+      exit 0
+      ;;
+    *)
+      ;;
+  esac
 fi
+
+create_menu=true
+create_desktop=true
 
 # --- Vérification d'intégrité (sha256) de tout le lot, avant toute extraction ---
 #
@@ -320,21 +197,16 @@ if [[ "${ignore_hash_flag}" != "yes" ]]; then
   done
 
   if [[ ${#hash_mismatch_names[@]} -gt 0 ]]; then
-    if [[ "${will_use_zenity}" = true ]]; then
-      hash_mismatch_recap=""
-      for name in "${hash_mismatch_names[@]}"; do
-        hash_mismatch_recap+="$(t install_game.hash_mismatch_item "${name}")"
-      done
-      # "Installer quand même"/"Exclure ces jeux" plutôt que OK/Annuler par défaut : "Annuler"
-      # serait ambigu ici (annule tout le lot, ou juste les jeux au hash invalide ?). Avec ces
-      # deux libellés explicites, aucune confusion possible sur ce que chaque bouton fait.
-      if zenity --question --title="$(t install_game.hash_mismatch_title)" \
-           --text="$(t install_game.hash_mismatch_text)${hash_mismatch_recap}" \
-           --ok-label="$(t install_game.hash_mismatch_ok)" \
-           --cancel-label="$(t install_game.hash_mismatch_cancel)" \
-           --width=480 2>/dev/null; then
-        : # "Installer quand même" -- games_to_install reste tel quel, rien à faire
-      else
+    zgu_cli_error "$(t install_game.hash_mismatch_cli_header)"
+    for name in "${hash_mismatch_names[@]}"; do
+      zgu_cli_error "$(t install_game.hash_mismatch_cli_item "${name}")"
+    done
+    read -r -p "$(t install_game.hash_mismatch_cli_prompt)" hash_response
+    case "${hash_response}" in
+      [yY])
+        : # installer quand même, games_to_install reste tel quel
+        ;;
+      *)
         declare -A hash_excluded
         for name in "${hash_mismatch_names[@]}"; do
           hash_excluded["${name}"]=1
@@ -344,30 +216,8 @@ if [[ "${ignore_hash_flag}" != "yes" ]]; then
           [[ -n "${hash_excluded[${name}]:-}" ]] || hash_filtered_games+=("${name}")
         done
         games_to_install=("${hash_filtered_games[@]}")
-      fi
-    else
-      zgu_cli_error "$(t install_game.hash_mismatch_cli_header)"
-      for name in "${hash_mismatch_names[@]}"; do
-        zgu_cli_error "$(t install_game.hash_mismatch_cli_item "${name}")"
-      done
-      read -r -p "$(t install_game.hash_mismatch_cli_prompt)" hash_response
-      case "${hash_response}" in
-        [yY])
-          : # installer quand même, games_to_install reste tel quel
-          ;;
-        *)
-          declare -A hash_excluded
-          for name in "${hash_mismatch_names[@]}"; do
-            hash_excluded["${name}"]=1
-          done
-          hash_filtered_games=()
-          for name in "${games_to_install[@]}"; do
-            [[ -n "${hash_excluded[${name}]:-}" ]] || hash_filtered_games+=("${name}")
-          done
-          games_to_install=("${hash_filtered_games[@]}")
-          ;;
-      esac
-    fi
+        ;;
+    esac
   fi
 fi
 
@@ -377,28 +227,14 @@ fi
 
 # ---------------------------------------------------------------------------------------------
 
-# Fenêtre de progression PARTAGÉE pour tout le lot (voir zgu_batch_progress_open dans
-# zgu-progress-utils.sh) : ouverte une seule fois quand on est en mode graphique ET qu'il y a
-# PLUS D'UN jeu à installer -- sinon on garde le comportement actuel (une fenêtre par jeu,
-# déjà suffisant quand il n'y en a qu'un, et qui évite la complexité du mode lot pour rien).
-# Sans ça, un lot de plusieurs jeux ouvrait et refermait une fenêtre de progression par jeu
-# (extraction PUIS finalisation, donc deux fois par jeu), avec le focus qui revenait sans
-# arrêt au premier plan à chaque nouvelle fenêtre -- gênant pour un lot qu'on veut pouvoir
-# laisser tourner, déplacé dans un coin de l'écran, sans qu'il revienne réclamer l'attention.
-using_batch_window=false
-if { [[ ${#cli_targets[@]} -eq 0 ]] || [[ "${is_double_click}" = true ]]; } && [[ ${#games_to_install[@]} -gt 1 ]]; then
-  using_batch_window=true
-  zgu_batch_progress_open "$(t install_game.batch_progress_title "${#games_to_install[@]}")"
-fi
-
 install_idx=0
 # Compteur de réussites réelles, utilisé pour que le notify-send final reflète ce qui a VRAIMENT
 # été installé plutôt que d'annoncer systématiquement un succès total (bug réel rencontré par
 # l'utilisateur : 103 jeux cochés, 0 installés, message final disant pourtant "103 installés").
-# Un simple fichier plutôt qu'une variable de shell : run_post_install est parfois appelée à
-# l'intérieur d'un pipeline (branche "pulsate" ci-dessous, "run_post_install | zenity ..."), donc
-# dans un sous-shell -- toute variable qu'elle modifierait y resterait invisible une fois le
-# sous-shell terminé, alors qu'une écriture dans un fichier par chemin traverse cette frontière.
+# Un simple fichier plutôt qu'une variable de shell, par prudence si run_post_install venait à
+# être appelée depuis un sous-shell -- toute variable qu'elle modifierait y resterait invisible
+# une fois le sous-shell terminé, alors qu'une écriture dans un fichier par chemin traverse cette
+# frontière.
 install_success_file=$(mktemp)
 # Traitement de chaque jeu sélectionné
 for name in "${games_to_install[@]}"; do
@@ -409,60 +245,25 @@ for name in "${games_to_install[@]}"; do
   temp_extract_dir=$(mktemp -d "${games_dir}/.zgp-extract-XXXXXX")
   file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
 
-  if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
-    t install_game.importing_cli "${name}"
-    # bsdtar (et non tar -I zstd) : voir le commentaire sur la vérification des dépendances
-    # plus haut dans ce fichier pour le détail des protections SECURE_NODOTDOT/SECURE_SYMLINKS.
-    # umask 022 le temps de l'extraction : bsdtar préserve par défaut les bits de permission
-    # d'origine de l'archive, sans "--no-same-permissions". Sans ce garde-fou, un .zgp
-    # forgé par un tiers pouvait planter un fichier monde-inscriptible (777) dans le
-    # dossier de jeux -- exploitable par un autre utilisateur local sur une machine
-    # partagée -- ou un fichier illisible (000) pour saboter silencieusement l'installation.
-    _lpm_old_umask=$(umask)
-    umask 022
-    pv -s "${file_size:-0}" "${filepath}" | bsdtar -xf - -C "${temp_extract_dir}"
-    tar_exit="${PIPESTATUS[1]}"
-    umask "${_lpm_old_umask}"
-  else
-    # Délégué à zgu_gui_extract_zstd (voir zgu-progress-utils.sh) : même mécanisme pv que
-    # le bloc CLI ci-dessus, factorisé et partagé avec les autres scripts de lib/. Le statut
-    # de sortie de Zenity est vérifié : une annulation (statut 2) doit être distinguée des
-    # vrais échecs de tar plutôt que de tomber dans le même message "archive corrompue".
-    #
-    # En mode lot, le texte inclut le compteur "N/TOTAL : nom" -- zgu_gui_extract_zstd écrit
-    # alors dans la fenêtre PARTAGÉE (ZGU_BATCH_FD, ouverte plus haut) au lieu d'en ouvrir une
-    # à elle, voir ce fichier pour le détail.
-    decompress_text="$(t install_game.decompressing_gui_text)"
-    if [[ "${using_batch_window}" = true ]]; then
-      decompress_text="$(t install_game.batch_progress_item "${install_idx}" "${#games_to_install[@]}" "${name}" "${decompress_text}")"
-    fi
-    zgu_gui_extract_zstd "${filepath}" "${temp_extract_dir}" \
-      "$(t install_game.importing_gui_title "${name}")" \
-      "${decompress_text}"
-    extract_status=$?
-    if [[ "${extract_status}" -eq 2 ]]; then
-      rm -rf "${temp_extract_dir}"
-      # Annulation détectée via la fenêtre PARTAGÉE (mode lot) : contrairement à l'annulation
-      # d'une fenêtre individuelle (qui ne concernait que ce jeu, "continue" vers le suivant),
-      # ici l'utilisateur a fermé LA fenêtre qui couvre tout le lot -- plus aucun sens de
-      # continuer les jeux restants.
-      if [[ "${using_batch_window}" = true ]]; then
-        break
-      fi
-      continue
-    fi
-    tar_exit="${ZGU_LAST_TAR_EXIT:-1}"
-  fi
+  t install_game.importing_cli "${name}"
+  # bsdtar (et non tar -I zstd) : voir le commentaire sur la vérification des dépendances
+  # plus haut dans ce fichier pour le détail des protections SECURE_NODOTDOT/SECURE_SYMLINKS.
+  # umask 022 le temps de l'extraction : bsdtar préserve par défaut les bits de permission
+  # d'origine de l'archive, sans "--no-same-permissions". Sans ce garde-fou, un .zgp
+  # forgé par un tiers pouvait planter un fichier monde-inscriptible (777) dans le
+  # dossier de jeux -- exploitable par un autre utilisateur local sur une machine
+  # partagée -- ou un fichier illisible (000) pour saboter silencieusement l'installation.
+  _lpm_old_umask=$(umask)
+  umask 022
+  pv -s "${file_size:-0}" "${filepath}" | bsdtar -xf - -C "${temp_extract_dir}"
+  tar_exit="${PIPESTATUS[1]}"
+  umask "${_lpm_old_umask}"
 
   # 1bis. Vérification de l'intégrité de l'extraction : si tar a échoué (archive corrompue,
   # tronquée ou invalide), on abandonne proprement ce jeu sans toucher à Lutris ni créer de raccourcis
   if [[ "${tar_exit}" -ne 0 ]]; then
     err_msg="$(t install_game.corrupt_archive "${name}" "${tar_exit}")"
-    if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
-      echo "${err_msg}" >&2
-    else
-      zgu_gui_error "${err_msg}" "$(t install_game.corrupt_archive_title)"
-    fi
+    echo "${err_msg}" >&2
     zgu_log "install" "ERREUR" "fichier=${name} raison=archive_corrompue code=${tar_exit}"
     rm -rf "${temp_extract_dir}"
     continue
@@ -535,11 +336,7 @@ for name in "${games_to_install[@]}"; do
   # 3. Vérification stricte : si le préfixe existe déjà, on refuse catégoriquement l'installation
   if [[ -d "${prefix_dir}" ]]; then
     err_msg="$(t install_game.already_installed "${slug}")"
-    if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
-      echo "${err_msg}" >&2
-    else
-      zgu_gui_error "${err_msg}" "$(t install_game.already_installed_title)"
-    fi
+    echo "${err_msg}" >&2
     zgu_log "install" "ERREUR" "fichier=${name} slug=${slug} raison=deja_installe"
     rm -rf "${temp_extract_dir}"
     continue
@@ -548,11 +345,7 @@ for name in "${games_to_install[@]}"; do
   # 4. Déplacement définitif instantané (0 seconde)
   if ! mv "${temp_extract_dir}/${slug}" "${games_dir}/"; then
     err_msg="$(t install_game.move_failed "${name}")"
-    if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
-      echo "${err_msg}" >&2
-    else
-      zgu_gui_error "${err_msg}" "$(t install_game.move_failed_title)"
-    fi
+    echo "${err_msg}" >&2
     zgu_log "install" "ERREUR" "fichier=${name} slug=${slug} raison=deplacement_echoue"
     rm -rf "${temp_extract_dir}"
     continue
@@ -708,7 +501,7 @@ except Exception:
           # convention que les autres "t install_game.*" appeles depuis run_post_install,
           # ex. "install_game.finalizing" plus bas).
           t install_game.hooks_auto_allowed_cli "${game_real_name}"
-        elif [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
+        else
           t install_game.hooks_confirm_header_cli "${game_real_name}"
           while IFS=$'\x1f' read -r hook_path hook_value; do
             [[ -z "${hook_path}" ]] && continue
@@ -719,18 +512,6 @@ except Exception:
             [oOyY]) keep_hooks="yes" ;;
             *) keep_hooks="no" ;;
           esac
-        else
-          hooks_list_text=""
-          while IFS=$'\x1f' read -r hook_path hook_value; do
-            [[ -z "${hook_path}" ]] && continue
-            hooks_list_text+="$(t install_game.hooks_list_item_gui "${hook_path}" "${hook_value}")"
-          done <<< "${detected_hooks}"
-
-          if zenity --question --title="$(t install_game.hooks_confirm_title)" \
-            --text="$(t install_game.hooks_confirm_header_gui "${game_real_name}")${hooks_list_text}$(t install_game.hooks_confirm_footer_gui)" \
-            --width=550 2>/dev/null; then
-            keep_hooks="yes"
-          fi
         fi
       fi
 
@@ -869,24 +650,8 @@ EOF
     t install_game.finalizing
   }
 
-  if [[ ${#cli_targets[@]} -gt 0 ]] && [[ "${is_double_click}" = false ]]; then
-    run_post_install
-  elif [[ "${using_batch_window}" = true ]]; then
-    # Mode lot : pas de fenêtre "pulsate" séparée ici (Zenity ne permet pas de faire osciller
-    # une barre déjà en mode pourcentage sans fermer/rouvrir la fenêtre -- exactement ce qu'on
-    # cherche à éviter) -- on se contente de mettre à jour le texte de la fenêtre PARTAGÉE pour
-    # cette étape de finalisation, rapide, sans animation dédiée.
-    zgu_batch_progress_label "$(t install_game.batch_progress_item "${install_idx}" "${#games_to_install[@]}" "${name}" "$(t install_game.post_extraction_text)")"
-    run_post_install
-  else
-    (
-      run_post_install
-      sleep 0.3
-    ) | zenity --progress --title="$(t install_game.configuring_gui_title "${name}")" --text="$(t install_game.post_extraction_text)" --pulsate --auto-close --width=500 2>/dev/null
-  fi
+  run_post_install
 done
-
-[[ "${using_batch_window}" = true ]] && zgu_batch_progress_close
 
 # Notification finale reflétant le résultat RÉEL (voir le commentaire sur install_success_file
 # plus haut) : succès total, échec total, ou partiel -- plutôt que d'annoncer un succès total

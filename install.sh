@@ -63,6 +63,21 @@ else
   exit 1
 fi
 
+# 3bis. Copie de l'interface graphique GTK4/Libadwaita (gui/) + son lanceur (bin/lpm-gui)
+# -- facultative : l'absence de PyGObject/GTK4/Libadwaita sur la machine ne doit jamais
+# faire échouer l'installation du reste de lpm (CLI toujours pleinement fonctionnelle
+# sans elle, voir bin/lpm-gui qui vérifie lui-même ces dépendances à l'exécution).
+if [[ -d "gui" ]] && [[ -f "bin/lpm-gui" ]]; then
+  mkdir -p "${INSTALL_LIB_DIR}/gui"
+  cp -r gui/* "${INSTALL_LIB_DIR}/gui/"
+  chmod +x "${INSTALL_LIB_DIR}/gui"/*.py 2>/dev/null || true
+  cp bin/lpm-gui "${INSTALL_BIN_DIR}/lpm-gui"
+  chmod +x "${INSTALL_BIN_DIR}/lpm-gui"
+  echo "[OK] Interface graphique installée dans ${INSTALL_LIB_DIR}/gui (lancer avec : lpm-gui)"
+else
+  echo "[INFO] Interface graphique absente de ce paquet source, ignorée."
+fi
+
 # 3bis. Copie des icônes SVG propres à lpm (thème hicolor -- icône de l'appli, icône de
 # secours des raccourcis de jeux, et icônes des types MIME .zgp/.zgr). Les gabarits de fond
 # assets/icons/lutris-bg-template.svg (carré, style "appli") et assets/icons/box-bg-template.svg

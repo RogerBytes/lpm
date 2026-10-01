@@ -61,46 +61,30 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-lsfg-utils.sh
 source "${script_dir}/zgu-lsfg-utils.sh"
 
-# --- 0. Mode CLI vs GUI, et validation de la syntaxe CLI ---
-will_use_zenity=true
+# --- 0. Validation de la syntaxe CLI (bin/lpm n'a plus aucun point d'entrée interactif :
+# plus de menu/sélection Zenity, uniquement cette commande explicite en terminal) ---
 cli_action=""
 cli_slugs=()
 
-if [[ ${#cli_args[@]} -gt 0 ]]; then
-  will_use_zenity=false
-  last_arg="${cli_args[-1]}"
-  if [[ "${last_arg}" = "on" ]] || [[ "${last_arg}" = "off" ]]; then
-    cli_action="${last_arg}"
-    cli_slugs=("${cli_args[@]:0:$(( ${#cli_args[@]} - 1 ))}")
-  fi
-  if [[ -z "${cli_action}" ]] || [[ ${#cli_slugs[@]} -eq 0 ]]; then
-    zgu_cli_error "$(t lsfg.cli_usage)"
-    exit 1
-  fi
+last_arg="${cli_args[-1]:-}"
+if [[ "${last_arg}" = "on" ]] || [[ "${last_arg}" = "off" ]]; then
+  cli_action="${last_arg}"
+  cli_slugs=("${cli_args[@]:0:$(( ${#cli_args[@]} - 1 ))}")
 fi
-
-display_mode="gui"
-[[ "${will_use_zenity}" = false ]] && display_mode="cli"
+if [[ -z "${cli_action}" ]] || [[ ${#cli_slugs[@]} -eq 0 ]]; then
+  zgu_cli_error "$(t lsfg.cli_usage)"
+  exit 1
+fi
 
 zgp_lsfg_report_error_early() {
   local msg="$1"
-  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zgu_gui_error "${msg}"
-  fi
   echo "${msg}" >&2
 }
-
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t lsfg.zenity_missing)"
-  exit 1
-fi
 
 for cmd in python3 sqlite3; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
@@ -109,9 +93,6 @@ for cmd in python3 sqlite3; do
   fi
 done
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t lsfg.pyyaml_missing_gui)"
-  fi
   zgu_cli_error "$(t lsfg.pyyaml_missing_cli)"
   exit 1
 fi
@@ -125,7 +106,7 @@ lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/syste
 lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 games_dir="${HOME}/Games"
 
-version=$(zgu_resolve_lutris_version "${display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
   zgp_lsfg_report_error_early "$(t lsfg.lutris_missing)"
   exit 1
@@ -170,19 +151,10 @@ zgp_lsfg_install_flatpak() {
     return 1
   fi
 
-  if [[ "${will_use_zenity}" = true ]]; then
-    if ! zenity --question --title="$(t lsfg.install_title)" \
-      --text="$(t lsfg.install_flatpak_confirm "${runtime_version}")" \
-      --ok-label="$(t lsfg.btn_validate)" --cancel-label="$(t lsfg.btn_cancel)" \
-      --width=480 2>/dev/null; then
-      return 1
-    fi
-  else
-    t lsfg.install_flatpak_confirm_cli "${runtime_version}"
-    local response
-    read -r -p "$(t lsfg.confirm_prompt_cli)" response
-    [[ "${response}" =~ ^[oOyY] ]] || return 1
-  fi
+  t lsfg.install_flatpak_confirm_cli "${runtime_version}"
+  local response
+  read -r -p "$(t lsfg.confirm_prompt_cli)" response
+  [[ "${response}" =~ ^[oOyY] ]] || return 1
 
   local install_err
   install_err=$(zgu_lsfg_install_flatpak_do "${runtime_version}")
@@ -205,19 +177,10 @@ zgp_lsfg_install_native() {
 
   command -v xdg-open >/dev/null 2>&1 && xdg-open "${link}" >/dev/null 2>&1 &
 
-  if [[ "${will_use_zenity}" = true ]]; then
-    if ! zenity --question --title="$(t lsfg.install_title)" \
-      --text="$(t lsfg.install_native_confirm_gui "${label}" "${link}")" \
-      --ok-label="$(t lsfg.btn_validate)" --cancel-label="$(t lsfg.btn_cancel)" \
-      --width=520 2>/dev/null; then
-      return 1
-    fi
-  else
-    t lsfg.install_native_confirm_cli "${label}" "${link}"
-    local response
-    read -r -p "$(t lsfg.confirm_prompt_cli)" response
-    [[ "${response}" =~ ^[oOyY] ]] || return 1
-  fi
+  t lsfg.install_native_confirm_cli "${label}" "${link}"
+  local response
+  read -r -p "$(t lsfg.confirm_prompt_cli)" response
+  [[ "${response}" =~ ^[oOyY] ]] || return 1
 
   if ! zgp_lsfg_vk_present; then
     zgp_lsfg_report_error_early "$(t lsfg.native_still_missing)"
@@ -232,12 +195,8 @@ zgp_lsfg_ensure_dll() {
   [[ -f "${lsfg_dll_master}" ]] && return 0
 
   local candidate candidate_basename
-  if [[ "${will_use_zenity}" = true ]]; then
-    candidate=$(zenity --file-selection --title="$(t lsfg.dll_select_title)" 2>/dev/null)
-  else
-    t lsfg.dll_select_text_cli
-    read -r -p "$(t lsfg.dll_select_prompt_cli)" candidate
-  fi
+  t lsfg.dll_select_text_cli
+  read -r -p "$(t lsfg.dll_select_prompt_cli)" candidate
 
   [[ -z "${candidate}" ]] && return 1
   [[ -f "${candidate}" ]] || { zgp_lsfg_report_error_early "$(t lsfg.dll_not_found "${candidate}")"; return 1; }
@@ -268,25 +227,8 @@ if ! zgp_lsfg_vk_present; then
   fi
 fi
 
-# --- 4. Choix activer/désactiver ---
-if [[ -n "${cli_action}" ]]; then
-  action="${cli_action}"
-else
-  choice=$(zenity --list --radiolist \
-    --title="$(t lsfg.action_title)" \
-    --text="$(t lsfg.action_text)" \
-    --column="" --column="$(t lsfg.action_col)" \
-    TRUE "$(t lsfg.action_activate)" \
-    FALSE "$(t lsfg.action_deactivate)" \
-    --width=420 --height=250 2>/dev/null)
-  if [[ "${choice}" = "$(t lsfg.action_activate)" ]]; then
-    action="on"
-  elif [[ "${choice}" = "$(t lsfg.action_deactivate)" ]]; then
-    action="off"
-  else
-    exit 0
-  fi
-fi
+# --- 4. Choix activer/désactiver (CLI uniquement) ---
+action="${cli_action}"
 
 if [[ "${action}" = "on" ]]; then
   zgp_lsfg_ensure_dll || exit 0
@@ -348,72 +290,27 @@ done
 
 targets=()
 
-if [[ "${will_use_zenity}" = false ]]; then
-  # --- MODE CLI ---
-  declare -A eligible_lookup
-  for g_slug in "${eligible_slugs[@]}"; do
-    eligible_lookup["${g_slug}"]=1
-  done
+# --- Sélection des cibles (CLI uniquement : sélection graphique via Zenity retirée) ---
+declare -A eligible_lookup
+for g_slug in "${eligible_slugs[@]}"; do
+  eligible_lookup["${g_slug}"]=1
+done
 
-  for target_slug in "${cli_slugs[@]}"; do
-    if [[ -z "${name_by_slug[${target_slug}]:-}" ]]; then
-      zgu_cli_error "$(t lsfg.slug_not_found "${target_slug}")"
-      exit 1
-    fi
-    if [[ -z "${eligible_lookup[${target_slug}]:-}" ]]; then
-      if [[ "${action}" = "on" ]]; then
-        zgu_cli_error "$(t lsfg.already_active "${target_slug}")"
-      else
-        zgu_cli_error "$(t lsfg.already_inactive "${target_slug}")"
-      fi
-      exit 1
-    fi
-    targets+=("${target_slug}")
-  done
-else
-  # --- MODE GUI ---
-  if [[ ${#eligible_slugs[@]} -eq 0 ]]; then
-    if [[ "${action}" = "on" ]]; then
-      zenity --info --text="$(t lsfg.nothing_to_activate)" 2>/dev/null
-    else
-      zenity --info --text="$(t lsfg.nothing_to_deactivate)" 2>/dev/null
-    fi
-    exit 0
+for target_slug in "${cli_slugs[@]}"; do
+  if [[ -z "${name_by_slug[${target_slug}]:-}" ]]; then
+    zgu_cli_error "$(t lsfg.slug_not_found "${target_slug}")"
+    exit 1
   fi
-
-  # "zenity --list --checklist" sans "--print-column=ALL" n'imprime QUE la première colonne
-  # de valeur (le nom), jamais les colonnes suivantes (le slug) -- vérifié en conditions
-  # réelles (voir le bug rapporté : la sélection GUI ne faisait rien du tout, silencieusement,
-  # "targets" restant vide car le code lisait à tort une paire nom+slug entrelacée qui n'était
-  # jamais renvoyée). Même convention que zgp-game-uninstaller.sh/zgp-game-shortcutter.sh :
-  # on ne récupère QUE le nom depuis Zenity, puis on retrouve le slug via une table dédiée.
-  declare -A slug_by_name_eligible=()
-  checklist_values=()
-  for g_slug in "${eligible_slugs[@]}"; do
-    checklist_values+=("${name_by_slug[${g_slug}]}" "${g_slug}")
-    slug_by_name_eligible["${name_by_slug[${g_slug}]}"]="${g_slug}"
-  done
-
-  select_title="$(t lsfg.select_title_activate)"
-  [[ "${action}" = "off" ]] && select_title="$(t lsfg.select_title_deactivate)"
-
-  selected=$(zgu_gui_checklist_toggle_all "FALSE" 2 \
-    "${select_title}" \
-    "$(t lsfg.select_text)" \
-    650 450 \
-    "$(t lsfg.select_col_check)" "$(t lsfg.select_col_game)" "$(t lsfg.select_col_slug)" \
-    -- \
-    "${checklist_values[@]}")
-
-  [[ -z "${selected}" ]] && exit 0
-
-  IFS=$'\x1f' read -r -a selected_names <<< "${selected}"
-  for g_name in "${selected_names[@]}"; do
-    [[ -n "${slug_by_name_eligible[${g_name}]:-}" ]] && targets+=("${slug_by_name_eligible[${g_name}]}")
-  done
-
-  [[ ${#targets[@]} -eq 0 ]] && exit 0
-fi
+  if [[ -z "${eligible_lookup[${target_slug}]:-}" ]]; then
+    if [[ "${action}" = "on" ]]; then
+      zgu_cli_error "$(t lsfg.already_active "${target_slug}")"
+    else
+      zgu_cli_error "$(t lsfg.already_inactive "${target_slug}")"
+    fi
+    exit 1
+  fi
+  targets+=("${target_slug}")
+done
 
 # --- 6. Application : copie du DLL + fusion/retrait des variables d'env ---
 #
@@ -492,18 +389,10 @@ n_ok=0
 for target_slug in "${targets[@]}"; do
   if zgp_lsfg_apply_one "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}" "${action}"; then
     n_ok=$(( n_ok + 1 ))
-    [[ "${will_use_zenity}" = false ]] && zgu_cli_ok "$(t lsfg.done_one_cli "${name_by_slug[${target_slug}]}")"
+    zgu_cli_ok "$(t lsfg.done_one_cli "${name_by_slug[${target_slug}]}")"
   else
     exit_code=1
   fi
 done
-
-if [[ "${will_use_zenity}" = true ]]; then
-  if [[ "${n_ok}" -gt 0 ]]; then
-    zenity --info --text="$(t lsfg.done_gui "${n_ok}")" 2>/dev/null
-  elif [[ "${exit_code}" -eq 0 ]]; then
-    exit 0
-  fi
-fi
 
 exit "${exit_code}"

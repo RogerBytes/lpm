@@ -54,8 +54,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 
 # --- Commande Lutris finale : strictement celle utilisée en Exec= avant l'orchestrateur ---
 launch_lutris() {

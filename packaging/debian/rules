@@ -10,6 +10,11 @@ override_dh_install:
 	dh_install
 	chmod +x debian/lpm/usr/lib/lpm/*.sh
 	chmod +x debian/lpm/usr/bin/lpm
+	# Interface graphique GTK4/Libadwaita (gui/) + son lanceur (bin/lpm-gui) : même correctif
+	# de permissions que ci-dessus, et seulement si le paquet source les contient (voir
+	# lpm.install) -- "|| true" pour ne jamais faire échouer le build si absents.
+	chmod +x debian/lpm/usr/lib/lpm/gui/*.py 2>/dev/null || true
+	chmod +x debian/lpm/usr/bin/lpm-gui
 	# La complétion bash doit s'appeler exactement "lpm" (nom de la commande) : le format
 	# debian/*.install ne sait pas renommer un fichier, seulement choisir son dossier de
 	# destination -- on le copie donc ici, à la main, sous le bon nom.

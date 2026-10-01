@@ -18,20 +18,11 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-progress-utils.sh
-source "${script_dir}/zgu-progress-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
-# En mode interactif, "generate_hash_flag" (positionnel, --hash) n'existe pas : la décision
-# passe par une question Zenity dédiée plus bas (voir "GENERATE_HASH" juste avant la boucle
-# de compression). En CLI, --hash décide seul, sans question.
 GENERATE_HASH=false
 [[ "${generate_hash_flag}" = "yes" ]] && GENERATE_HASH=true
 
@@ -54,18 +45,12 @@ GAMES_DIR="${HOME}/Games"
 
 # Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout aussi
 # le cas des deux installées en même temps)
-pack_game_display_mode="gui"
-[[ ${#cli_games[@]} -gt 0 ]] && pack_game_display_mode="cli"
-lutris_version=$(zgu_resolve_lutris_version "${pack_game_display_mode}" "${lutris_package_db}" "")
+lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${lutris_version}" ]]; then
   # Détection explicite (alignée sur les autres scripts de lib/) : un repli silencieux
   # vers les chemins natifs donnerait un message "dossier introuvable" plus tard dans le
   # script, bien moins clair que la vraie cause (Lutris non installé).
-  if [[ ${#cli_games[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t pack_game.lutris_missing_cli)"
-  else
-    zgu_gui_error "$(t pack_game.lutris_missing_gui)"
-  fi
+  zgu_cli_error "$(t pack_game.lutris_missing_cli)"
   exit 1
 fi
 case "${lutris_version}" in
@@ -132,22 +117,13 @@ fi
 # Sans lui, le paquet pouvait être créé avec un zgp-game-config.yml non nettoyé (chemins
 # absolus, version de runner manquante) sans qu'aucune erreur ne soit visible.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ ${#cli_games[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t pack_game.pyyaml_missing_cli)"
-  else
-    zgu_gui_error "$(t pack_game.pyyaml_missing_gui)"
-  fi
+  zgu_cli_error "$(t pack_game.pyyaml_missing_cli)"
   exit 1
 fi
 
 if [[ ! -d "${GAMES_DIR}" ]]; then
-  if [[ ${#cli_games[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t pack_game.games_dir_missing "${GAMES_DIR}")"
-    exit 1
-  else
-    zgu_gui_error "$(t pack_game.games_dir_missing "${GAMES_DIR}")"
-    exit 1
-  fi
+  zgu_cli_error "$(t pack_game.games_dir_missing "${GAMES_DIR}")"
+  exit 1
 fi
 
 declare -A folder_by_name  # game_real_name -> chemin réel absolu du préfixe (depuis pga.db)
@@ -210,150 +186,50 @@ if [[ ${#cli_games[@]} -eq 1 ]] && [[ "${cli_games[0]}" = "--all" ]]; then
   cli_games=("${all_wine_slugs[@]}")
 fi
 
-# --- Mode CLI vs Mode Interactif ---
-if [[ ${#cli_games[@]} -gt 0 ]]; then
-  # --- MODE CLI (Pas de Zenity, 100% Terminal) ---
-  LEVEL="${compression_arg:-3}"
+# --- Sélection des jeux cibles ---
+# Ancien mode interactif Zenity (liste à cocher avec bouton "Tout cocher/décocher", puis
+# questions de compression/hash) supprimé : bin/lpm n'a plus aucun point d'entrée
+# interactif, "cli_games" est donc toujours non vide ici.
+LEVEL="${compression_arg:-3}"
 
-  for target_slug_raw in "${cli_games[@]}"; do
-    # basename() neutralise toute tentative de traversée de chemin ("../", chemin absolu...)
-    # dans le slug fourni en CLI, par cohérence avec le reste du projet.
-    target_slug=$(basename -- "${target_slug_raw}")
+for target_slug_raw in "${cli_games[@]}"; do
+  # basename() neutralise toute tentative de traversée de chemin ("../", chemin absolu...)
+  # dans le slug fourni en CLI, par cohérence avec le reste du projet.
+  target_slug=$(basename -- "${target_slug_raw}")
 
-    if [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
-      zgu_cli_error "$(t pack_game.slug_blacklisted_cli "${target_slug}")"
-      exit 1
-    fi
-
-    resolved_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
-    if [[ -z "${resolved_dir}" ]]; then
-      zgu_cli_error "$(t pack_game.folder_not_found_cli "${target_slug_raw}" "${GAMES_DIR}")"
-      exit 1
-    fi
-
-    game_real_name=""
-    if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
-      safe_target_slug="${target_slug//\'/\'\'}"
-      game_real_name=$(sqlite3 "${lutris_db_path}" "SELECT name FROM games WHERE slug='${safe_target_slug}' LIMIT 1;" 2>/dev/null)
-    fi
-    [[ -z "${game_real_name}" ]] && game_real_name="${target_slug}"
-
-    # Vérification anti-écrasement en CLI
-    archive_path="${OUTPUT_DIR}/${game_real_name}.zgp"
-    if [[ -f "${archive_path}" ]]; then
-      zgu_cli_error "$(t pack_game.archive_exists_cli "${game_real_name}" "${OUTPUT_DIR}")"
-      zgu_cli_error "$(t pack_game.archive_exists_hint)"
-      exit 1
-    fi
-
-    games_to_export+=("${game_real_name}")
-    folder_by_name["${game_real_name}"]="${resolved_dir}"
-    slug_by_name["${game_real_name}"]="${target_slug}"
-  done
-else
-  # --- MODE INTERACTIF (Avec Zenity) ---
-  if ! command -v zenity >/dev/null 2>&1; then
-    zgu_cli_error "$(t pack_game.zenity_missing)"
+  if [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
+    zgu_cli_error "$(t pack_game.slug_blacklisted_cli "${target_slug}")"
     exit 1
   fi
 
-  zgu_start_focus_watcher
-
-  if ! command -v sqlite3 >/dev/null 2>&1 || [[ ! -f "${lutris_db_path}" ]]; then
-    zenity --info --text="$(t pack_game.no_prefix_found "${GAMES_DIR}")" 2>/dev/null
-    exit 0
+  resolved_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
+  if [[ -z "${resolved_dir}" ]]; then
+    zgu_cli_error "$(t pack_game.folder_not_found_cli "${target_slug_raw}" "${GAMES_DIR}")"
+    exit 1
   fi
 
-  games_rows=$(sqlite3 "${lutris_db_path}" "SELECT slug || char(31) || name FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
-  if [[ -z "${games_rows}" ]]; then
-    zenity --info --text="$(t pack_game.no_prefix_found "${GAMES_DIR}")" 2>/dev/null
-    exit 0
+  game_real_name=""
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
+    safe_target_slug="${target_slug//\'/\'\'}"
+    game_real_name=$(sqlite3 "${lutris_db_path}" "SELECT name FROM games WHERE slug='${safe_target_slug}' LIMIT 1;" 2>/dev/null)
+  fi
+  [[ -z "${game_real_name}" ]] && game_real_name="${target_slug}"
+
+  # Vérification anti-écrasement en CLI
+  archive_path="${OUTPUT_DIR}/${game_real_name}.zgp"
+  if [[ -f "${archive_path}" ]]; then
+    zgu_cli_error "$(t pack_game.archive_exists_cli "${game_real_name}" "${OUTPUT_DIR}")"
+    zgu_cli_error "$(t pack_game.archive_exists_hint)"
+    exit 1
   fi
 
-  checklist_values=()
-  while IFS=$'\x1f' read -r row_slug row_name; do
-    [[ -z "${row_slug}" ]] && continue
-    [[ -n "${blacklisted_slugs[${row_slug}]:-}" ]] && continue
-
-    resolved_dir=$(resolve_prefix_dir_by_slug "${row_slug}")
-    [[ -z "${resolved_dir}" ]] && continue
-
-    game_real_name="${row_name}"
-    [[ -z "${game_real_name}" ]] && game_real_name="${row_slug}"
-
-    folder_by_name["${game_real_name}"]="${resolved_dir}"
-    slug_by_name["${game_real_name}"]="${row_slug}"
-    checklist_values+=( "${game_real_name}" )
-  done <<< "${games_rows}"
-
-  if [[ ${#checklist_values[@]} -eq 0 ]]; then
-    zenity --info --text="$(t pack_game.no_prefix_found "${GAMES_DIR}")" 2>/dev/null
-    exit 0
-  fi
-
-  # Bouton "Tout cocher/décocher" en plus de la liste (voir zgu-checklist-utils.sh).
-  selected_games=$(zgu_gui_checklist_toggle_all FALSE 1 \
-    "$(t pack_game.select_title)" \
-    "$(t pack_game.select_text)" \
-    500 400 \
-    "$(t pack_game.select_col_export)" "$(t pack_game.select_col_name)" \
-    -- \
-    "${checklist_values[@]}")
-
-  [[ -z "${selected_games}" ]] && exit 0
-
-  IFS=$'\x1f' read -r -a games_to_export <<< "${selected_games}"
-
-  # --- Vérification anti-écrasement en Mode Interactif ---
-  for game_real_name in "${games_to_export[@]}"; do
-    archive_path="${OUTPUT_DIR}/${game_real_name}.zgp"
-    if [[ -f "${archive_path}" ]]; then
-      # Appel Zenity avec --width=450, hors du gabarit standard de zgu_gui_error : on logue
-      # explicitement ici plutôt que de passer par elle, même effet, sans perdre --width.
-      zgu_log "zgp-game-packer" "ERREUR" "$(t pack_game.archive_exists_gui "${game_real_name}")"
-      zenity --error \
-        --title="$(t pack_game.archive_exists_title)" \
-        --text="$(t pack_game.archive_exists_gui "${game_real_name}")" \
-        --width=450 2>/dev/null
-      exit 1
-    fi
-  done
-
-  LEVEL=3
-  if zenity --question \
-    --title="$(t pack_game.compression_question_title)" \
-    --text="$(t pack_game.compression_question_text)" \
-    --width=400 2>/dev/null; then
-    if level_choice=$(zenity --scale \
-      --title="$(t pack_game.compression_scale_title)" \
-      --text="$(t pack_game.compression_scale_text)" \
-      --min-value=1 --max-value=22 --value=3 --step=1 --width=400 2>/dev/null); then
-      [[ -n "${level_choice}" ]] && LEVEL="${level_choice}"
-    fi
-  fi
-
-  if zenity --question \
-    --title="$(t pack_game.hash_question_title)" \
-    --text="$(t pack_game.hash_question_text)" \
-    --width=400 2>/dev/null; then
-    GENERATE_HASH=true
-  fi
-fi
-
-# Fenêtre de progression PARTAGÉE (voir zgu_batch_progress_open dans zgu-progress-utils.sh),
-# même principe que zgp-game-installer.sh : sans ça, plusieurs jeux sélectionnés ici ouvraient
-# et refermaient une fenêtre par jeu, avec le focus qui revenait sans arrêt au premier plan et
-# aucun compteur "N/Total" affiché.
-pack_using_batch=false
-if [[ ${#cli_games[@]} -eq 0 ]] && [[ ${#games_to_export[@]} -gt 1 ]]; then
-  pack_using_batch=true
-  zgu_batch_progress_open "$(t pack_game.batch_progress_title "${#games_to_export[@]}")"
-fi
-pack_idx=0
+  games_to_export+=("${game_real_name}")
+  folder_by_name["${game_real_name}"]="${resolved_dir}"
+  slug_by_name["${game_real_name}"]="${target_slug}"
+done
 
 # Traitement de chaque jeu sélectionné
 for game_real_name in "${games_to_export[@]}"; do
-  pack_idx=$((pack_idx + 1))
   WINEPREFIX_DIR="${folder_by_name[${game_real_name}]}"
   game_slug="${slug_by_name[${game_real_name}]}"
 
@@ -544,82 +420,45 @@ except Exception as e:
     zstd_opt="-${LEVEL}"
   fi
 
-  # --- EXÉCUTION DE LA COMPRESSION SELON LE MODE ---
-  if [[ ${#cli_games[@]} -gt 0 ]]; then
-    # MODE CLI : Utilisation de pv pour une barre textuelle propre si dispo, sinon simple message
-    t pack_game.compressing_cli "${ARCHIVE_NAME}" "${LEVEL}"
-    if command -v pv >/dev/null 2>&1; then
-      source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
-      [[ -z "${source_size}" ]] && source_size=0
-      
-      tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | pv -s "${source_size}" | zstd "${zstd_opt}" > "${archive_path}"
-      tar_exit="${PIPESTATUS[0]}"
-    else
-      tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | zstd "${zstd_opt}" > "${archive_path}"
-      tar_exit="${PIPESTATUS[0]}"
-    fi
+  # --- EXÉCUTION DE LA COMPRESSION --- (ancienne branche interactive déléguée à
+  # zgu_gui_compress_zstd supprimée : bin/lpm n'a plus aucun point d'entrée interactif)
+  # Utilisation de pv pour une barre textuelle propre si dispo, sinon simple message.
+  t pack_game.compressing_cli "${ARCHIVE_NAME}" "${LEVEL}"
+  if command -v pv >/dev/null 2>&1; then
+    source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
+    [[ -z "${source_size}" ]] && source_size=0
 
-    if [[ "${tar_exit}" -ne 0 ]] || [[ ! -s "${archive_path}" ]]; then
-      zgu_cli_error "$(t pack_game.compression_failed_cli "${ARCHIVE_NAME}")"
-      zgu_log "pack" "ERREUR" "slug=${game_slug} nom=${game_real_name} raison=compression_echouee code=${tar_exit}"
-      rm -f "${archive_path}"
-      exit 1
-    fi
-
-    # Le .zgp peut embarquer des données sensibles (registre Wine : clés de licence,
-    # chemins...) : restreint aux seuls droits du propriétaire pour éviter qu'un autre
-    # utilisateur local de la même machine puisse le lire avant un partage volontaire.
-    chmod 600 "${archive_path}"
-
-    if [[ "${GENERATE_HASH}" = true ]]; then
-      zgu_write_hash_sidecar "${archive_path}" "${OUTPUT_DIR}"
-    fi
-
-    zgu_log "pack" "OK" "slug=${game_slug} nom=${game_real_name} archive=${archive_path}"
-
-    zgu_cli_ok "$(t pack_game.done_cli "${archive_path}")"
+    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | pv -s "${source_size}" | zstd "${zstd_opt}" > "${archive_path}"
+    tar_exit="${PIPESTATUS[0]}"
   else
-    # MODE INTERACTIF : délégué à zgu_gui_compress_zstd (voir zgu-progress-utils.sh) :
-    # pourcentage réel piloté par pv sur le flux tar d'entrée, exactement le même mécanisme
-    # que le mode CLI ci-dessus.
-    pack_zen_text="$(t pack_game.export_text "${LEVEL}")"
-    if [[ "${pack_using_batch}" = true ]]; then
-      pack_zen_text="$(t pack_game.batch_progress_item "${pack_idx}" "${#games_to_export[@]}" "${ARCHIVE_NAME}" "${pack_zen_text}")"
-    fi
-    zgu_gui_compress_zstd "${PARENT_DIR}" "${WINEPREFIX_NAME}" "${archive_path}" "${LEVEL}" \
-      "$(t pack_game.export_title "${ARCHIVE_NAME}")" \
-      "${pack_zen_text}"
-    compress_status=$?
-
-    if [[ "${compress_status}" -eq 2 ]]; then
-      [[ "${pack_using_batch}" = true ]] && zgu_batch_progress_close
-      zgu_log "pack" "INFO" "slug=${game_slug} nom=${game_real_name} raison=annule_par_utilisateur"
-      zenity --info --title="$(t pack_game.cancel_title)" --text="$(t pack_game.cancel_text "${ARCHIVE_NAME}")" 2>/dev/null
-      exit 0
-    elif [[ "${compress_status}" -ne 0 ]]; then
-      [[ "${pack_using_batch}" = true ]] && zgu_batch_progress_close
-      zgu_log "pack" "ERREUR" "slug=${game_slug} nom=${game_real_name} raison=compression_echouee code=${compress_status}"
-      zgu_gui_error "$(t pack_game.compression_error "${ARCHIVE_NAME}")"
-      exit 1
-    fi
-
-    if [[ "${GENERATE_HASH}" = true ]]; then
-      zgu_write_hash_sidecar "${archive_path}" "${OUTPUT_DIR}"
-    fi
-
-    zgu_log "pack" "OK" "slug=${game_slug} nom=${game_real_name} archive=${archive_path}"
+    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | zstd "${zstd_opt}" > "${archive_path}"
+    tar_exit="${PIPESTATUS[0]}"
   fi
+
+  if [[ "${tar_exit}" -ne 0 ]] || [[ ! -s "${archive_path}" ]]; then
+    zgu_cli_error "$(t pack_game.compression_failed_cli "${ARCHIVE_NAME}")"
+    zgu_log "pack" "ERREUR" "slug=${game_slug} nom=${game_real_name} raison=compression_echouee code=${tar_exit}"
+    rm -f "${archive_path}"
+    exit 1
+  fi
+
+  # Le .zgp peut embarquer des données sensibles (registre Wine : clés de licence,
+  # chemins...) : restreint aux seuls droits du propriétaire pour éviter qu'un autre
+  # utilisateur local de la même machine puisse le lire avant un partage volontaire.
+  chmod 600 "${archive_path}"
+
+  if [[ "${GENERATE_HASH}" = true ]]; then
+    zgu_write_hash_sidecar "${archive_path}" "${OUTPUT_DIR}"
+  fi
+
+  zgu_log "pack" "OK" "slug=${game_slug} nom=${game_real_name} archive=${archive_path}"
+
+  zgu_cli_ok "$(t pack_game.done_cli "${archive_path}")"
 
   # Nettoyage des fichiers temporaires embarqués avant la fin
   rm -f "${WINEPREFIX_DIR}/zgp-game-config.yml"
 
 done
 
-[[ "${pack_using_batch}" = true ]] && zgu_batch_progress_close
-
-if [[ ${#cli_games[@]} -eq 0 ]]; then
-  notify-send "$(t pack_game.notify_title)" "$(t pack_game.notify_body)" 2>/dev/null
-else
-  zgu_cli_ok "$(t pack_game.cli_done)"
-fi
+zgu_cli_ok "$(t pack_game.cli_done)"
 exit 0

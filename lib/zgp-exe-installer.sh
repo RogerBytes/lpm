@@ -7,8 +7,6 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 
 # --- lpm exe-install : créer un prefix (comme "prefix vierge") puis lancer un
 # installateur Windows (.exe/.msi/.bat/.cmd) DEDANS, en conditions réelles (fenêtre
@@ -27,19 +25,66 @@ source "${script_dir}/zgu-focus-utils.sh"
 #   - code de sortie 0 -> sélection optionnelle du .exe final du jeu installé
 #     (sélecteur de fichier ouvert dans le prefix), puis écriture yml + pga.db
 #
-# $1 = mode ("cli" = commande terminal explicite, vide/absent = menu interactif Zenity)
+# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
+#      en position pour rester cohérent avec les autres scripts de lib/, mais sa valeur
+#      n'est plus lue ici)
 # $2 = confirm_flag ("yes" si -y -- ne s'applique qu'à la confirmation de lancement,
 #      jamais à la proposition de suppression en cas d'échec, qui est toujours posée)
 # $3 = cible CLI ("chemin/vers/setup.exe" ou "chemin/vers/setup.exe|Nom perso")
-mode="${1:-}"
+# $4+ = options reconnues après la cible CLI, toutes optionnelles (absence = comportement
+# actuel inchangé -- runner/arch par défaut, question interactive pour l'exécutable final).
+# Permettent à un appelant automatisé (future interface GTK4, script...) de fournir ces choix
+# d'avance, pour qu'aucun prompt interactif ne vienne jamais bloquer l'exécution :
+#   -r, --runner=<nom>              runner à utiliser (sinon : zgu_get_default_runner)
+#   -a, --arch=<win32|win64>        architecture du prefix (sinon : win64)
+#   -f, --final-exe=<chemin|none>   exécutable final du jeu installé ("none" = aucun, sans
+#                                    jamais poser la question en CLI)
 shift || true
 confirm_flag="${1:-}"
 shift || true
 cli_target="${1:-}"
+shift || true
 
-will_use_zenity=true
-if [[ "${mode}" = "cli" ]] && [[ -n "${cli_target}" ]]; then
-  will_use_zenity=false
+cli_runner=""
+cli_arch=""
+cli_final_exe=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -r|--runner)
+      cli_runner="${2:-}"
+      shift 2
+      ;;
+    --runner=*)
+      cli_runner="${1#--runner=}"
+      shift
+      ;;
+    -a|--arch)
+      cli_arch="${2:-}"
+      shift 2
+      ;;
+    --arch=*)
+      cli_arch="${1#--arch=}"
+      shift
+      ;;
+    -f|--final-exe)
+      cli_final_exe="${2:-}"
+      shift 2
+      ;;
+    --final-exe=*)
+      cli_final_exe="${1#--final-exe=}"
+      shift
+      ;;
+    *)
+      # Argument non reconnu : ignoré plutôt que de faire échouer tout le script --
+      # même tolérance que le reste du routeur lpm face à des options inconnues.
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "${cli_arch}" ]] && [[ "${cli_arch}" != "win32" ]] && [[ "${cli_arch}" != "win64" ]]; then
+  zgu_cli_error "$(t exe_install.invalid_arch_cli "${cli_arch}")"
+  exit 1
 fi
 
 # 1. Vérification des dépendances
@@ -50,19 +95,7 @@ for cmd in sqlite3 python3; do
   fi
 done
 
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  t create_prefix.zenity_missing
-  exit 1
-fi
-
-if [[ "${will_use_zenity}" = true ]]; then
-  zgu_start_focus_watcher
-fi
-
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t create_prefix.pyyaml_missing_gui)"
-  fi
   zgu_cli_error "$(t create_prefix.pyyaml_missing_cli)"
   exit 1
 fi
@@ -92,11 +125,8 @@ lutris_package_umu="${HOME}/.local/share/lutris/runtime/umu/umu-run"
 
 games_dir="${HOME}/Games"
 
-exe_install_display_mode="gui"
-[[ "${mode}" = "cli" ]] && exe_install_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${exe_install_display_mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${version}" ]]; then
-  zgu_gui_error "$(t create_prefix.lutris_missing_gui)"
   t create_prefix.lutris_missing_cli
   exit 1
 fi
@@ -133,7 +163,6 @@ mkdir -p "$(dirname "${lutris_db}")"
 mkdir -p "${games_dir}"
 
 if [[ ! -d "${runner_dir}" ]]; then
-  zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
   zgu_cli_error "$(t create_prefix.no_runners_found_cli "${runner_dir}")"
   exit 1
 fi
@@ -195,78 +224,13 @@ print(slug)
 '
 }
 
-# 4. Choix du runner et de l'architecture
-#
-# IMPORTANT : "zenity --forms --add-combo" n'a AUCUN moyen de présélectionner une
-# valeur (vérifié : --help-forms ne liste aucune option de valeur par défaut pour un
-# --add-combo). Le premier essai (placer le runner par défaut en tête de liste)
-# reposait sur l'idée que Zenity affiche la première valeur d'un menu déroulant par
-# défaut -- pas garanti sur toutes les versions de Zenity : rapporté vide par
-# l'utilisateur sur sa machine. Remplacé par "--list --radiolist", qui a un vrai
-# mécanisme de présélection explicite (TRUE/FALSE par ligne) -- vérifié avec un clic
-# automatisé réel (xdotool) sous Xvfb.
-runner_choice=""
-arch_choice="win64"
-
-if [[ "${will_use_zenity}" = true ]]; then
-  mapfile -t usable_runners < <(zgp_list_usable_runners)
-  if [[ ${#usable_runners[@]} -eq 0 ]]; then
-    zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
-    exit 1
-  fi
-
-  default_runner=$(zgu_get_default_runner)
-  is_default_usable=false
-  for r in "${usable_runners[@]}"; do
-    if [[ "${r}" = "${default_runner}" ]]; then
-      is_default_usable=true
-    fi
-  done
-
-  runner_rows=()
-  marked=false
-  for r in "${usable_runners[@]}"; do
-    if [[ "${is_default_usable}" = true ]] && [[ "${r}" = "${default_runner}" ]] && [[ "${marked}" = false ]]; then
-      runner_rows+=("TRUE" "${r}")
-      marked=true
-    else
-      runner_rows+=("FALSE" "${r}")
-    fi
-  done
-  if [[ "${marked}" = false ]] && [[ ${#runner_rows[@]} -gt 0 ]]; then
-    runner_rows[0]="TRUE"
-  fi
-
-  runner_choice=$(zenity --list --radiolist \
-    --title="$(t exe_install.forms_title)" \
-    --text="$(t exe_install.forms_text)
-$(t create_prefix.runner_select_text)" \
-    --column="" --column="$(t create_prefix.forms_runner_label)" \
-    --width=500 --height=400 \
-    "${runner_rows[@]}" 2>/dev/null)
-
-  if [[ -z "${runner_choice}" ]]; then
-    exit 0
-  fi
-
-  arch_choice=$(zenity --list --radiolist \
-    --title="$(t exe_install.forms_title)" \
-    --text="$(t create_prefix.arch_select_text)" \
-    --column="" --column="$(t create_prefix.forms_arch_label)" \
-    --width=400 --height=220 \
-    TRUE "win64" FALSE "win32" 2>/dev/null)
-
-  if [[ -z "${arch_choice}" ]]; then
-    exit 0
-  fi
-else
-  runner_choice=$(zgu_get_default_runner)
-  arch_choice="win64"
-fi
+# 4. Choix du runner et de l'architecture (CLI uniquement : sélection interactive via
+# Zenity retirée, bin/lpm n'a plus aucun point d'entrée interactif)
+runner_choice="${cli_runner:-$(zgu_get_default_runner)}"
+arch_choice="${cli_arch:-win64}"
 
 runner_type=$(zgp_detect_runner_type "${runner_dir}/${runner_choice}")
 if [[ "${runner_type}" = "unknown" ]]; then
-  zgu_gui_error "$(t create_prefix.unknown_runner_type "${runner_choice}")"
   zgu_cli_error "$(t create_prefix.unknown_runner_type_cli "${runner_choice}")"
   exit 1
 fi
@@ -274,107 +238,54 @@ fi
 umu_run_path=""
 if [[ "${runner_type}" = "proton" ]]; then
   if ! umu_run_path=$(zgp_find_umu_run); then
-    zgu_gui_error "$(t create_prefix.umu_missing_gui)"
     zgu_cli_error "$(t create_prefix.umu_missing_cli)"
     exit 1
   fi
 fi
 
-# 5. Choix du fichier d'installation + nom d'affichage + slug
-#
-# Zenity ne propose pas de champ "chemin + bouton Parcourir" combiné dans une même
-# fenêtre (vérifié : --help-forms ne liste aucun --add-file-selection). Et --forms
-# --add-entry ne permet pas non plus de pré-remplir un champ (aucune option de
-# valeur par défaut, contrairement à --add-combo). L'équivalent réaliste qui couvre
-# les deux usages demandés (choisir visuellement OU taper/corriger le chemin à la
-# main) est donc : un sélecteur de fichier standard, suivi de champs --entry
-# distincts (qui eux acceptent --entry-text pour pré-remplir), pour le chemin, le nom
-# ET le slug (calculé automatiquement à partir du nom, mais affiché et modifiable
-# avant de continuer -- même principe que le tableau de révision de "prefix vierge").
+# 5. Choix du fichier d'installation + nom d'affichage + slug (CLI uniquement :
+# sélecteur Zenity + champs --entry retirés, bin/lpm n'a plus aucun point d'entrée
+# interactif)
 exe_path=""
 display_name=""
 explicit_slug=""
 
-if [[ "${will_use_zenity}" = true ]]; then
-  picked_path=$(zenity --file-selection --title="$(t exe_install.browse_title)" \
-    --file-filter="$(t exe_install.browse_filter_label) | *.exe *.msi *.bat *.cmd" \
-    --file-filter="*" 2>/dev/null)
-
-  guessed_name=""
-  if [[ -n "${picked_path}" ]]; then
-    guessed_name="$(basename "${picked_path}")"
-    guessed_name="${guessed_name%.*}"
-  fi
-
-  entered_path=$(zenity --entry --title="$(t exe_install.edit_title)" \
-    --text="$(t exe_install.edit_path_label)" \
-    --entry-text="${picked_path}" --width=500 2>/dev/null)
-  path_status=$?
-  if [[ "${path_status}" -ne 0 ]]; then
-    exit 0
-  fi
-
-  entered_name=$(zenity --entry --title="$(t exe_install.edit_title)" \
-    --text="$(t exe_install.edit_name_label)" \
-    --entry-text="${guessed_name}" --width=500 2>/dev/null)
-  name_status=$?
-  if [[ "${name_status}" -ne 0 ]]; then
-    exit 0
-  fi
-
-  guessed_slug=$(zgp_slugify "${entered_name}")
-
-  entered_slug=$(zenity --entry --title="$(t exe_install.edit_title)" \
-    --text="$(t exe_install.edit_slug_label)" \
-    --entry-text="${guessed_slug}" --width=500 2>/dev/null)
-  slug_status=$?
-  if [[ "${slug_status}" -ne 0 ]]; then
-    exit 0
-  fi
-
-  exe_path="${entered_path}"
-  display_name="${entered_name}"
-  explicit_slug="${entered_slug}"
-else
-  if [[ -z "${cli_target}" ]]; then
-    zgu_cli_error "$(t exe_install.no_path_error_cli)"
-    exit 1
-  fi
-  if [[ "${cli_target}" == *"|"* ]]; then
-    exe_path="${cli_target%%|*}"
-    rest="${cli_target#*|}"
-    if [[ "${rest}" == *"|"* ]]; then
-      display_name="${rest%%|*}"
-      explicit_slug="${rest#*|}"
-    else
-      display_name="${rest}"
-    fi
+if [[ -z "${cli_target}" ]]; then
+  zgu_cli_error "$(t exe_install.no_path_error_cli)"
+  exit 1
+fi
+if [[ "${cli_target}" == *"|"* ]]; then
+  exe_path="${cli_target%%|*}"
+  rest="${cli_target#*|}"
+  if [[ "${rest}" == *"|"* ]]; then
+    display_name="${rest%%|*}"
+    explicit_slug="${rest#*|}"
   else
-    exe_path="${cli_target}"
-    display_name="$(basename "${exe_path}")"
-    display_name="${display_name%.*}"
+    display_name="${rest}"
   fi
+else
+  exe_path="${cli_target}"
+  display_name="$(basename "${exe_path}")"
+  display_name="${display_name%.*}"
 fi
 
 exe_path="${exe_path/#\~/${HOME}}"
 
 if [[ -z "${exe_path}" ]] || [[ ! -f "${exe_path}" ]]; then
-  zgu_gui_error "$(t exe_install.exe_not_found_gui "${exe_path}")"
   zgu_cli_error "$(t exe_install.exe_not_found_cli "${exe_path}")"
   exit 1
 fi
 
 if [[ -z "${display_name}" ]]; then
-  zgu_gui_error "$(t create_prefix.no_names_error)"
   zgu_cli_error "$(t create_prefix.no_names_error_cli)"
   exit 1
 fi
 
 # 6. Génération du slug (déduplication contre pga.db uniquement -- un seul jeu à la
-# fois ici, pas de lot). Le slug saisi/affiché à l'étape précédente (GUI) ou fourni
-# après le 2e "|" (CLI) est toujours repassé par zgp_slugify avant usage -- même
-# principe que le tableau de révision de "prefix vierge" : une valeur éditée à la
-# main ne doit jamais pouvoir contenir un caractère invalide.
+# fois ici, pas de lot). Le slug fourni après le 2e "|" (CLI) est toujours repassé
+# par zgp_slugify avant usage -- même principe que le tableau de révision de
+# "prefix vierge" : une valeur éditée à la main ne doit jamais pouvoir contenir un
+# caractère invalide.
 declare -A existing_slugs=()
 if [[ -f "${lutris_db}" ]]; then
   while IFS= read -r s; do
@@ -397,7 +308,6 @@ done
 prefix_dir="${games_dir}/${final_slug}"
 
 if [[ -d "${prefix_dir}" ]]; then
-  zgu_gui_error "$(t exe_install.prefix_exists_gui "${prefix_dir}")"
   zgu_cli_error "$(t exe_install.prefix_exists_cli "${prefix_dir}")"
   exit 1
 fi
@@ -405,7 +315,7 @@ fi
 # 7. Confirmation (uniquement pour lancer la création + l'installation -- la
 # proposition de suppression en cas d'échec, plus loin, est toujours posée quel que
 # soit -y).
-if [[ "${will_use_zenity}" = false ]] && [[ "${confirm_flag}" != "yes" ]]; then
+if [[ "${confirm_flag}" != "yes" ]]; then
   t exe_install.confirm_cli_header "${display_name}" "${final_slug}" "${exe_path}" "${runner_choice}" "${arch_choice}"
   read -r -p "$(t exe_install.confirm_cli_prompt)" response
   case "${response}" in
@@ -435,11 +345,7 @@ zgp_wait_for_prefix() {
 
 mkdir -p "${prefix_dir}"
 
-if [[ "${will_use_zenity}" = true ]]; then
-  t exe_install.init_progress_text "${display_name}"
-else
-  t exe_install.init_progress_cli "${display_name}"
-fi
+t exe_install.init_progress_cli "${display_name}"
 
 if [[ "${runner_type}" = "wine" ]]; then
   env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="winemenubuilder=" \
@@ -450,7 +356,6 @@ else
 fi
 
 if ! zgp_wait_for_prefix "${prefix_dir}"; then
-  zgu_gui_error "$(t exe_install.init_failed_gui)"
   zgu_cli_error "$(t exe_install.init_failed_cli)"
   rm -rf "${prefix_dir}"
   exit 1
@@ -458,14 +363,6 @@ fi
 
 # 9. Lancement réel de l'installateur, au premier plan, fenêtre visible -- on
 # attend sa fermeture (comme Lutris) puis on regarde son code de sortie.
-pulsate_pid=""
-if [[ "${will_use_zenity}" = true ]]; then
-  ( while true; do echo "#$(t exe_install.waiting_progress_text)"; sleep 1; done ) \
-    | zenity --progress --pulsate --no-cancel --title="$(t exe_install.waiting_title)" \
-      --text="$(t exe_install.waiting_progress_text)" 2>/dev/null &
-  pulsate_pid=$!
-fi
-
 if [[ "${runner_type}" = "wine" ]]; then
   env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" \
     "${runner_dir}/${runner_choice}/bin/wine" "${exe_path}"
@@ -476,49 +373,32 @@ else
   install_exit_code=$?
 fi
 
-if [[ -n "${pulsate_pid}" ]]; then
-  kill "${pulsate_pid}" 2>/dev/null
-  wait "${pulsate_pid}" 2>/dev/null
-fi
-
 # 10. Code de sortie non-zéro -> proposition de tout supprimer (toujours posée,
 # indépendamment de -y : c'est une action destructive irréversible).
 if [[ "${install_exit_code}" -ne 0 ]]; then
   wants_delete=false
-  if [[ "${will_use_zenity}" = true ]]; then
-    if zenity --question --title="$(t exe_install.error_title)" \
-      --text="$(t exe_install.error_delete_question "${install_exit_code}")" 2>/dev/null; then
-      wants_delete=true
-    fi
-  else
-    t exe_install.error_delete_cli "${install_exit_code}"
-    read -r -p "$(t exe_install.error_delete_prompt)" del_response
-    case "${del_response}" in
-      [oOyY]) wants_delete=true ;;
-      *) wants_delete=false ;;
-    esac
-  fi
+  t exe_install.error_delete_cli "${install_exit_code}"
+  read -r -p "$(t exe_install.error_delete_prompt)" del_response
+  case "${del_response}" in
+    [oOyY]) wants_delete=true ;;
+    *) wants_delete=false ;;
+  esac
 
   if [[ "${wants_delete}" = true ]]; then
     rm -rf "${prefix_dir}"
-    if [[ "${will_use_zenity}" = true ]]; then
-      zenity --info --text="$(t exe_install.deleted_gui)" 2>/dev/null
-    else
-      zgu_cli_ok "$(t exe_install.deleted_cli)"
-    fi
+    zgu_cli_ok "$(t exe_install.deleted_cli)"
     exit 0
   fi
   # Sinon, on continue quand même (l'utilisateur estime que ça a fonctionné malgré
   # le code de sortie).
 fi
 
-# 11. Sélection optionnelle du .exe final du jeu installé (ouverte dans le prefix)
+# 11. Sélection optionnelle du .exe final du jeu installé (CLI uniquement : sélecteur
+# Zenity retiré)
 final_executable=""
-if [[ "${will_use_zenity}" = true ]]; then
-  final_executable=$(zenity --file-selection --title="$(t exe_install.pick_exe_title)" \
-    --filename="${prefix_dir}/" \
-    --file-filter="$(t exe_install.browse_filter_label) | *.exe" \
-    --file-filter="*" 2>/dev/null)
+if [[ -n "${cli_final_exe}" ]]; then
+  # "none" explicite : aucun exécutable final, sans jamais poser la question.
+  [[ "${cli_final_exe}" != "none" ]] && final_executable="${cli_final_exe}"
 else
   t exe_install.pick_exe_cli
   read -r -p "$(t exe_install.pick_exe_prompt)" final_executable
@@ -572,11 +452,6 @@ VALUES (
 EOF
 
 # 13. Résumé final
-if [[ "${will_use_zenity}" = true ]]; then
-  zenity --info --title="$(t exe_install.summary_title)" --text="$(t exe_install.summary_done "${display_name}")" 2>/dev/null
-  notify-send "$(t exe_install.summary_title)" "$(t exe_install.summary_done "${display_name}")" 2>/dev/null
-else
-  zgu_cli_ok "$(t exe_install.summary_done "${display_name}")"
-fi
+zgu_cli_ok "$(t exe_install.summary_done "${display_name}")"
 
 exit 0

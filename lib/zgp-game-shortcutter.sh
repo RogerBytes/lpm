@@ -23,10 +23,6 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 
 # Configuration des chemins Lutris
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
@@ -46,27 +42,17 @@ lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 games_dir="${HOME}/Games"
 
-# 1. Vérification de sqlite3 (zenity uniquement requis en mode interactif)
+# 1. Vérification de sqlite3
 if ! command -v sqlite3 >/dev/null 2>&1; then
-  if [[ ${#cli_targets[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t shortcut.sqlite_missing)"
-  else
-    zgu_gui_error "$(t shortcut.sqlite_missing)"
-  fi
+  zgu_cli_error "$(t shortcut.sqlite_missing)"
   exit 1
 fi
 
 # 2. Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout
 # aussi le cas des deux installées en même temps)
-shortcut_display_mode="gui"
-[[ ${#cli_targets[@]} -gt 0 ]] && shortcut_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${shortcut_display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
-  if [[ ${#cli_targets[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t shortcut.lutris_missing)"
-  else
-    zgu_gui_error "$(t shortcut.lutris_missing)"
-  fi
+  zgu_cli_error "$(t shortcut.lutris_missing)"
   exit 1
 fi
 [[ "${version}" = "native" ]] && version="package"
@@ -102,11 +88,7 @@ if [[ -f "${lutris_system_file}" ]]; then
 fi
 
 if [[ ! -f "${lutris_db}" ]]; then
-  if [[ ${#cli_targets[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t shortcut.db_missing "${lutris_db}")"
-  else
-    zgu_gui_error "$(t shortcut.db_missing "${lutris_db}")"
-  fi
+  zgu_cli_error "$(t shortcut.db_missing "${lutris_db}")"
   exit 1
 fi
 
@@ -125,11 +107,7 @@ fi
 games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
 
 if [[ -z "${games_list}" ]]; then
-  if [[ ${#cli_targets[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t shortcut.none_found)"
-  else
-    zenity --info --text="$(t shortcut.none_found)" 2>/dev/null
-  fi
+  zgu_cli_error "$(t shortcut.none_found)"
   exit 0
 fi
 
@@ -175,11 +153,7 @@ while IFS=$'\x1f' read -r game_id game_name game_slug game_dir game_exe game_con
 done <<< "${games_list}"
 
 if [[ ${#sorted_game_names[@]} -eq 0 ]]; then
-  if [[ ${#cli_targets[@]} -gt 0 ]]; then
-    zgu_cli_error "$(t shortcut.none_found)"
-  else
-    zenity --info --text="$(t shortcut.none_found)" 2>/dev/null
-  fi
+  zgu_cli_error "$(t shortcut.none_found)"
   exit 0
 fi
 
@@ -194,88 +168,29 @@ create_desktop=false
 # marqueur "${game_dir}/.lpm-no-loadingscreen" en mode CLI.
 loadingscreen_enabled=true
 
-# --- Mode CLI vs Mode Interactif ---
-if [[ ${#cli_targets[@]} -gt 0 ]]; then
-  # --- MODE CLI (100% Terminal, zéro Zenity) ---
-  if [[ "${cli_targets[0]}" = "--all" ]]; then
-    games_to_process=("${sorted_game_names[@]}")
-  else
-    for target_slug in "${cli_targets[@]}"; do
-      found_name="${name_by_slug[${target_slug}]}"
-      if [[ -n "${found_name}" ]]; then
-        games_to_process+=("${found_name}")
-      elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
-        zgu_cli_error "$(t shortcut.slug_blacklisted "${target_slug}")"
-        exit 1
-      else
-        zgu_cli_error "$(t shortcut.slug_not_found "${target_slug}")"
-        exit 1
-      fi
-    done
-  fi
-
-  create_menu=true
-  create_desktop=true
+# --- Sélection des jeux ciblés ---
+# bin/lpm n'a plus aucun point d'entrée interactif : "lpm shortcut" exige toujours des slugs
+# (ou "--all") en ligne de commande -- l'ancien mode interactif (checklist Zenity listant tous
+# les jeux, puis écran menu/bureau/écran de chargement à cocher) a été retiré.
+if [[ "${cli_targets[0]}" = "--all" ]]; then
+  games_to_process=("${sorted_game_names[@]}")
 else
-  # --- MODE INTERACTIF (Avec Zenity) ---
-  if ! command -v zenity >/dev/null 2>&1; then
-    zgu_cli_error "$(t shortcut.zenity_missing)"
-    exit 1
-  fi
-
-  zgu_start_focus_watcher
-
-  checklist_values=()
-  for g_name in "${sorted_game_names[@]}"; do
-    checklist_values+=( "${g_name}" "${slug_by_name[${g_name}]}" )
+  for target_slug in "${cli_targets[@]}"; do
+    found_name="${name_by_slug[${target_slug}]}"
+    if [[ -n "${found_name}" ]]; then
+      games_to_process+=("${found_name}")
+    elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
+      zgu_cli_error "$(t shortcut.slug_blacklisted "${target_slug}")"
+      exit 1
+    else
+      zgu_cli_error "$(t shortcut.slug_not_found "${target_slug}")"
+      exit 1
+    fi
   done
-
-  # zgu_gui_checklist_toggle_all (voir zgu-checklist-utils.sh) : liste --checklist avec un
-  # bouton "Tout cocher/décocher" en plus. Tout coché par défaut (TRUE) : à la différence de
-  # la désinstallation, régénérer un raccourci n'a rien de destructif, donc partir de "tout
-  # sélectionné" est le comportement le plus pratique ici.
-  selected_games=$(zgu_gui_checklist_toggle_all TRUE 2 \
-    "$(t shortcut.select_title)" \
-    "$(t shortcut.select_text)" \
-    650 450 \
-    "$(t shortcut.select_col_create)" "$(t shortcut.select_col_game)" "$(t shortcut.select_col_slug)" \
-    -- \
-    "${checklist_values[@]}")
-
-  if [[ -z "${selected_games}" ]]; then
-    exit 0
-  fi
-
-  IFS=$'\x1f' read -r -a games_to_process <<< "${selected_games}"
-
-  # Écran menu/bureau : réutilise volontairement les mêmes libellés que l'écran équivalent de
-  # zgp-game-installer.sh (install_game.shortcuts_opt_menu/_opt_desktop/_col_create/
-  # _col_location) plutôt que d'en dupliquer une traduction séparée -- même case à cocher,
-  # même sens, les deux pré-cochées par défaut.
-  opt_menu_label="$(t install_game.shortcuts_opt_menu)"
-  opt_desktop_label="$(t install_game.shortcuts_opt_desktop)"
-  # Même case, mêmes libellés réutilisés qu'entre zgp-game-shortcutter.sh et
-  # zgp-game-installer.sh pour opt_menu_label/opt_desktop_label ci-dessus -- voir
-  # zgp-game-installer.sh pour l'écran équivalent à la création.
-  opt_loadingscreen_label="$(t install_game.shortcuts_opt_loadingscreen)"
-
-  shortcut_locations=$(zenity --list --checklist --title="$(t shortcut.locations_title)" --text="$(t shortcut.locations_text)" --column="$(t install_game.shortcuts_col_create)" --column="$(t install_game.shortcuts_col_location)" --separator=$'\x1f' TRUE "${opt_menu_label}" TRUE "${opt_desktop_label}" TRUE "${opt_loadingscreen_label}" --width=500 --height=250 2>/dev/null)
-
-  if [[ "${shortcut_locations}" == *"${opt_menu_label}"* ]]; then
-    create_menu=true
-  fi
-  if [[ "${shortcut_locations}" == *"${opt_desktop_label}"* ]]; then
-    create_desktop=true
-  fi
-  loadingscreen_enabled=false
-  if [[ "${shortcut_locations}" == *"${opt_loadingscreen_label}"* ]]; then
-    loadingscreen_enabled=true
-  fi
-
-  if [[ "${create_menu}" = false ]] && [[ "${create_desktop}" = false ]]; then
-    exit 0
-  fi
 fi
+
+create_menu=true
+create_desktop=true
 
 # 4. Génération effective des raccourcis (fonction partagée avec zgp-game-installer.sh --
 # voir zgu_write_game_shortcut dans zgu-desktop-utils.sh)
@@ -298,11 +213,7 @@ for game_name in "${games_to_process[@]}"; do
     : > "${game_prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
   fi
 
-  [[ ${#cli_targets[@]} -gt 0 ]] && t shortcut.created_cli "${game_name}"
+  t shortcut.created_cli "${game_name}"
 done
-
-if [[ ${#cli_targets[@]} -eq 0 ]]; then
-  zenity --info --text="$(t shortcut.done_gui "${#games_to_process[@]}")" 2>/dev/null
-fi
 
 exit 0

@@ -9,16 +9,19 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-github-release-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-progress-utils.sh
-source "${script_dir}/zgu-progress-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 # shellcheck source=./zgu-lsfg-utils.sh
 source "${script_dir}/zgu-lsfg-utils.sh"
 
 # --- Récupération des arguments du routeur lpm ---
-# $1 = mode ("cli" depuis le terminal, "gui" ou vide depuis le menu Zenity)
-mode="${1:-gui}"
+# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
+#      en position pour rester cohérent avec les autres scripts de lib/)
+# $2 = confirm_flag ("yes" si -y, même convention que zgc-wine-killer.sh) : saute la seule
+# vraie question de ce script (installer le runtime Flatpak lsfg-vk ?) sans jamais l'afficher
+# (plus de "read") -- nécessaire pour qu'un appelant automatisé (future interface graphique
+# GTK4, script, etc.) puisse lancer ce script sans qu'aucun prompt interactif ne vienne
+# jamais le bloquer.
+mode="${1:-cli}"
+confirm_flag="${2:-}"
 
 # Configuration des chemins Lutris
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
@@ -34,22 +37,14 @@ lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 # seul endroit à modifier pour changer le dépôt/la release des runners.
 
 say() {
-  if [[ "${mode}" = "cli" ]]; then
-    echo "$1"
-  else
-    zenity --info --text="$1" --width=450 2>/dev/null
-  fi
+  echo "$1"
 }
 
 say_err() {
-  # Point de passage unique pour toutes les erreurs de ce script (cli et gui) : un seul
-  # "zgu_log" ici couvre les deux modes, pas besoin d'un par site d'appel.
+  # Point de passage unique pour toutes les erreurs de ce script : un seul "zgu_log" ici
+  # suffit, pas besoin d'un par site d'appel.
   zgu_log "zgc-dependency-checker" "ERREUR" "$1"
-  if [[ "${mode}" = "cli" ]]; then
-    echo "$1" >&2
-  else
-    zenity --error --text="$1" --width=450 2>/dev/null
-  fi
+  echo "$1" >&2
 }
 
 # Présence d'AntimicroX (fork maintenu du projet "antimicro", voir
@@ -77,15 +72,6 @@ for cmd in sqlite3 python3 bsdtar sha256sum; do
   fi
 done
 
-if [[ "${mode}" != "cli" ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t check.zenity_missing_gui)"
-  exit 1
-fi
-
-if [[ "${mode}" != "cli" ]]; then
-  zgu_start_focus_watcher
-fi
-
 # curl OU wget est requis pour interroger la release GitHub des runners (section 5 plus bas).
 # Sans cette vérification explicite (alignée sur zgr-runner-remote-lister.sh et
 # zgr-runner-installer.sh), l'absence des deux outils faisait échouer zgu_fetch_url en
@@ -94,17 +80,6 @@ fi
 # l'absence d'outil réseau plutôt qu'une release GitHub introuvable.
 if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
   say_err "$(t check.network_tool_missing)"
-  exit 1
-fi
-
-# pv n'est requis ici qu'en mode GUI : extract_gui() (plus bas) délègue à
-# zgu_gui_extract_zstd (voir zgu-progress-utils.sh), qui appelle pv SANS repli possible en son
-# absence (contrairement à extract_cli() juste en dessous, qui bascule proprement sur un appel
-# bsdtar direct si pv est absent). Sans cette vérification, un pv manquant en mode GUI faisait
-# échouer l'extraction avec un message générique "runner non résolu", sans jamais indiquer que
-# la vraie cause était pv manquant.
-if [[ "${mode}" != "cli" ]] && ! command -v pv >/dev/null 2>&1; then
-  say_err "$(t check.cmd_missing "pv")"
   exit 1
 fi
 
@@ -118,11 +93,11 @@ fi
 
 # xdotool sur une session X11 : optionnel (jamais bloquant, ce n'est pas ici un paquet
 # absent qui casse une fonctionnalité entière), mais son absence dégradait plusieurs points
-# en silence -- le focus forcé des fenêtres Zenity (zgu-focus-utils.sh), la navigation
-# manette hors du picker (zgu-gamepad-nav-utils.sh) et surtout la détection réelle de la
-# fenêtre du jeu par l'orchestrateur de l'écran de chargement (lib/zgl-launcher-
-# orchestrator.sh), qui retombe alors sur une attente fixe de 12s au lieu de disparaître dès
-# que le jeu s'affiche vraiment. Non applicable sous Wayland (xdotool n'y fonctionne pas,
+# en silence -- la navigation manette dans le picker de repli de zgl-launcher-runtime.sh
+# (zgu-gamepad-nav-utils.sh) et surtout la détection réelle de la fenêtre du jeu par
+# l'orchestrateur de l'écran de chargement (lib/zgl-launcher-orchestrator.sh), qui retombe
+# alors sur une attente fixe de 12s au lieu de disparaître dès que le jeu s'affiche vraiment.
+# Non applicable sous Wayland (xdotool n'y fonctionne pas,
 # quelle que soit son installation -- ydotool est l'équivalent, déjà utilisé là où c'est
 # possible, voir les fichiers cités).
 session_kind_check="x11"
@@ -245,11 +220,7 @@ if [[ ${#lsfg_games[@]} -gt 0 ]]; then
   if ! zgu_lsfg_vk_present "${lutris_is_flatpak_bool}"; then
     lsfg_game_list=$(IFS=', '; echo "${lsfg_games[*]}")
 
-    if [[ "${mode}" = "cli" ]]; then
-      t check.lsfg_missing_cli "${lsfg_game_list}"
-    else
-      say "$(t check.lsfg_missing_gui "${lsfg_game_list}")"
-    fi
+    t check.lsfg_missing_cli "${lsfg_game_list}"
 
     if [[ "${lutris_is_flatpak_bool}" = true ]]; then
       lsfg_runtime_version=$(zgu_lsfg_resolve_freedesktop_runtime_version)
@@ -257,17 +228,14 @@ if [[ ${#lsfg_games[@]} -gt 0 ]]; then
         say_err "$(t lsfg.flatpak_runtime_unknown)"
       else
         lsfg_do_install=false
-        if [[ "${mode}" = "cli" ]]; then
+        if [[ "${confirm_flag}" = "yes" ]]; then
+          # -y déjà donné au lancement : on ne pose plus jamais cette question (plus de
+          # "read").
+          lsfg_do_install=true
+        else
           t lsfg.install_flatpak_confirm_cli "${lsfg_runtime_version}"
           read -r -p "$(t lsfg.confirm_prompt_cli)" lsfg_response
           [[ "${lsfg_response}" =~ ^[oOyY] ]] && lsfg_do_install=true
-        else
-          if zenity --question --title="$(t lsfg.install_title)" \
-            --text="$(t lsfg.install_flatpak_confirm "${lsfg_runtime_version}")" \
-            --ok-label="$(t lsfg.btn_validate)" --cancel-label="$(t lsfg.btn_cancel)" \
-            --width=480 2>/dev/null; then
-            lsfg_do_install=true
-          fi
         fi
 
         if [[ "${lsfg_do_install}" = true ]]; then
@@ -291,11 +259,7 @@ if [[ ${#antimicro_games[@]} -gt 0 ]]; then
   if ! zgu_antimicro_present; then
     antimicro_game_list=$(IFS=', '; echo "${antimicro_games[*]}")
 
-    if [[ "${mode}" = "cli" ]]; then
-      t check.antimicro_missing_cli "${antimicro_game_list}"
-    else
-      say "$(t check.antimicro_missing_gui "${antimicro_game_list}")"
-    fi
+    t check.antimicro_missing_cli "${antimicro_game_list}"
   fi
 fi
 
@@ -320,20 +284,17 @@ if [[ ${#missing_runners[@]} -eq 0 ]]; then
   exit 0
 fi
 
-if [[ "${mode}" = "cli" ]]; then
-  t check.missing_detected_header
-  for r in "${missing_runners[@]}"; do
-    t check.missing_detected_item "${r}" "${games_needing_runner[${r}]}"
-  done
-  echo ""
-fi
+t check.missing_detected_header
+for r in "${missing_runners[@]}"; do
+  t check.missing_detected_item "${r}" "${games_needing_runner[${r}]}"
+done
+echo ""
 
 # ---------------------------------------------------------------------------------------------
 # 5. Récupération unique de la liste des assets de la release GitHub (avec taille et digest SHA256)
 # ---------------------------------------------------------------------------------------------
 
 declare -A release_asset_url     # runner_name (sans .zgr) -> url de téléchargement
-declare -A release_asset_size    # runner_name (sans .zgr) -> taille en octets
 declare -A release_asset_digest  # runner_name (sans .zgr) -> "sha256:<hash>" (vide si non fourni par GitHub)
 
 api_url=$(zgu_github_api_url "${GITHUB_RELEASE_URL}")
@@ -358,7 +319,6 @@ except Exception:
   while IFS=$'\x1f' read -r asset_name download_url asset_size asset_digest; do
     [[ -z "${asset_name}" ]] && continue
     release_asset_url["${asset_name%.zgr}"]="${download_url}"
-    release_asset_size["${asset_name%.zgr}"]="${asset_size}"
     release_asset_digest["${asset_name%.zgr}"]="${asset_digest}"
   done <<< "${parsed_assets}"
 fi
@@ -392,29 +352,6 @@ download_cli() {
   echo "${dest}"
 }
 
-# Mince wrapper autour de zgu_gui_download (voir zgu-progress-utils.sh) : téléchargement
-# piloté par pv, pourcentage réel quand la taille de l'asset est connue, sans aucun
-# balayage disque périodique. Imprime le chemin du fichier téléchargé sur stdout en cas
-# de succès uniquement.
-download_gui() {
-  local url="$1" runner_name="$2" expected_size="${3:-0}"
-  # Texte optionnel (compteur "N/Total : nom -- etape") utilise en mode lot -- voir
-  # ZGU_BATCH_FD plus bas dans ce fichier. Vide hors lot : comportement inchange.
-  local batch_text="${4:-}"
-  local zen_text="${batch_text:-$(t check.download_gui_text)}"
-  local dest
-  # Voir le commentaire dans download_cli() ci-dessus : pas de "-u", même raison.
-  dest=$(mktemp "/tmp/${runner_name}-XXXXXX.zgr")
-
-  zgu_gui_download "${url}" "${dest}" "${expected_size}" \
-    "$(t check.download_gui_title "${runner_name}")" \
-    "${zen_text}"
-  local status=$?
-
-  [[ "${status}" -eq 0 ]] && echo "${dest}"
-  return "${status}"
-}
-
 # Vérifie le SHA256 d'une archive téléchargée par rapport au digest de la release GitHub
 # (calcul factorisé dans zgu_sha256_matches, voir lib/zgu-github-release-utils.sh).
 # Retourne 0 si la vérification passe (ou si aucun digest n'est disponible pour cet asset),
@@ -425,9 +362,9 @@ verify_checksum() {
 
   if [[ -z "${expected_digest}" ]]; then
     # Avertissement non bloquant (l'extraction se poursuit normalement juste après) :
-    # say() plutôt que say_err(), pour ne pas afficher une popup "erreur" zenity trompeuse
-    # alors qu'aucune vérification n'a en réalité échoué -- GitHub n'a simplement fourni
-    # aucun digest pour cet asset précis.
+    # say() plutôt que say_err(), pour ne pas afficher un message "erreur" trompeur alors
+    # qu'aucune vérification n'a en réalité échoué -- GitHub n'a simplement fourni aucun
+    # digest pour cet asset précis.
     say "$(t check.checksum_missing "${runner_name}")"
   fi
 
@@ -459,31 +396,6 @@ extract_cli() {
   [[ "${tar_exit}" -eq 0 ]] && [[ -d "${runner_dir}/${runner_name}" ]]
 }
 
-# Mince wrapper autour de zgu_gui_extract_zstd (voir zgu-progress-utils.sh) : pourcentage
-# réel piloté par pv sur le flux compressé d'entrée, sans balayage périodique du dossier
-# de sortie (un "du -sb" répété serait coûteux sur un runner volumineux). Sur annulation
-# ou échec, nettoie la cible avant de retourner.
-extract_gui() {
-  local archive_path="$1" runner_name="$2"
-  # Texte optionnel (compteur "N/Total : nom -- etape") utilise en mode lot -- voir
-  # ZGU_BATCH_FD plus bas dans ce fichier. Vide hors lot : comportement inchange.
-  local batch_text="${3:-}"
-  local zen_text="${batch_text:-$(t check.extract_gui_text)}"
-  local target_dir="${runner_dir}/${runner_name}"
-
-  zgu_gui_extract_zstd "${archive_path}" "${runner_dir}" \
-    "$(t check.extract_gui_title "${runner_name}")" \
-    "${zen_text}"
-  local status=$?
-
-  if [[ "${status}" -ne 0 ]]; then
-    rm -rf "${target_dir}"
-    return 1
-  fi
-
-  [[ -d "${target_dir}" ]]
-}
-
 # ---------------------------------------------------------------------------------------------
 # 7. Traitement de chaque runner manquant : recherche distante uniquement, pas de question locale
 # ---------------------------------------------------------------------------------------------
@@ -491,42 +403,15 @@ extract_gui() {
 resolved_runners=()
 unresolved_runners=()
 
-# Fenêtre de progression PARTAGÉE (voir zgu_batch_progress_open dans zgu-progress-utils.sh),
-# même principe que zgp-game-installer.sh : sans ça, plusieurs runners manquants résolus en
-# une passe ouvraient et refermaient DEUX fenêtres chacun (téléchargement puis extraction).
-check_using_batch=false
-if [[ "${mode}" != "cli" ]] && [[ ${#missing_runners[@]} -gt 1 ]]; then
-  check_using_batch=true
-  zgu_batch_progress_open "$(t check.batch_progress_title "${#missing_runners[@]}")"
-fi
-check_idx=0
-
 for runner_name in "${missing_runners[@]}"; do
-  check_idx=$((check_idx + 1))
   install_ok=false
 
   if [[ -n "${release_asset_url[${runner_name}]}" ]]; then
-    if [[ "${mode}" = "cli" ]]; then
-      archive_path=$(download_cli "${release_asset_url[${runner_name}]}" "${runner_name}")
-    else
-      dl_text=""
-      if [[ "${check_using_batch}" = true ]]; then
-        dl_text="$(t check.batch_progress_item "${check_idx}" "${#missing_runners[@]}" "${runner_name}" "$(t check.download_gui_text)")"
-      fi
-      archive_path=$(download_gui "${release_asset_url[${runner_name}]}" "${runner_name}" "${release_asset_size[${runner_name}]}" "${dl_text}")
-    fi
+    archive_path=$(download_cli "${release_asset_url[${runner_name}]}" "${runner_name}")
 
     if [[ -n "${archive_path}" ]]; then
       if verify_checksum "${archive_path}" "${runner_name}"; then
-        if [[ "${mode}" = "cli" ]]; then
-          extract_cli "${archive_path}" "${runner_name}" && install_ok=true
-        else
-          ex_text=""
-          if [[ "${check_using_batch}" = true ]]; then
-            ex_text="$(t check.batch_progress_item "${check_idx}" "${#missing_runners[@]}" "${runner_name}" "$(t check.extract_gui_text)")"
-          fi
-          extract_gui "${archive_path}" "${runner_name}" "${ex_text}" && install_ok=true
-        fi
+        extract_cli "${archive_path}" "${runner_name}" && install_ok=true
       fi
       rm -f "${archive_path}"
     fi
@@ -534,13 +419,11 @@ for runner_name in "${missing_runners[@]}"; do
 
   if [[ "${install_ok}" = true ]]; then
     resolved_runners+=("${runner_name}")
-    [[ "${mode}" = "cli" ]] && t check.runner_installed_success "${runner_name}"
+    t check.runner_installed_success "${runner_name}"
   else
     unresolved_runners+=("${runner_name}")
   fi
 done
-
-[[ "${check_using_batch}" = true ]] && zgu_batch_progress_close
 
 # ---------------------------------------------------------------------------------------------
 # 8. Récapitulatif final
@@ -564,22 +447,11 @@ for r in "${unresolved_runners[@]}"; do
 "
 done
 
-if [[ "${mode}" = "cli" ]]; then
-  echo ""
-  echo "=== $(t check.unresolved_header_cli) ==="
-  echo "${recap_names}"
-  t check.detail_label
-  echo "${recap_details}"
-  t check.manual_install_hint
-else
-  full_text="$(t check.unresolved_header_gui)
-
-${recap_names}
-$(t check.detail_label)
-${recap_details}
-$(t check.manual_install_hint)"
-
-  echo "${full_text}" | zenity --text-info --title="$(t check.unresolved_gui_title)" --width=550 --height=400 2>/dev/null
-fi
+echo ""
+echo "=== $(t check.unresolved_header_cli) ==="
+echo "${recap_names}"
+t check.detail_label
+echo "${recap_details}"
+t check.manual_install_hint
 
 exit 0

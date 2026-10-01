@@ -1,5 +1,5 @@
 Name:           lpm
-Version:        0.9.2
+Version:        0.9.3
 Release:        1%{?dist}
 Summary:        Package manager for Lutris
 
@@ -15,12 +15,13 @@ Requires:       python3-gobject
 Requires:       python3-evdev
 Requires:       SDL2
 Requires:       sqlite
-Requires:       zenity
 Requires:       zstd
 Requires:       bsdtar
 Requires:       desktop-file-utils
 Requires:       shared-mime-info
 Requires:       hicolor-icon-theme
+Requires:       gtk4 >= 4.10
+Requires:       libadwaita >= 1.4
 Recommends:     lutris
 Recommends:     wine
 Recommends:     winetricks
@@ -46,6 +47,15 @@ integration (icons, MIME types, shortcuts).
 rm -rf %{buildroot}
 
 install -Dm755 bin/lpm %{buildroot}/usr/bin/lpm
+
+# Interface graphique GTK4/Libadwaita (gui/) + son lanceur (bin/lpm-gui) : gtk4 et
+# libadwaita sont des dépendances obligatoires (voir Requires ci-dessus), donc bin/lpm et
+# bin/lpm-gui n'ont plus besoin de vérifier leur présence à l'exécution.
+install -Dm755 bin/lpm-gui %{buildroot}/usr/bin/lpm-gui
+install -d %{buildroot}/usr/lib/lpm/gui
+for f in gui/*.py; do
+  install -Dm755 "${f}" "%{buildroot}/usr/lib/lpm/gui/$(basename "${f}")"
+done
 
 install -d %{buildroot}/usr/lib/lpm
 for f in lib/*.sh; do
@@ -81,8 +91,10 @@ install -Dm644 packaging/common/lpm.xml %{buildroot}/usr/share/mime/packages/lpm
 %files
 %license LICENSE
 /usr/bin/lpm
+/usr/bin/lpm-gui
 /usr/lib/lpm/
 /usr/lib/lpm/data/
+/usr/lib/lpm/gui/
 /usr/share/bash-completion/completions/lpm
 /usr/share/zsh/site-functions/_lpm
 /usr/share/man/man1/lpm.1*
@@ -95,5 +107,10 @@ install -Dm644 packaging/common/lpm.xml %{buildroot}/usr/share/mime/packages/lpm
 /usr/share/mime/packages/lpm.xml
 
 %changelog
+* Thu Oct 01 2026 Harry <harry.richmond@rogerbytes.com> - 0.9.3-1
+- Remove all remaining Zenity code; lpm-gui (GTK4/Libadwaita) is now the sole GUI.
+- gtk4 and libadwaita become mandatory Requires (>= 4.10 / >= 1.4) instead of Recommends;
+  the GTK4/Libadwaita runtime check at launch is removed accordingly.
+
 * Tue Sep 29 2026 Harry <harry.richmond@rogerbytes.com> - 0.9.2-1
 - Initial RPM package release.

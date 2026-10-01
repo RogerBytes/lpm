@@ -45,15 +45,16 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 # shellcheck source=./zgu-gamepad-nav-utils.sh
 source "${script_dir}/zgu-gamepad-nav-utils.sh"
 
 bail() {
   local msg="$1"
+  # Pas de notification graphique ici (ancien "zenity --error" retiré) : ce cas est
+  # anormal mais déjà entièrement journalisé, et ce script ne doit JAMAIS bloquer le
+  # lancement du jeu (voir en-tête de fichier) -- une fenêtre d'erreur en plus n'aiderait
+  # pas à diagnostiquer après coup, le log ("lpm log") le fait déjà.
   zgu_log "launcher-runtime" "ERREUR" "gamedir=${gamedir} raison=${msg}"
-  command -v zenity >/dev/null 2>&1 && zenity --error --text="$(t launcher.runtime_error "${msg}")" --width=480 2>/dev/null &
   exit 0
 }
 
@@ -217,29 +218,27 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
     # --- Repli : l'orchestrateur n'a pas tourné (raccourci lpm contourné, jeu lancé
     # autrement) -- ce script affiche son propre picker, comme avant l'introduction du
     # fichier de choix, en mode dégradé (manette/focus best-effort, pas garantis fiables
-    # dans un Lutris Flatpak). ---
+    # dans un Lutris Flatpak). Même picker maison que l'orchestrateur (zgu-launcher-
+    # picker.py, GTK3, PAS Zenity -- voir zgl-launcher-orchestrator.sh pour le détail de ce
+    # choix) : dernier appel à zenity de tout le flux lancement retiré, pour rester cohérent
+    # même dans ce cas dégradé. Le picker gère lui-même son focus (set_keep_above +
+    # grab_focus, voir zgu-launcher-picker.py) : plus besoin du va-et-vient xdotool de
+    # zgu-focus-utils.sh ici (celui-ci ne surveillait de toute façon qu'une fenêtre
+    # Zenity, jamais une fenêtre GTK maison). ---
     set_indicator "IND_HIDE"
-    zgu_start_focus_watcher
     zgu_start_gamepad_nav
 
-    zenity_values=()
-    for lbl in "${entry_labels[@]}"; do
-      zenity_values+=("${lbl}")
-    done
-
-    selection=$(zenity --list \
-      --title="${title}" \
-      --text="${prompt}" \
-      --column="$(t launcher.picker_column)" \
-      "${zenity_values[@]}" \
-      --width=500 --height=400 2>/dev/null)
+    selection=$(python3 "${script_dir}/zgu-launcher-picker.py" \
+      "${title}" "${prompt}" \
+      "$(t launcher.picker_validate_button)" "$(t launcher.picker_cancel_button)" \
+      "${entry_labels[@]}" 2>/dev/null)
+    picker_rc=$?
 
     zgu_stop_gamepad_nav 2>/dev/null
-    zgu_stop_focus_watcher 2>/dev/null
     set_indicator "IND_SHOW"
 
     chosen_idx=-1
-    if [[ -n "${selection}" ]]; then
+    if [[ "${picker_rc}" -eq 0 ]] && [[ -n "${selection}" ]]; then
       for i in "${!entry_labels[@]}"; do
         if [[ "${entry_labels[$i]}" = "${selection}" ]]; then
           chosen_idx="${i}"

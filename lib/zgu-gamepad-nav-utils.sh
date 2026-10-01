@@ -1,21 +1,14 @@
 #!/bin/bash
 
-# --- Utilitaire partagé : navigation manette dans TOUS les dialogues Zenity de lpm ---
+# --- Utilitaire partagé : navigation manette dans un picker GTK3 maison ---
 #
-# À l'origine, le pont manette->clavier (zgu-gamepad-bridge.py, voir ce fichier pour le
-# détail du fonctionnement) n'était démarré que par l'écran de chargement d'un jeu
-# (zgl-launcher-orchestrator.sh), le temps de naviguer le picker multi-entrées. Étendu ici
-# à toute la session interactive de lpm : une manette permet désormais de naviguer
-# n'importe quel menu/dialogue Zenity de l'outil (menu principal, listes, checklists,
-# formulaires), pas seulement le picker au lancement d'un jeu.
-#
-# Démarré une seule fois par bin/lpm, juste avant la boucle du menu interactif principal --
-# exactement le même point d'intégration que zgu_start_focus_watcher (voir
-# zgu-focus-utils.sh), pour la même raison : bin/lpm ne fait pas "exec" vers les
-# sous-commandes qu'il lance depuis ce menu (contrairement au dispatch direct en ligne de
-# commande), donc son propre process survit d'un sous-menu à l'autre -- un seul appel ici
-# couvre donc TOUTE la session interactive, sans câblage supplémentaire dans chaque script
-# de sous-commande.
+# Le pont manette->clavier (zgu-gamepad-bridge.py, voir ce fichier pour le détail du
+# fonctionnement) n'est plus démarré que par le repli dégradé de zgl-launcher-runtime.sh
+# (l'orchestrateur n'a pas tourné), le temps de naviguer son picker multi-entrées
+# (zgu-launcher-picker.py) -- l'ancien menu interactif Zenity de bin/lpm, qui le démarrait
+# aussi pour toute la session, a été entièrement retiré (voir bin/lpm, plus aucun point
+# d'entrée interactif : la nouvelle interface GTK4/Libadwaita, lpm-gui, gère sa propre
+# navigation nativement).
 #
 # Absence de python3-evdev, ou aucune manette détectée au démarrage : le script
 # zgu-gamepad-bridge.py se termine de lui-même silencieusement (voir son propre code) --
@@ -44,12 +37,11 @@ zgu_start_gamepad_nav() {
   disown "${ZGU_GAMEPAD_NAV_PID}" 2>/dev/null
 
   # --- Ajout au trap EXIT existant plutôt que de l'écraser ---
-  # bin/lpm démarre déjà zgu_start_focus_watcher (zgu-focus-utils.sh) au même endroit, qui
-  # pose son propre "trap ... EXIT". Un "trap 'zgu_stop_gamepad_nav' EXIT" naïf ici
-  # remplacerait purement et simplement ce trap existant (bash n'empile pas les traps) --
-  # le focus watcher continuerait alors de tourner indéfiniment après la fin de bin/lpm.
-  # On récupère donc le trap EXIT déjà posé (s'il y en a un) et on y ajoute notre propre
-  # nettoyage, quel que soit l'ordre d'appel des deux fonctions "start_*".
+  # Un "trap 'zgu_stop_gamepad_nav' EXIT" naïf ici remplacerait purement et simplement un
+  # trap EXIT déjà posé par l'appelant (bash n'empile pas les traps) -- on récupère donc
+  # celui déjà en place (s'il y en a un) et on y ajoute notre propre nettoyage, par
+  # précaution, même si plus aucun autre appelant de ce projet n'en pose un au même point
+  # d'intégration aujourd'hui.
   local existing_trap
   existing_trap="$(trap -p EXIT | sed -e "s/^trap -- '//" -e "s/' EXIT$//")"
   if [[ -n "${existing_trap}" ]]; then

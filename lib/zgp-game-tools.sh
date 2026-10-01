@@ -38,38 +38,22 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 
 # --- Arguments ---
-# $1 = slug ciblé (optionnel -- sélection interactive dans une liste si absent)
-# $2 = outil ciblé, CLI pur, sans aucun zenity (optionnel -- menu radiolist si absent) :
+# $1 = slug ciblé (obligatoire -- bin/lpm n'a plus aucun point d'entrée interactif, plus de
+#      sélection dans une liste Zenity si absent)
+# $2 = outil ciblé (obligatoire, même raison) :
 #      winetricks | regedit | winecfg | console | exe | folder | favorite
 # $3 = chemin de l'exécutable (uniquement pour $2=exe), ou du dossier favori
-#      (uniquement pour $2=favorite), en CLI pur
+#      (uniquement pour $2=favorite) -- également obligatoire pour ces deux outils, même
+#      raison (plus de sélecteur de fichier Zenity de secours)
 cli_slug="${1:-}"
 cli_tool="${2:-}"
 cli_exe_path="${3:-}"
 
-# Cette feature a toujours besoin de zenity pour au moins une étape (sélection du jeu,
-# et/ou du fichier .exe ou du dossier favori), SAUF quand slug ET outil sont fournis en
-# CLI (et, pour "exe"/"favorite", le chemin aussi) : dans ce cas précis, tout se fait
-# sans aucune fenêtre.
-will_use_zenity=true
-if [[ -n "${cli_slug}" ]] && [[ -n "${cli_tool}" ]]; then
-  if [[ "${cli_tool}" != "exe" ]] && [[ "${cli_tool}" != "favorite" ]]; then
-    will_use_zenity=false
-  elif [[ -n "${cli_exe_path}" ]]; then
-    will_use_zenity=false
-  fi
-fi
-
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  t game_tools.zenity_missing
+if [[ -z "${cli_slug}" ]] || [[ -z "${cli_tool}" ]]; then
+  zgu_cli_error "$(t game_tools.cli_usage)"
   exit 1
-fi
-if [[ "${will_use_zenity}" = true ]]; then
-  zgu_start_focus_watcher
 fi
 
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -95,11 +79,8 @@ lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 lutris_flatpak_runtime_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runtime"
 lutris_package_runtime_dir="${HOME}/.local/share/lutris/runtime"
 
-game_tools_display_mode="gui"
-[[ "${will_use_zenity}" = false ]] && game_tools_display_mode="cli"
-lutris_version=$(zgu_resolve_lutris_version "${game_tools_display_mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
+lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${lutris_version}" ]]; then
-  zenity --error --text="$(t game_tools.lutris_missing_gui)" 2>/dev/null
   zgu_cli_error "$(t game_tools.lutris_missing_cli)"
   exit 1
 fi
@@ -128,7 +109,6 @@ if [[ -f "${lutris_system_file}" ]]; then
 fi
 
 if ! command -v sqlite3 >/dev/null 2>&1 || [[ ! -f "${lutris_db}" ]]; then
-  zenity --info --text="$(t game_tools.no_games_found "${games_dir}")" 2>/dev/null
   zgu_cli_error "$(t game_tools.no_games_found_cli "${games_dir}")"
   exit 1
 fi
@@ -149,66 +129,24 @@ resolve_prefix_dir_by_slug() {
   echo "${real_dir}"
 }
 
-# --- 1. Sélection du jeu (slug CLI fourni, ou liste interactive) ---
+# --- 1. Sélection du jeu (slug CLI uniquement : bin/lpm n'a plus aucun point d'entrée
+# interactif, plus de liste Zenity de secours si le slug est absent) ---
 #
 # Pas d'exclusion des jeux en prefixe partagé (Epic/EA/Ubisoft...) ici : contrairement
 # au pack (export) ou à l'uninstall, cette feature ne touche/n'exporte rien, elle se
 # contente de lancer des outils DANS le prefixe existant -- confirmé voulu ainsi.
 target_slug="" target_name="" target_configpath=""
 
-if [[ -n "${cli_slug}" ]]; then
-  target_slug=$(basename -- "${cli_slug}")
-  row=$(sqlite3 "${lutris_db}" "SELECT name || char(31) || configpath FROM games WHERE slug='${target_slug//\'/\'\'}' AND runner='wine' LIMIT 1;" 2>/dev/null)
-  if [[ -z "${row}" ]]; then
-    zgu_cli_error "$(t game_tools.slug_not_found_cli "${target_slug}")"
-    exit 1
-  fi
-  IFS=$'\x1f' read -r target_name target_configpath <<< "${row}"
-else
-  games_rows=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || name || char(31) || configpath FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
-  if [[ -z "${games_rows}" ]]; then
-    zenity --info --text="$(t game_tools.no_games_found "${games_dir}")" 2>/dev/null
-    exit 0
-  fi
-
-  declare -A slug_by_name configpath_by_name
-  radio_rows=()
-  first=true
-  while IFS=$'\x1f' read -r row_slug row_name row_configpath; do
-    [[ -z "${row_slug}" ]] && continue
-    resolved=$(resolve_prefix_dir_by_slug "${row_slug}") || continue
-    slug_by_name["${row_name}"]="${row_slug}"
-    configpath_by_name["${row_name}"]="${row_configpath}"
-    if [[ "${first}" = true ]]; then
-      radio_rows+=("TRUE" "${row_name}")
-      first=false
-    else
-      radio_rows+=("FALSE" "${row_name}")
-    fi
-  done <<< "${games_rows}"
-
-  if [[ ${#radio_rows[@]} -eq 0 ]]; then
-    zenity --info --text="$(t game_tools.no_games_found "${games_dir}")" 2>/dev/null
-    exit 0
-  fi
-
-  selected_name=$(zenity --list --radiolist \
-    --title="$(t game_tools.select_title)" \
-    --text="$(t game_tools.select_text)" \
-    --column="" --column="$(t game_tools.select_col_name)" \
-    --width=500 --height=450 \
-    "${radio_rows[@]}" 2>/dev/null)
-
-  [[ -z "${selected_name}" ]] && exit 0
-
-  target_name="${selected_name}"
-  target_slug="${slug_by_name[${selected_name}]}"
-  target_configpath="${configpath_by_name[${selected_name}]}"
+target_slug=$(basename -- "${cli_slug}")
+row=$(sqlite3 "${lutris_db}" "SELECT name || char(31) || configpath FROM games WHERE slug='${target_slug//\'/\'\'}' AND runner='wine' LIMIT 1;" 2>/dev/null)
+if [[ -z "${row}" ]]; then
+  zgu_cli_error "$(t game_tools.slug_not_found_cli "${target_slug}")"
+  exit 1
 fi
+IFS=$'\x1f' read -r target_name target_configpath <<< "${row}"
 
 prefix_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
 if [[ -z "${prefix_dir}" ]]; then
-  zenity --error --text="$(t game_tools.prefix_not_found_gui "${target_name}")" 2>/dev/null
   zgu_cli_error "$(t game_tools.prefix_not_found_cli "${target_name}")"
   exit 1
 fi
@@ -272,7 +210,6 @@ fi
 
 wine_bin=$(zgu_get_wine_binary "${runner_dir}" "${wine_version}")
 if [[ -z "${wine_bin}" ]]; then
-  zenity --error --text="$(t game_tools.runner_missing_gui "${wine_version}")" 2>/dev/null
   zgu_cli_error "$(t game_tools.runner_missing_cli "${wine_version}")"
   exit 1
 fi
@@ -320,12 +257,10 @@ zgt_already_running() {
 
 run_winetricks() {
   if [[ -z "${winetricks_bin}" ]]; then
-    zenity --error --text="$(t game_tools.winetricks_missing_gui)" 2>/dev/null
     zgu_cli_error "$(t game_tools.winetricks_missing_cli)"
     return 1
   fi
   if zgt_already_running "${winetricks_bin}"; then
-    zenity --error --text="$(t game_tools.already_running_gui "${target_name}")" 2>/dev/null
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
@@ -335,7 +270,6 @@ run_winetricks() {
 
 run_regedit() {
   if zgt_already_running 'regedit\.exe'; then
-    zenity --error --text="$(t game_tools.already_running_gui "${target_name}")" 2>/dev/null
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
@@ -345,7 +279,6 @@ run_regedit() {
 
 run_winecfg() {
   if zgt_already_running 'winecfg\.exe'; then
-    zenity --error --text="$(t game_tools.already_running_gui "${target_name}")" 2>/dev/null
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
@@ -397,13 +330,13 @@ run_console() {
 
 run_exe() {
   local exe_path="$1"
+  # Chemin obligatoire : bin/lpm n'a plus aucun point d'entrée interactif, plus de
+  # sélecteur de fichier Zenity de secours si absent.
   if [[ -z "${exe_path}" ]]; then
-    exe_path=$(zenity --file-selection --title="$(t game_tools.exe_selection_title)" \
-      --filename="${prefix_dir}/" 2>/dev/null)
-    [[ -z "${exe_path}" ]] && return 0
+    zgu_cli_error "$(t game_tools.exe_not_found_cli "${exe_path}")"
+    return 1
   fi
   if [[ ! -f "${exe_path}" ]]; then
-    zenity --error --text="$(t game_tools.exe_not_found_gui "${exe_path}")" 2>/dev/null
     zgu_cli_error "$(t game_tools.exe_not_found_cli "${exe_path}")"
     return 1
   fi
@@ -438,15 +371,14 @@ run_folder() {
 run_favorite() {
   local target_dir="$1" winepath_bin="" win_path
 
+  # Dossier obligatoire : bin/lpm n'a plus aucun point d'entrée interactif, plus de
+  # sélecteur de dossier Zenity de secours si absent.
   if [[ -z "${target_dir}" ]]; then
-    target_dir=$(zenity --file-selection --directory \
-      --title="$(t game_tools.favorite_selection_title)" \
-      --filename="${HOME}/" 2>/dev/null)
-    [[ -z "${target_dir}" ]] && return 0
+    zgu_cli_error "$(t game_tools.favorite_not_found_cli "${target_dir}")"
+    return 1
   fi
 
   if [[ ! -d "${target_dir}" ]]; then
-    zenity --error --text="$(t game_tools.favorite_not_found_gui "${target_dir}")" 2>/dev/null
     zgu_cli_error "$(t game_tools.favorite_not_found_cli "${target_dir}")"
     return 1
   fi
@@ -457,14 +389,12 @@ run_favorite() {
     winepath_bin="winepath"
   fi
   if [[ -z "${winepath_bin}" ]]; then
-    zenity --error --text="$(t game_tools.favorite_winepath_missing_gui)" 2>/dev/null
     zgu_cli_error "$(t game_tools.favorite_winepath_missing_cli)"
     return 1
   fi
 
   win_path=$(WINEPREFIX="${prefix_dir}" "${winepath_bin}" -w "${target_dir}" 2>/dev/null | tr -d '\r')
   if [[ -z "${win_path}" ]]; then
-    zenity --error --text="$(t game_tools.favorite_winepath_failed_gui "${target_dir}")" 2>/dev/null
     zgu_cli_error "$(t game_tools.favorite_winepath_failed_cli "${target_dir}")"
     return 1
   fi
@@ -472,88 +402,26 @@ run_favorite() {
   if WINEPREFIX="${prefix_dir}" "${wine_bin}" reg add \
       "HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Comdlg32\Placesbar" \
       /v Place0 /t REG_SZ /d "${win_path}" /f >/dev/null 2>&1; then
-    [[ "${will_use_zenity}" = true ]] && \
-      zenity --info --text="$(t game_tools.favorite_saved_gui "${target_dir}")" 2>/dev/null
     zgu_cli_ok "$(t game_tools.favorite_saved_cli "${target_name}" "${target_dir}")"
   else
-    zenity --error --text="$(t game_tools.favorite_reg_failed_gui)" 2>/dev/null
     zgu_cli_error "$(t game_tools.favorite_reg_failed_cli)"
     return 1
   fi
 }
 
-# --- 5. Choix de l'outil (CLI pur si déjà fourni, sinon menu radiolist) ---
-if [[ -n "${cli_tool}" ]]; then
-  case "${cli_tool}" in
-    winetricks) run_winetricks ;;
-    regedit) run_regedit ;;
-    winecfg) run_winecfg ;;
-    console) run_console ;;
-    exe) run_exe "${cli_exe_path}" ;;
-    folder) run_folder ;;
-    favorite) run_favorite "${cli_exe_path}" ;;
-    *)
-      zgu_cli_error "$(t game_tools.invalid_tool_cli "${cli_tool}")"
-      exit 1
-      ;;
-  esac
-  exit $?
-fi
-
-opt_winetricks="$(t game_tools.action_winetricks)"
-opt_regedit="$(t game_tools.action_regedit)"
-opt_winecfg="$(t game_tools.action_winecfg)"
-opt_console="$(t game_tools.action_console)"
-opt_exe="$(t game_tools.action_exe)"
-opt_folder="$(t game_tools.action_folder)"
-opt_favorite="$(t game_tools.action_favorite)"
-
-# Boucle sur le menu d'outils (au lieu d'un lancement unique suivi d'un exit) --
-# confirmé voulu ainsi : les outils se lancent en arrière-plan (zgt_launch_detached),
-# donc rien n'empêche d'en enchaîner plusieurs pour LE MÊME jeu (ex: winecfg puis
-# winetricks) sans avoir à retraverser tout le menu principal de lpm et re-sélectionner
-# le jeu à chaque fois. Le menu ne se referme (et lpm ne rend la main au menu principal)
-# que quand l'utilisateur annule explicitement (Annuler/Échap -- action_choice vide).
-while true; do
-  # Ré-évalué à CHAQUE tour (pas une seule fois avant la boucle) : l'état "en cours"
-  # peut changer entre deux affichages (l'utilisateur ferme Winetricks pendant qu'il
-  # regarde le menu, ou vient d'en ouvrir un autre juste avant). Uniquement pour les 3
-  # outils confirmés concernés (winetricks/regedit/winecfg) -- pas console/exe/folder,
-  # qui peuvent légitimement s'ouvrir plusieurs fois en parallèle sans conflit.
-  label_winetricks="${opt_winetricks}"
-  label_regedit="${opt_regedit}"
-  label_winecfg="${opt_winecfg}"
-  [[ -n "${winetricks_bin}" ]] && zgt_already_running "${winetricks_bin}" && \
-    label_winetricks="${opt_winetricks}$(t game_tools.running_suffix)"
-  zgt_already_running 'regedit\.exe' && \
-    label_regedit="${opt_regedit}$(t game_tools.running_suffix)"
-  zgt_already_running 'winecfg\.exe' && \
-    label_winecfg="${opt_winecfg}$(t game_tools.running_suffix)"
-
-  action_choice=$(zenity --list --radiolist \
-    --title="$(t game_tools.action_title "${target_name}")" \
-    --text="$(t game_tools.action_text)" \
-    --column="" --column="$(t game_tools.action_col)" \
-    --width=450 --height=380 \
-    TRUE "${label_winetricks}" \
-    FALSE "${label_regedit}" \
-    FALSE "${label_winecfg}" \
-    FALSE "${opt_console}" \
-    FALSE "${opt_exe}" \
-    FALSE "${opt_folder}" \
-    FALSE "${opt_favorite}" 2>/dev/null)
-
-  [[ -z "${action_choice}" ]] && break
-
-  case "${action_choice}" in
-    "${label_winetricks}") run_winetricks ;;
-    "${label_regedit}") run_regedit ;;
-    "${label_winecfg}") run_winecfg ;;
-    "${opt_console}") run_console ;;
-    "${opt_exe}") run_exe "" ;;
-    "${opt_folder}") run_folder ;;
-    "${opt_favorite}") run_favorite "" ;;
-  esac
-done
-
-exit 0
+# --- 5. Choix de l'outil (CLI uniquement : bin/lpm n'a plus aucun point d'entrée
+# interactif, le menu radiolist de secours a été entièrement retiré) ---
+case "${cli_tool}" in
+  winetricks) run_winetricks ;;
+  regedit) run_regedit ;;
+  winecfg) run_winecfg ;;
+  console) run_console ;;
+  exe) run_exe "${cli_exe_path}" ;;
+  folder) run_folder ;;
+  favorite) run_favorite "${cli_exe_path}" ;;
+  *)
+    zgu_cli_error "$(t game_tools.invalid_tool_cli "${cli_tool}")"
+    exit 1
+    ;;
+esac
+exit $?

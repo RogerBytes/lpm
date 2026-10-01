@@ -7,8 +7,6 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-focus-utils.sh
-source "${script_dir}/zgu-focus-utils.sh"
 
 # --- lpm create-prefix : créer un ou plusieurs wineprefixes vierges enregistrés dans
 # Lutris, sans passer par l'assistant d'installation (pas de script, pas d'exécutable
@@ -28,21 +26,34 @@ source "${script_dir}/zgu-focus-utils.sh"
 #     runner Wine classique (bin/wine présent) d'un Proton (toolmanifest.vdf présent,
 #     pas de bin/ à la racine).
 #
-# $1 = mode ("cli" = commande terminal explicite, vide/absent = menu interactif Zenity)
+# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
+#      en position pour rester cohérent avec les autres scripts de lib/)
 # $2 = confirm_flag ("yes" si -y)
-# $3, $4... = cibles CLI ("Nom affiché" ou "Nom affiché|slug-personnalise")
+# Reste des arguments = cibles CLI ("Nom affiché" ou "Nom affiché|slug-personnalise"), plus
+# optionnellement -r|--runner <nom> et -a|--arch <win32|win64> (même convention que
+# zgp-exe-installer.sh) pour choisir explicitement le runner/l'architecture -- sinon on
+# retombe sur zgu_get_default_runner / "win64".
 mode="${1:-}"
 shift || true
 confirm_flag="${1:-}"
 shift || true
-cli_targets=("$@")
 
-# zenity n'est requis que si on va effectivement afficher une fenêtre : cas de tout
-# SAUF le mode CLI strict avec au moins une cible fournie sur la ligne de commande
-# (même logique que zgp-game-installer.sh).
-will_use_zenity=true
-if [[ "${mode}" = "cli" ]] && [[ ${#cli_targets[@]} -gt 0 ]]; then
-  will_use_zenity=false
+cli_runner=""
+cli_arch=""
+cli_targets=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -r|--runner) cli_runner="${2:-}"; shift 2 ;;
+    --runner=*) cli_runner="${1#--runner=}"; shift ;;
+    -a|--arch) cli_arch="${2:-}"; shift 2 ;;
+    --arch=*) cli_arch="${1#--arch=}"; shift ;;
+    *) cli_targets+=("$1"); shift ;;
+  esac
+done
+
+if [[ "${mode}" = "cli" ]] && [[ -n "${cli_arch}" ]] && [[ "${cli_arch}" != "win32" ]] && [[ "${cli_arch}" != "win64" ]]; then
+  zgu_cli_error "$(t create_prefix.invalid_arch_cli "${cli_arch}")"
+  exit 1
 fi
 
 # 1. Vérification des dépendances : sqlite3/python3/PyYAML systématiquement (le
@@ -56,19 +67,7 @@ for cmd in sqlite3 python3; do
   fi
 done
 
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  t create_prefix.zenity_missing
-  exit 1
-fi
-
-if [[ "${will_use_zenity}" = true ]]; then
-  zgu_start_focus_watcher
-fi
-
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t create_prefix.pyyaml_missing_gui)"
-  fi
   zgu_cli_error "$(t create_prefix.pyyaml_missing_cli)"
   exit 1
 fi
@@ -104,11 +103,8 @@ lutris_package_umu="${HOME}/.local/share/lutris/runtime/umu/umu-run"
 
 games_dir="${HOME}/Games"
 
-prefix_creator_display_mode="gui"
-[[ "${mode}" = "cli" ]] && prefix_creator_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${prefix_creator_display_mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${version}" ]]; then
-  zgu_gui_error "$(t create_prefix.lutris_missing_gui)"
   t create_prefix.lutris_missing_cli
   exit 1
 fi
@@ -145,7 +141,6 @@ mkdir -p "$(dirname "${lutris_db}")"
 mkdir -p "${games_dir}"
 
 if [[ ! -d "${runner_dir}" ]]; then
-  zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
   zgu_cli_error "$(t create_prefix.no_runners_found_cli "${runner_dir}")"
   exit 1
 fi
@@ -234,82 +229,14 @@ print(slug)
 
 # 4. Choix du runner et de l'architecture
 #
-# IMPORTANT : "zenity --forms --add-combo" n'a AUCUN moyen de présélectionner une
-# valeur (vérifié : --help-forms ne liste aucune option de valeur par défaut pour un
-# --add-combo). Le premier essai (placer le runner par défaut en tête de liste)
-# reposait sur l'idée que Zenity affiche la première valeur d'un menu déroulant par
-# défaut -- vrai sur certaines versions de GTK4 (vérifié avec un GtkDropDown réel
-# sous Xvfb), mais PAS garanti sur toutes les versions de Zenity : rapporté vide par
-# l'utilisateur sur sa machine. Remplacé par "--list --radiolist", qui a un vrai
-# mécanisme de présélection explicite (TRUE/FALSE par ligne, comme les cases à
-# cocher utilisées ailleurs dans le projet) -- vérifié avec un clic automatisé réel
-# (xdotool) sous Xvfb : la ligne marquée TRUE est bien celle sélectionnée et
-# renvoyée, sans ambiguïté possible liée à la version de Zenity.
-runner_choice=""
-arch_choice="win64"
-
-if [[ "${will_use_zenity}" = true ]]; then
-  mapfile -t usable_runners < <(zgp_list_usable_runners)
-  if [[ ${#usable_runners[@]} -eq 0 ]]; then
-    zgu_gui_error "$(t create_prefix.no_runners_found "${runner_dir}")"
-    exit 1
-  fi
-
-  default_runner=$(zgu_get_default_runner)
-  is_default_usable=false
-  for r in "${usable_runners[@]}"; do
-    if [[ "${r}" = "${default_runner}" ]]; then
-      is_default_usable=true
-    fi
-  done
-
-  runner_rows=()
-  marked=false
-  for r in "${usable_runners[@]}"; do
-    if [[ "${is_default_usable}" = true ]] && [[ "${r}" = "${default_runner}" ]] && [[ "${marked}" = false ]]; then
-      runner_rows+=("TRUE" "${r}")
-      marked=true
-    else
-      runner_rows+=("FALSE" "${r}")
-    fi
-  done
-  # Si le runner par défaut de Lutris n'est pas (ou plus) installé/utilisable, on
-  # présélectionne quand même le premier de la liste plutôt que de laisser un écran
-  # sans aucune ligne cochée.
-  if [[ "${marked}" = false ]] && [[ ${#runner_rows[@]} -gt 0 ]]; then
-    runner_rows[0]="TRUE"
-  fi
-
-  runner_choice=$(zenity --list --radiolist \
-    --title="$(t create_prefix.forms_title)" \
-    --text="$(t create_prefix.forms_text)
-$(t create_prefix.runner_select_text)" \
-    --column="" --column="$(t create_prefix.forms_runner_label)" \
-    --width=500 --height=400 \
-    "${runner_rows[@]}" 2>/dev/null)
-
-  if [[ -z "${runner_choice}" ]]; then
-    exit 0
-  fi
-
-  arch_choice=$(zenity --list --radiolist \
-    --title="$(t create_prefix.forms_title)" \
-    --text="$(t create_prefix.arch_select_text)" \
-    --column="" --column="$(t create_prefix.forms_arch_label)" \
-    --width=400 --height=220 \
-    TRUE "win64" FALSE "win32" 2>/dev/null)
-
-  if [[ -z "${arch_choice}" ]]; then
-    exit 0
-  fi
-else
-  runner_choice=$(zgu_get_default_runner)
-  arch_choice="win64"
-fi
+# Ancien écran de sélection Zenity ("--list --radiolist") supprimé : bin/lpm n'a plus
+# aucun point d'entrée interactif, donc le runner/l'architecture ne peuvent venir que
+# de -r/--runner et -a/--arch (ou du runner par défaut de Lutris / "win64" à défaut).
+runner_choice="${cli_runner:-$(zgu_get_default_runner)}"
+arch_choice="${cli_arch:-win64}"
 
 runner_type=$(zgp_detect_runner_type "${runner_dir}/${runner_choice}")
 if [[ "${runner_type}" = "unknown" ]]; then
-  zgu_gui_error "$(t create_prefix.unknown_runner_type "${runner_choice}")"
   zgu_cli_error "$(t create_prefix.unknown_runner_type_cli "${runner_choice}")"
   exit 1
 fi
@@ -317,7 +244,6 @@ fi
 umu_run_path=""
 if [[ "${runner_type}" = "proton" ]]; then
   if ! umu_run_path=$(zgp_find_umu_run); then
-    zgu_gui_error "$(t create_prefix.umu_missing_gui)"
     zgu_cli_error "$(t create_prefix.umu_missing_cli)"
     exit 1
   fi
@@ -326,30 +252,12 @@ fi
 # 5. Saisie des noms d'affichage
 declare -a raw_names=()
 
-if [[ "${will_use_zenity}" = true ]]; then
-  names_input=$(zenity --text-info --title="$(t create_prefix.names_title)" \
-    --text="$(t create_prefix.names_text)" \
-    --editable --width=550 --height=400 2>/dev/null)
-  names_status=$?
-
-  if [[ "${names_status}" -ne 0 ]]; then
-    exit 0
-  fi
-
-  while IFS= read -r line; do
-    line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
-    [[ -n "${line}" ]] && raw_names+=("${line}")
-  done <<< "${names_input}"
-else
-  for target in "${cli_targets[@]}"; do
-    [[ -z "${target}" ]] && continue
-    raw_names+=("${target}")
-  done
-fi
+for target in "${cli_targets[@]}"; do
+  [[ -z "${target}" ]] && continue
+  raw_names+=("${target}")
+done
 
 if [[ ${#raw_names[@]} -eq 0 ]]; then
-  zgu_gui_error "$(t create_prefix.no_names_error)"
   zgu_cli_error "$(t create_prefix.no_names_error_cli)"
   exit 1
 fi
@@ -372,7 +280,7 @@ declare -A used_slugs=()
 for entry in "${raw_names[@]}"; do
   display_name=""
   explicit_slug=""
-  if [[ "${will_use_zenity}" = false ]] && [[ "${entry}" == *"|"* ]]; then
+  if [[ "${entry}" == *"|"* ]]; then
     display_name="${entry%%|*}"
     explicit_slug="${entry#*|}"
   else
@@ -399,98 +307,23 @@ for entry in "${raw_names[@]}"; do
   batch_slugs+=("${final_slug}")
 done
 
-# 7. Écran de révision (GUI) / récapitulatif + confirmation (CLI)
-#
-# IMPORTANT (deux bugs réels trouvés et corrigés successivement) :
-#   1. "zenity --list --editable" seul (sans --checklist/--multiple) ne renvoie QUE la
-#      ligne actuellement sélectionnée (celle sur laquelle on vient de cliquer pour
-#      l'éditer), et sans "--print-column=ALL" il ne renvoie QUE la première colonne
-#      (le nom, jamais le slug) -- d'où un seul prefix créé avec un slug de repli en
-#      UUID à la place du slug affiché.
-#   2. Correctif de "--checklist" ajouté pour forcer toutes les lignes cochées à
-#      sortir : mais vérifié dans le vrai code source de Zenity (src/tree.c,
-#      zenity_tree_dialog_toggle_get_selected -- "start at 1 because we're not
-#      printing the checklist column string") que la colonne de case à cocher n'est
-#      JAMAIS incluse dans la sortie, même avec --print-column=ALL : elle sert
-#      uniquement de FILTRE (seules les lignes cochées sont renvoyées), sans jamais
-#      imprimer elle-même de valeur TRUE/FALSE. Le code qui suit attendait donc à
-#      tort un triplet (coché, nom, slug) par ligne alors que Zenity ne renvoie qu'une
-#      paire (nom, slug) par ligne cochée -- ce qui décalait tout le parsing et
-#      filtrait silencieusement la totalité du lot (aucune ligne ne semblait "TRUE"
-#      là où le nom était en réalité attendu). Corrigé : on repasse à un pas de 2, la
-#      case à cocher continue d'agir comme filtre côté Zenity lui-même (une ligne
-#      décochée n'apparaît simplement pas du tout dans la sortie).
-if [[ "${will_use_zenity}" = true ]]; then
-  review_values=()
+# 7. Récapitulatif + confirmation (CLI) -- ancien écran de révision Zenity
+# ("--list --checklist --editable") supprimé : bin/lpm n'a plus aucun point d'entrée
+# interactif, donc plus de moyen d'éditer nom/slug à la volée dans un tableau. En CLI,
+# le slug a déjà été validé/dédupliqué à l'étape 6 (via "|" ou repli automatique).
+if [[ "${confirm_flag}" != "yes" ]]; then
+  t create_prefix.confirm_cli_header
   for (( i=0; i<${#batch_names[@]}; i++ )); do
-    review_values+=( "TRUE" "${batch_names[i]}" "${batch_slugs[i]}" )
+    t create_prefix.confirm_cli_item "${batch_names[i]}" "${batch_slugs[i]}"
   done
-
-  review_result=$(zenity --list --checklist --editable \
-    --title="$(t create_prefix.review_title)" \
-    --text="$(t create_prefix.review_text)" \
-    --column="$(t create_prefix.review_col_create)" \
-    --column="$(t create_prefix.review_col_name)" --column="$(t create_prefix.review_col_slug)" \
-    --separator=$'\x1f' \
-    --print-column=ALL \
-    --width=650 --height=450 \
-    "${review_values[@]}" 2>/dev/null)
-
-  if [[ -z "${review_result}" ]]; then
-    exit 0
-  fi
-
-  # Reconstruction des paires nom/slug à partir de la sortie plate de Zenity (une
-  # paire par ligne COCHÉE seulement -- les lignes décochées sont déjà absentes de
-  # "${review_result}"), et re-normalisation systématique de chaque slug (même s'il
-  # n'a pas été modifié) : garantit qu'un slug tapé/modifié à la main dans ce tableau
-  # reste toujours valide (pas d'espace, de "/" ou de caractère spécial), sans code
-  # de validation séparé.
-  mapfile -t flat_fields < <(printf '%s' "${review_result}" | tr $'\x1f' '\n')
-
-  final_names=()
-  final_slugs=()
-  declare -A final_used_slugs=()
-  duplicate_found=""
-
-  for (( i=0; i<${#flat_fields[@]}; i+=2 )); do
-    r_name="${flat_fields[i]}"
-    r_slug="${flat_fields[i+1]:-}"
-    [[ -z "${r_name}" ]] && continue
-    r_slug=$(zgp_slugify "${r_slug}")
-
-    if [[ -n "${existing_slugs[${r_slug}]:-}" ]] || [[ -n "${final_used_slugs[${r_slug}]:-}" ]]; then
-      duplicate_found="${r_slug}"
-      break
-    fi
-    final_used_slugs["${r_slug}"]=1
-
-    final_names+=("${r_name}")
-    final_slugs+=("${r_slug}")
-  done
-
-  if [[ -n "${duplicate_found}" ]]; then
-    zgu_gui_error "$(t create_prefix.duplicate_slug_error "${duplicate_found}")"
-    exit 1
-  fi
-
-  batch_names=("${final_names[@]}")
-  batch_slugs=("${final_slugs[@]}")
-else
-  if [[ "${confirm_flag}" != "yes" ]]; then
-    t create_prefix.confirm_cli_header
-    for (( i=0; i<${#batch_names[@]}; i++ )); do
-      t create_prefix.confirm_cli_item "${batch_names[i]}" "${batch_slugs[i]}"
-    done
-    read -r -p "$(t create_prefix.confirm_cli_prompt)" response
-    case "${response}" in
-      [oOyY]) : ;;
-      *)
-        t create_prefix.cancelled_cli
-        exit 0
-        ;;
-    esac
-  fi
+  read -r -p "$(t create_prefix.confirm_cli_prompt)" response
+  case "${response}" in
+    [oOyY]) : ;;
+    *)
+      t create_prefix.cancelled_cli
+      exit 0
+      ;;
+  esac
 fi
 
 if [[ ${#batch_names[@]} -eq 0 ]]; then
@@ -539,11 +372,7 @@ with open(os.environ["YML_PATH"], "w") as f:
 
 total="${#batch_names[@]}"
 
-# Trois fichiers temporaires pour faire remonter les résultats hors du sous-shell
-# ci-dessous : quand cette boucle est branchée dans un pipe vers "zenity --progress"
-# (mode GUI), toute variable qu'elle modifie reste locale à ce sous-shell et
-# disparaît une fois le pipe terminé -- même contrainte, même solution, que
-# zgu_gui_extract_zstd (tar_exit_file) dans zgu-progress-utils.sh.
+# Trois fichiers temporaires pour faire remonter les résultats de la boucle ci-dessous.
 created_count_file=$(mktemp)
 skipped_file=$(mktemp)
 failed_file=$(mktemp)
@@ -551,7 +380,7 @@ echo "0" > "${created_count_file}"
 
 zgp_run_creation_batch() {
   local created=0
-  local i c_name c_slug prefix_dir step_num percent
+  local i c_name c_slug prefix_dir step_num
   local timestamp config_id yml_config_file safe_name safe_slug safe_prefix_dir safe_config_id
 
   for (( i=0; i<total; i++ )); do
@@ -560,20 +389,8 @@ zgp_run_creation_batch() {
     prefix_dir="${games_dir}/${c_slug}"
 
     step_num=$(( i + 1 ))
-    # Plafonné a 99, jamais 100, tant qu'on est dans la boucle : meme raison que dans
-    # zgp-game-uninstaller.sh/zgr-runner-uninstaller.sh -- confirme reel que certaines versions
-    # de Zenity referment la fenetre des qu'elles lisent un "100", meme avec "--auto-close" et
-    # le flux d'entree encore ouvert. Le vrai "100" (ligne "echo 100" en fin de fonction,
-    # plus bas) n'est ecrit qu'une fois CHAQUE prefix reellement cree (ou ignore/echoue et
-    # consigne).
-    percent=$(( (step_num * 99) / total ))
 
-    if [[ "${will_use_zenity}" = true ]]; then
-      echo "${percent}"
-      echo "# $(t create_prefix.progress_text "${c_name}" "${step_num}" "${total}")"
-    else
-      t create_prefix.creating_cli "${c_name}" "${c_slug}" "${step_num}" "${total}"
-    fi
+    t create_prefix.creating_cli "${c_name}" "${c_slug}" "${step_num}" "${total}"
 
     # Refus strict si le prefix existe déjà (même garde-fou que l'installeur) : on
     # ignore cette ligne plutôt que d'écraser un dossier déjà présent, et on
@@ -627,23 +444,15 @@ VALUES (
 EOF
 
     created=$(( created + 1 ))
-    # Ecrit a CHAQUE reussite, pas seulement une fois a la fin de la boucle : si ce sous-shell
-    # devait mourir prematurement (SIGPIPE d'une fenetre Zenity refermee trop tot -- voir le
-    # commentaire sur le plafond a 99 plus haut), created_count_file garde quand meme le compte
-    # exact des prefixes deja crees avec succes jusque-la, plutot que de rester bloque a "0".
+    # Ecrit a CHAQUE reussite, pas seulement une fois a la fin de la boucle : si cette
+    # fonction devait s'interrompre prematurement, created_count_file garde quand meme
+    # le compte exact des prefixes deja crees avec succes jusque-la, plutot que de
+    # rester bloque a "0".
     echo "${created}" > "${created_count_file}"
   done
-
-  [[ "${will_use_zenity}" = true ]] && echo "100"
 }
 
-if [[ "${will_use_zenity}" = true ]]; then
-  zgp_run_creation_batch | zenity --progress --title="$(t create_prefix.progress_title)" \
-    --text="$(t create_prefix.progress_text "" 0 "${total}")" \
-    --percentage=0 --auto-close --no-cancel --width=550 2>/dev/null
-else
-  zgp_run_creation_batch
-fi
+zgp_run_creation_batch
 
 created_count=$(cat "${created_count_file}" 2>/dev/null)
 [[ -z "${created_count}" ]] && created_count=0
@@ -661,24 +470,12 @@ done < "${failed_file}"
 rm -f "${created_count_file}" "${skipped_file}" "${failed_file}"
 
 # 9. Résumé final
-if [[ "${will_use_zenity}" = true ]]; then
-  summary_text="$(t create_prefix.summary_created "${created_count}")"
-  if [[ ${#skipped_existing[@]} -gt 0 ]]; then
-    summary_text+=$'\n'"$(t create_prefix.summary_skipped "${#skipped_existing[@]}")"
-  fi
-  if [[ ${#failed_names[@]} -gt 0 ]]; then
-    summary_text+=$'\n'"$(t create_prefix.summary_failed "${#failed_names[@]}")"
-  fi
-  zenity --info --title="$(t create_prefix.summary_title)" --text="${summary_text}" 2>/dev/null
-  notify-send "$(t create_prefix.notify_title)" "$(t create_prefix.notify_body "${created_count}")" 2>/dev/null
-else
-  zgu_cli_ok "$(t create_prefix.summary_created "${created_count}")"
-  if [[ ${#skipped_existing[@]} -gt 0 ]]; then
-    t create_prefix.summary_skipped "${#skipped_existing[@]}"
-  fi
-  if [[ ${#failed_names[@]} -gt 0 ]]; then
-    t create_prefix.summary_failed "${#failed_names[@]}"
-  fi
+zgu_cli_ok "$(t create_prefix.summary_created "${created_count}")"
+if [[ ${#skipped_existing[@]} -gt 0 ]]; then
+  t create_prefix.summary_skipped "${#skipped_existing[@]}"
+fi
+if [[ ${#failed_names[@]} -gt 0 ]]; then
+  t create_prefix.summary_failed "${#failed_names[@]}"
 fi
 
 exit 0

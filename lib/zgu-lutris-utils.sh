@@ -267,34 +267,18 @@ zgu_resolve_lutris_version() {
   fi
 
   # Les deux sont installées et rien n'est sauvegardé : avertissement + choix immédiat.
+  # "display_mode" est systématiquement "cli" désormais (bin/lpm n'a plus aucun point
+  # d'entrée interactif -- menu et double-clic délèguent tous les deux à lpm-gui, qui
+  # appelle toujours ce script avec des cibles explicites) : plus de branche zenity ici.
   local choice="" confirmed=true
-  if [[ "${display_mode}" = "cli" ]]; then
-    t common.dual_lutris_warning_cli >&2
-    local response
-    read -r -p "$(t common.dual_lutris_prompt_cli)" response
-    case "${response}" in
-      2) choice="native" ;;
-      1|"") choice="flatpak" ;;
-      *) choice="flatpak"; confirmed=false ;;
-    esac
-  else
-    zenity --warning --text="$(t common.dual_lutris_warning_gui)" --width=500 2>/dev/null
-    local selected
-    selected=$(zenity --list --radiolist \
-      --title="$(t common.dual_lutris_select_title)" \
-      --text="$(t common.dual_lutris_select_text)" \
-      --column="" --column="$(t common.dual_lutris_select_col)" \
-      TRUE "Flatpak" \
-      FALSE "$(t common.dual_lutris_native_label)" \
-      --width=420 --height=250 2>/dev/null)
-    if [[ "${selected}" = "Flatpak" ]]; then
-      choice="flatpak"
-    elif [[ -n "${selected}" ]]; then
-      choice="native"
-    else
-      choice="flatpak"; confirmed=false
-    fi
-  fi
+  t common.dual_lutris_warning_cli >&2
+  local response
+  read -r -p "$(t common.dual_lutris_prompt_cli)" response
+  case "${response}" in
+    2) choice="native" ;;
+    1|"") choice="flatpak" ;;
+    *) choice="flatpak"; confirmed=false ;;
+  esac
 
   if [[ "${confirmed}" = true ]]; then
     mkdir -p "$(dirname "${ZGU_LUTRIS_VERSION_CONFIG}")"

@@ -10,9 +10,8 @@
 # effective utilisée par les autres commandes de lpm reste centralisée là-bas.
 
 # --- Récupération des arguments du routeur lpm ---
-# $1 = mode ("cli" ou "gui", même convention que zgc-dependency-checker.sh)
+# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif)
 # $2 = sous-commande optionnelle : "flatpak", "native", "reset", ou vide (affichage seul)
-mode="${1:-gui}"
 sub_arg="${2:-}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,28 +23,13 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 
 say() {
-  if [[ "${mode}" = "cli" ]]; then
-    echo "$1"
-  else
-    zenity --info --text="$1" --width=480 2>/dev/null
-  fi
+  echo "$1"
 }
 
 say_err() {
-  # Point de passage unique pour toutes les erreurs de ce script (cli et gui) : un seul
-  # "zgu_log" ici couvre les deux modes, pas besoin d'un par site d'appel.
   zgu_log "zgc-lutris-version-checker" "ERREUR" "$1"
-  if [[ "${mode}" = "cli" ]]; then
-    echo "$1" >&2
-  else
-    zenity --error --text="$1" --width=480 2>/dev/null
-  fi
+  echo "$1" >&2
 }
-
-if [[ "${mode}" != "cli" ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t lutris_version.zenity_missing)"
-  exit 1
-fi
 
 # --- 1. Détection des installations réelles (mêmes chemins que les autres commandes) ---
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
@@ -203,35 +187,11 @@ if [[ -n "${sub_arg}" ]]; then
 fi
 
 # --- 5. Sans sous-commande : affichage, et proposition de choix si les deux sont présentes ---
-if [[ "${mode}" = "cli" ]]; then
-  print_detected_list
-else
-  full_text="$(print_detected_list)"
-  zenity --text-info --title="$(t lutris_version.header)" --width=500 --height=250 <<< "${full_text}" 2>/dev/null
-fi
+print_detected_list
 
 if [[ "${has_flatpak}" = true ]] && [[ "${has_native}" = true ]]; then
-  if [[ "${mode}" = "cli" ]]; then
-    echo ""
-    t lutris_version.hint_cli
-  else
-    selected=$(zenity --list --radiolist \
-      --title="$(t lutris_version.select_title)" \
-      --text="$(t lutris_version.select_text)" \
-      --column="" --column="$(t lutris_version.select_col)" \
-      FALSE "$(t lutris_version.label_flatpak)" \
-      FALSE "$(t lutris_version.label_native)" \
-      --width=420 --height=250 2>/dev/null)
-    if [[ "${selected}" = "$(t lutris_version.label_flatpak)" ]]; then
-      mkdir -p "$(dirname "${ZGU_LUTRIS_VERSION_CONFIG}")"
-      echo "flatpak" > "${ZGU_LUTRIS_VERSION_CONFIG}"
-      say "$(t lutris_version.forced_saved "$(t lutris_version.label_flatpak)")"
-    elif [[ "${selected}" = "$(t lutris_version.label_native)" ]]; then
-      mkdir -p "$(dirname "${ZGU_LUTRIS_VERSION_CONFIG}")"
-      echo "native" > "${ZGU_LUTRIS_VERSION_CONFIG}"
-      say "$(t lutris_version.forced_saved "$(t lutris_version.label_native)")"
-    fi
-  fi
+  echo ""
+  t lutris_version.hint_cli
 else
   if [[ "${has_flatpak}" = true ]]; then
     say "$(t lutris_version.only_one_cli "$(t lutris_version.label_flatpak)")"

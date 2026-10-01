@@ -16,12 +16,13 @@ Depends: ${misc:Depends},
  python3-evdev,
  libsdl2-2.0-0,
  sqlite3,
- zenity,
  zstd,
  libarchive-tools,
  desktop-file-utils,
  shared-mime-info,
- hicolor-icon-theme
+ hicolor-icon-theme,
+ gir1.2-gtk-4.0 (>= 4.10),
+ gir1.2-adw-1 (>= 1.4)
 Recommends: lutris, wine, winetricks, imagemagick, curl, xdotool, ydotool, bash-completion
 Description: Package manager for Lutris
  lpm (Ludis Package Manager) packages, installs and manages Wine/Proton

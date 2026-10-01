@@ -54,19 +54,3 @@ zgu_cli_error() {
     printf '%s\n' "$1" >&2
   fi
 }
-
-# zgu_gui_error <texte> [<titre>] : affiche <texte> dans une boîte de dialogue Zenity d'erreur
-# (avec <titre> si fourni), et journalise systématiquement l'appel dans lpm.log (STATUT=ERREUR)
-# -- même mécanisme que zgu_cli_error, pour que TOUTE erreur affichée à l'utilisateur, en CLI
-# comme en GUI, laisse une trace dans le journal, sans exception.
-zgu_gui_error() {
-  local text="$1" title="${2:-}"
-  local caller
-  caller=$(basename -- "${BASH_SOURCE[1]:-inconnu}" .sh)
-  zgu_log "${caller}" "ERREUR" "${text}"
-  if [[ -n "${title}" ]]; then
-    zenity --error --title="${title}" --text="${text}" 2>/dev/null
-  else
-    zenity --error --text="${text}" 2>/dev/null
-  fi
-}

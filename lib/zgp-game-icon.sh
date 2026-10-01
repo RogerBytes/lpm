@@ -12,9 +12,8 @@
 # SteamGridDB ou l'absence de clé ne doit jamais faire échouer une installation ou la
 # création d'un raccourci, qui restent 100% autonomes.
 #
-# $1, $2... = slugs de jeux cibles en CLI. Vide => mode interactif Zenity, liste à cocher de
-# tous les jeux installés, pré-cochant uniquement ceux qui n'ont pas encore d'icône
-# personnalisée (voir zgp_icon_has_custom_icon plus bas).
+# $1, $2... = slugs de jeux cibles en CLI (toujours non vide : bin/lpm n'a plus aucun point
+# d'entrée interactif).
 cli_targets=("$@")
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,13 +25,8 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-
-will_use_zenity=true
-[[ ${#cli_targets[@]} -gt 0 ]] && will_use_zenity=false
 
 # La clé SteamGridDB est strictement personnelle à l'utilisateur (voir zgp_sgdb_ensure_key
 # plus bas) : jamais partagée, jamais embarquée dans lpm -- un fichier dédié, hors de portée
@@ -44,9 +38,6 @@ sgdb_key=""
 # --- 1. Vérification des dépendances ---
 zgp_icon_report_error_early() {
   local msg="$1"
-  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zenity --error --text="${msg}" 2>/dev/null
-  fi
   echo "${msg}" >&2
 }
 
@@ -56,11 +47,6 @@ for cmd in sqlite3 curl python3 realpath; do
     exit 1
   fi
 done
-
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t icon.zenity_missing)"
-  exit 1
-fi
 
 # ImageMagick : nécessaire pour convertir les icônes ".ico" (fréquentes, extraites
 # d'exécutables Windows à l'origine) en ".png", le seul format que la spec freedesktop
@@ -91,9 +77,7 @@ lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runner
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 games_dir="${HOME}/Games"
 
-icon_display_mode="gui"
-[[ "${will_use_zenity}" = false ]] && icon_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${icon_display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
   zgp_icon_report_error_early "$(t icon.lutris_missing)"
   exit 1
@@ -171,69 +155,26 @@ if [[ ${#sorted_slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Un jeu a déjà une icône personnalisée si <prefix_dir>/icon contient un fichier image --
-# EXACTEMENT le même test que celui fait par zgu_write_game_shortcut pour résoudre l'icône
-# d'un raccourci : les deux doivent toujours s'accorder.
-zgp_icon_has_custom_icon() {
-  local dir="$1"
-  [[ -d "${dir}/icon" ]] || return 1
-  local f
-  f=$(find "${dir}/icon" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -print -quit 2>/dev/null)
-  [[ -n "${f}" ]]
-}
-
 # --- 4. Sélection des jeux cibles ---
+# Ancien mode interactif Zenity (liste à cocher, précochant les jeux sans icône
+# personnalisée) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, "cli_targets"
+# est donc toujours non vide ici.
 targets=()
 
-if [[ ${#cli_targets[@]} -gt 0 ]]; then
-  # --- MODE CLI ---
-  if [[ "${cli_targets[0]}" = "--all" ]]; then
-    targets=("${sorted_slugs[@]}")
-  else
-    for target_slug in "${cli_targets[@]}"; do
-      if [[ -n "${name_by_slug[${target_slug}]:-}" ]]; then
-        targets+=("${target_slug}")
-      elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
-        zgu_cli_error "$(t icon.slug_blacklisted "${target_slug}")"
-        exit 1
-      else
-        zgu_cli_error "$(t icon.slug_not_found "${target_slug}")"
-        exit 1
-      fi
-    done
-  fi
+if [[ "${cli_targets[0]}" = "--all" ]]; then
+  targets=("${sorted_slugs[@]}")
 else
-  # --- MODE INTERACTIF (Zenity) ---
-  # Précoche uniquement les jeux sans icône personnalisée -- voir zgu_gui_checklist_with_states
-  # dans zgu-checklist-utils.sh pour la mécanique d'états différenciés par ligne.
-  checklist_values=()
-  for g_slug in "${sorted_slugs[@]}"; do
-    if zgp_icon_has_custom_icon "${dir_by_slug[${g_slug}]}"; then
-      checklist_values+=("FALSE" "${name_by_slug[${g_slug}]}" "${g_slug}")
+  for target_slug in "${cli_targets[@]}"; do
+    if [[ -n "${name_by_slug[${target_slug}]:-}" ]]; then
+      targets+=("${target_slug}")
+    elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
+      zgu_cli_error "$(t icon.slug_blacklisted "${target_slug}")"
+      exit 1
     else
-      checklist_values+=("TRUE" "${name_by_slug[${g_slug}]}" "${g_slug}")
+      zgu_cli_error "$(t icon.slug_not_found "${target_slug}")"
+      exit 1
     fi
   done
-
-  selected=$(zgu_gui_checklist_with_states 2 \
-    "$(t icon.select_title)" \
-    "$(t icon.select_text)" \
-    650 450 \
-    "$(t icon.select_col_fetch)" "$(t icon.select_col_game)" "$(t icon.select_col_slug)" \
-    -- \
-    "${checklist_values[@]}")
-
-  [[ -z "${selected}" ]] && exit 0
-
-  # zgu_gui_checklist_with_states/--list --checklist renvoie TOUTES les colonnes de valeur des
-  # lignes cochées (séparées par \x1f) : nom puis slug, à plat -- on ne garde que le slug (une
-  # colonne sur deux) pour retrouver le jeu dans les tableaux associatifs ci-dessus.
-  IFS=$'\x1f' read -r -a selected_flat <<< "${selected}"
-  for (( i=1; i<${#selected_flat[@]}; i+=2 )); do
-    targets+=("${selected_flat[i]}")
-  done
-
-  [[ ${#targets[@]} -eq 0 ]] && exit 0
 fi
 
 # --- 5. Clé API SteamGridDB ---
@@ -270,15 +211,9 @@ zgp_sgdb_ensure_key() {
 
   local candidate first_try=true
   while true; do
-    if [[ "${will_use_zenity}" = true ]]; then
-      [[ "${first_try}" = false ]] && zenity --error --text="$(t icon.key_invalid)" 2>/dev/null
-      command -v xdg-open >/dev/null 2>&1 && xdg-open "https://www.steamgriddb.com/profile/preferences/api" >/dev/null 2>&1 &
-      candidate=$(zenity --entry --title="$(t icon.key_title)" --text="$(t icon.key_text)" --width=500 2>/dev/null)
-    else
-      [[ "${first_try}" = false ]] && t icon.key_invalid >&2
-      t icon.key_text_cli
-      read -r -p "$(t icon.key_prompt_cli)" candidate
-    fi
+    [[ "${first_try}" = false ]] && t icon.key_invalid >&2
+    t icon.key_text_cli
+    read -r -p "$(t icon.key_prompt_cli)" candidate
     first_try=false
 
     [[ -z "${candidate}" ]] && return 1
@@ -449,15 +384,11 @@ for url, thumb in results:
 # --- 7. Traitement d'un jeu ---
 #
 # Retourne 0 si une icône a bien été posée, 1 sinon (jeu introuvable sur SteamGridDB, aucune
-# icône disponible, téléchargement/conversion échoués, ou annulation par l'utilisateur en
-# mode GUI) -- jamais de silence : chaque échec passe par zgp_icon_report_skip, affiché sur
-# stderr en CLI et accumulé pour un résumé Zenity unique en fin de traitement du lot en GUI
-# (même principe que zgp-game-isolator.sh).
-declare -a gui_skip_messages=()
+# icône disponible, téléchargement/conversion échoués, ou annulation par l'utilisateur) --
+# jamais de silence : chaque échec passe par zgp_icon_report_skip, affiché sur stderr.
 zgp_icon_report_skip() {
   local msg="$1"
   echo "${msg}" >&2
-  [[ "${will_use_zenity}" = true ]] && gui_skip_messages+=("${msg}")
 }
 
 zgp_icon_process_one() {
@@ -476,40 +407,20 @@ zgp_icon_process_one() {
 
   local chosen_game_id="" chosen_game_name=""
   if [[ "${n_matches}" -gt 1 ]]; then
-    if [[ "${will_use_zenity}" = true ]]; then
-      local zargs=() g_gid g_sgdb_name first=true
-      while IFS=$'\t' read -r g_gid g_sgdb_name; do
-        [[ -z "${g_gid}" ]] && continue
-        if [[ "${first}" = true ]]; then
-          zargs+=("TRUE" "${g_gid}" "${g_sgdb_name}")
-          first=false
-        else
-          zargs+=("FALSE" "${g_gid}" "${g_sgdb_name}")
-        fi
-      done <<< "${search_results}"
-
-      chosen_game_id=$(zenity --list --radiolist \
-        --title="$(t icon.pick_game_title "${g_name}")" \
-        --text="$(t icon.pick_game_text "${g_name}")" \
-        --column="" --column="ID" --column="$(t icon.pick_game_col)" \
-        --hide-column=2 --print-column=2 \
-        "${zargs[@]}" --width=550 --height=420 2>/dev/null)
-    else
-      t icon.pick_game_text_cli "${g_name}"
-      local -A idx_to_id=() idx_to_name=()
-      local idx=1 g_gid g_sgdb_name
-      while IFS=$'\t' read -r g_gid g_sgdb_name; do
-        [[ -z "${g_gid}" ]] && continue
-        printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
-        idx_to_id["${idx}"]="${g_gid}"
-        idx_to_name["${idx}"]="${g_sgdb_name}"
-        idx=$((idx + 1))
-      done <<< "${search_results}"
-      local choice
-      read -r -p "$(t icon.pick_game_prompt_cli)" choice
-      chosen_game_id="${idx_to_id[${choice}]:-}"
-      chosen_game_name="${idx_to_name[${choice}]:-}"
-    fi
+    t icon.pick_game_text_cli "${g_name}"
+    local -A idx_to_id=() idx_to_name=()
+    local idx=1 g_gid g_sgdb_name
+    while IFS=$'\t' read -r g_gid g_sgdb_name; do
+      [[ -z "${g_gid}" ]] && continue
+      printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
+      idx_to_id["${idx}"]="${g_gid}"
+      idx_to_name["${idx}"]="${g_sgdb_name}"
+      idx=$((idx + 1))
+    done <<< "${search_results}"
+    local choice
+    read -r -p "$(t icon.pick_game_prompt_cli)" choice
+    chosen_game_id="${idx_to_id[${choice}]:-}"
+    chosen_game_name="${idx_to_name[${choice}]:-}"
 
     if [[ -z "${chosen_game_id}" ]]; then
       zgp_icon_report_skip "$(t icon.cancelled_by_user "${g_name}")"
@@ -528,13 +439,10 @@ zgp_icon_process_one() {
   # alors 0 résultat -- confirmé réel : c'est exactement ce qui faisait échouer le Client Icon pour
   # Crossbar Cards malgré la correction précédente.
   #
-  # Retrouvé ici en recherchant "chosen_game_id" dans "search_results" plutôt qu'en essayant de
-  # le récupérer directement en sortie de Zenity (--radiolist) : ça évite de dépendre d'un
-  # comportement de "--print-column=ALL" avec plusieurs colonnes de valeur qui n'a pas pu être
-  # vérifié en direct de façon fiable, contrairement au cas de zgu_gui_checklist_with_states.
-  # Cette recherche fonctionne quel que soit le mode (CLI ou GUI) et écrase toujours la valeur
-  # déjà réglée par les branches ci-dessus -- une seule source de vérité. Repli sur "g_name"
-  # seulement si l'ID choisi n'est, contre toute attente, pas retrouvé dans "search_results".
+  # Retrouvé ici en recherchant "chosen_game_id" dans "search_results" (une seule source de
+  # vérité, qui écrase toujours la valeur déjà réglée par les branches ci-dessus). Repli sur
+  # "g_name" seulement si l'ID choisi n'est, contre toute attente, pas retrouvé dans
+  # "search_results".
   local sr_gid sr_name
   while IFS=$'\t' read -r sr_gid sr_name; do
     if [[ "${sr_gid}" = "${chosen_game_id}" ]]; then
@@ -552,118 +460,12 @@ zgp_icon_process_one() {
     return 1
   fi
 
-  local n_icons
-  n_icons=$(printf '%s\n' "${icons_urls}" | grep -c .)
-
+  # Ancien sélecteur visuel Zenity ("--list --imagelist", vignettes téléchargées/recadrées en
+  # parallèle) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, donc en CLI on
+  # prend systématiquement la première icône candidate (déjà la meilleure trouvée par
+  # zgp_sgdb_icons, "clienticon" puis "official" puis le reste, voir plus haut).
   local chosen_url=""
-  if [[ "${n_icons}" -gt 1 ]] && [[ "${will_use_zenity}" = true ]]; then
-    # Sélection visuelle : chaque icône candidate est téléchargée en vignette locale, puis
-    # affichée via "zenity --list --imagelist" (colonne image, voir "zenity --help-list").
-    #
-    # Deux optimisations pour un affichage rapide et des vignettes de taille homogène :
-    #  1. Téléchargement de "thumb" (vignette déjà réduite par SteamGridDB, voir
-    #     zgp_sgdb_icons ci-dessus) au lieu de "url" (pleine résolution) -- beaucoup plus léger,
-    #     donc beaucoup plus rapide à récupérer. "url" en pleine qualité reste utilisée plus
-    #     bas, une fois l'icône choisie.
-    #  2. Téléchargements lancés en parallèle (en arrière-plan, "wait" ensuite) plutôt qu'un
-    #     par un en séquence -- le temps d'attente devient celui du plus lent des
-    #     téléchargements, pas leur somme.
-    #  3. Chaque vignette est ensuite recadrée par ImageMagick sur un canevas carré fixe
-    #     (fond transparent, image centrée) : les icônes SteamGridDB n'ont pas toutes les
-    #     mêmes dimensions ni le même ratio, donc sans ça, l'aperçu affiche des cases de
-    #     tailles visuellement différentes -- ce recadrage garantit que toutes les vignettes
-    #     apparaissent avec exactement la même taille dans le sélecteur.
-    local tmp_dir icon_urls_arr=() thumb_urls_arr=() thumb_paths=() line u thumb_u ext raw_thumb padded_thumb i
-    tmp_dir=$(mktemp -d)
-    i=0
-    while IFS=$'\t' read -r u thumb_u; do
-      [[ -z "${u}" ]] && continue
-      [[ -z "${thumb_u}" ]] && thumb_u="${u}"
-      icon_urls_arr+=("${u}")
-      thumb_urls_arr+=("${thumb_u}")
-      i=$((i + 1))
-    done <<< "${icons_urls}"
-
-    local -a dl_pids=()
-    for i in "${!thumb_urls_arr[@]}"; do
-      ext="${thumb_urls_arr[${i}]##*.}"
-      raw_thumb="${tmp_dir}/${i}.raw.${ext}"
-      (curl -sLf --max-time 15 "${thumb_urls_arr[${i}]}" -o "${raw_thumb}" 2>/dev/null) &
-      dl_pids+=("$!")
-    done
-    for pid in "${dl_pids[@]}"; do
-      wait "${pid}" 2>/dev/null
-    done
-
-    local frame_ref biggest
-    for i in "${!thumb_urls_arr[@]}"; do
-      ext="${thumb_urls_arr[${i}]##*.}"
-      raw_thumb="${tmp_dir}/${i}.raw.${ext}"
-      padded_thumb="${tmp_dir}/${i}.png"
-      frame_ref="${raw_thumb}"
-      if [[ -s "${raw_thumb}" ]] && [[ "${ext,,}" = "ico" ]]; then
-        # Un ".ico" (notamment le "Client Icon" Steam, voir zgp_sgdb_icons plus haut) empile
-        # souvent plusieurs résolutions dans un seul fichier. Sans préciser laquelle utiliser
-        # ("[index]"), "convert" traite CHAQUE résolution empilée et, comme un ".png" ne peut
-        # en contenir qu'une seule à la fois, écrit alors PLUSIEURS fichiers numérotés
-        # ("nom-0.png", "nom-1.png", ...) au lieu du seul fichier "${padded_thumb}" attendu --
-        # celui-ci n'est alors jamais créé, mais "convert" se termine quand même en succès (code
-        # 0), donc rien ne signalait l'échec : Zenity affichait une vignette cassée/vide pour ce
-        # candidat, alors que l'autre (une image à une seule résolution, ex: le petit "icon"
-        # Steam en 32x32) s'affichait normalement -- confirmé réel avec le vrai ".ico" 256x256
-        # de Crossbar Cards (6 résolutions empilées, de 16x16 à 256x256). Résultat concret :
-        # l'utilisateur voyait une vignette valide et une vignette cassée, et choisissait sans
-        # le savoir la moins bonne qualité des deux puisque la meilleure semblait indisponible.
-        # Correction : sélectionner ici la plus grande résolution empilée (même méthode -
-        # "identify" trié numériquement sur la géométrie - que celle déjà utilisée après coup
-        # pour le téléchargement final en pleine qualité) et ne convertir QUE cette résolution
-        # ("raw_thumb.ico[index]") -- un seul fichier en sortie, et l'aperçu reflète enfin
-        # fidèlement ce qui sera vraiment posé comme icône si ce candidat est choisi.
-        biggest=$("${identify_bin[@]}" "${raw_thumb}" 2>/dev/null | sort -n -k3 | tail -n1 | grep -oP '\[\K[^\]]+')
-        [[ -n "${biggest}" ]] && frame_ref="${raw_thumb}[${biggest}]"
-      fi
-      # "96x96^" (recadrage "cover", jamais de bordure ajoutée) et pas "96x96" simple
-      # (letterbox/pad) : Zenity rogne les marges unies (transparentes ou non) d'une vignette
-      # au moment de l'afficher dans "--imagelist", donc une image simplement mise à l'échelle
-      # PUIS paddée sur un canevas carré ressort quand même avec une taille visuelle différente
-      # selon le ratio d'origine (confirmé par test réel) -- seul un remplissage intégral du
-      # carré (comme un recadrage centré) donne une taille affichée réellement identique pour
-      # toutes les icônes, quel que soit leur ratio de départ.
-      # "-background none" explicite : sans lui, ImageMagick recompose l'image sur un fond
-      # blanc opaque par défaut pendant le recadrage, et une icône avec des coins transparents
-      # (ex: icône ronde) ressort avec un carré blanc plein autour -- confirmé par un test réel
-      # (pixel de coin lu en srgb(255,255,255) sans lui, en srgba(0,0,0,0) avec).
-      if [[ -s "${raw_thumb}" ]] && "${convert_bin[@]}" "${frame_ref}" -background none -resize 96x96^ -gravity center -extent 96x96 "${padded_thumb}" 2>/dev/null && [[ -s "${padded_thumb}" ]]; then
-        thumb_paths+=("${padded_thumb}")
-      else
-        thumb_paths+=("")
-      fi
-    done
-
-    local imglist_args=()
-    for i in "${!icon_urls_arr[@]}"; do
-      [[ -n "${thumb_paths[${i}]}" ]] || continue
-      imglist_args+=("${thumb_paths[${i}]}" "$((i + 1))")
-    done
-
-    local chosen_idx
-    chosen_idx=$(zenity --list --imagelist \
-      --title="$(t icon.pick_icon_title "${g_name}")" \
-      --text="$(t icon.pick_icon_text "${g_name}")" \
-      --column="$(t icon.pick_icon_col_preview)" --column="$(t icon.pick_icon_col_num)" \
-      --print-column=2 \
-      "${imglist_args[@]}" --width=650 --height=450 2>/dev/null)
-
-    rm -rf "${tmp_dir}"
-
-    if [[ -z "${chosen_idx}" ]]; then
-      zgp_icon_report_skip "$(t icon.cancelled_by_user "${g_name}")"
-      return 1
-    fi
-    chosen_url="${icon_urls_arr[$((chosen_idx - 1))]}"
-  else
-    chosen_url=$(printf '%s\n' "${icons_urls}" | head -n1 | cut -f1)
-  fi
+  chosen_url=$(printf '%s\n' "${icons_urls}" | head -n1 | cut -f1)
 
   # --- Téléchargement + conversion .ico -> .png si nécessaire ---
   mkdir -p "${prefix_dir}/icon"
@@ -718,7 +520,7 @@ zgp_icon_process_one() {
   fi
 
   zgu_log "icon" "OK" "slug=${slug} nom=${g_name}"
-  [[ "${will_use_zenity}" = false ]] && t icon.done_cli "${g_name}"
+  t icon.done_cli "${g_name}"
   return 0
 }
 
@@ -729,18 +531,5 @@ exit_code=0
 for target_slug in "${targets[@]}"; do
   zgp_icon_process_one "${target_slug}" "${name_by_slug[${target_slug}]}" "${dir_by_slug[${target_slug}]}" "${id_by_slug[${target_slug}]}" "${exe_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}" || exit_code=1
 done
-
-# Résumé Zenity des échecs éventuels (mode GUI uniquement) -- une seule fenêtre en fin de
-# lot, même principe que zgp-game-isolator.sh, pour ne pas empiler les fenêtres si plusieurs
-# jeux du lot échouent chacun pour une raison différente.
-if [[ "${will_use_zenity}" = true ]] && [[ ${#gui_skip_messages[@]} -gt 0 ]]; then
-  errors_text=$(printf '%s\n' "${gui_skip_messages[@]}")
-  zenity --error --title="$(t icon.errors_gui_title)" --width=550 \
-    --text="$(t icon.errors_gui_intro)
-
-${errors_text}" 2>/dev/null
-elif [[ "${will_use_zenity}" = true ]]; then
-  zenity --info --text="$(t icon.done_gui "${#targets[@]}")" 2>/dev/null
-fi
 
 exit "${exit_code}"

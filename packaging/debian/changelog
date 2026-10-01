@@ -1,3 +1,13 @@
+lpm (0.9.3-1) unstable; urgency=medium
+
+  * Retrait complet du code Zenity : lpm-gui (GTK4/Libadwaita) est désormais le seul
+    point d'entrée graphique, sans aucun repli.
+  * gir1.2-gtk-4.0 (>= 4.10) et gir1.2-adw-1 (>= 1.4) passent de Recommends à Depends ;
+    la vérification de leur présence au lancement est donc retirée de bin/lpm et
+    bin/lpm-gui, le paquet garantissant déjà leur installation.
+
+ -- Harry <harry.richmond@rogerbytes.com>  Thu, 01 Oct 2026 00:00:00 +0000
+
 lpm (0.9.2-1) unstable; urgency=medium
 
   * Version initiale du paquet Debian.

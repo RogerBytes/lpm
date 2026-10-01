@@ -1,4 +1,6 @@
 bin/lpm usr/bin
+bin/lpm-gui usr/bin
+gui/*.py usr/lib/lpm/gui
 lib/*.sh usr/lib/lpm
 lib/*.py usr/lib/lpm
 lib/data/* usr/lib/lpm/data

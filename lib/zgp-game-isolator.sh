@@ -11,14 +11,17 @@
 # uniquement dans son instance, exclu de toutes les autres).
 #
 # --- Récupération des arguments du routeur lpm ---
-# $1 = store à isoler entièrement (optionnel) : code interne (egs/ea/ubisoft/battlenet), alias
+# $1 = confirm_flag ("yes" si -y) : saute la confirmation finale (nombre de jeux isolés) en
+#      mode CLI strict, même convention que les autres scripts de lib/.
+# $2 = store à isoler entièrement (optionnel) : code interne (egs/ea/ubisoft/battlenet), alias
 #      courant (ex. "epic", "blizzard"), ou slug d'un jeu actuellement détecté dans ce
 #      giga-préfixe (juste pour retrouver le store à viser, tous les jeux de ce store seront
-#      isolés, pas seulement celui nommé). Vide => mode interactif Zenity qui liste les STORES
-#      actuellement détectés comme partagés (voir zgu_get_blacklisted_slugs), pas les jeux un
-#      par un.
+#      isolés, pas seulement celui nommé). Vide => aucun store trouvé/sélectionné : erreur
+#      propre (voir plus bas) -- bin/lpm n'a plus aucun point d'entrée interactif pour proposer
+#      une liste de stores à la place.
+confirm_flag="${1:-}"
+shift || true
 cli_store_arg="${1:-}"
-cli_slug="${cli_store_arg}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -29,19 +32,8 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
-# shellcheck source=./zgu-progress-utils.sh
-source "${script_dir}/zgu-progress-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-
-will_use_zenity=true
-[[ -n "${cli_slug}" ]] && will_use_zenity=false
-
-# Erreurs d'isolation accumulées pour un résumé Zenity affiché en fin d'exécution en mode
-# GUI (voir zgp_isolate_report_error ci-dessous) -- sans ça, un échec pendant "lpm isolate"
-# sans argument (mode Zenity) ne remontait auparavant que sur stderr, invisible pour
-# l'utilisateur : aucune fenêtre d'erreur, aucune notification, juste "rien ne s'est passé".
-declare -a gui_error_messages=()
 
 # 1. Vérification des dépendances
 for cmd in sqlite3 realpath; do
@@ -51,19 +43,11 @@ for cmd in sqlite3 realpath; do
   fi
 done
 
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t isolate.zenity_missing)"
-  exit 1
-fi
-
 if ! command -v python3 >/dev/null 2>&1; then
   zgu_cli_error "$(t isolate.cmd_missing "python3")"
   exit 1
 fi
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t isolate.pyyaml_missing_gui)"
-  fi
   zgu_cli_error "$(t isolate.pyyaml_missing_cli)"
   exit 1
 fi
@@ -85,13 +69,8 @@ lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/syste
 lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 games_dir="${HOME}/Games"
 
-isolate_display_mode="gui"
-[[ "${will_use_zenity}" = false ]] && isolate_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${isolate_display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t isolate.lutris_missing_gui)"
-  fi
   zgu_cli_error "$(t isolate.lutris_missing_cli)"
   exit 1
 fi
@@ -120,9 +99,6 @@ if [[ -f "${lutris_system_file}" ]]; then
 fi
 
 if [[ ! -f "${lutris_db}" ]]; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zgu_gui_error "$(t isolate.db_missing "${lutris_db}")"
-  fi
   zgu_cli_error "$(t isolate.db_missing "${lutris_db}")"
   exit 1
 fi
@@ -290,22 +266,6 @@ zgp_copy_rel_cli() {
   cp -a -- "${src}" "${dst}"
 }
 
-# Équivalent GUI avec barre de progression Zenity réelle (voir zgu_gui_copy_tree dans
-# zgu-progress-utils.sh, même mécanisme pv que l'extraction/compression des .zgp) pour les
-# dossiers ; les fichiers isolés (raccourcis .desktop/.lnk/.url) sont copiés directement, une
-# barre de progression n'apporte rien pour quelques kilo-octets.
-zgp_copy_rel_gui() {
-  local src_root="$1" dst_root="$2" rel="$3" zen_title="$4" zen_text="$5"
-  local src="${src_root}/${rel}" dst="${dst_root}/${rel}"
-  [[ -e "${src}" ]] || return 0
-  mkdir -p "$(dirname "${dst}")" || return 1
-  if [[ -d "${src}" ]]; then
-    zgu_gui_copy_tree "${src}" "${dst}" "${zen_title}" "${zen_text}"
-    return $?
-  fi
-  cp -a -- "${src}" "${dst}"
-}
-
 # ---------------------------------------------------------------------------------------------
 # --- Construction de la liste des jeux blacklistés candidats (avec store détecté) ---
 declare -A bl_name_by_slug
@@ -394,41 +354,9 @@ if [[ -n "${cli_store_arg}" ]]; then
     zgu_cli_error "$(t isolate.store_arg_invalid "${cli_store_arg}")"
     exit 1
   fi
-else
-  if [[ ${#store_slugs[@]} -eq 0 ]]; then
-    zenity --info --text="$(t isolate.none_found)" 2>/dev/null
-    exit 0
-  fi
-
-  sorted_stores=($(printf '%s\n' "${!store_slugs[@]}" | sort))
-  zenity_args=()
-  for s_code in "${sorted_stores[@]}"; do
-    s_count=$(wc -w <<< "${store_slugs[${s_code}]}")
-    zenity_args+=("FALSE" "$(zgu_store_display_name "${s_code}")" "${s_count}")
-  done
-
-  # Sélection UNIQUE (radiolist) : on isole un store entier à la fois, jamais une sélection de
-  # jeux au cas par cas -- colonne "print" = nom affiché (2e colonne), retraduit vers le code
-  # interne juste après via zgu_store_display_name.
-  selected_label=$(zenity --list --radiolist \
-    --title="$(t isolate.select_title)" \
-    --text="$(t isolate.select_text)" \
-    --column="$(t isolate.select_col_isolate)" --column="$(t isolate.select_col_store)" --column="$(t isolate.select_col_count)" \
-    "${zenity_args[@]}" \
-    --width=550 --height=350 2>/dev/null)
-
-  [[ -z "${selected_label}" ]] && exit 0
-
-  for s_code in "${sorted_stores[@]}"; do
-    if [[ "$(zgu_store_display_name "${s_code}")" = "${selected_label}" ]]; then
-      target_store="${s_code}"
-      break
-    fi
-  done
 fi
 
 if [[ -z "${target_store}" ]] || [[ -z "${store_slugs[${target_store}]:-}" ]]; then
-  [[ "${will_use_zenity}" = true ]] && zenity --info --text="$(t isolate.none_found)" 2>/dev/null
   zgu_cli_error "$(t isolate.none_found)"
   exit 0
 fi
@@ -437,7 +365,7 @@ slugs_to_isolate=(${store_slugs[${target_store}]})
 
 # ---------------------------------------------------------------------------------------------
 # --- Confirmation ---
-if [[ "${will_use_zenity}" = false ]]; then
+if [[ "${confirm_flag}" != "yes" ]]; then
   t isolate.confirm_cli_store "$(zgu_store_display_name "${target_store}")" "${#slugs_to_isolate[@]}"
   for s in "${slugs_to_isolate[@]}"; do
     t isolate.confirm_cli_item "${bl_name_by_slug[${s}]}" "${s}"
@@ -449,22 +377,18 @@ if [[ "${will_use_zenity}" = false ]]; then
   esac
 fi
 
-# Signale l'échec d'isolation d'un jeu donné : toujours affiché sur stderr (visible en mode
-# CLI), et en plus accumulé dans gui_error_messages en mode GUI pour un résumé Zenity montré
-# une fois la boucle terminée -- voir la déclaration de gui_error_messages plus haut pour le
-# problème que ça corrige (échec auparavant totalement invisible en mode Zenity).
+# Signale l'échec d'isolation d'un jeu donné : toujours affiché sur stderr.
 zgp_isolate_report_error() {
   local msg="$1"
   echo "${msg}" >&2
-  [[ "${will_use_zenity}" = true ]] && gui_error_messages+=("${msg}")
 }
 
 # ---------------------------------------------------------------------------------------------
 # --- Isolation d'un jeu ---
 #
 # Retourne 0 en cas de succès, 1 sinon. Les erreurs passent par zgp_isolate_report_error
-# ci-dessus (stderr en CLI, résumé Zenity en fin d'exécution en GUI) ; la progression normale
-# (copie en cours, etc.) reste gérée séparément par l'appelant/zgu_gui_copy_tree.
+# ci-dessus (stderr) ; la progression normale (copie en cours, etc.) reste affichée séparément
+# via les messages "t isolate.copying_*_cli" au fil de la copie.
 zgp_isolate_one() {
   local slug="$1"
   local giga_dir="${bl_dir_by_slug[${slug}]}"
@@ -585,23 +509,6 @@ except Exception:
     return 1
   }
 
-  local zen_title="" zen_text=""
-  [[ "${will_use_zenity}" = true ]] && zen_title="$(t isolate.copying_base_gui_title "${game_name}")"
-
-  # Préfixe "N/Total : nom -- " ajouté devant le texte de la fenêtre PARTAGÉE quand plusieurs
-  # jeux d'un même store sont isolés en une seule passe (voir isolate_using_batch, réglé plus
-  # bas dans ce fichier avant la boucle "Exécution") -- même mécanisme que
-  # zgp-game-installer.sh, pour éviter qu'un store de 200 jeux ouvre et referme une fenêtre
-  # (et envoie une notification desktop) par jeu.
-  zgp_isolate_batch_text() {
-    local base_text="$1"
-    if [[ "${isolate_using_batch:-false}" = true ]]; then
-      t isolate.batch_progress_item "${isolate_idx}" "${isolate_total}" "${game_name}" "${base_text}"
-    else
-      echo "${base_text}"
-    fi
-  }
-
   # --- 1. Copie du socle (launcher, credentials, session) ---
   if [[ "${store}" = "ubisoft" ]]; then
     # Cas particulier : le socle EST "Ubisoft Game Launcher/" moins les sous-dossiers
@@ -610,18 +517,8 @@ except Exception:
     local entry entry_rel
     while IFS= read -r entry; do
       entry_rel="${ubi_root}/$(basename "${entry}")"
-      if [[ "${will_use_zenity}" = true ]]; then
-        zen_text="$(zgp_isolate_batch_text "$(t isolate.copying_base_gui_text)")"
-        zgp_copy_rel_gui "${giga_dir}" "${new_prefix_dir}" "${entry_rel}" "${zen_title}" "${zen_text}"
-      else
-        t isolate.copying_base_cli "${game_name}"
-        zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${entry_rel}"
-      fi || {
-        copy_exit=$?
-        if [[ "${copy_exit}" -eq 2 ]]; then
-          rm -rf "${new_prefix_dir}"
-          return 2
-        fi
+      t isolate.copying_base_cli "${game_name}"
+      zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${entry_rel}" || {
         zgp_isolate_report_error "$(t isolate.copy_failed "${game_name}")"
         zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=copie_echouee"
         rm -rf "${new_prefix_dir}"
@@ -632,18 +529,8 @@ except Exception:
     local socle_rel
     while IFS= read -r socle_rel; do
       [[ -z "${socle_rel}" ]] && continue
-      if [[ "${will_use_zenity}" = true ]]; then
-        zen_text="$(zgp_isolate_batch_text "$(t isolate.copying_base_gui_text)")"
-        zgp_copy_rel_gui "${giga_dir}" "${new_prefix_dir}" "${socle_rel}" "${zen_title}" "${zen_text}"
-      else
-        t isolate.copying_base_cli "${game_name}"
-        zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${socle_rel}"
-      fi || {
-        copy_exit=$?
-        if [[ "${copy_exit}" -eq 2 ]]; then
-          rm -rf "${new_prefix_dir}"
-          return 2
-        fi
+      t isolate.copying_base_cli "${game_name}"
+      zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${socle_rel}" || {
         zgp_isolate_report_error "$(t isolate.copy_failed "${game_name}")"
         zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=copie_echouee"
         rm -rf "${new_prefix_dir}"
@@ -654,18 +541,8 @@ except Exception:
 
   # --- 2. Copie du dossier du jeu (uniquement celui-ci, jamais les autres jeux) ---
   for rp in "${game_rel_paths[@]}"; do
-    if [[ "${will_use_zenity}" = true ]]; then
-      zen_text="$(zgp_isolate_batch_text "$(t isolate.copying_game_gui_text)")"
-      zgp_copy_rel_gui "${giga_dir}" "${new_prefix_dir}" "${rp}" "${zen_title}" "${zen_text}"
-    else
-      t isolate.copying_game_cli "${game_name}"
-      zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${rp}"
-    fi || {
-      copy_exit=$?
-      if [[ "${copy_exit}" -eq 2 ]]; then
-        rm -rf "${new_prefix_dir}"
-        return 2
-      fi
+    t isolate.copying_game_cli "${game_name}"
+    zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${rp}" || {
       zgp_isolate_report_error "$(t isolate.copy_failed "${game_name}")"
       zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=copie_echouee"
       rm -rf "${new_prefix_dir}"
@@ -683,7 +560,7 @@ except Exception:
   # prefix. Même filtre anti-hooks qu'à l'installation (zgp-game-installer.sh) : un YAML
   # d'origine potentiellement édité à la main ne doit pas pouvoir embarquer une commande
   # exécutée automatiquement par Lutris.
-  [[ "${will_use_zenity}" = false ]] && t isolate.registering
+  t isolate.registering
   local timestamp new_config_id new_yml new_executable=""
   timestamp=$(date +%s%N)
   new_config_id="${new_slug}-${timestamp}"
@@ -791,7 +668,7 @@ EOF
   # spec) : réalisée seulement après confirmation que la copie a bien produit un préfixe non
   # vide, pour ne jamais perdre les fichiers du jeu si la copie a échoué à mi-chemin.
   if [[ -n "$(find "${new_prefix_dir}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
-    [[ "${will_use_zenity}" = false ]] && t isolate.purging
+    t isolate.purging
     for rp in "${game_rel_paths[@]}"; do
       local src="${giga_dir}/${rp}" real_src
       real_src=$(realpath -e "${src}" 2>/dev/null)
@@ -804,83 +681,21 @@ EOF
   rm -f "${lutris_config_dir}/${old_configpath}.yml" 2>/dev/null
 
   zgu_log "isolate" "OK" "slug=${slug} nouveau_slug=${new_slug} store=${store} nom=${game_name}"
-  if [[ "${will_use_zenity}" = true ]]; then
-    # En mode lot (plusieurs jeux du même store), pas de notification desktop individuelle
-    # par jeu -- un store de 200 jeux en enverrait 200 d'affilée. Un seul résumé final est
-    # envoyé après la boucle "Exécution" plus bas dans ce fichier.
-    if [[ "${isolate_using_batch:-false}" = false ]]; then
-      notify-send "$(t isolate.notify_title)" "$(t isolate.notify_body "${game_name}")" 2>/dev/null
-    fi
-  else
-    zgu_cli_ok "$(t isolate.done_cli "${game_name}")"
-  fi
+  zgu_cli_ok "$(t isolate.done_cli "${game_name}")"
   return 0
 }
 
 # ---------------------------------------------------------------------------------------------
 # --- Exécution ---
-
-# Fenêtre de progression PARTAGÉE (voir zgu_batch_progress_open dans zgu-progress-utils.sh),
-# même principe que zgp-game-installer.sh : "lpm isolate" traite TOUS les jeux d'un même store
-# en une seule passe (potentiellement 100+ jeux), et chacun ouvrait/refermait sa propre fenêtre
-# (une par étape de copie) sans ça -- en plus d'envoyer une notification desktop par jeu.
-isolate_total=${#slugs_to_isolate[@]}
-isolate_using_batch=false
-if [[ "${will_use_zenity}" = true ]] && [[ "${isolate_total}" -gt 1 ]]; then
-  isolate_using_batch=true
-  zgu_batch_progress_open "$(t isolate.batch_progress_title "${isolate_total}")"
-fi
-
+# bin/lpm n'a plus aucun point d'entrée interactif : la fenêtre de progression Zenity partagée
+# et le résumé/notification de fin de lot qui l'accompagnaient ont été retirés ci-dessous, ainsi
+# que l'annulation en cours de lot (code retour 2 de zgp_isolate_one, qui ne peut plus se
+# produire sans la fenêtre Zenity qui la déclenchait).
 exit_code=0
-isolate_idx=0
-isolate_success_count=0
-isolate_cancelled=false
 for target_slug in "${slugs_to_isolate[@]}"; do
-  isolate_idx=$((isolate_idx + 1))
   zgp_isolate_one "${target_slug}"
   isolate_one_status=$?
-  if [[ "${isolate_one_status}" -eq 0 ]]; then
-    isolate_success_count=$((isolate_success_count + 1))
-  elif [[ "${isolate_one_status}" -eq 2 ]]; then
-    # Annulé par l'utilisateur dans la fenêtre partagée : on arrête tout le lot ici, plutôt
-    # que de continuer (et d'accumuler une "erreur de copie" pour chacun des jeux restants,
-    # qui n'ont jamais été tentés).
-    isolate_cancelled=true
-    exit_code=1
-    break
-  else
-    exit_code=1
-  fi
+  [[ "${isolate_one_status}" -eq 0 ]] || exit_code=1
 done
-
-[[ "${isolate_using_batch}" = true ]] && zgu_batch_progress_close
-
-if [[ "${will_use_zenity}" = true ]]; then
-  if [[ "${isolate_cancelled}" = true ]]; then
-    zenity --info --title="$(t isolate.cancel_title)" --text="$(t isolate.cancel_text "${isolate_success_count}" "${isolate_total}")" 2>/dev/null
-  elif [[ "${isolate_using_batch}" = true ]]; then
-    # Résumé final reflétant le résultat RÉEL (même principe que zgp-game-installer.sh).
-    if [[ "${isolate_success_count}" -eq "${isolate_total}" ]] && [[ "${isolate_total}" -gt 0 ]]; then
-      notify-send "$(t isolate.notify_title)" "$(t isolate.notify_body_batch "${isolate_success_count}")" 2>/dev/null
-    elif [[ "${isolate_success_count}" -eq 0 ]]; then
-      notify-send "$(t isolate.notify_title_none)" "$(t isolate.notify_body_none)" 2>/dev/null
-    else
-      notify-send "$(t isolate.notify_title_partial)" "$(t isolate.notify_body_partial "${isolate_success_count}" "${isolate_total}")" 2>/dev/null
-    fi
-  fi
-fi
-
-# Résumé Zenity des échecs éventuels (mode GUI uniquement) : voir la déclaration de
-# gui_error_messages plus haut. Affiché une seule fois après toute la boucle (plutôt qu'un
-# dialogue par jeu en échec) pour ne pas empiler les fenêtres si plusieurs jeux d'un même
-# store échouent -- les succès restent, eux, notifiés individuellement (notify-send) au fil
-# de la boucle, comme avant.
-if [[ "${will_use_zenity}" = true ]] && [[ ${#gui_error_messages[@]} -gt 0 ]]; then
-  errors_text=$(printf '%s\n' "${gui_error_messages[@]}")
-  zenity --error --title="$(t isolate.errors_gui_title)" --width=550 \
-    --text="$(t isolate.errors_gui_intro)
-
-${errors_text}" 2>/dev/null
-fi
 
 exit "${exit_code}"

@@ -1,14 +1,14 @@
 # Maintainer: Harry <harry.richmond@rogerbytes.com>
 pkgname=lpm
-pkgver=0.9.2
+pkgver=0.9.3
 pkgrel=1
 pkgdesc="Package manager for Lutris (Wine/Proton games and runners)"
 arch=('any')
 url="https://rogerbytes.com"
 license=('MIT' 'GPL3')  # MIT: lpm code -- GPL3: assets/icons/application-x-zg{p,r}-*.svg
                         # (traced artwork from Mint-L-Blue, see packaging/debian/copyright)
-depends=('bash' 'python' 'python-yaml' 'python-gobject' 'python-evdev' 'sdl2' 'sqlite' 'zenity' 'zstd' 'libarchive'
-         'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme')
+depends=('bash' 'python' 'python-yaml' 'python-gobject' 'python-evdev' 'sdl2' 'sqlite' 'zstd' 'libarchive'
+         'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme' 'gtk4>=4.10' 'libadwaita>=1.4')
 optdepends=('lutris: manage Lutris games'
             'wine: run Windows games'
             'winetricks: Windows dependencies inside wineprefixes'
@@ -24,6 +24,15 @@ package() {
   cd "$srcdir/$pkgname-$pkgver"
 
   install -Dm755 bin/lpm "$pkgdir/usr/bin/lpm"
+
+  # Interface graphique GTK4/Libadwaita (gui/) + son lanceur (bin/lpm-gui) : gtk4 et
+  # libadwaita sont des dépendances obligatoires (voir depends= ci-dessus), donc bin/lpm
+  # et bin/lpm-gui n'ont plus besoin de vérifier leur présence à l'exécution.
+  install -Dm755 bin/lpm-gui "$pkgdir/usr/bin/lpm-gui"
+  install -d "$pkgdir/usr/lib/lpm/gui"
+  for f in gui/*.py; do
+    install -Dm755 "$f" "$pkgdir/usr/lib/lpm/gui/$(basename "$f")"
+  done
 
   install -d "$pkgdir/usr/lib/lpm"
   for f in lib/*.sh; do

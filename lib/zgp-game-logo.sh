@@ -20,10 +20,8 @@
 # que "lpm launcher ... on" ait déjà été lancé pour ce jeu ou non -- rien n'oblige à activer
 # le launcher avant de choisir son logo, ni l'inverse.
 #
-# $1, $2... = slugs de jeux cibles en CLI, ou "--all" pour tous les jeux éligibles. Vide =>
-# mode interactif Zenity, liste à cocher de tous les jeux installés, pré-cochant uniquement
-# ceux qui n'ont pas encore de logo (voir zgp_logo_has_custom_logo plus bas -- simple présence
-# de $GAMEDIR/splash/logo.png).
+# $1, $2... = slugs de jeux cibles en CLI (toujours non vide : bin/lpm n'a plus aucun point
+# d'entrée interactif), ou "--all" pour tous les jeux éligibles.
 cli_targets=("$@")
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,13 +31,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-
-will_use_zenity=true
-[[ ${#cli_targets[@]} -gt 0 ]] && will_use_zenity=false
 
 # Même principe que zgp-game-icon.sh/zgp-game-splash.sh : clé strictement personnelle, jamais
 # partagée/embarquée dans lpm, réutilise le MÊME fichier de clé que "lpm icon"/"lpm splash" --
@@ -51,9 +44,6 @@ sgdb_key=""
 # --- 1. Vérification des dépendances ---
 zgp_logo_report_error_early() {
   local msg="$1"
-  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zenity --error --text="${msg}" 2>/dev/null
-  fi
   echo "${msg}" >&2
 }
 
@@ -63,11 +53,6 @@ for cmd in sqlite3 curl python3 realpath; do
     exit 1
   fi
 done
-
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t logo.zenity_missing)"
-  exit 1
-fi
 
 # ImageMagick : toute image récupérée (png/jpeg/webp) est systématiquement repassée par
 # "convert"/"magick" avant d'être posée en "logo.png" -- garantit un vrai PNG valide en
@@ -96,9 +81,7 @@ lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/syste
 lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 games_dir="${HOME}/Games"
 
-logo_display_mode="gui"
-[[ "${will_use_zenity}" = false ]] && logo_display_mode="cli"
-version=$(zgu_resolve_lutris_version "${logo_display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
   zgp_logo_report_error_early "$(t logo.lutris_missing)"
   exit 1
@@ -166,63 +149,26 @@ if [[ ${#sorted_slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Un logo compte comme "personnalisé" dès que $GAMEDIR/splash/logo.png existe -- ce fichier
-# n'a jamais pu être posé que par l'utilisateur lui-même (à la main, ou via "lpm logo").
-zgp_logo_has_custom_logo() {
-  local f="${1}/splash/logo.png"
-  [[ -f "${f}" ]]
-}
-
 # --- 4. Sélection des jeux cibles ---
+# Ancien mode interactif Zenity (liste à cocher, précochant les jeux sans logo personnalisé)
+# supprimé : bin/lpm n'a plus aucun point d'entrée interactif, "cli_targets" est donc
+# toujours non vide ici.
 targets=()
 
-if [[ ${#cli_targets[@]} -gt 0 ]]; then
-  # --- MODE CLI ---
-  if [[ "${cli_targets[0]}" = "--all" ]]; then
-    targets=("${sorted_slugs[@]}")
-  else
-    for target_slug in "${cli_targets[@]}"; do
-      if [[ -n "${name_by_slug[${target_slug}]:-}" ]]; then
-        targets+=("${target_slug}")
-      elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
-        zgu_cli_error "$(t logo.slug_blacklisted "${target_slug}")"
-        exit 1
-      else
-        zgu_cli_error "$(t logo.slug_not_found "${target_slug}")"
-        exit 1
-      fi
-    done
-  fi
+if [[ "${cli_targets[0]}" = "--all" ]]; then
+  targets=("${sorted_slugs[@]}")
 else
-  # --- MODE INTERACTIF (Zenity) ---
-  # Précoche uniquement les jeux sans logo personnalisé -- voir
-  # zgu_gui_checklist_with_states dans zgu-checklist-utils.sh pour la mécanique d'états
-  # différenciés par ligne (même usage que zgp-game-icon.sh/zgp-game-splash.sh).
-  checklist_values=()
-  for g_slug in "${sorted_slugs[@]}"; do
-    if zgp_logo_has_custom_logo "${dir_by_slug[${g_slug}]}"; then
-      checklist_values+=("FALSE" "${name_by_slug[${g_slug}]}" "${g_slug}")
+  for target_slug in "${cli_targets[@]}"; do
+    if [[ -n "${name_by_slug[${target_slug}]:-}" ]]; then
+      targets+=("${target_slug}")
+    elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
+      zgu_cli_error "$(t logo.slug_blacklisted "${target_slug}")"
+      exit 1
     else
-      checklist_values+=("TRUE" "${name_by_slug[${g_slug}]}" "${g_slug}")
+      zgu_cli_error "$(t logo.slug_not_found "${target_slug}")"
+      exit 1
     fi
   done
-
-  selected=$(zgu_gui_checklist_with_states 2 \
-    "$(t logo.select_title)" \
-    "$(t logo.select_text)" \
-    650 450 \
-    "$(t logo.select_col_fetch)" "$(t logo.select_col_game)" "$(t logo.select_col_slug)" \
-    -- \
-    "${checklist_values[@]}")
-
-  [[ -z "${selected}" ]] && exit 0
-
-  IFS=$'\x1f' read -r -a selected_flat <<< "${selected}"
-  for (( i=1; i<${#selected_flat[@]}; i+=2 )); do
-    targets+=("${selected_flat[i]}")
-  done
-
-  [[ ${#targets[@]} -eq 0 ]] && exit 0
 fi
 
 # --- 5. Clé API SteamGridDB (identique à zgp-game-icon.sh/zgp-game-splash.sh -- même
@@ -254,15 +200,9 @@ zgp_sgdb_ensure_key() {
 
   local candidate first_try=true
   while true; do
-    if [[ "${will_use_zenity}" = true ]]; then
-      [[ "${first_try}" = false ]] && zenity --error --text="$(t logo.key_invalid)" 2>/dev/null
-      command -v xdg-open >/dev/null 2>&1 && xdg-open "https://www.steamgriddb.com/profile/preferences/api" >/dev/null 2>&1 &
-      candidate=$(zenity --entry --title="$(t logo.key_title)" --text="$(t logo.key_text)" --width=500 2>/dev/null)
-    else
-      [[ "${first_try}" = false ]] && t logo.key_invalid >&2
-      t logo.key_text_cli
-      read -r -p "$(t logo.key_prompt_cli)" candidate
-    fi
+    [[ "${first_try}" = false ]] && t logo.key_invalid >&2
+    t logo.key_text_cli
+    read -r -p "$(t logo.key_prompt_cli)" candidate
     first_try=false
 
     [[ -z "${candidate}" ]] && return 1
@@ -366,14 +306,11 @@ zgp_steam_logo_url() {
 #
 # Retourne 0 si un logo a bien été posé, 1 sinon (jeu introuvable sur SteamGridDB et sur
 # Steam, aucun logo disponible, téléchargement/conversion échoués, ou annulation par
-# l'utilisateur en mode GUI) -- jamais de silence : chaque échec passe par
-# zgp_logo_report_skip, affiché sur stderr en CLI et accumulé pour un résumé Zenity unique en
-# fin de lot en GUI (même principe que zgp-game-icon.sh/zgp-game-splash.sh).
-declare -a gui_skip_messages=()
+# l'utilisateur) -- jamais de silence : chaque échec passe par zgp_logo_report_skip, affiché
+# sur stderr.
 zgp_logo_report_skip() {
   local msg="$1"
   echo "${msg}" >&2
-  [[ "${will_use_zenity}" = true ]] && gui_skip_messages+=("${msg}")
 }
 
 zgp_logo_save_from_url() {
@@ -415,40 +352,20 @@ zgp_logo_process_one() {
     n_matches=$(printf '%s\n' "${search_results}" | grep -c .)
 
     if [[ "${n_matches}" -gt 1 ]]; then
-      if [[ "${will_use_zenity}" = true ]]; then
-        local zargs=() g_gid g_sgdb_name first=true
-        while IFS=$'\t' read -r g_gid g_sgdb_name; do
-          [[ -z "${g_gid}" ]] && continue
-          if [[ "${first}" = true ]]; then
-            zargs+=("TRUE" "${g_gid}" "${g_sgdb_name}")
-            first=false
-          else
-            zargs+=("FALSE" "${g_gid}" "${g_sgdb_name}")
-          fi
-        done <<< "${search_results}"
-
-        chosen_game_id=$(zenity --list --radiolist \
-          --title="$(t logo.pick_game_title "${g_name}")" \
-          --text="$(t logo.pick_game_text "${g_name}")" \
-          --column="" --column="ID" --column="$(t logo.pick_game_col)" \
-          --hide-column=2 --print-column=2 \
-          "${zargs[@]}" --width=550 --height=420 2>/dev/null)
-      else
-        t logo.pick_game_text_cli "${g_name}"
-        local -A idx_to_id=() idx_to_name=()
-        local idx=1 g_gid g_sgdb_name
-        while IFS=$'\t' read -r g_gid g_sgdb_name; do
-          [[ -z "${g_gid}" ]] && continue
-          printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
-          idx_to_id["${idx}"]="${g_gid}"
-          idx_to_name["${idx}"]="${g_sgdb_name}"
-          idx=$((idx + 1))
-        done <<< "${search_results}"
-        local choice
-        read -r -p "$(t logo.pick_game_prompt_cli)" choice
-        chosen_game_id="${idx_to_id[${choice}]:-}"
-        chosen_game_name="${idx_to_name[${choice}]:-}"
-      fi
+      t logo.pick_game_text_cli "${g_name}"
+      local -A idx_to_id=() idx_to_name=()
+      local idx=1 g_gid g_sgdb_name
+      while IFS=$'\t' read -r g_gid g_sgdb_name; do
+        [[ -z "${g_gid}" ]] && continue
+        printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
+        idx_to_id["${idx}"]="${g_gid}"
+        idx_to_name["${idx}"]="${g_sgdb_name}"
+        idx=$((idx + 1))
+      done <<< "${search_results}"
+      local choice
+      read -r -p "$(t logo.pick_game_prompt_cli)" choice
+      chosen_game_id="${idx_to_id[${choice}]:-}"
+      chosen_game_name="${idx_to_name[${choice}]:-}"
 
       if [[ -z "${chosen_game_id}" ]]; then
         zgp_logo_report_skip "$(t logo.cancelled_by_user "${g_name}")"
@@ -474,72 +391,10 @@ zgp_logo_process_one() {
   local chosen_url=""
 
   if [[ -n "${logos_urls}" ]]; then
-    local n_logos
-    n_logos=$(printf '%s\n' "${logos_urls}" | grep -c .)
-
-    if [[ "${n_logos}" -gt 1 ]] && [[ "${will_use_zenity}" = true ]]; then
-      # Sélection visuelle : même mécanique que zgp-game-icon.sh/zgp-game-splash.sh --
-      # vignettes "thumb" légères, téléchargées en parallèle. Recadrage "-background none"
-      # (transparence préservée dans l'aperçu aussi, pas de fond blanc/noir trompeur), format
-      # large ("300x120") proche du ratio habituel d'un logo, sans forcer de crop carré comme
-      # pour les icônes.
-      local tmp_dir icon_urls_arr=() thumb_urls_arr=() thumb_paths=() u thumb_u ext raw_thumb padded_thumb i
-      tmp_dir=$(mktemp -d)
-      i=0
-      while IFS=$'\t' read -r u thumb_u; do
-        [[ -z "${u}" ]] && continue
-        [[ -z "${thumb_u}" ]] && thumb_u="${u}"
-        icon_urls_arr+=("${u}")
-        thumb_urls_arr+=("${thumb_u}")
-        i=$((i + 1))
-      done <<< "${logos_urls}"
-
-      local -a dl_pids=()
-      for i in "${!thumb_urls_arr[@]}"; do
-        ext="${thumb_urls_arr[${i}]##*.}"
-        raw_thumb="${tmp_dir}/${i}.raw.${ext}"
-        (curl -sLf --max-time 15 "${thumb_urls_arr[${i}]}" -o "${raw_thumb}" 2>/dev/null) &
-        dl_pids+=("$!")
-      done
-      for pid in "${dl_pids[@]}"; do
-        wait "${pid}" 2>/dev/null
-      done
-
-      for i in "${!thumb_urls_arr[@]}"; do
-        ext="${thumb_urls_arr[${i}]##*.}"
-        raw_thumb="${tmp_dir}/${i}.raw.${ext}"
-        padded_thumb="${tmp_dir}/${i}.png"
-        if [[ -s "${raw_thumb}" ]] && "${convert_bin[@]}" "${raw_thumb}" -background none -resize 300x120 -gravity center -extent 300x120 "${padded_thumb}" 2>/dev/null && [[ -s "${padded_thumb}" ]]; then
-          thumb_paths+=("${padded_thumb}")
-        else
-          thumb_paths+=("")
-        fi
-      done
-
-      local imglist_args=()
-      for i in "${!icon_urls_arr[@]}"; do
-        [[ -n "${thumb_paths[${i}]}" ]] || continue
-        imglist_args+=("${thumb_paths[${i}]}" "$((i + 1))")
-      done
-
-      local chosen_idx
-      chosen_idx=$(zenity --list --imagelist \
-        --title="$(t logo.pick_logo_title "${g_name}")" \
-        --text="$(t logo.pick_logo_text "${g_name}")" \
-        --column="$(t logo.pick_logo_col_preview)" --column="$(t logo.pick_logo_col_num)" \
-        --print-column=2 \
-        "${imglist_args[@]}" --width=650 --height=450 2>/dev/null)
-
-      rm -rf "${tmp_dir}"
-
-      if [[ -z "${chosen_idx}" ]]; then
-        zgp_logo_report_skip "$(t logo.cancelled_by_user "${g_name}")"
-        return 1
-      fi
-      chosen_url="${icon_urls_arr[$((chosen_idx - 1))]}"
-    else
-      chosen_url=$(printf '%s\n' "${logos_urls}" | head -n1 | cut -f1)
-    fi
+    # Ancien sélecteur visuel Zenity ("--list --imagelist", vignettes téléchargées/recadrées
+    # en parallèle) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, donc en CLI
+    # on prend systématiquement le premier logo candidat.
+    chosen_url=$(printf '%s\n' "${logos_urls}" | head -n1 | cut -f1)
   fi
 
   # --- Repli Steam : uniquement si SteamGridDB n'a rien donné (jeu introuvable, ou trouvé
@@ -570,7 +425,7 @@ zgp_logo_process_one() {
   fi
 
   zgu_log "logo" "OK" "slug=${slug} nom=${g_name}"
-  [[ "${will_use_zenity}" = false ]] && t logo.done_cli "${g_name}"
+  t logo.done_cli "${g_name}"
   return 0
 }
 
@@ -581,15 +436,5 @@ exit_code=0
 for target_slug in "${targets[@]}"; do
   zgp_logo_process_one "${target_slug}" "${name_by_slug[${target_slug}]}" "${dir_by_slug[${target_slug}]}" || exit_code=1
 done
-
-if [[ "${will_use_zenity}" = true ]] && [[ ${#gui_skip_messages[@]} -gt 0 ]]; then
-  errors_text=$(printf '%s\n' "${gui_skip_messages[@]}")
-  zenity --error --title="$(t logo.errors_gui_title)" --width=550 \
-    --text="$(t logo.errors_gui_intro)
-
-${errors_text}" 2>/dev/null
-elif [[ "${will_use_zenity}" = true ]]; then
-  zenity --info --text="$(t logo.done_gui "${#targets[@]}")" 2>/dev/null
-fi
 
 exit "${exit_code}"

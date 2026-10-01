@@ -1,0 +1,34 @@
+#!/bin/bash
+# --- Lanceur de l'interface graphique GTK4/Libadwaita de lpm ---
+#
+# Remplace entièrement l'ancien menu Zenity (voir gui/lpm_gtk.py) : cette interface
+# n'implémente aucune logique métier, elle appelle les mêmes scripts de lib/ en mode CLI,
+# exactement comme le ferait un terminal.
+set -euo pipefail
+
+# Même détection Dev vs Global que bin/lpm (voir ce fichier) : deux emplacements
+# d'installation système possibles selon l'origine du binaire (install.sh vs paquet
+# .deb/.rpm/Arch), sinon on suppose le mode dev (lancé directement depuis le dépôt).
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "${script_dir}" in
+  /usr/local/bin) gui_dir="/usr/local/lib/lpm/gui" ;;
+  /usr/bin)       gui_dir="/usr/lib/lpm/gui" ;;
+  *)              gui_dir="$(dirname "${script_dir}")/gui" ;;
+esac
+
+if [[ ! -f "${gui_dir}/lpm_gtk.py" ]]; then
+  echo "Erreur critique : l'interface graphique est introuvable à : ${gui_dir}" >&2
+  exit 1
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Erreur : python3 est requis pour l'interface graphique." >&2
+  exit 1
+fi
+
+# PyGObject + GTK4 (>= 4.10) + Libadwaita (>= 1.4) sont une dépendance obligatoire du
+# paquet lpm depuis la version 0.9.3 (voir packaging/) : plus de vérification ici, un
+# paquet installé les garantit déjà présents. Si lpm_gtk.py plante quand même à l'import
+# de "gi"/Gtk/Adw, c'est que l'installation elle-même est cassée (installation manuelle
+# hors paquet, environnement bricolé...), pas un cas à gérer silencieusement ici.
+exec python3 "${gui_dir}/lpm_gtk.py" "$@"

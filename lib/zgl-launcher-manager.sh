@@ -45,54 +45,28 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-checklist-utils.sh
-source "${script_dir}/zgu-checklist-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# --- 0. Mode CLI vs GUI, et validation de la syntaxe CLI ---
-will_use_zenity=true
+# --- 0. Validation de la syntaxe CLI (bin/lpm n'a plus aucun point d'entrée interactif :
+# plus de menu/sélection Zenity, uniquement cette commande explicite en terminal) ---
 cli_action=""
 cli_slugs=()
 
-if [[ ${#cli_args[@]} -gt 0 ]]; then
-  will_use_zenity=false
-  last_arg="${cli_args[-1]}"
-  if [[ "${last_arg}" = "off" ]] || [[ "${last_arg}" = "on" ]]; then
-    cli_action="${last_arg}"
-    cli_slugs=("${cli_args[@]:0:$(( ${#cli_args[@]} - 1 ))}")
-  fi
-  if [[ -z "${cli_action}" ]] || [[ ${#cli_slugs[@]} -eq 0 ]]; then
-    zgu_cli_error "$(t launcher.cli_usage)"
-    exit 1
-  fi
+last_arg="${cli_args[-1]:-}"
+if [[ "${last_arg}" = "off" ]] || [[ "${last_arg}" = "on" ]]; then
+  cli_action="${last_arg}"
+  cli_slugs=("${cli_args[@]:0:$(( ${#cli_args[@]} - 1 ))}")
 fi
-
-display_mode="gui"
-[[ "${will_use_zenity}" = false ]] && display_mode="cli"
+if [[ -z "${cli_action}" ]] || [[ ${#cli_slugs[@]} -eq 0 ]]; then
+  zgu_cli_error "$(t launcher.cli_usage)"
+  exit 1
+fi
 
 zgp_launcher_report_error_early() {
   local msg="$1"
-  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zenity --error --text="${msg}" 2>/dev/null
-  fi
   echo "${msg}" >&2
 }
-
-# Message de succès/information (pas une erreur) : en GUI, une boîte --info ; en CLI, rien
-# ici -- le message équivalent est déjà affiché par la boucle d'exécution via zgu_cli_ok,
-# pas la peine de l'imprimer deux fois.
-zgp_launcher_report_info() {
-  local msg="$1"
-  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    zenity --info --text="${msg}" --width=500 2>/dev/null
-  fi
-}
-
-if [[ "${will_use_zenity}" = true ]] && ! command -v zenity >/dev/null 2>&1; then
-  zgu_cli_error "$(t launcher.zenity_missing)"
-  exit 1
-fi
 
 for cmd in python3 sqlite3; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
@@ -101,9 +75,6 @@ for cmd in python3 sqlite3; do
   fi
 done
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  if [[ "${will_use_zenity}" = true ]]; then
-    zenity --error --text="$(t launcher.pyyaml_missing_gui)" 2>/dev/null
-  fi
   zgu_cli_error "$(t launcher.pyyaml_missing_cli)"
   exit 1
 fi
@@ -119,7 +90,7 @@ lutris_flatpak_runners_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runne
 lutris_package_runners_dir="${HOME}/.local/share/lutris/runners/wine"
 games_dir="${HOME}/Games"
 
-version=$(zgu_resolve_lutris_version "${display_mode}" "${lutris_package_db}" "")
+version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
   zgp_launcher_report_error_early "$(t launcher.lutris_missing)"
   exit 1
@@ -147,25 +118,8 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# --- 2. Choix activer/désactiver ---
-if [[ -n "${cli_action}" ]]; then
-  action="${cli_action}"
-else
-  choice=$(zenity --list --radiolist \
-    --title="$(t launcher.action_title)" \
-    --text="$(t launcher.action_text)" \
-    --column="" --column="$(t launcher.action_col)" \
-    TRUE "$(t launcher.action_activate)" \
-    FALSE "$(t launcher.action_deactivate)" \
-    --width=420 --height=250 2>/dev/null)
-  if [[ "${choice}" = "$(t launcher.action_activate)" ]]; then
-    action="on"
-  elif [[ "${choice}" = "$(t launcher.action_deactivate)" ]]; then
-    action="off"
-  else
-    exit 0
-  fi
-fi
+# --- 2. Choix activer/désactiver (CLI uniquement) ---
+action="${cli_action}"
 
 # --- 3. Liste des jeux Wine/Proton, filtrée par état actuel dans le YAML ---
 games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
@@ -223,66 +177,27 @@ done
 
 targets=()
 
-if [[ "${will_use_zenity}" = false ]]; then
-  # --- MODE CLI ---
-  declare -A eligible_lookup
-  for g_slug in "${eligible_slugs[@]}"; do
-    eligible_lookup["${g_slug}"]=1
-  done
+# --- Sélection des cibles (CLI uniquement : sélection graphique via Zenity retirée) ---
+declare -A eligible_lookup
+for g_slug in "${eligible_slugs[@]}"; do
+  eligible_lookup["${g_slug}"]=1
+done
 
-  for target_slug in "${cli_slugs[@]}"; do
-    if [[ -z "${name_by_slug[${target_slug}]:-}" ]]; then
-      zgu_cli_error "$(t launcher.slug_not_found "${target_slug}")"
-      exit 1
-    fi
-    if [[ -z "${eligible_lookup[${target_slug}]:-}" ]]; then
-      if [[ "${action}" = "on" ]]; then
-        zgu_cli_error "$(t launcher.already_active "${target_slug}")"
-      else
-        zgu_cli_error "$(t launcher.already_inactive "${target_slug}")"
-      fi
-      exit 1
-    fi
-    targets+=("${target_slug}")
-  done
-else
-  # --- MODE GUI ---
-  if [[ ${#eligible_slugs[@]} -eq 0 ]]; then
-    if [[ "${action}" = "on" ]]; then
-      zenity --info --text="$(t launcher.nothing_to_activate)" 2>/dev/null
-    else
-      zenity --info --text="$(t launcher.nothing_to_deactivate)" 2>/dev/null
-    fi
-    exit 0
+for target_slug in "${cli_slugs[@]}"; do
+  if [[ -z "${name_by_slug[${target_slug}]:-}" ]]; then
+    zgu_cli_error "$(t launcher.slug_not_found "${target_slug}")"
+    exit 1
   fi
-
-  declare -A slug_by_name_eligible=()
-  checklist_values=()
-  for g_slug in "${eligible_slugs[@]}"; do
-    checklist_values+=("${name_by_slug[${g_slug}]}" "${g_slug}")
-    slug_by_name_eligible["${name_by_slug[${g_slug}]}"]="${g_slug}"
-  done
-
-  select_title="$(t launcher.select_title_activate)"
-  [[ "${action}" = "off" ]] && select_title="$(t launcher.select_title_deactivate)"
-
-  selected=$(zgu_gui_checklist_toggle_all "FALSE" 2 \
-    "${select_title}" \
-    "$(t launcher.select_text)" \
-    650 450 \
-    "$(t launcher.select_col_check)" "$(t launcher.select_col_game)" "$(t launcher.select_col_slug)" \
-    -- \
-    "${checklist_values[@]}")
-
-  [[ -z "${selected}" ]] && exit 0
-
-  IFS=$'\x1f' read -r -a selected_names <<< "${selected}"
-  for g_name in "${selected_names[@]}"; do
-    [[ -n "${slug_by_name_eligible[${g_name}]:-}" ]] && targets+=("${slug_by_name_eligible[${g_name}]}")
-  done
-
-  [[ ${#targets[@]} -eq 0 ]] && exit 0
-fi
+  if [[ -z "${eligible_lookup[${target_slug}]:-}" ]]; then
+    if [[ "${action}" = "on" ]]; then
+      zgu_cli_error "$(t launcher.already_active "${target_slug}")"
+    else
+      zgu_cli_error "$(t launcher.already_inactive "${target_slug}")"
+    fi
+    exit 1
+  fi
+  targets+=("${target_slug}")
+done
 
 # --- 4. Application : activation ---
 zgp_launcher_apply_on() {
@@ -500,8 +415,10 @@ if [[ -z "\${runtime_script}" ]]; then
     "\$(date +%FT%T%z 2>/dev/null)" "launcher-runtime" "ERREUR" \
     "gamedir=${game_dir} raison=runtime_introuvable_bac_a_sable script_dir=${script_dir}" \
     >> "\${log_dir}/lpm.log" 2>/dev/null
-  command -v zenity >/dev/null 2>&1 && zenity --error --width=550 \
-    --text="$(t launcher.runtime_sandbox_unreachable "${script_dir}")" 2>/dev/null &
+  # Pas de notification graphique ici (ancien "zenity --error" retiré, même principe que
+  # zgl-launcher-runtime.sh) : déjà entièrement journalisé ci-dessus, et ce relais ne doit
+  # jamais bloquer le lancement du jeu pour un souci qu'il ne peut pas afficher de façon
+  # fiable (c'est précisément le cas où zenity lui-même serait injoignable aussi).
   exit 0
 fi
 
@@ -550,23 +467,9 @@ with open(yml_path, "w") as f:
 
   zgu_log "launcher" "OK" "slug=${slug} action=on"
 
-  # Propose d'ouvrir directement le dossier contenant lpm-launcher.yml -- ce fichier est
-  # celui que l'utilisateur doit éditer à la main pour ajouter/adapter des entrées, et
-  # rien avant ça ne lui montrait ce dossier autrement qu'en texte dans un message.
-  # Uniquement en mode GUI (jamais en CLI pur, même logique partout ailleurs dans lpm :
-  # pas de fenêtre Zenity si slug ET action sont déjà fournis en ligne de commande) -- le
-  # chemin est déjà donné tel quel par zgu_cli_ok dans la boucle appelante en mode CLI.
-  if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-    if zenity --question \
-        --title="$(t launcher.setup_done_title)" \
-        --text="$(t launcher.setup_done "${name_by_slug[${slug}]}" "${game_dir}/lpm-launcher.yml")" \
-        --ok-label="$(t launcher.open_folder_button)" \
-        --cancel-label="$(t launcher.close_button)" \
-        --width=500 2>/dev/null; then
-      setsid xdg-open "${game_dir}" >/dev/null 2>&1 </dev/null &
-      disown
-    fi
-  fi
+  # Le chemin de lpm-launcher.yml à éditer à la main est déjà donné tel quel par
+  # zgu_cli_ok dans la boucle appelante -- plus de proposition d'ouverture de dossier
+  # via Zenity ici, bin/lpm n'a plus aucun point d'entrée interactif.
 
   # --- Lutris Flatpak : rappel de permission, best-effort ---
   #
@@ -604,7 +507,7 @@ with open(yml_path, "w") as f:
       # On propose de l'appliquer nous-mêmes plutôt que de simplement afficher la commande
       # -- l'utilisateur confirme, lpm exécute "flatpak override" lui-même. Repli sur le
       # rappel manuel (ancien comportement) si la confirmation est refusée, ou si aucun
-      # moyen de la demander n'est disponible (ni zenity, ni terminal interactif).
+      # terminal interactif n'est disponible pour la demander.
       local flatpak_question apply_now=false
       if [[ "${fp_needs_hostos}" = true ]]; then
         flatpak_question="$(t launcher.flatpak_permission_question_hostos "${script_dir}")"
@@ -612,9 +515,7 @@ with open(yml_path, "w") as f:
         flatpak_question="$(t launcher.flatpak_permission_question "${script_dir}")"
       fi
 
-      if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-        zenity --question --text="${flatpak_question}" --width=550 2>/dev/null && apply_now=true
-      elif [[ -t 0 ]]; then
+      if [[ -t 0 ]]; then
         echo "${flatpak_question}" >&2
         local reponse=""
         read -r -p "[o/N] " reponse </dev/tty 2>/dev/null
@@ -627,11 +528,7 @@ with open(yml_path, "w") as f:
         if flatpak override --user net.lutris.Lutris --filesystem="${override_target}:ro" >/dev/null 2>&1; then
           local ok_msg
           ok_msg="$(t launcher.flatpak_permission_applied_ok)"
-          if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-            zenity --info --text="${ok_msg}" --width=400 2>/dev/null
-          else
-            echo "${ok_msg}" >&2
-          fi
+          echo "${ok_msg}" >&2
           zgu_log "launcher" "OK" "slug=${slug} action=flatpak_override_applique cible=${override_target}"
         else
           local fail_msg
@@ -640,11 +537,7 @@ with open(yml_path, "w") as f:
           else
             fail_msg="$(t launcher.flatpak_permission_applied_fail "${script_dir}")"
           fi
-          if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-            zenity --error --text="${fail_msg}" --width=550 2>/dev/null
-          else
-            echo "${fail_msg}" >&2
-          fi
+          echo "${fail_msg}" >&2
           zgu_log "launcher" "ERREUR" "slug=${slug} raison=flatpak_override_echoue cible=${override_target}"
         fi
       else
@@ -654,11 +547,7 @@ with open(yml_path, "w") as f:
         else
           flatpak_hint="$(t launcher.flatpak_permission_hint "${script_dir}")"
         fi
-        if [[ "${will_use_zenity}" = true ]] && command -v zenity >/dev/null 2>&1; then
-          zenity --info --text="${flatpak_hint}" --width=550 2>/dev/null
-        else
-          echo "${flatpak_hint}" >&2
-        fi
+        echo "${flatpak_hint}" >&2
       fi
     fi
   fi
@@ -720,7 +609,6 @@ with open(yml_path, "w") as f:
   fi
 
   zgu_log "launcher" "OK" "slug=${slug} action=off"
-  zgp_launcher_report_info "$(t launcher.teardown_done "${name_by_slug[${slug}]}")"
   return 0
 }
 
@@ -730,22 +618,18 @@ for target_slug in "${targets[@]}"; do
   if [[ "${action}" = "on" ]]; then
     if zgp_launcher_apply_on "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}"; then
       n_ok=$(( n_ok + 1 ))
-      [[ "${will_use_zenity}" = false ]] && zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "${dir_by_slug[${target_slug}]}/lpm-launcher.yml")"
+      zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "${dir_by_slug[${target_slug}]}/lpm-launcher.yml")"
     else
       exit_code=1
     fi
   else
     if zgp_launcher_apply_off "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}"; then
       n_ok=$(( n_ok + 1 ))
-      [[ "${will_use_zenity}" = false ]] && zgu_cli_ok "$(t launcher.done_one_off_cli "${name_by_slug[${target_slug}]}")"
+      zgu_cli_ok "$(t launcher.done_one_off_cli "${name_by_slug[${target_slug}]}")"
     else
       exit_code=1
     fi
   fi
 done
-
-if [[ "${will_use_zenity}" = true ]] && [[ "${n_ok}" -eq 0 ]] && [[ "${exit_code}" -eq 0 ]]; then
-  exit 0
-fi
 
 exit "${exit_code}"
