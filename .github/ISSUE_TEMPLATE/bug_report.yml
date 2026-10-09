@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The more precise you are, the faster it can be fixed.
+  - type: input
+    id: version
+    attributes:
+      label: lpm version
+      description: Output of `lpm --version`
+      placeholder: v0.9.5
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and Lutris type
+      description: For example "Fedora 44, Lutris Flatpak" or "Ubuntu 24.04, Lutris native"
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did it happen?
+      options:
+        - Graphical interface (lpm-gui)
+        - Command line (lpm)
+        - Game launcher / loading screen
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did (the exact command if any), what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: lpm log
+      description: |
+        Graphical interface: System > Logs > Copy, then paste here.
+        Command line: output of `lpm log -n 50`.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, the game involved, or a file you can attach.
