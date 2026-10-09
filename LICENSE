@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 Harry <harry.richmond@rogerbytes.com>
+Copyright (c) 2026 RogerBytes
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -50,3 +50,72 @@ MIT license grants the right to copy, modify and redistribute the code and
 icon files themselves, but grants no right to use these names, this logo,
 or these icons to identify, endorse, or promote any other project, fork,
 or distribution as "Ludis Prefix Manager" or "lpm".
+
+------------------------------------------------------------------------
+
+Third-party data
+
+lib/data/gamecontrollerdb.txt is the SDL_GameControllerDB gamepad mapping
+database (https://github.com/mdqinc/SDL_GameControllerDB). It is NOT under
+the MIT license above: it keeps its own license (zlib), whose text is in
+lib/data/gamecontrollerdb-LICENSE.txt.MIT License
+
+Copyright (c) 2026 RogerBytes
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+------------------------------------------------------------------------
+
+Exception: three icon files
+
+The following files reuse vector path data from the Mint-L-Blue icon theme
+(public repository linuxmint/mint-l-icons) and remain under that theme's
+original license (GNU General Public License v3, or any later version),
+NOT under the MIT license above:
+
+  - assets/icons/application-x-zgp-game.svg
+  - assets/icons/application-x-zgr-runner.svg
+  - assets/icons/box-bg-template.svg
+
+The full text of the GPLv3 is available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+The rest of the project (code, documentation, other icons) is under the
+MIT license.
+
+------------------------------------------------------------------------
+
+Project name and logo
+
+The names "Ludis Prefix Manager" and "lpm", and the project's logo and
+application icons (including but not limited to assets/icons/lpm.svg and
+assets/icons/lpm-game-generic.svg), are not covered by this license. The
+MIT license grants the right to copy, modify and redistribute the code and
+icon files themselves, but grants no right to use these names, this logo,
+or these icons to identify, endorse, or promote any other project, fork,
+or distribution as "Ludis Prefix Manager" or "lpm".
+
+------------------------------------------------------------------------
+
+Third-party data
+
+lib/data/gamecontrollerdb.txt is the SDL_GameControllerDB gamepad mapping
+database (https://github.com/mdqinc/SDL_GameControllerDB). It is NOT under
+the MIT license above: it keeps its own license (zlib), whose text is in
+lib/data/gamecontrollerdb-LICENSE.txt.
