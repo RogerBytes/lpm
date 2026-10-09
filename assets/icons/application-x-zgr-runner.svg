@@ -4,7 +4,7 @@
     Nom de fichier = nom d'icône attendu par shared-mime-info pour ce type MIME
     ("/" du type MIME remplacé par "-").
     Forme : même silhouette de carton "package-x-generic" que application-x-zgp-game.svg
-    (reprise du thème Mint-L-Blue de Harry, dépôt public linuxmint/mint-l-icons, licence
+    (reprise du thème Mint-L-Blue, dépôt public linuxmint/mint-l-icons, licence
     GPLv3), mais recolorée avec un dégradé orange->rouge distinct (au lieu du jaune->orange
     partagé par lpm.svg et .zgp) : à petite taille (16-24px, taille d'affichage courante
     dans Nemo en vue liste), une même teinte sur les 3 icônes les rendait difficiles à

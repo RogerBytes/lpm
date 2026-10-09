@@ -2,18 +2,17 @@
 
 # --- lpm log ---
 #
-# Consultation du journal écrit par zgu_log (lib/zgu-log-utils.sh). Ne modifie jamais le
-# journal, sauf --clear (avec confirmation explicite, jamais en une seule commande -y comme
-# install/uninstall : la perte du journal n'a pas de garde-fou fonctionnel équivalent au
-# "slug déjà installé", une confirmation systématique est donc volontairement plus stricte
-# ici qu'ailleurs dans lpm).
+# Views the journal written by zgu_log (lib/zgu-log-utils.sh). Never modifies it, except
+# with --clear (explicit confirmation required, never a single -y command like
+# install/uninstall: losing the journal has no functional safeguard equivalent to
+# "slug already installed", so a systematic confirmation is deliberately stricter here).
 #
-# Usage :
-#   lpm log                    Affiche les 50 dernières lignes (les plus récentes en dernier)
-#   lpm log -n <N>              Affiche les N dernières lignes
-#   lpm log --all                Affiche tout le journal
-#   lpm log --grep <motif>       Filtre les lignes contenant <motif> (commande, statut, slug...)
-#   lpm log --clear               Vide le journal (confirmation demandée)
+# Usage:
+#   lpm log                    Show the last 50 lines (most recent last)
+#   lpm log -n <N>              Show the last N lines
+#   lpm log --all                Show the whole journal
+#   lpm log --grep <pattern>     Filter lines containing <pattern> (command, status, slug...)
+#   lpm log --clear               Empty the journal (confirmation asked)
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -72,9 +71,8 @@ if [[ "${do_clear}" = true ]]; then
   read -r -p "$(t log.clear_confirm_input) " response
   case "${response}" in
     [oOyY]|[oO][uU][iI]|[yY][eE][sS])
-      # Purge aussi le fichier de rotation (lpm.log.1, voir zgu_log_rotate_if_needed) :
-      # "vider le journal" doit vider tout ce que "lpm log" peut potentiellement
-      # référencer, pas seulement le fichier courant.
+      # Also purge the rotation file (lpm.log.1, see zgu_log_rotate_if_needed): "clear the
+      # journal" must clear everything "lpm log" can reference, not only the current file.
       : > "${ZGU_LOG_FILE}"
       rm -f -- "${ZGU_LOG_FILE}.1" 2>/dev/null || true
       zgu_cli_ok "$(t log.cleared)"
@@ -91,10 +89,9 @@ if [[ ! -f "${ZGU_LOG_FILE}" ]] || [[ ! -s "${ZGU_LOG_FILE}" ]]; then
   exit 0
 fi
 
-# Filtrage éventuel (--grep), puis limitation du nombre de lignes (sauf --all) -- dans cet
-# ordre : filtrer d'abord garantit que "-n 50" porte bien sur les 50 dernières lignes
-# CORRESPONDANTES, pas sur les 50 dernières lignes brutes parmi lesquelles seules quelques-
-# unes correspondraient.
+# Optional filtering (--grep), then line-count limit (unless --all), in this order:
+# filtering first ensures "-n 50" applies to the last 50 MATCHING lines, not to the last 50
+# raw lines of which only a few might match.
 if [[ -n "${grep_pattern}" ]]; then
   filtered=$(grep -F -- "${grep_pattern}" "${ZGU_LOG_FILE}")
 else

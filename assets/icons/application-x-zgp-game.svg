@@ -4,13 +4,13 @@
     Nom de fichier = nom d'icône attendu par shared-mime-info pour ce type MIME
     ("/" du type MIME remplacé par "-").
     Forme : silhouette de carton "package-x-generic" reprise telle quelle du thème
-    d'icônes de Harry (Mint-L-Blue, dépôt public linuxmint/mint-l-icons, licence GPLv3 ;
+    d'icônes Mint-L-Blue (le dépôt public linuxmint/mint-l-icons, licence GPLv3 ;
     voir src/mimetypes/48/package-x-generic.svg dans ce dépôt), recolorée avec notre
     dégradé jaune->orange (le même que lpm.svg) plutôt que le brun carton d'origine.
     Choisie à la place d'un carré plein ou d'un coin corné "page" : la forme de boîte est
     un repère universel de "ceci est un paquet/fichier", donc bien distincte de l'icône
     carrée pleine de l'appli lpm elle-même, tout en restant cohérente avec le thème
-    système de Harry.
+    d'icônes Mint-L-Blue.
     Glyphe : paquet ouvert (Tabler Icons "package", licence MIT, le même glyphe que
     lpm.svg), blanc et plat ; la référence à Wine (verre plein) est réservée à .zgr, le
     "moteur d'exécution" ; plus logique là qu'ici. Centré non pas sur le canevas entier

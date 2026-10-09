@@ -14,14 +14,24 @@ source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
-# --- Analyse des arguments transmis par bin/lpm ---
-# $1 = mode (toujours "cli" désormais : bin/lpm n'a plus aucun point d'entrée interactif --
-#      conservé en position pour rester cohérent avec les autres scripts de lib/, mais sa
-#      valeur n'est plus lue ici)
-# $2 = confirm_flag ("yes" si -y)
-# $3 = allow_scripts_flag ("yes" si --allow-scripts)
-# $4 = ignore_hash_flag ("yes" si --ignore-hash)
-# $5, $6... = cibles (fichiers .zgp)
+# File descriptor 3 = copy of the script's REAL stdout (what the GUI/terminal reads), taken once
+# here before any pipe. Needed for the "[PROGRESS] <pct>" lines emitted during extraction:
+# inside "pv | bsdtar", fd 1 is the next command's input, so writing there would mix text into
+# the archive data sent to bsdtar and corrupt the extraction.
+exec 3>&1
+
+# --- Arguments passed by bin/lpm ---
+# $1 = mode (always "cli"; kept for consistency with the other lib/ scripts, value unused here)
+# $2 = confirm_flag ("yes" if -y)
+# $3 = allow_scripts_flag ("yes" if --allow-scripts)
+# $4 = ignore_hash_flag ("yes" if --ignore-hash)
+# $5+ = targets (.zgp files), plus these options recognized anywhere among them:
+#   -s, --shortcut=<menu|desktop|both|none>   shortcuts to create (default "both")
+#   --desktop-dir=<path>                      folder for the desktop shortcut, instead of the one from
+#                                             zgu_get_desktop_dir() (no effect with shortcut_mode "menu"/"none")
+#   -n, --no-loadingscreen                    disable the lpm loading screen for the created shortcut(s)
+#                                             (default enabled; see zgl-launcher-orchestrator.sh; no effect
+#                                             with shortcut_mode "none")
 shift || true
 confirm_flag="${1:-}"
 shift || true
@@ -29,9 +39,45 @@ allow_scripts_flag="${1:-}"
 shift || true
 ignore_hash_flag="${1:-}"
 shift || true
-cli_targets=("$@")
 
-# Configuration des chemins
+shortcut_mode="both"
+desktop_dir_override=""
+loadingscreen_enabled=true
+cli_targets=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -s|--shortcut)
+      shortcut_mode="${2:-both}"
+      shift $(( $# >= 2 ? 2 : 1 ))
+      ;;
+    --shortcut=*)
+      shortcut_mode="${1#--shortcut=}"
+      shift
+      ;;
+    --desktop-dir=*)
+      desktop_dir_override="${1#--desktop-dir=}"
+      shift
+      ;;
+    -n|--no-loadingscreen)
+      loadingscreen_enabled=false
+      shift
+      ;;
+    *)
+      cli_targets+=("$1")
+      shift
+      ;;
+  esac
+done
+
+case "${shortcut_mode}" in
+  menu | desktop | both | none) ;;
+  *)
+    zgu_cli_error "$(t install_game.invalid_shortcut_mode_cli "${shortcut_mode}")"
+    exit 1
+    ;;
+esac
+
+# Path configuration
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
@@ -41,23 +87,19 @@ lutris_package_config_dir="${HOME}/.config/lutris/games"
 lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
 lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
-# Dossier des builds Wine/Proton installés : nécessaire pour zgu_write_game_shortcut, qui y
-# vérifie la présence de "toolmanifest.vdf" (même test que umu-run) afin de distinguer un
-# runner Proton d'un Wine classique -- voir le commentaire détaillé dans zgu-desktop-utils.sh.
+# Wine/Proton builds directory: zgu_write_game_shortcut checks for "toolmanifest.vdf" there
+# (same test as umu-run) to tell a Proton runner from plain Wine. See zgu-desktop-utils.sh.
 lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 games_dir="${HOME}/Games"
 
-# 1. Vérification des dépendances
-# sqlite3, pv et bsdtar sont toujours nécessaires (CLI comme interactif). bsdtar (paquet
-# "libarchive-tools" sur Debian/Ubuntu) remplace le tar GNU pour l'extraction : il refuse
-# par défaut (ARCHIVE_EXTRACT_SECURE_NODOTDOT / ARCHIVE_EXTRACT_SECURE_SYMLINKS) tout membre
-# d'archive tentant de sortir de son dossier de destination via "../" ou un lien symbolique
-# piégé -- un .zgp est un paquet potentiellement partagé par un tiers, donc non fiable (voir
-# la vérification de slug plus bas), et cette protection doit s'appliquer dès l'extraction,
-# pas seulement après coup sur le nom du dossier de premier niveau. bsdtar lit le zstd
-# nativement (libzstd liée en dur), donc zstd n'est plus une dépendance externe requise ici.
+# 1. Dependency check
+# sqlite3, pv and bsdtar are always required. bsdtar (package "libarchive-tools" on
+# Debian/Ubuntu) replaces GNU tar: by default it refuses archive members that escape the
+# destination via "../" or a malicious symlink (SECURE_NODOTDOT / SECURE_SYMLINKS). A .zgp may
+# come from an untrusted third party, so this must apply at extraction time. bsdtar reads zstd
+# natively, so zstd is not a separate dependency.
 for cmd in sqlite3 pv bsdtar; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     t install_game.cmd_missing "${cmd}"
@@ -65,30 +107,28 @@ for cmd in sqlite3 pv bsdtar; do
   fi
 done
 
-# python3 lui-même est requis, distinctement de PyYAML ci-dessous : sans cette vérification
-# séparée, une machine sans python3 du tout recevait le même message "PyYAML manquant" qu'une
-# machine avec python3 mais sans le module, ce qui égarait l'utilisateur sur la vraie cause.
+# python3 itself is checked separately from PyYAML so the user gets the message matching the
+# real cause.
 if ! command -v python3 >/dev/null 2>&1; then
   t install_game.cmd_missing "python3"
   exit 1
 fi
 
-# PyYAML est utilisé pour lire/écrire le YAML embarqué (zgp-game-config.yml) : sans lui,
-# l'installation se poursuivait avant en silence avec un exécutable Lutris vide.
+# PyYAML is used to read/write the embedded YAML (zgp-game-config.yml).
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   zgu_cli_error "$(t install_game.pyyaml_missing_cli)"
   exit 1
 fi
 
-# 2. Fermeture préalable de Lutris pour libérer la BDD
+# 2. Close Lutris first to release the database
 if flatpak list 2>/dev/null | grep -q lutris; then
   flatpak kill net.lutris.Lutris 2>/dev/null
 fi
 pkill -9 -x lutris 2>/dev/null
 pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
-# 3. Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout
-# aussi le cas des deux installées en même temps)
+# 3. Detect Flatpak vs native package (function from zgu-lutris-utils.sh; also handles both
+# being installed)
 version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${version}" ]]; then
   t install_game.lutris_missing_cli
@@ -110,19 +150,16 @@ case "${version}" in
     runner_dir="${lutris_package_runner_dir}"
     ;;
   *)
-    # Ne devrait jamais arriver : $version n'est affecté qu'à "flatpak" ou "package"
-    # ci-dessus (sinon exit 1). Garde-fou si cette invariant venait à changer.
+    # Should never happen: $version is only set to "flatpak" or "package" above (otherwise
+    # exit 1). Safeguard in case that invariant changes.
     echo "Erreur interne : version Lutris inattendue '${version}'." >&2
     exit 1
     ;;
 esac
 
-# Chemin Games personnalisé (si défini dans Lutris) : cette préférence globale ("appliquée à
-# tous les jeux", donc côté système et non côté runner Wine) vit dans system.yml, sous la clé
-# "system: game_path:" -- PAS dans runners/wine.yml (qui ne contient que des options propres
-# au runner Wine, comme system_winetricks/version). L'awk ne dépend pas de l'indentation ou
-# de la clé parente : il matche n'importe quelle ligne "game_path:" (avec espaces de tête),
-# donc il fonctionne tel quel une fois pointé vers le bon fichier.
+# Custom Games path (if set in Lutris): this global preference lives in system.yml under
+# "system: game_path:", not in runners/wine.yml. The awk matches any "game_path:" line
+# regardless of indentation or parent key.
 if [[ -f "${lutris_system_file}" ]]; then
   extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
   if [[ -n "${extracted_path}" ]]; then
@@ -140,15 +177,15 @@ games_to_install=()
 declare -A filepath_by_name
 create_menu=false
 create_desktop=false
-# Écran de chargement (voir lib/zgl-launcher-orchestrator.sh) : actif par défaut pour tout
-# raccourci créé par lpm, quel que soit le mode (CLI ou interactif/double-clic) -- aucun
-# flag CLI dédié pour l'instant, même convention que create_menu/create_desktop en mode CLI
-# (toujours "true", sans équivalent --no-menu/--no-desktop).
-loadingscreen_enabled=true
+# Loading screen (see lib/zgl-launcher-orchestrator.sh): "loadingscreen_enabled" is already
+# resolved above from -n/--no-loadingscreen.
 
-# Mode CLI strict uniquement (depuis le terminal avec ou sans -y) : bin/lpm n'a plus aucun
-# point d'entrée interactif, donc l'ancien menu Zenity/sélecteur de fichier/case à cocher
-# (mode menu ou double-clic) a été retiré ici.
+# Strict CLI mode only: bin/lpm has no interactive entry point.
+if [[ ${#cli_targets[@]} -eq 0 ]]; then
+  zgu_cli_error "$(t common.missing_target_cli "lpm install")"
+  exit 1
+fi
+
 for target in "${cli_targets[@]}"; do
   if [[ -f "${target}" ]]; then
     filename=$(basename "${target}" .zgp)
@@ -160,13 +197,13 @@ for target in "${cli_targets[@]}"; do
   fi
 done
 
-# Gestion de la confirmation interactive si le flag -y n'est pas présent
+# Interactive confirmation when -y is absent
 if [[ "${confirm_flag}" != "yes" ]]; then
   t install_game.confirm_cli_header
   for name in "${games_to_install[@]}"; do
     t install_game.confirm_cli_item "${name}" "${filepath_by_name[${name}]}"
   done
-  read -r -p "$(t install_game.confirm_cli_prompt)" response
+  read -r -p "$(t install_game.confirm_cli_prompt)" response || response="n"  # EOF (no terminal) = cancel, never an implicit confirmation
   case "${response}" in
     [nN])
       t install_game.cancelled_cli
@@ -177,16 +214,19 @@ if [[ "${confirm_flag}" != "yes" ]]; then
   esac
 fi
 
-create_menu=true
-create_desktop=true
+# Resolve "shortcut_mode" (see -s/--shortcut above) into the two booleans expected by
+# zgu_write_game_shortcut. Its validity was already checked, so there is no "*)" case.
+case "${shortcut_mode}" in
+  both) create_menu=true; create_desktop=true ;;
+  menu) create_menu=true; create_desktop=false ;;
+  desktop) create_menu=false; create_desktop=true ;;
+  none) create_menu=false; create_desktop=false ;;
+esac
 
-# --- Vérification d'intégrité (sha256) de tout le lot, avant toute extraction ---
+# --- Integrity check (sha256) of the whole batch, before any extraction ---
 #
-# Faite ici, après que games_to_install soit définitivement établi par les deux branches
-# ci-dessus (CLI stricte et interactive/double-clic), pour ne vérifier qu'une seule fois par
-# lot plutôt que de mélanger la vérif dans chaque branche séparément. Tout se joue AVANT le
-# début de la boucle d'extraction plus bas : aucun fichier n'est touché tant que ce bloc n'a
-# pas fini de décider quels jeux restent dans games_to_install.
+# Done once per batch, after games_to_install is final. Nothing is touched until this block has
+# decided which games remain.
 if [[ "${ignore_hash_flag}" != "yes" ]]; then
   hash_mismatch_names=()
   for name in "${games_to_install[@]}"; do
@@ -204,7 +244,7 @@ if [[ "${ignore_hash_flag}" != "yes" ]]; then
     read -r -p "$(t install_game.hash_mismatch_cli_prompt)" hash_response
     case "${hash_response}" in
       [yY])
-        : # installer quand même, games_to_install reste tel quel
+        : # install anyway; games_to_install is left unchanged
         ;;
       *)
         declare -A hash_excluded
@@ -228,39 +268,87 @@ fi
 # ---------------------------------------------------------------------------------------------
 
 install_idx=0
-# Compteur de réussites réelles, utilisé pour que le notify-send final reflète ce qui a VRAIMENT
-# été installé plutôt que d'annoncer systématiquement un succès total (bug réel rencontré par
-# l'utilisateur : 103 jeux cochés, 0 installés, message final disant pourtant "103 installés").
-# Un simple fichier plutôt qu'une variable de shell, par prudence si run_post_install venait à
-# être appelée depuis un sous-shell -- toute variable qu'elle modifierait y resterait invisible
-# une fois le sous-shell terminé, alors qu'une écriture dans un fichier par chemin traverse cette
-# frontière.
+# Computed before the loop: needed from the first game to display "[n/total]".
+install_total_count=${#games_to_install[@]}
+# Count of real successes, so the final notify-send reflects what was actually installed. Kept
+# in a file rather than a shell variable so it survives if run_post_install is ever called from
+# a subshell.
 install_success_file=$(mktemp)
-# Traitement de chaque jeu sélectionné
+
+# --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
+# removes ONLY the game being installed (temp extraction, or a moved prefix not yet finished,
+# including Lutris entry, YAML config and menu/desktop shortcuts). Completed games of the batch
+# are never touched here (the GUI then offers to uninstall them via "lpm uninstall"), and the
+# .zgp is never deleted. A pre-existing prefix is never affected, since installation refuses any
+# game whose folder already exists ("deja_installe"). Exit code 130 + "[CANCELLED]" line.
+inprogress_prefix=""
+inprogress_slug=""
+temp_extract_dir=""
+
+lpm_cancel_cleanup() {
+  trap '' TERM INT
+  if [[ -n "${temp_extract_dir}" ]] && [[ "${temp_extract_dir}" == "${games_dir}/.zgp-extract-"* ]]; then
+    rm -rf "${temp_extract_dir}"
+  fi
+  if [[ -n "${inprogress_prefix}" ]] && [[ -n "${inprogress_slug}" ]]; then
+    real_games_dir=$(realpath -e "${games_dir}" 2>/dev/null)
+    real_prefix=$(realpath -e "${inprogress_prefix}" 2>/dev/null)
+    if [[ -n "${real_games_dir}" ]] && [[ -n "${real_prefix}" ]] && [[ "${real_prefix}" == "${real_games_dir}/"* ]]; then
+      rm -rf "${real_prefix}"
+    fi
+    safe_cancel_slug="${inprogress_slug//\'/\'\'}"
+    sqlite3 "${lutris_db}" "DELETE FROM games WHERE slug='${safe_cancel_slug}';" 2>/dev/null
+    rm -f "${lutris_config_dir}/${inprogress_slug}-"*.yml
+    rm -f "${HOME}/.local/share/applications/net.lutris.${inprogress_slug}.desktop"
+    cancel_desktop_dir="${desktop_dir_override:-$(zgu_get_desktop_dir)}"
+    rm -f "${cancel_desktop_dir}/${inprogress_slug}.desktop"
+    if [[ -n "${game_real_name:-}" ]]; then
+      rm -f "${cancel_desktop_dir}/${game_real_name} $(t install_game.bonus_folder_suffix)"
+    fi
+    update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+    zgu_log "install" "INFO" "slug=${inprogress_slug} raison=annule_nettoye"
+  fi
+  rm -f "${install_success_file}"
+  echo "[CANCELLED]"
+  t install_game.cancelled_run_cli
+  exit 130
+}
+trap lpm_cancel_cleanup TERM INT
+
+# Process each selected game
 for name in "${games_to_install[@]}"; do
   install_idx=$((install_idx + 1))
   filepath="${filepath_by_name[${name}]}"
 
-  # 1. Extraction dans un dossier temporaire DIRECTEMENT dans $games_dir (renommage instantané garanti)
+  # 1. Extract into a temp folder directly inside $games_dir (guarantees an instant rename)
   temp_extract_dir=$(mktemp -d "${games_dir}/.zgp-extract-XXXXXX")
   file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
 
-  t install_game.importing_cli "${name}"
-  # bsdtar (et non tar -I zstd) : voir le commentaire sur la vérification des dépendances
-  # plus haut dans ce fichier pour le détail des protections SECURE_NODOTDOT/SECURE_SYMLINKS.
-  # umask 022 le temps de l'extraction : bsdtar préserve par défaut les bits de permission
-  # d'origine de l'archive, sans "--no-same-permissions". Sans ce garde-fou, un .zgp
-  # forgé par un tiers pouvait planter un fichier monde-inscriptible (777) dans le
-  # dossier de jeux -- exploitable par un autre utilisateur local sur une machine
-  # partagée -- ou un fichier illisible (000) pour saboter silencieusement l'installation.
+  # "[n/total] ..." is parsed by the GUI (CommandPage.run_command in gui/*.py) to show which
+  # game out of how many in the progress text; same convention as zgp-game-uninstaller.sh.
+  t install_game.progress_cli "${install_idx}" "${install_total_count}" "$(basename -- "${filepath}")"
+  # bsdtar rather than tar -I zstd: see the dependency check above for the
+  # SECURE_NODOTDOT/SECURE_SYMLINKS protections.
+  # umask 022 during extraction: without "--no-same-permissions", bsdtar keeps the archive's
+  # permission bits, so a forged .zgp could plant a world-writable (777) file in the games
+  # folder, or an unreadable (000) one to sabotage the install.
   _lpm_old_umask=$(umask)
   umask 022
-  pv -s "${file_size:-0}" "${filepath}" | bsdtar -xf - -C "${temp_extract_dir}"
+  # "pv -n" emits the extracted percentage as a number on STDERR, leaving stdout intact to
+  # carry the archive data to bsdtar. pv's stderr is redirected (2>) to a process substitution
+  # ">(...)" that rereads each percentage and reprints it as "[PROGRESS] <pct>" to fd 3 (see
+  # "exec 3>&1" at the top), not stdout, which here is already piped to bsdtar. Same mechanism
+  # in zgr-runner-installer.sh.
+  pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _lpm_pct; do
+    printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+  done) | bsdtar -xf - -C "${temp_extract_dir}"
+  # PIPESTATUS[1] = bsdtar's exit code (only "pv" and "bsdtar" are in the "|" pipe; the
+  # process substitution on stderr is not).
   tar_exit="${PIPESTATUS[1]}"
   umask "${_lpm_old_umask}"
 
-  # 1bis. Vérification de l'intégrité de l'extraction : si tar a échoué (archive corrompue,
-  # tronquée ou invalide), on abandonne proprement ce jeu sans toucher à Lutris ni créer de raccourcis
+  # 1bis. Verify the extraction: if tar failed (corrupt, truncated or invalid archive), abort
+  # this game cleanly without touching Lutris or creating shortcuts
   if [[ "${tar_exit}" -ne 0 ]]; then
     err_msg="$(t install_game.corrupt_archive "${name}" "${tar_exit}")"
     echo "${err_msg}" >&2
@@ -269,11 +357,9 @@ for name in "${games_to_install[@]}"; do
     continue
   fi
 
-  # 2. Découverte du véritable slug à partir de ce qui a été réellement extrait
-  # find + head plutôt que "ls -1 | head -n 1" (SC2012) : comportement identique dans le
-  # cas normal (un seul dossier top-level attendu), la protection réelle contre un nom de
-  # fichier pathologique reste de toute façon assurée par les vérifications qui suivent
-  # (-d, anti-symlink, realpath) plutôt que par ce choix de commande.
+  # 2. Find the real slug from what was actually extracted
+  # find + head rather than "ls -1 | head -n 1" (SC2012); the real protection against
+  # pathological file names comes from the checks below (-d, anti-symlink, realpath).
   slug=$(basename "$(find "${temp_extract_dir}" -mindepth 1 -maxdepth 1 | head -n 1)")
   if [[ -z "${slug}" ]] || [[ ! -d "${temp_extract_dir}/${slug}" ]]; then
     zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
@@ -282,20 +368,18 @@ for name in "${games_to_install[@]}"; do
     continue
   fi
 
-  # 2bis. Durcissement anti-traversée : un .zgp est un paquet potentiellement partagé
-  # par un tiers, donc non fiable. Un lien symbolique nommé comme entrée de premier
-  # niveau dans l'archive (ex: pointant vers /etc ou $HOME) ferait passer le test
-  # "-d" ci-dessus tout en pointant hors de $temp_extract_dir : on refuse tout lien
-  # symbolique ici, et on vérifie en plus que le chemin réel résolu reste bien un
-  # enfant direct de $temp_extract_dir avant de continuer.
+  # 2bis. Anti-traversal hardening: a .zgp may come from an untrusted third party. A symlink
+  # named like a top-level entry (e.g. pointing to /etc or $HOME) would pass the "-d" test
+  # above while pointing outside $temp_extract_dir, so any symlink is refused and the resolved
+  # real path must also be a direct child of $temp_extract_dir.
   if [[ -L "${temp_extract_dir}/${slug}" ]]; then
     zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
     zgu_log "install" "ERREUR" "fichier=${name} raison=slug_lien_symbolique"
     rm -rf "${temp_extract_dir}"
     continue
   fi
-  # shellcheck disable=SC2249 # filtre de rejet, pas un dispatch : un slug qui ne matche
-  # pas ces motifs dangereux continue normalement le traitement ci-dessous, c'est voulu.
+  # shellcheck disable=SC2249 # reject filter, not a dispatch: a slug that matches none of
+  # these dangerous patterns continues normally below, as intended.
   case "${slug}" in
     */*|.|..)
       zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
@@ -305,15 +389,12 @@ for name in "${games_to_install[@]}"; do
       ;;
   esac
 
-  # Rejet de tout caractère de contrôle (saut de ligne, retour chariot...) dans le slug :
-  # un nom de dossier Linux peut légalement en contenir, et slug sert de repli pour
-  # icon_path, lui-même injecté tel quel dans le fichier .desktop généré plus bas
-  # ("Icon=${icon_path}"). Sans ce filtre, un \n dans le slug d'un .zgp forgé par un tiers
-  # pouvait ajouter une ligne "Exec=" arbitraire dans le .desktop -- qui, marqué
-  # "metadata::trusted true" à la création, s'exécute sans avertissement au double-clic.
-  # Même risque déjà mitigé pour game_real_name plus bas ; slug suit exactement le même
-  # chemin et doit être filtré de façon identique, ici en amont, par rejet plutôt que
-  # nettoyage a posteriori.
+  # Reject any control character (newline, CR...) in the slug: a Linux folder name may legally
+  # contain them, and the slug is the fallback for icon_path, which is injected as-is into the
+  # generated .desktop ("Icon=${icon_path}"). A "\n" in a forged .zgp's slug could add an
+  # arbitrary "Exec=" line to a .desktop marked "metadata::trusted true", which runs without
+  # warning on double-click. Same risk as for game_real_name below; rejected here, upstream,
+  # rather than sanitized afterwards.
   case "${slug}" in
     *[$'\n\r\t']*)
       zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
@@ -333,7 +414,7 @@ for name in "${games_to_install[@]}"; do
 
   prefix_dir="${games_dir}/${slug}"
 
-  # 3. Vérification stricte : si le préfixe existe déjà, on refuse catégoriquement l'installation
+  # 3. Strict check: if the prefix already exists, refuse the installation outright
   if [[ -d "${prefix_dir}" ]]; then
     err_msg="$(t install_game.already_installed "${slug}")"
     echo "${err_msg}" >&2
@@ -342,7 +423,7 @@ for name in "${games_to_install[@]}"; do
     continue
   fi
 
-  # 4. Déplacement définitif instantané (0 seconde)
+  # 4. Instant final move (0 seconds)
   if ! mv "${temp_extract_dir}/${slug}" "${games_dir}/"; then
     err_msg="$(t install_game.move_failed "${name}")"
     echo "${err_msg}" >&2
@@ -351,6 +432,9 @@ for name in "${games_to_install[@]}"; do
     continue
   fi
   rm -rf "${temp_extract_dir}"
+  temp_extract_dir=""
+  inprogress_prefix="${prefix_dir}"
+  inprogress_slug="${slug}"
 
   run_post_install() {
     t install_game.analyzing "${name}"
@@ -358,24 +442,19 @@ for name in "${games_to_install[@]}"; do
     timestamp=$(date +%s%N)
     config_id="${slug}-${timestamp}"
 
-    # Le nom affiche du jeu (raccourci .desktop, messages, etc.) vient directement du champ
-    # "name" du zgp-game-config.yml embarque -- c'est deja la copie du YAML Lutris d'origine,
-    # ou ce champ est present nativement (confirme par inspection d'un vrai fichier Lutris :
-    # "game:", "game_slug:", "name:", "system:", "wine:" en cles racine). Il n'y a donc plus
-    # besoin d'un zgp-meta.json separe portant la meme information en double : un seul fichier
-    # a lire au lieu de deux, sans rien perdre (l'ancien zgp-meta.json n'etait ecrit par le
-    # packer que pour transporter ce meme nom).
+    # The display name (.desktop shortcut, messages...) comes straight from the "name" field
+    # of the bundled zgp-game-config.yml, which is a copy of the original Lutris YAML where
+    # it is a root key.
     bundled_yml="${prefix_dir}/zgp-game-config.yml"
     game_real_name=""
 
     if [[ -f "${bundled_yml}" ]]; then
-      # Pas de test "command -v python3" ici : python3 est déjà vérifié comme dépendance
-      # obligatoire en tête de script (le script quitte sinon), donc toujours présent à ce stade.
-      # $bundled_yml dérive de $slug, potentiellement forgé par quiconque a créé le
-      # paquet .zgp partagé (voir la même remarque plus bas concernant l'échappement
-      # SQL) : passé via l'environnement plutôt qu'interpolé dans le code Python, pour
-      # qu'une apostrophe ou tout autre caractère spécial dans le chemin extrait
-      # ne puisse plus casser la chaîne littérale et injecter du code Python arbitraire.
+      # No "command -v python3" test: python3 is a mandatory dependency checked at the
+      # top.
+      # $bundled_yml derives from $slug, possibly forged by whoever created the shared
+      # .zgp (see the SQL escaping note below): passed via the environment rather than
+      # interpolated into the Python code, so an apostrophe or other special character
+      # cannot break the string literal and inject Python code.
       game_real_name=$(BUN_YML="${bundled_yml}" python3 -c '
 import yaml, os
 try:
@@ -388,14 +467,12 @@ except Exception:
 ' 2>/dev/null)
     fi
 
-    # game_real_name vient d'un zgp-game-config.yml potentiellement forgé par quiconque a créé
-    # le paquet .zgp partagé (voir remarque plus haut sur l'échappement SQL/Python). Cette
-    # valeur est ensuite réutilisée telle quelle dans le fichier .desktop généré plus bas
-    # ("Name=${game_real_name}") et dans bonus_dir_name : un saut de ligne injecté ici
-    # pourrait ajouter une clé "Exec=" arbitraire dans le .desktop (exécution de commande
-    # au clic sur le raccourci), et un "/" ou "../" pourrait faire sortir le rm -rf de
-    # bonus_dir_name de desktop_dir. On retire donc tout caractère de contrôle (CR/LF en
-    # tête) et tout séparateur de chemin avant toute autre utilisation de cette variable.
+    # game_real_name comes from a zgp-game-config.yml possibly forged by the .zgp's creator.
+    # It is reused as-is in the generated .desktop ("Name=${game_real_name}") and in
+    # bonus_dir_name: an injected newline could add an arbitrary "Exec=" key to the
+    # .desktop, and a "/" or "../" could make the rm -rf of bonus_dir_name escape
+    # desktop_dir. So control characters (CR/LF first) and path separators are stripped
+    # before any other use.
     game_real_name="${game_real_name//[$'\n\r']/ }"
     game_real_name="${game_real_name//\//-}"
 
@@ -408,11 +485,10 @@ except Exception:
       fi
     done
 
-    # find + head -n 1 plutôt qu'un glob passé tel quel à basename : si "Games/" contient
-    # plusieurs sous-dossiers, basename recevait plusieurs arguments et interprétait le
-    # second comme un suffixe à retirer du premier (voire échouait avec "extra operand"
-    # sur 3+ dossiers), ce qui pouvait faire sauter silencieusement ce patch goglog.ini.
-    # Même mécanisme que dans zgp-game-packer.sh pour rester cohérent.
+    # find + head -n 1 rather than a glob passed to basename: with several subfolders in
+    # "Games/", basename would take the second as a suffix to strip (or fail with "extra
+    # operand" on 3+), silently skipping this goglog.ini patch. Same mechanism as
+    # zgp-game-packer.sh.
     gamefolder=$(basename "$(find "${prefix_dir}/drive_c/Games" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -n 1)")
     if [[ -n "${gamefolder}" ]]; then
       ini_parent_dir="${prefix_dir}/drive_c/Games/${gamefolder}"
@@ -428,37 +504,33 @@ except Exception:
       ln -sf "." "${prefix_dir}/pfx"
     fi
 
-    # Filet de sécurité pour une archive plus ancienne encore packagée avant ce nettoyage
-    # (voir zgp-game-packer.sh) : "Local Settings" peut contenir un résidu de migration
-    # Proton ("Application Data BACKUP" non vide) qui ferait échouer la migration automatique
-    # au premier lancement avec "Directory not empty". Supprimé sans condition, comme au pack.
+    # Safety net for archives packaged before this cleanup (see zgp-game-packer.sh): "Local
+    # Settings" may contain a leftover Proton migration ("Application Data BACKUP"
+    # non-empty) that makes the automatic migration fail at first launch with "Directory not
+    # empty". Removed unconditionally, as at pack time.
     if [[ -e "${prefix_dir}/drive_c/users/steamuser/Local Settings" || -L "${prefix_dir}/drive_c/users/steamuser/Local Settings" ]]; then
       rm -rf -- "${prefix_dir}/drive_c/users/steamuser/Local Settings"
     fi
 
     t install_game.registering_lutris
     safe_name="${game_real_name//\'/\'\'}"
-    # slug et config_id dérivent du nom du dossier extrait de l'archive .zgp (voir plus haut :
-    # slug=$(ls -1 "$temp_extract_dir" | head -n 1)), donc potentiellement forgés par quiconque a
-    # créé le paquet .zgp partagé, pas seulement par l'utilisateur local. Sans échappement, un nom
-    # de dossier contenant une apostrophe permettait une injection SQL dans les requêtes ci-dessous.
+    # slug and config_id derive from the folder name extracted from the .zgp, so they may be
+    # forged by the package creator. Without escaping, a folder name containing an
+    # apostrophe would allow SQL injection in the queries below.
     safe_slug="${slug//\'/\'\'}"
     safe_config_id="${config_id//\'/\'\'}"
 
-    # bundled_yml a déjà été résolu plus haut (lecture du nom réel du jeu) ; on réutilise la
-    # même variable ici plutôt que de la redéclarer.
+    # bundled_yml was resolved earlier (real game name); reused here.
     yml_config_file="${lutris_config_dir}/${config_id}.yml"
 
     executable_path=""
 
     if [[ -f "${bundled_yml}" ]]; then
-      # --- Détection des hooks d'exécution automatique (prelaunch_command, etc.) ---
-      # Lecture seule, rien n'est modifié ici : on liste juste, à l'avance, les clés que le
-      # nettoyage ci-dessous retirerait silencieusement (voir le commentaire détaillé sur
-      # strip_exec_hooks un peu plus bas). Un .zgp peut aussi bien venir d'un tiers non
-      # fiable que d'un paquet que l'utilisateur a créé lui-même avec "lpm pack" -- lpm ne
-      # peut pas savoir lequel c'est, donc plutôt que de retirer ces hooks sans jamais le
-      # dire, on informe explicitement et on laisse le choix (voir la confirmation plus bas).
+      # --- Detect auto-run hooks (prelaunch_command, etc.) ---
+      # Read-only: lists in advance the keys that the cleanup below would strip (see
+      # strip_exec_hooks below). A .zgp may come from an untrusted third party or from the
+      # user's own "lpm pack"; lpm cannot tell which, so rather than silently stripping
+      # these hooks it informs the user and asks (see the confirmation below).
       detected_hooks=$(BUN_YML="${bundled_yml}" python3 -c '
 import os, yaml
 
@@ -486,20 +558,17 @@ except Exception:
     pass
 ' 2>/dev/null)
 
-      # Par défaut, on strip (comportement historique, sûr) : keep_hooks ne passe à "yes"
-      # que si confirmé explicitement ci-dessous -- soit par une réponse interactive, soit
-      # par le flag --allow-scripts (voir bin/lpm), fourni explicitement et séparément de
-      # -y : -y saute la confirmation d'installation générale, pas l'autorisation
-      # d'exécution automatique d'un script à chaque lancement du jeu -- ce sont deux
-      # risques différents, --allow-scripts doit être demandé pour lui-même.
+      # Strip by default (safe): keep_hooks becomes "yes" only if explicitly confirmed
+      # below, by an interactive answer or the --allow-scripts flag (see bin/lpm). It is
+      # separate from -y: -y skips the general install confirmation, not the authorization
+      # to run a script at every game launch; these are different risks.
       keep_hooks="no"
       if [[ -n "${detected_hooks}" ]]; then
         if [[ "${allow_scripts_flag}" = "yes" ]]; then
           keep_hooks="yes"
-          # Notification affichée quelle que soit la voie (CLI-strict ecrit dans le terminal,
-          # GUI/double-clic ecrit dans le flux qui alimente la barre de progression -- meme
-          # convention que les autres "t install_game.*" appeles depuis run_post_install,
-          # ex. "install_game.finalizing" plus bas).
+          # Shown on every path (CLI writes to the terminal, GUI writes to the
+          # progress stream), same convention as the other "t install_game.*" calls
+          # from run_post_install, e.g. "install_game.finalizing" below.
           t install_game.hooks_auto_allowed_cli "${game_real_name}"
         else
           t install_game.hooks_confirm_header_cli "${game_real_name}"
@@ -515,7 +584,7 @@ except Exception:
         fi
       fi
 
-      BUN_YML="${bundled_yml}" YML_OUT="${yml_config_file}" PFX_DIR="${prefix_dir}" USER_HOME="${HOME}" ERR_YAML_LABEL="$(t install_game.yaml_processing_error)" KEEP_HOOKS="${keep_hooks}" python3 -c '
+      BUN_YML="${bundled_yml}" YML_OUT="${yml_config_file}" PFX_DIR="${prefix_dir}" USER_HOME="${HOME}" ERR_YAML_LABEL="$(t install_game.yaml_processing_error)" python3 -c '
 import os, yaml, re
 try:
     with open(os.environ["BUN_YML"], "r") as f:
@@ -523,7 +592,7 @@ try:
     if isinstance(data, dict):
         data.pop("script", None)
         data.pop("version", None)
-        
+
         def update_paths(obj):
             if isinstance(obj, dict):
                 return {k: update_paths(v) for k, v in obj.items()}
@@ -534,42 +603,23 @@ try:
                 res = res.replace("$GAMEDIR", os.environ["PFX_DIR"])
                 return res
             return obj
-            
+
         data = update_paths(data)
 
-        # zgp-game-config.yml vient du paquet .zgp partage, potentiellement forge par
-        # quiconque l a cree (meme remarque que pour game_real_name/safe_slug plus haut) --
-        # voire edite a la main pour y glisser un hook. Lutris execute automatiquement
-        # tout ce qui ressemble a une commande/script au lancement ou a la fermeture du
-        # jeu (prelaunch_script/postexit_script sous "game", prelaunch_command/
-        # postexit_command sous "system"), sans aucune confirmation demandee a
-        # l utilisateur. Plutot qu une liste figee de noms de cles connus (qui ne
-        # couvrirait pas un futur hook Lutris ni une cle ajoutee a la main sous une
-        # autre section), on retire recursivement, dans TOUT le YAML, toute cle dont le
-        # nom se termine par "_command"/"_script"/"_wait" ou contient "exec". Ce filtre
-        # ne touche pas system.env (LD_PRELOAD, WINEDLLOVERRIDES, etc.) : ces variables
-        # sont un usage legitime tres courant (gamemode, mangohud, overrides DXVK...)
-        # qu on ne peut pas distinguer d une valeur malveillante sans whitelist de
-        # valeurs, donc on les laisse volontairement intactes.
-        # keep_hooks : passe a True uniquement si confirmation explicite de la personne qui
-        # installe (voir la detection + confirmation juste avant cet appel Python, cote
-        # bash) -- sinon comportement historique inchange (strip silencieux).
-        keep_hooks = os.environ.get("KEEP_HOOKS", "no") == "yes"
-
-        def strip_exec_hooks(obj):
-            if isinstance(obj, dict):
-                cleaned = {}
-                for k, v in obj.items():
-                    kl = k.lower() if isinstance(k, str) else ""
-                    if not keep_hooks and (kl.endswith("_command") or kl.endswith("_script") or kl.endswith("_wait") or "exec" in kl):
-                        continue
-                    cleaned[k] = strip_exec_hooks(v)
-                return cleaned
-            elif isinstance(obj, list):
-                return [strip_exec_hooks(v) for v in obj]
-            return obj
-
-        data = strip_exec_hooks(data)
+        # zgp-game-config.yml comes from the shared .zgp, possibly forged or hand-edited
+        # to add a hook. Lutris runs any command/script automatically at game launch or
+        # exit (prelaunch_script/postexit_script under "game",
+        # prelaunch_command/postexit_command under "system") without asking.
+        # Neutralization (if not authorized) is done on the bash side by
+        # zgu_apply_hook_policy (mode "broad"), by COMMENTING rather than deleting, so
+        # the command can be re-authorized later (page "Raccourci de lancement"). This
+        # block therefore writes the YAML as-is.
+        #
+        # IMPORTANT: zgu_apply_hook_policy must run AFTER zgu_write_game_shortcut (see
+        # below), not here: zgu_write_game_shortcut sometimes rewrites the whole YAML
+        # (Proton/GAMEID detection) through a standard parser that never sees commented
+        # lines, so neutralizing before would erase the comment, and the command with
+        # it.
 
         if "game" not in data:
             data["game"] = {}
@@ -583,12 +633,10 @@ except Exception as e:
 ' 2>/dev/null
       rm -f "${bundled_yml}"
 
-      # Chemin de l'exécutable relu depuis le YAML DÉJÀ PATCHÉ (game.prefix, "$GAMEDIR"
-      # et "/home/<user>" déjà résolus vers cette machine ci-dessus), et non depuis le YAML
-      # brut embarqué dans le paquet : sinon le "$GAMEDIR" littéral (ou le "anonuser" du
-      # paquetage) se retrouverait tel quel dans la base Lutris, pointant vers un chemin
-      # inexistant dès qu'on installe sur une autre machine ou un dossier de jeux différent
-      # de celui de la machine ayant créé le paquet.
+      # Executable path re-read from the ALREADY PATCHED YAML (game.prefix, "$GAMEDIR" and
+      # "/home/<user>" already resolved for this machine), not the raw bundled one:
+      # otherwise a literal "$GAMEDIR" (or the packager's "anonuser") would end up in the
+      # Lutris DB, pointing to a nonexistent path on another machine or games folder.
       if [[ -f "${yml_config_file}" ]]; then
         executable_path=$(YML_OUT="${yml_config_file}" python3 -c '
 import os, yaml
@@ -635,17 +683,61 @@ EOF
     t install_game.creating_shortcuts
     game_id=$(sqlite3 "${lutris_db}" "SELECT id FROM games WHERE slug='${safe_slug}';")
 
-    zgu_write_game_shortcut "${game_real_name}" "${slug}" "${prefix_dir}" "${game_id}" "${version}" "${create_menu}" "${create_desktop}" "${executable_path}" "${config_id}" "${lutris_config_dir}" "${runner_dir}"
+    zgu_write_game_shortcut "${game_real_name}" "${slug}" "${prefix_dir}" "${game_id}" "${version}" "${create_menu}" "${create_desktop}" "${executable_path}" "${config_id}" "${lutris_config_dir}" "${runner_dir}" "${desktop_dir_override}"
 
-    # Marqueur d'écran de chargement (voir lib/zgl-launcher-orchestrator.sh) : idempotent,
-    # même logique que zgp-game-shortcutter.sh -- créé si décoché, absent (donc écran actif)
-    # sinon, ce qui est déjà l'état par défaut d'un dossier de jeu fraîchement extrait.
+    # --- Reconnect the LPM Launcher if this game already had it: "scripts/lpm-launcher.sh"
+    # and "lpm-launcher.yml" live inside the game folder so they survive reinstallation, but
+    # "system.prelaunch_command" lives in the LUTRIS config, rewritten here from the bundled
+    # YAML, which never contains it (it is added separately by "lpm launcher ... on").
+    # Without this block the picker would stay unreachable after a reinstall (see
+    # zgp_launcher_is_active in zgl-launcher-manager.sh). Adds the key ONLY if entirely
+    # absent, never overwriting a hook already present and confirmed (keep_hooks). Must run
+    # HERE: after zgu_write_game_shortcut (same reason as zgu_apply_hook_policy below) and
+    # before zgu_apply_hook_policy, so its "lpm's own relay" exemption applies on the first
+    # pass. ---
+    if [[ -f "${prefix_dir}/scripts/lpm-launcher.sh" ]] && [[ -f "${yml_config_file}" ]]; then
+      YML_PATH="${yml_config_file}" RELAY_PATH="${prefix_dir}/scripts/lpm-launcher.sh" python3 -c '
+import os, yaml
+try:
+    with open(os.environ["YML_PATH"], "r") as f:
+        data = yaml.safe_load(f) or {}
+    system = data.setdefault("system", {})
+    if "prelaunch_command" not in system:
+        system["prelaunch_command"] = os.environ["RELAY_PATH"]
+        system["prelaunch_wait"] = True
+        with open(os.environ["YML_PATH"], "w") as f:
+            yaml.dump(data, f, sort_keys=False)
+except Exception:
+    pass
+' 2>/dev/null
+    fi
+
+    # Neutralize (never delete) unauthorized hooks; see the YAML handling comment above and
+    # zgu_apply_hook_policy in zgu-desktop-utils.sh. keep_hooks was resolved earlier. MUST
+    # run AFTER zgu_write_game_shortcut (which may rewrite ${yml_config_file} entirely),
+    # never before.
+    if [[ -n "${yml_config_file}" ]] && [[ -f "${yml_config_file}" ]]; then
+      install_allow_hooks="false"
+      [[ "${keep_hooks}" = "yes" ]] && install_allow_hooks="true"
+      zgu_apply_hook_policy "${yml_config_file}" "${install_allow_hooks}" "broad"
+    fi
+
+    # Loading screen marker (see lib/zgl-launcher-orchestrator.sh): idempotent, same logic
+    # as zgp-game-shortcutter.sh: created if unchecked, absent (screen active) otherwise,
+    # which is the default for a freshly extracted game folder.
     if [[ "${loadingscreen_enabled}" = false ]]; then
       : > "${prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
     fi
 
     zgu_log "install" "OK" "slug=${slug} nom=${game_real_name}"
-    echo 1 >> "${install_success_file}"
+    # The slug (not just "1"): reused after the loop for the best-effort Lutris native media
+    # update, see "install_success_file".
+    echo "${slug}" >> "${install_success_file}"
+    # Line read by the GUI (see CommandPage.run_command): this game is done, so no longer
+    # subject to cancel cleanup, but offered for removal if the batch is cancelled.
+    printf '[INSTALLED] %s\n' "${slug}"
+    inprogress_prefix=""
+    inprogress_slug=""
 
     t install_game.finalizing
   }
@@ -653,13 +745,15 @@ EOF
   run_post_install
 done
 
-# Notification finale reflétant le résultat RÉEL (voir le commentaire sur install_success_file
-# plus haut) : succès total, échec total, ou partiel -- plutôt que d'annoncer un succès total
-# sans condition, ce qui a produit un message trompeur lors du bug du lot de 103 jeux.
-install_success_count=$(wc -l < "${install_success_file}" 2>/dev/null)
+# Final notification reflecting the REAL outcome (see install_success_file above): full success,
+# full failure, or partial.
+install_succeeded_slugs=()
+if [[ -f "${install_success_file}" ]]; then
+  mapfile -t install_succeeded_slugs < "${install_success_file}" 2>/dev/null
+fi
 rm -f "${install_success_file}"
-[[ -z "${install_success_count}" ]] && install_success_count=0
-install_total_count=${#games_to_install[@]}
+install_success_count=${#install_succeeded_slugs[@]}
+# install_total_count is computed before the loop.
 
 if [[ "${install_success_count}" -eq "${install_total_count}" ]] && [[ "${install_total_count}" -gt 0 ]]; then
   notify-send "$(t install_game.notify_title)" "$(t install_game.notify_body)" 2>/dev/null
@@ -667,5 +761,22 @@ elif [[ "${install_success_count}" -eq 0 ]]; then
   notify-send "$(t install_game.notify_title_none)" "$(t install_game.notify_body_none)" 2>/dev/null
 else
   notify-send "$(t install_game.notify_title_partial)" "$(t install_game.notify_body_partial "${install_success_count}" "${install_total_count}")" 2>/dev/null
+fi
+
+# Best-effort update of Lutris native media (banner/icon/cover, see "lpm sync-media") for the
+# games just installed. Outside the install loop: a lutris.net network problem must never fail
+# an installation.
+if [[ ${#install_succeeded_slugs[@]} -gt 0 ]]; then
+  # Run in the background, detached ("&" + "disown"): nothing here needs to wait for
+  # sync-media (purely cosmetic); each game's result remains available via "lpm log" (see
+  # zgu_log in zgp-game-sync-media.sh).
+  bash "${script_dir}/zgp-game-sync-media.sh" "${install_succeeded_slugs[@]}" >/dev/null 2>&1 &
+  disown
+fi
+
+# Exit code reflects the real outcome: 1 if at least one archive could not be installed (the GUI
+# and scripts rely on it).
+if [[ "${install_success_count}" -lt "${install_total_count}" ]]; then
+  exit 1
 fi
 exit 0

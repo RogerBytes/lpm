@@ -1,47 +1,38 @@
 #!/bin/bash
 
-# --- Journal des actions lpm ---
+# --- lpm action log ---
 #
-# Fichier texte, append-only, une ligne par événement, colonnes séparées par une
-# tabulation : TIMESTAMP <TAB> COMMANDE <TAB> STATUT <TAB> DÉTAIL
-#   - STATUT ∈ OK / ERREUR / INFO
-#   - DÉTAIL est une chaîne libre "cle=valeur cle2=valeur2 ..."
+# Append-only text file, one line per event, tab-separated columns:
+# TIMESTAMP <TAB> COMMAND <TAB> STATUS <TAB> DETAIL
+#   - STATUS is OK / ERREUR / INFO
+#   - DETAIL is a free string "key=value key2=value2 ..."
 #
-# Objectif : déboguer a posteriori un install/isolate/pack/uninstall raté (voir
-# lpm log, lib/zgp-log-viewer.sh) -- pas un journal exhaustif de toute la sortie
-# stdout/stderr, seulement les décisions clé (début de commande, succès/échec par
-# élément traité, avec la raison).
+# Purpose: debugging a failed install/isolate/pack/uninstall after the fact (see lpm log,
+# lib/zgp-log-viewer.sh) -- not an exhaustive log of all stdout/stderr, only key decisions (command
+# start, success/failure per processed item, with the reason).
 #
-# Emplacement : TOUJOURS ~/.local/share/lpm/lpm.log, EN DUR sur $HOME -- jamais via
-# $XDG_DATA_HOME. Certains scripts lpm (zgl-launcher-runtime.sh, entre autres) sont
-# invoqués comme "system.prelaunch_command" par Lutris et héritent donc de SON
-# environnement -- un Lutris installé en Flatpak redéfinit $XDG_DATA_HOME vers son
-# propre dossier de données privé (confirmé réel : "~/.var/app/net.lutris.Lutris/
-# data"). Avec un repli dynamique "${XDG_DATA_HOME:-...}", ces scripts écriraient
-# alors dans un fichier différent de celui que "lpm log" lit dans un shell normal --
-# le journal doit rester le même fichier partout, quel que soit qui l'écrit.
+# Location: ALWAYS ~/.local/share/lpm/lpm.log, HARDCODED on $HOME -- never via $XDG_DATA_HOME. Some
+# lpm scripts (zgl-launcher-runtime.sh, among others) are invoked by Lutris as
+# "system.prelaunch_command" and inherit ITS environment -- a Flatpak Lutris redefines
+# $XDG_DATA_HOME to its own private data folder ("~/.var/app/net.lutris.Lutris/data"). With a dynamic
+# "${XDG_DATA_HOME:-...}" fallback those scripts would write to a different file than the one
+# "lpm log" reads in a normal shell.
 #
-# Rotation : au-delà de ZGU_LOG_MAX_LINES lignes, lpm.log est renommé lpm.log.1 (en
-# écrasant un éventuel lpm.log.1 précédent -- un seul niveau de sauvegarde, pas une
-# pile façon logrotate : ce journal sert à déboguer l'action la plus récente, pas à
-# archiver un historique long terme) et un nouveau lpm.log vide est repris. "lpm log
-# --all"/"--grep" ne portent que sur lpm.log actuel, jamais sur lpm.log.1 -- volontaire,
-# pour rester cohérent avec la portée "déboguer un raté a posteriori" documentée
-# ci-dessus plutôt que de devenir un historique permanent à consulter.
+# Rotation: beyond ZGU_LOG_MAX_LINES lines, lpm.log is renamed lpm.log.1 (overwriting any previous
+# lpm.log.1 -- a single backup level, not a logrotate-style stack) and a new empty lpm.log is started.
+# "lpm log --all"/"--grep" only cover the current lpm.log, never lpm.log.1 -- intentional, matching
+# the "debug a failure after the fact" scope above.
 #
-# Best-effort : une erreur d'écriture du journal (disque plein, dossier en lecture
-# seule, permissions...) ne doit JAMAIS faire échouer la commande lpm elle-même,
-# d'où le "|| true"/"|| return 0" systématique ci-dessous -- le journal est un
-# outil de confort, pas une garantie, sa perte ne doit pas dégrader le service.
+# Best-effort: a log write error (disk full, read-only folder, permissions...) must NEVER make the
+# lpm command itself fail, hence the systematic "|| true"/"|| return 0" below.
 
 ZGU_LOG_DIR="${HOME}/.local/share/lpm"
 ZGU_LOG_FILE="${ZGU_LOG_DIR}/lpm.log"
 ZGU_LOG_MAX_LINES=10000
 
-# Rotation best-effort : appelée avant chaque écriture (zgu_log), jamais depuis la
-# lecture (zgp-log-viewer.sh) -- la rotation est un effet de bord de l'écriture, pas de
-# la consultation. "wc -l" sur un fichier plafonné à ZGU_LOG_MAX_LINES lignes reste
-# négligeable (quelques Ko à quelques centaines de Ko), pas besoin d'optimiser plus.
+# Best-effort rotation: called before each write (zgu_log), never from reading (zgp-log-viewer.sh) --
+# rotation is a side effect of writing. "wc -l" on a file capped at ZGU_LOG_MAX_LINES lines stays
+# negligible, no need to optimize further.
 zgu_log_rotate_if_needed() {
   [[ -f "${ZGU_LOG_FILE}" ]] || return 0
   local current_lines
@@ -50,13 +41,11 @@ zgu_log_rotate_if_needed() {
   mv -f -- "${ZGU_LOG_FILE}" "${ZGU_LOG_FILE}.1" 2>/dev/null || true
 }
 
-# zgu_log <commande> <statut> <détail>
-# Ajoute une ligne au journal. Neutralise tabulations/sauts de ligne dans chaque
-# champ avant écriture : "commande" et "statut" sont toujours des constantes
-# internes à lpm, mais "détail" peut embarquer un slug/nom de jeu potentiellement
-# forgé par un tiers (paquet .zgp partagé, voir zgp-game-installer.sh) -- sans ce
-# filtre, un \t ou \n dedans casserait le format à 4 colonnes en tabulations pour
-# toute lecture ultérieure (lpm log --grep, awk, etc.).
+# zgu_log <command> <status> <detail>
+# Appends a line to the log. Neutralizes tabs/newlines in each field before writing: "command" and
+# "status" are always lpm-internal constants, but "detail" may embed a slug/game name possibly forged
+# by a third party (shared .zgp package, see zgp-game-installer.sh) -- without this filter, a \t or \n
+# in it would break the 4-column tab format for any later read (lpm log --grep, awk, etc.).
 zgu_log() {
   local command="$1" status="$2" detail="$3"
   mkdir -p "${ZGU_LOG_DIR}" 2>/dev/null || return 0

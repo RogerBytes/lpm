@@ -2,41 +2,53 @@
 
 # --- lpm launcher [slug...] [on|off] ---
 #
-# Active/désactive le "LPM Launcher" (écran noir + splash + verrou manette, avec picker
-# multi-exécutable optionnel) pour un ou plusieurs jeux Wine/Proton de Lutris. Conception
-# validée en amont (voir échange complet) :
+# Enables/disables the "LPM Launcher" (black screen + splash + gamepad lock, with an
+# optional multi-executable picker) for one or more Lutris Wine/Proton games.
 #
-#   1. "on" ne demande AUCUN choix single/multi -- ça n'avait pas de sens : le nombre
-#      d'entrées réellement utilisées au lancement est de toute façon relu dynamiquement
-#      dans le YAML à chaque lancement du jeu (voir zgl-launcher-runtime.sh), jamais figé
-#      par quoi que ce soit décidé ici. "on" écrit donc TOUJOURS la même chose : une
-#      première entrée auto-remplie depuis le game.exe/working_dir déjà configurés dans
-#      Lutris (rien à éditer à la main pour un jeu à un seul exécutable), PLUS une
-#      deuxième entrée d'exemple commentée dans lpm-launcher.yml -- à décommenter/adapter
-#      à la main si le jeu a plusieurs exécutables (épisodes, DLC, campagnes...). C'est
-#      entièrement à l'utilisateur d'ajouter ou non des entrées ensuite, lpm ne lui
-#      impose aucun choix à l'activation.
-#   2. Détection "déjà actif" : un jeu "a" le launcher si son game.exe pointe vers
-#      lpm-launch.bat -- relu directement depuis le YAML à chaque lancement de cette
-#      commande, jamais de fichier de suivi séparé (source de vérité unique).
-#   3. Activation : sauvegarde l'exe/working_dir d'origine (clé "original_exe" du nouveau
-#      lpm-launcher.yml), convertit les chemins natifs Linux en chemins Windows (C:\...)
-#      via winepath -w -- nécessaire uniquement pour l'entrée auto-remplie, l'utilisateur
-#      tape lui-même en Windows pour toute entrée ajoutée à la main. Crée
-#      $GAMEDIR/scripts/lpm-launcher.sh (relais, appelle zgl-launcher-runtime.sh). AUCUNE
-#      image splash par défaut n'est copiée : l'absence de $GAMEDIR/splash/splash.png
-#      signifie "écran de chargement noir uni" pour l'orchestrateur (voir
-#      lib/zgl-launcher-orchestrator.sh) -- un splash.png déjà présent (personnalisation
-#      existante) n'est jamais touché. Branche system.prelaunch_command et règle game.exe
-#      sur lpm-launch.bat.
-#   4. Désactivation : restaure l'exe d'origine depuis "original_exe", retire
-#      system.prelaunch_command (seulement s'il référence bien notre script relais),
-#      affiche une alerte invitant à vérifier l'exécutable dans Lutris. Ne supprime JAMAIS
-#      lpm-launcher.yml/scripts//splash/ (non destructif, réactivable plus tard).
-#   5. Jeux Wine/Proton uniquement (runner='wine'), préfixes partagés inclus (opération non
-#      destructive, même principe que "lpm tools"/"lpm lsfg").
+#   1. "on" asks NO single/multi choice: the number of entries actually used is re-read from
+#      the YAML at every game launch (see zgl-launcher-runtime.sh). "on" always writes the
+#      same thing: a first entry auto-filled from the game.exe/working_dir already set in
+#      Lutris, PLUS a second commented example entry in lpm-launcher.yml, to uncomment/adapt
+#      by hand if the game has several executables (episodes, DLC, campaigns...).
+#   2. "Already active" detection: a game has the launcher if its game.exe points to
+#      lpm-launch.bat, re-read from the YAML on each run (no separate tracking file).
+#   3. Enable: saves the original exe/working_dir ("original_exe" key of the new
+#      lpm-launcher.yml), converts native Linux paths to Windows paths (C:\...) via
+#      winepath -w (only needed for the auto-filled entry; users type Windows paths for
+#      entries added by hand). Creates $GAMEDIR/scripts/lpm-launcher.sh (relay, calls
+#      zgl-launcher-runtime.sh). NO default splash image is copied: a missing
+#      $GAMEDIR/splash/splash.png means "plain black loading screen" for the orchestrator
+#      (see lib/zgl-launcher-orchestrator.sh); an existing splash.png is never touched.
+#      Sets system.prelaunch_command and points game.exe to lpm-launch.bat.
+#   4. Disable: restores the original exe from "original_exe", removes
+#      system.prelaunch_command (only if it references our relay script), and shows an alert
+#      asking to check the executable in Lutris. NEVER deletes lpm-launcher.yml/scripts//
+#      splash/ (non-destructive, can be re-enabled).
+#   5. Wine/Proton games only (runner='wine'), shared prefixes included (non-destructive,
+#      same principle as "lpm tools"/"lpm lsfg").
+#   6. "--if-needed" (optional, before or after the slugs): a game already in the requested
+#      state is silently skipped instead of failing the whole command (default behaviour
+#      UNCHANGED without the flag; in CLI group selection, picking an already-active game is
+#      probably a mistake worth reporting). Added for "gui/*.py" (page_launcher), where the
+#      enabled/disabled state follows from the form content (entries -> active, none ->
+#      inactive), so "already in the requested state" is not an error there.
+#   7. "lpm launcher status" (no slug): lists, one per line, the slugs of Wine/Proton games
+#      that already have the LPM Launcher active (same detection as item 2,
+#      zgp_launcher_is_active, re-read on each call, nothing cached). Applies and modifies
+#      nothing. Added for "gui/*.py" (page_launcher) to highlight (bold) active games in the
+#      selection list.
 
 cli_args=("$@")
+if_needed=0
+_filtered_args=()
+for _a in "${cli_args[@]}"; do
+  if [[ "${_a}" = "--if-needed" ]]; then
+    if_needed=1
+  else
+    _filtered_args+=("${_a}")
+  fi
+done
+cli_args=("${_filtered_args[@]}")
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -48,8 +60,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# --- 0. Validation de la syntaxe CLI (bin/lpm n'a plus aucun point d'entrée interactif :
-# plus de menu/sélection Zenity, uniquement cette commande explicite en terminal) ---
+# --- 0. CLI syntax validation (bin/lpm has no interactive entry point: no menu/Zenity
+# selection, only this explicit terminal command) ---
 cli_action=""
 cli_slugs=()
 
@@ -57,8 +69,15 @@ last_arg="${cli_args[-1]:-}"
 if [[ "${last_arg}" = "off" ]] || [[ "${last_arg}" = "on" ]]; then
   cli_action="${last_arg}"
   cli_slugs=("${cli_args[@]:0:$(( ${#cli_args[@]} - 1 ))}")
+elif [[ ${#cli_args[@]} -eq 1 ]] && [[ "${cli_args[0]}" = "status" ]]; then
+  # See item 7 of the file header: no slug required, read-only.
+  cli_action="status"
 fi
-if [[ -z "${cli_action}" ]] || [[ ${#cli_slugs[@]} -eq 0 ]]; then
+if [[ -z "${cli_action}" ]]; then
+  zgu_cli_error "$(t launcher.cli_usage)"
+  exit 1
+fi
+if [[ "${cli_action}" != "status" ]] && [[ ${#cli_slugs[@]} -eq 0 ]]; then
   zgu_cli_error "$(t launcher.cli_usage)"
   exit 1
 fi
@@ -79,7 +98,7 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- 1. Détection Flatpak vs Paquet natif + résolution des chemins Lutris ---
+# --- 1. Flatpak vs native package detection + Lutris path resolution ---
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
@@ -118,10 +137,10 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# --- 2. Choix activer/désactiver (CLI uniquement) ---
+# --- 2. Enable/disable choice (CLI only) ---
 action="${cli_action}"
 
-# --- 3. Liste des jeux Wine/Proton, filtrée par état actuel dans le YAML ---
+# --- 3. List of Wine/Proton games, filtered by current state in the YAML ---
 games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
 
 if [[ -z "${games_list}" ]]; then
@@ -141,7 +160,11 @@ while IFS=$'\x1f' read -r _g_id g_name g_slug g_dir g_configpath; do
   sorted_slugs+=("${g_slug}")
 done <<< "${games_list}"
 
-# Retourne 0 (vrai) si game.exe pointe déjà vers lpm-launch.bat pour ce jeu.
+# Returns 0 (true) if game.exe already points to lpm-launch.bat AND system.prelaunch_command
+# is present and active (not just commented/absent) for this game. Checking only "game.exe"
+# gave a false positive after reinstalling from a .zgp: the package config keeps "game.exe"
+# (rewritten before packaging) but not "system.prelaunch_command" (added separately by
+# "lpm launcher ... on", never captured in the .zgp), so the missing hook was never rewritten.
 zgp_launcher_is_active() {
   local configpath="$1" yml_file
   [[ -z "${configpath}" ]] && return 1
@@ -153,7 +176,12 @@ try:
     with open(os.environ["YML_PATH"], "r") as f:
         data = yaml.safe_load(f) or {}
     exe = (data.get("game") or {}).get("exe") or ""
-    sys.exit(0 if os.path.basename(exe) == "lpm-launch.bat" else 1)
+    prelaunch = (data.get("system") or {}).get("prelaunch_command") or ""
+    ok = (
+        os.path.basename(exe) == "lpm-launch.bat"
+        and prelaunch.rstrip("/\\").endswith("/scripts/lpm-launcher.sh")
+    )
+    sys.exit(0 if ok else 1)
 except Exception:
     sys.exit(1)
 ' 2>/dev/null
@@ -166,6 +194,14 @@ for g_slug in "${sorted_slugs[@]}"; do
   fi
 done
 
+if [[ "${action}" = "status" ]]; then
+  # See item 7 of the file header: plain read, nothing to apply.
+  for g_slug in "${sorted_slugs[@]}"; do
+    [[ -n "${active_by_slug[${g_slug}]:-}" ]] && echo "${g_slug}"
+  done
+  exit 0
+fi
+
 eligible_slugs=()
 for g_slug in "${sorted_slugs[@]}"; do
   if [[ "${action}" = "on" ]]; then
@@ -177,7 +213,7 @@ done
 
 targets=()
 
-# --- Sélection des cibles (CLI uniquement : sélection graphique via Zenity retirée) ---
+# --- Target selection (CLI only) ---
 declare -A eligible_lookup
 for g_slug in "${eligible_slugs[@]}"; do
   eligible_lookup["${g_slug}"]=1
@@ -189,6 +225,11 @@ for target_slug in "${cli_slugs[@]}"; do
     exit 1
   fi
   if [[ -z "${eligible_lookup[${target_slug}]:-}" ]]; then
+    if [[ "${if_needed}" -eq 1 ]]; then
+      # See item 6 of the file header: already in the requested state, the game is just excluded
+      # from the targets (no error, no action).
+      continue
+    fi
     if [[ "${action}" = "on" ]]; then
       zgu_cli_error "$(t launcher.already_active "${target_slug}")"
     else
@@ -199,7 +240,7 @@ for target_slug in "${cli_slugs[@]}"; do
   targets+=("${target_slug}")
 done
 
-# --- 4. Application : activation ---
+# --- 4. Apply: enable ---
 zgp_launcher_apply_on() {
   local slug="$1" game_dir="$2" configpath="$3"
   local yml_file="${lutris_config_dir}/${configpath}.yml"
@@ -210,9 +251,9 @@ zgp_launcher_apply_on() {
     return 1
   fi
 
-  # Lit exe/working_dir/prefix/version actuels, résout le working_dir effectif exactement
-  # comme Lutris lui-même (working_dir explicite, sinon dossier de l'exe -- voir source
-  # Lutris consultée en amont : lutris/runners/wine.py, _get_explicit_working_dir()).
+  # Reads the current exe/working_dir/prefix/version and resolves the effective working_dir
+  # exactly like Lutris (explicit working_dir, else the exe folder; see Lutris source
+  # lutris/runners/wine.py, _get_explicit_working_dir()).
   local current_data
   current_data=$(YML_PATH="${yml_file}" GAME_PATH="${game_dir}" python3 -c '
 import os, sys, yaml
@@ -252,9 +293,9 @@ print(version)
 
   [[ -z "${current_prefix}" ]] && current_prefix="${game_dir}"
 
-  # Résolution du binaire winepath : à côté du binaire wine du runner utilisé par ce jeu en
-  # priorité (garantit la même résolution de lettres de lecteur que Lutris lui-même pour ce
-  # préfixe précis), repli sur un "winepath" générique du PATH sinon.
+  # winepath binary resolution: first next to the wine binary of the runner used by this game
+  # (same drive letter resolution as Lutris for that prefix), else a generic "winepath" from
+  # PATH.
   local wine_bin winepath_bin=""
   wine_bin=$(zgu_get_wine_binary "${lutris_runners_dir}" "${current_version}" 2>/dev/null)
   if [[ -n "${wine_bin}" ]] && [[ -x "$(dirname "${wine_bin}")/winepath" ]]; then
@@ -275,25 +316,20 @@ print(version)
     return 1
   fi
 
-  # Emplacement FIXE de lpm-launch.bat -- DANS drive_c (jamais à la racine de $GAMEDIR
-  # comme dans une version précédente). Vérifié réel avec un vrai jeu (Wine/Proton, Lutris
-  # Flatpak) : Lutris exécute un ".bat" via "cmd /C <nom>", avec le dossier du ".bat" comme
-  # répertoire de travail du processus -- si ce dossier est hors de drive_c (ex: la racine
-  # du préfixe), il n'est atteignable depuis Wine que si le préfixe a un lecteur Z:
-  # (mappage de "/"), souvent absent des préfixes isolés par jeu -- confirmé : le jeu ne
-  # démarrait pas du tout dans ce cas.
+  # FIXED location of lpm-launch.bat, INSIDE drive_c (never the root of $GAMEDIR). Lutris runs
+  # a ".bat" via "cmd /C <name>" with the .bat folder as process working directory; a folder
+  # outside drive_c (e.g. the prefix root) is only reachable from Wine if the prefix has a Z:
+  # drive (mapping of "/"), often missing in per-game isolated prefixes, and the game then
+  # does not start at all.
   #
-  # Racine choisie : le sous-dossier direct de "drive_c/Games/" qui contient l'exe (à sa
-  # racine ou dans n'importe lequel de ses propres sous-dossiers, peu importe la
-  # profondeur) -- PAS "working_dir" (peut ne pas être défini, et même défini il ne
-  # correspond pas forcément à cette racine-là) ni "dirname(exe)" (peut être arbitrairement
-  # profond). Exemple concret : exe dans
+  # Chosen root: the direct subfolder of "drive_c/Games/" containing the exe (at its root or in
+  # any of its subfolders, whatever the depth); NOT "working_dir" (may be unset, and not
+  # necessarily that root) nor "dirname(exe)" (may be arbitrarily deep). Example: exe in
   #   drive_c/Games/Jeu/sous/sous/sous/sous/sous/exe
-  # avec un autre dossier "drive_c/Games/Truc" à côté -- le ".bat" doit aller dans
+  # with another folder "drive_c/Games/Truc" beside it: the ".bat" goes in
   #   drive_c/Games/Jeu/lpm-launch.bat
-  # c'est-à-dire le premier niveau sous "Games/" qui mène (directement ou via ses propres
-  # sous-dossiers) jusqu'à l'exe, jamais plus profond. "Games/" est le dossier
-  # d'installation standard utilisé par les installateurs Lutris/lpm.
+  # i.e. the first level under "Games/" leading to the exe, never deeper. "Games/" is the
+  # standard install folder used by Lutris/lpm installers.
   local drive_c games_root bat_dir bat_path_linux
   drive_c="${current_prefix}/drive_c"
   games_root="${drive_c}/Games"
@@ -304,23 +340,21 @@ print(version)
     top_component="${rel_to_games%%/*}"
     bat_dir="${games_root}/${top_component}"
   else
-    # Repli : installation hors de la convention drive_c/Games/<jeu>/... -- on ne peut pas
-    # appliquer la règle ci-dessus sans connaître la convention réelle utilisée. On retombe
-    # sur "current_workdir" (résolu plus haut, working_dir explicite de la config sinon
-    # dirname(exe)), en le journalisant pour rester traçable.
+    # Fallback: install outside the drive_c/Games/<game>/... convention, so the rule above
+    # cannot apply. Uses "current_workdir" (resolved above: explicit config working_dir, else
+    # dirname(exe)), and logs it.
     bat_dir="${current_workdir}"
     zgu_log "launcher" "AVERT" "slug=${slug} raison=exe_hors_convention_games bat_dir=${bat_dir}"
   fi
 
   bat_path_linux="${bat_dir}/lpm-launch.bat"
 
-  # Écrit lpm-launch.bat DÈS CETTE ACTIVATION -- pas seulement au premier lancement réel
-  # (voir zgl-launcher-runtime.sh, qui le réécrira de toute façon avec l'entrée alors
-  # choisie). Nécessaire : "game.exe" est pointé vers ce chemin plus bas, DANS CETTE MÊME
-  # activation -- si le fichier n'existe pas encore à ce moment-là, Lutris le signale comme
-  # introuvable/bugue (constaté réel) avant même le premier lancement. Contenu identique au
-  # modèle utilisé par zgl-launcher-runtime.sh, avec l'entrée auto-remplie par défaut
-  # (win_workdir/win_exe, résolus plus haut).
+  # Writes lpm-launch.bat NOW, at activation, not only at the first real launch
+  # (zgl-launcher-runtime.sh rewrites it anyway with the chosen entry). Required: "game.exe"
+  # is pointed to this path below, in this same activation; if the file does not exist yet,
+  # Lutris reports it missing/misbehaves before the first launch. Same content as the template
+  # of zgl-launcher-runtime.sh, with the default auto-filled entry (win_workdir/win_exe,
+  # resolved above).
   mkdir -p "${bat_dir}" 2>/dev/null
   {
     printf '@echo off\r\n'
@@ -328,13 +362,18 @@ print(version)
     printf 'start "" "%s"\r\n' "${win_exe}"
   } > "${bat_path_linux}" 2>/dev/null
 
-  # --- Écriture de lpm-launcher.yml (entrée auto-remplie + repli exemple commenté) ---
-  local default_label
-  default_label="$(t launcher.default_entry_label)"
+  # --- Write lpm-launcher.yml (auto-filled entry + commented example) --
+  # ONLY if it does not exist yet. "off" never deletes this file (see item 4 of the file
+  # header) so it survives an off/on cycle; overwriting it on "on" would lose manual
+  # customization on every re-enable, including a repair re-enable after a reinstall that
+  # dropped system.prelaunch_command (see zgp_launcher_is_active above). ---
+  if [[ ! -f "${game_dir}/lpm-launcher.yml" ]]; then
+    local default_label
+    default_label="$(t launcher.default_entry_label)"
 
-  YML_PATH="${game_dir}/lpm-launcher.yml" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
-    LABEL="${default_label}" WORKDIR="${win_workdir}" EXE="${win_exe}" ORIGINAL_EXE="${current_exe}" \
-    BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
+    YML_PATH="${game_dir}/lpm-launcher.yml" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
+      LABEL="${default_label}" WORKDIR="${win_workdir}" EXE="${win_exe}" ORIGINAL_EXE="${current_exe}" \
+      BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
 import os, yaml
 
 data = {
@@ -349,50 +388,44 @@ data = {
 with open(os.environ["YML_PATH"], "w") as f:
     yaml.dump(data, f, sort_keys=False, allow_unicode=True)
 ' 2>/dev/null
-  if [[ $? -ne 0 ]]; then
-    zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=ecriture_yaml_echouee"
-    return 1
+    if [[ $? -ne 0 ]]; then
+      zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
+      zgu_log "launcher" "ERREUR" "slug=${slug} raison=ecriture_yaml_echouee"
+      return 1
+    fi
+
+    {
+      echo "# $(t launcher.example_entry_comment)"
+      echo "#  - label: \"$(t launcher.example_entry_label)\""
+      echo "#    workdir: \"C:\\\\Games\\\\...\""
+      echo "#    exe: \"C:\\\\Games\\\\...\\\\jeu.exe\""
+    } >> "${game_dir}/lpm-launcher.yml"
   fi
 
-  {
-    echo "# $(t launcher.example_entry_comment)"
-    echo "#  - label: \"$(t launcher.example_entry_label)\""
-    echo "#    workdir: \"C:\\\\Games\\\\...\""
-    echo "#    exe: \"C:\\\\Games\\\\...\\\\jeu.exe\""
-  } >> "${game_dir}/lpm-launcher.yml"
-
-  # --- Dossier scripts/ ---
+  # --- scripts/ folder ---
   #
-  # AUCUNE image splash par défaut n'est plus copiée ici : depuis l'introduction de
-  # l'orchestrateur (lib/zgl-launcher-orchestrator.sh), l'absence de
-  # "${game_dir}/splash/splash.png" signifie explicitement "écran de chargement noir uni"
-  # -- copier une image par défaut ici irait à l'encontre de ce choix pour tout jeu activant
-  # le LPM Launcher pour la première fois. Le dossier splash/ lui-même n'est donc plus créé
-  # d'office non plus : il est créé par l'orchestrateur au moment où une vraie image y est
-  # déposée par l'utilisateur (ou jamais, si le noir uni convient). Un splash.png déjà
-  # présent (personnalisation existante, ou dossier splash/ d'un jeu activé avant ce
-  # changement) n'est jamais touché ni supprimé par "lpm launcher ... on".
+  # No default splash image is copied here: with the orchestrator
+  # (lib/zgl-launcher-orchestrator.sh), a missing "${game_dir}/splash/splash.png" explicitly
+  # means "plain black loading screen". The splash/ folder itself is no longer created either:
+  # the orchestrator creates it when the user drops a real image there. An existing splash.png
+  # (custom, or splash/ of a game enabled earlier) is never touched or deleted by "lpm launcher
+  # ... on".
   mkdir -p "${game_dir}/scripts"
 
   cat > "${game_dir}/scripts/lpm-launcher.sh" <<EOF
 #!/bin/bash
-# Relais généré par "lpm launcher" -- ne modifie jamais ce fichier à la main, il est
-# réécrit à chaque (ré)activation. La vraie logique vit dans l'installation de lpm.
+# Relay generated by "lpm launcher" -- do not edit by hand, it is rewritten on every
+# (re)activation. The real logic lives in the lpm installation.
 #
-# Ce relais vit TOUJOURS sous \$HOME (donc visible même dans le bac à sable d'un Lutris
-# Flatpak qui ne partage pas "/usr" par défaut). Le vrai script ("${script_dir}/
-# zgl-launcher-runtime.sh") peut lui être invisible dans ce bac à sable si lpm est
-# installé sous /usr -- MÊME quand la permission "host"/"host-os" est accordée à
-# Lutris : cette permission ne remplace PAS le "/usr" du bac à sable (qui reste
-# TOUJOURS celui du runtime Flatpak, jamais celui de l'hôte, pour la compatibilité des
-# bibliothèques) -- elle rend le "/usr" de l'hôte visible à un AUTRE endroit,
-# "/run/host/usr" (confirmé : c'est le comportement documenté de Flatpak pour "host"/
-# "host-os"). Donc on essaie le chemin direct, PUIS ce second chemin avant d'abandonner.
-# Si aucun des deux ne marche, RIEN n'était loggué avant ce correctif -- ce bloc écrit
-# directement une ligne dans lpm.log (même format que zgu_log, mais sans dépendre du
-# reste de l'installation lpm, justement injoignable dans ce cas précis) pour que
-# "lpm log --grep launcher-runtime" dise clairement que le picker n'a pas pu
+# This relay always lives under HOME, so it stays visible inside a Flatpak Lutris sandbox,
+# which does not share "/usr" by default. The real script ("${script_dir}/
+# zgl-launcher-runtime.sh") may be invisible there when lpm is installed under /usr, even
+# with the "host"/"host-os" permission: that permission does not replace the sandbox "/usr"
+# (always the Flatpak runtime's), it exposes the host "/usr" at "/run/host/usr" instead
+# (documented Flatpak behaviour). So try the direct path, then that second one, before giving up.
+# If neither works, write a line straight to lpm.log (same format as zgu_log, without relying on
+# the unreachable lpm installation) so "lpm log --grep launcher-runtime" says the picker could
+# not be shown, and why.
 # s'afficher, et pourquoi.
 runtime_script=""
 for candidate in "${script_dir}/zgl-launcher-runtime.sh" "/run/host${script_dir}/zgl-launcher-runtime.sh"; do
@@ -403,22 +436,18 @@ for candidate in "${script_dir}/zgl-launcher-runtime.sh" "/run/host${script_dir}
 done
 
 if [[ -z "\${runtime_script}" ]]; then
-  # Chemin EN DUR sur \$HOME, jamais via \$XDG_DATA_HOME : Lutris en Flatpak redéfinit
-  # cette variable vers son propre dossier de données privé (confirmé réel :
-  # "XDG_DATA_HOME=~/.var/app/net.lutris.Lutris/data" dans son environnement) -- si ce
-  # relais héritait de cette valeur, la ligne serait écrite dans un fichier que "lpm
-  # log" ne lit jamais. lpm.log doit rester au même endroit partout, qu'on l'écrive
-  # depuis un shell normal ou depuis l'intérieur d'un bac à sable Flatpak.
+  # Hardcoded path under HOME, never via XDG_DATA_HOME: a Flatpak Lutris redefines that
+  # variable to its private data dir, so the line would land in a file "lpm log" never reads.
+  # lpm.log must stay in the same place whether written from a normal shell or a Flatpak sandbox.
   log_dir="\${HOME}/.local/share/lpm"
   mkdir -p "\${log_dir}" 2>/dev/null
   printf '%s\t%s\t%s\t%s\n' \
     "\$(date +%FT%T%z 2>/dev/null)" "launcher-runtime" "ERREUR" \
     "gamedir=${game_dir} raison=runtime_introuvable_bac_a_sable script_dir=${script_dir}" \
     >> "\${log_dir}/lpm.log" 2>/dev/null
-  # Pas de notification graphique ici (ancien "zenity --error" retiré, même principe que
-  # zgl-launcher-runtime.sh) : déjà entièrement journalisé ci-dessus, et ce relais ne doit
-  # jamais bloquer le lancement du jeu pour un souci qu'il ne peut pas afficher de façon
-  # fiable (c'est précisément le cas où zenity lui-même serait injoignable aussi).
+  # No GUI notification here: the failure is already logged above, and this relay must never
+  # block the game from starting over a problem it cannot reliably display (zenity itself may
+  # be unreachable in exactly this case).
   exit 0
 fi
 
@@ -426,19 +455,27 @@ exec bash "\${runtime_script}" "${game_dir}"
 EOF
   chmod +x "${game_dir}/scripts/lpm-launcher.sh"
 
-  # --- Branchement dans la config Lutris : game.exe + system.prelaunch_command ---
+  # --- Wiring into the Lutris config: game.exe + system.prelaunch_command ---
   #
-  # PAS de "bash" devant le chemin du relais : le fichier est déjà exécutable (chmod +x
-  # ci-dessus) et porte son propre shebang -- l'ajouter est inutile et n'a jamais été la
-  # cause d'un quelconque souci (vérifié).
+  # NO "bash" before the relay path: the file is already executable (chmod +x above) and has
+  # its own shebang.
   #
-  # "prelaunch_wait: true" est INDISPENSABLE : par défaut (absent), Lutris lance
-  # prelaunch_command EN ARRIÈRE-PLAN et enchaîne IMMÉDIATEMENT sur le vrai lancement, en
-  # parallèle -- confirmé dans le code source de Lutris (lutris/game.py,
-  # start_prelaunch_command(), et lutris/sysoptions.py où "prelaunch_wait" a bien
-  # default=False). Sans ce réglage, Wine peut tenter d'exécuter lpm-launch.bat avant même
-  # que ce script ait fini de l'écrire -- confirmé réel : c'est exactement ce qui rendait le
-  # jeu injouable au tout premier lancement.
+  # "prelaunch_wait: true" is REQUIRED: by default (absent), Lutris runs prelaunch_command IN THE
+  # BACKGROUND and immediately goes on with the real launch, in parallel (see Lutris source,
+  # lutris/game.py start_prelaunch_command(), and lutris/sysoptions.py where "prelaunch_wait"
+  # has default=False). Without it, Wine may run lpm-launch.bat before this script has finished
+  # writing it, which made the game unplayable at the very first launch.
+# Line-based text editing (zgu-yaml-edit.py): yaml.dump would destroy the Lutris YAML comments,
+# including hooks disabled by LPM ("# lpm:hook-disabled"). Falls back to the full rewrite
+# below if targeted editing is not possible.
+if {
+  yaml_edit_py="${script_dir}/zgu-yaml-edit.py"
+  python3 "${yaml_edit_py}" "${yml_file}" set game exe "${bat_path_linux}" &&
+  python3 "${yaml_edit_py}" "${yml_file}" set system prelaunch_command "${game_dir}/scripts/lpm-launcher.sh" &&
+  python3 "${yaml_edit_py}" "${yml_file}" set system prelaunch_wait true --bool
+} >/dev/null 2>&1; then
+  :
+else
   YML_PATH="${yml_file}" BAT_PATH="${bat_path_linux}" \
     PRELAUNCH="${game_dir}/scripts/lpm-launcher.sh" python3 -c '
 import os, yaml
@@ -459,6 +496,7 @@ data["system"]["prelaunch_wait"] = True
 with open(yml_path, "w") as f:
     yaml.dump(data, f, sort_keys=False)
 ' 2>/dev/null
+fi
   if [[ $? -ne 0 ]]; then
     zgp_launcher_report_error_early "$(t launcher.yaml_patch_failed "${slug}")"
     zgu_log "launcher" "ERREUR" "slug=${slug} raison=patch_lutris_yaml_echoue"
@@ -467,31 +505,24 @@ with open(yml_path, "w") as f:
 
   zgu_log "launcher" "OK" "slug=${slug} action=on"
 
-  # Le chemin de lpm-launcher.yml à éditer à la main est déjà donné tel quel par
-  # zgu_cli_ok dans la boucle appelante -- plus de proposition d'ouverture de dossier
-  # via Zenity ici, bin/lpm n'a plus aucun point d'entrée interactif.
+  # The path of lpm-launcher.yml to edit by hand is already given by zgu_cli_ok in the calling
+  # loop; no folder-opening offer via Zenity here (bin/lpm has no interactive entry point).
 
-  # --- Lutris Flatpak : rappel de permission, best-effort ---
+  # --- Flatpak Lutris: permission reminder, best-effort ---
   #
-  # Un Lutris installé en Flatpak tourne dans un bac à sable qui ne voit PAS forcément
-  # "/usr/lib/lpm" (ou l'installation de lpm en cours d'exécution, quel que soit son
-  # emplacement réel) -- sans permission adéquate, le relais ($GAMEDIR/scripts/
-  # lpm-launcher.sh, TOUJOURS visible car sous $HOME) ne peut pas atteindre le vrai
-  # script runtime, et échouait silencieusement avant le correctif ci-dessus (qui logue
-  # désormais ce cas précis dans lpm.log, voir plus haut).
+  # A Flatpak Lutris runs in a sandbox that may NOT see "/usr/lib/lpm" (or wherever the running
+  # lpm is installed). Without the right permission, the relay ($GAMEDIR/scripts/lpm-launcher.sh,
+  # always visible under $HOME) cannot reach the runtime script (the relay logs this case in
+  # lpm.log, see above).
   #
-  # IMPORTANT (confirmé réel : "Not sharing "/usr/lib/lpm" with sandbox: Path "/usr" is
-  # reserved by Flatpak") -- Flatpak refuse TOUJOURS un "--filesystem=<chemin>" précis
-  # quand ce chemin est sous /usr, même après un "override" qui a l'air d'avoir réussi
-  # (la commande elle-même ne renvoie aucune erreur, seul le montage réel au lancement
-  # est refusé). Installer lpm sous /usr (cas par défaut de install.sh, /usr/local/
-  # lib/lpm) rend donc l'ancien rappel ("--filesystem=${script_dir}:ro") inefficace : la
-  # seule permission qui fonctionne pour un chemin sous /usr est la permission large
-  # "host"/"host-os" (voir doc Flatpak : elle monte le vrai système hôte tel quel,
-  # contournant la restriction propre aux chemins /usr précis). Donc : si lpm est
-  # installé sous /usr, on demande/applique "host-os" ; sinon (install non standard
-  # hors /usr), le chemin précis reste suffisant et plus restrictif, donc préféré.
-  # Simple rappel informatif, jamais bloquant.
+  # IMPORTANT ("Not sharing "/usr/lib/lpm" with sandbox: Path "/usr" is reserved by Flatpak"):
+  # Flatpak always refuses a precise "--filesystem=<path>" under /usr, even after an "override"
+  # that seems to succeed (only the actual mount at launch is refused). With lpm under /usr
+  # (default of install.sh, /usr/local/lib/lpm), a "--filesystem=${script_dir}:ro" reminder is
+  # ineffective; the only permission that works for a path under /usr is the broad
+  # "host"/"host-os" (it mounts the real host system as-is). So: if lpm is installed under
+  # /usr, ask/apply "host-os"; otherwise (non-standard install outside /usr) the precise path
+  # is enough and more restrictive, hence preferred. Informational reminder, never blocking.
   if [[ "${version}" = "flatpak" ]] && command -v flatpak >/dev/null 2>&1; then
     local fp_perms="" fp_ok=false fp_needs_hostos=false
     fp_perms=$(flatpak info --show-permissions net.lutris.Lutris 2>/dev/null)
@@ -504,10 +535,9 @@ with open(yml_path, "w") as f:
       fp_ok=true
     fi
     if [[ "${fp_ok}" = false ]]; then
-      # On propose de l'appliquer nous-mêmes plutôt que de simplement afficher la commande
-      # -- l'utilisateur confirme, lpm exécute "flatpak override" lui-même. Repli sur le
-      # rappel manuel (ancien comportement) si la confirmation est refusée, ou si aucun
-      # terminal interactif n'est disponible pour la demander.
+      # Offer to apply it ourselves instead of only printing the command: the user confirms and
+      # lpm runs "flatpak override". Falls back to the manual reminder if refused or if no
+      # interactive terminal is available.
       local flatpak_question apply_now=false
       if [[ "${fp_needs_hostos}" = true ]]; then
         flatpak_question="$(t launcher.flatpak_permission_question_hostos "${script_dir}")"
@@ -555,7 +585,7 @@ with open(yml_path, "w") as f:
   return 0
 }
 
-# --- 5. Application : désactivation ---
+# --- 5. Apply: disable ---
 zgp_launcher_apply_off() {
   local slug="$1" game_dir="$2" configpath="$3"
   local yml_file="${lutris_config_dir}/${configpath}.yml"
@@ -581,6 +611,24 @@ print(data.get("original_exe") or "")
     return 1
   fi
 
+# Line-based text editing (zgu-yaml-edit.py), see zgp_launcher_apply_on above.
+if {
+  yaml_edit_py="${script_dir}/zgu-yaml-edit.py"
+  python3 "${yaml_edit_py}" "${yml_file}" set game exe "${original_exe}" &&
+  current_prelaunch=$(YML_PATH="${yml_file}" python3 -c '
+import os, yaml
+with open(os.environ["YML_PATH"], "r") as f:
+    data = yaml.safe_load(f) or {}
+system = data.get("system")
+print(str(system.get("prelaunch_command") or "") if isinstance(system, dict) else "")
+') &&
+  if [[ "${current_prelaunch}" == *"scripts/lpm-launcher.sh"* ]]; then
+    python3 "${yaml_edit_py}" "${yml_file}" unset system prelaunch_command &&
+    python3 "${yaml_edit_py}" "${yml_file}" unset system prelaunch_wait
+  fi
+} >/dev/null 2>&1; then
+  :
+else
   YML_PATH="${yml_file}" ORIGINAL_EXE="${original_exe}" RELAY_MARKER="scripts/lpm-launcher.sh" python3 -c '
 import os, yaml
 
@@ -602,6 +650,7 @@ if isinstance(system, dict):
 with open(yml_path, "w") as f:
     yaml.dump(data, f, sort_keys=False)
 ' 2>/dev/null
+fi
   if [[ $? -ne 0 ]]; then
     zgp_launcher_report_error_early "$(t launcher.yaml_patch_failed "${slug}")"
     zgu_log "launcher" "ERREUR" "slug=${slug} raison=patch_lutris_yaml_echoue"

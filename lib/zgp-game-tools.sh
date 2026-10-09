@@ -1,35 +1,26 @@
 #!/bin/bash
 
-# --- lpm tools : menu d'outils Wine pour un jeu (winetricks, éditeur de registre,
-# winecfg, console DOS, exécuter un .exe, ouvrir le dossier du prefixe, ajouter un
-# dossier favori aux fenêtres Ouvrir/Enregistrer Windows) ---
+# --- lpm tools: Wine tools menu for a game (winetricks, registry editor, winecfg, DOS console,
+# run an .exe, open the prefix folder, add a favorite folder to the Windows Open/Save dialogs)
+# ---
 #
-# Objectif : reproduire EXACTEMENT le comportement de Lutris pour ces outils (même
-# binaire wine, mêmes variables d'environnement), vérifié dans son code source
-# (lutris/runners/commands/wine.py et lutris/util/wine/wine.py) plutôt que deviné :
-#   - Pas de flatpak-spawn/host-spawn : Lutris appelle le binaire wine directement, que
-#     Lutris (et donc lpm) tourne en Flatpak ou en paquet natif.
-#   - Le binaire utilisé est celui du runner CONFIGURÉ POUR CE JEU (wine.version dans son
-#     YAML), jamais un "wine" générique du PATH -- winecfg/regedit/winetricks tournant
-#     avec une version différente de celle utilisée pour lancer le jeu donnerait un
-#     comportement incohérent (clés de registre, DLL builtin différentes...).
-#   - WINEDLLOVERRIDES est reconstruit avec le MÊME algorithme que get_overrides_env()
-#     de Lutris (buckets par valeur normalisée, "winemenubuilder" toujours désactivé).
-#   - Winetricks : le binaire embarqué par Lutris (RUNTIME_DIR/winetricks/winetricks)
-#     est préféré, sauf si le jeu a l'option "system_winetricks" activée -- exactement le
-#     choix que ferait Lutris pour CE jeu.
+# Goal: reproduce EXACTLY what Lutris does for these tools (same wine binary, same environment
+# variables), checked against its source (lutris/runners/commands/wine.py and
+# lutris/util/wine/wine.py):
+#   - No flatpak-spawn/host-spawn: Lutris calls the wine binary directly, whether Lutris (and thus lpm) runs as Flatpak or native package.
+#   - The binary used is the one of the runner CONFIGURED FOR THIS GAME (wine.version in its YAML), never a generic "wine" from PATH: winecfg/regedit/winetricks running a different version than the game would behave inconsistently (registry keys, builtin DLLs...).
+#   - WINEDLLOVERRIDES is rebuilt with the SAME algorithm as Lutris get_overrides_env() (buckets by normalized value, "winemenubuilder" always disabled).
+#   - Winetricks: the binary bundled by Lutris (RUNTIME_DIR/winetricks/winetricks) is preferred, unless the game has "system_winetricks" enabled, exactly the choice Lutris would make for THIS game.
 #
-# Simplification assumée (pas une approximation au hasard, un choix délibéré) : Lutris
-# ajoute aussi LD_LIBRARY_PATH vers son "Lutris Runtime" (libs de compatibilité qu'il
-# télécharge lui-même). La structure exacte de ce dossier n'est pas stable/documentée
-# assez précisément pour être reproduite sans risque de se tromper -- et elle sert
-# surtout à faire tourner des JEUX (DXVK/VKD3D/etc.), pas des utilitaires Win32 basiques
-# comme winecfg/regedit/cmd. Elle n'est donc PAS reproduite ici : en cas de souci precis
-# lié à ça sur une distro exotique, à revoir plus tard avec un vrai cas concret.
+# Deliberate simplification: Lutris also adds LD_LIBRARY_PATH for its "Lutris Runtime"
+# (compatibility libs it downloads itself). The exact layout of that folder is not
+# stable/documented enough to reproduce safely, and it mainly serves to run GAMES
+# (DXVK/VKD3D/etc.), not basic Win32 utilities like winecfg/regedit/cmd. It is therefore NOT
+# reproduced here; revisit with a concrete case if an issue shows up on an exotic distro.
 #
-# WINEARCH n'est pas non plus forcé : le prefixe existe déjà (créé par Lutris ou par lpm),
-# Wine détecte son architecture depuis system.reg tout seul. Le forcer risquerait au
-# contraire de casser un prefixe si jamais la valeur lue diffère de la réalité.
+# WINEARCH is not forced either: the prefix already exists (created by Lutris or lpm) and Wine
+# detects its architecture from system.reg by itself. Forcing it could break a prefix if the
+# value read differs from reality.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -40,16 +31,16 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 
 # --- Arguments ---
-# $1 = slug ciblé (obligatoire -- bin/lpm n'a plus aucun point d'entrée interactif, plus de
-#      sélection dans une liste Zenity si absent)
-# $2 = outil ciblé (obligatoire, même raison) :
-#      winetricks | regedit | winecfg | console | exe | folder | favorite
-# $3 = chemin de l'exécutable (uniquement pour $2=exe), ou du dossier favori
-#      (uniquement pour $2=favorite) -- également obligatoire pour ces deux outils, même
-#      raison (plus de sélecteur de fichier Zenity de secours)
+# $1 = target slug (required)
+# $2 = target tool (required):
+#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner
+# $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), or runner name (only for $2=runner); also required for those tools
 cli_slug="${1:-}"
 cli_tool="${2:-}"
 cli_exe_path="${3:-}"
+cli_arg4="${4:-}"
+cli_arg5="${5:-}"
+cli_argc=$#   # number of arguments received (distinguishes "KEY ''" from a missing value)
 
 if [[ -z "${cli_slug}" ]] || [[ -z "${cli_tool}" ]]; then
   zgu_cli_error "$(t game_tools.cli_usage)"
@@ -61,7 +52,8 @@ if ! command -v sqlite3 >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- Détection Flatpak vs paquet natif (mêmes chemins/conventions que le reste du projet) ---
+# --- Flatpak vs native package detection (same paths/conventions as the rest of the project)
+# ---
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
@@ -74,8 +66,8 @@ lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-# RUNTIME_DIR de Lutris : DATA_DIR/runtime (settings.py de Lutris, vérifié dans son code
-# source) -- c'est là que vit son winetricks embarqué (RUNTIME_DIR/winetricks/winetricks).
+# Lutris RUNTIME_DIR: DATA_DIR/runtime (Lutris settings.py); its bundled winetricks lives there
+# (RUNTIME_DIR/winetricks/winetricks).
 lutris_flatpak_runtime_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runtime"
 lutris_package_runtime_dir="${HOME}/.local/share/lutris/runtime"
 
@@ -113,8 +105,8 @@ if ! command -v sqlite3 >/dev/null 2>&1 || [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# Résout le chemin réel et sûr du prefixe d'un slug (même garde anti-évasion que
-# zgp-game-packer.sh : le chemin doit rester un sous-dossier réel de games_dir).
+# Resolves the real, safe prefix path of a slug (same anti-escape guard as zgp-game-packer.sh:
+# the path must stay a real subfolder of games_dir).
 resolve_prefix_dir_by_slug() {
   local slug="$1" safe_slug raw_dir real_dir real_games_dir
   safe_slug="${slug//\'/\'\'}"
@@ -129,12 +121,11 @@ resolve_prefix_dir_by_slug() {
   echo "${real_dir}"
 }
 
-# --- 1. Sélection du jeu (slug CLI uniquement : bin/lpm n'a plus aucun point d'entrée
-# interactif, plus de liste Zenity de secours si le slug est absent) ---
+# --- 1. Game selection (CLI slug only) ---
 #
-# Pas d'exclusion des jeux en prefixe partagé (Epic/EA/Ubisoft...) ici : contrairement
-# au pack (export) ou à l'uninstall, cette feature ne touche/n'exporte rien, elle se
-# contente de lancer des outils DANS le prefixe existant -- confirmé voulu ainsi.
+# No exclusion of games in shared prefixes (Epic/EA/Ubisoft...) here: unlike pack (export) or
+# uninstall, this feature touches/exports nothing, it only launches tools INSIDE the existing
+# prefix. This is intended.
 target_slug="" target_name="" target_configpath=""
 
 target_slug=$(basename -- "${cli_slug}")
@@ -145,13 +136,48 @@ if [[ -z "${row}" ]]; then
 fi
 IFS=$'\x1f' read -r target_name target_configpath <<< "${row}"
 
+# --- "runner" tool: handled HERE, before the configured-runner check below. This is precisely
+# the case where the runner must be changed: the game's current one is no longer installed (or
+# no longer suitable). Only the game's YAML is read/written; neither the prefix nor the old
+# runner is needed. The NEW runner must be installed (same on-disk probe as when launching a
+# tool). ---
+run_runner() {
+  local new_runner="$1" yml_file="${lutris_config_dir}/${target_configpath}.yml"
+  if [[ -z "${new_runner}" ]] || [[ "${new_runner}" = */* ]] || [[ "${new_runner}" = .* ]]; then
+    zgu_cli_error "$(t game_tools.runner_name_missing_cli)"
+    return 1
+  fi
+  if [[ -z "$(zgu_get_wine_binary "${runner_dir}" "${new_runner}")" ]]; then
+    zgu_cli_error "$(t game_tools.runner_not_installed_cli "${new_runner}")"
+    return 1
+  fi
+  if [[ -z "${target_configpath}" ]] || [[ ! -f "${yml_file}" ]]; then
+    zgu_cli_error "$(t game_tools.env_config_missing_cli "${target_name}")"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
+    zgu_cli_error "$(t game_tools.env_yaml_missing_cli)"
+    return 1
+  fi
+  if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set wine version "${new_runner}"; then
+    zgu_cli_error "$(t game_tools.runner_write_failed_cli "${target_name}")"
+    return 1
+  fi
+  zgu_cli_ok "$(t game_tools.runner_set_cli "${target_name}" "${new_runner}")"
+}
+
+if [[ "${cli_tool}" = "runner" ]]; then
+  run_runner "${cli_exe_path}"
+  exit $?
+fi
+
 prefix_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
 if [[ -z "${prefix_dir}" ]]; then
   zgu_cli_error "$(t game_tools.prefix_not_found_cli "${target_name}")"
   exit 1
 fi
 
-# --- 2. Lecture de la config Wine du jeu (version du runner, system_winetricks, overrides) ---
+# --- 2. Read the game Wine config (runner version, system_winetricks, overrides) ---
 wine_version=""
 system_winetricks="0"
 overrides_env="winemenubuilder="
@@ -177,10 +203,10 @@ try:
         if wine_cfg.get("system_winetricks"):
             system_winetricks = "1"
 
-        # Reproduction fidele de get_overrides_env() de Lutris
-        # (lutris/util/wine/wine.py) : memes buckets, meme normalisation,
-        # "winemenubuilder" toujours force a desactive (ecrase une eventuelle
-        # valeur utilisateur, exactement comme le fait Lutris).
+        # Faithful reproduction of Lutris get_overrides_env()
+        # (lutris/util/wine/wine.py): same buckets, same normalization,
+        # "winemenubuilder" always forced to disabled (overrides any user value, as
+        # Lutris does).
         overrides = wine_cfg.get("overrides")
         overrides = dict(overrides) if isinstance(overrides, dict) else {}
         overrides["winemenubuilder"] = ""
@@ -214,9 +240,9 @@ if [[ -z "${wine_bin}" ]]; then
   exit 1
 fi
 
-# --- 3. Résolution du binaire winetricks (embarqué Lutris, sauf si le jeu utilise
-# explicitement le winetricks système -- exactement le choix que ferait Lutris pour ce
-# jeu, voir find_winetricks() dans son code source) ---
+# --- 3. Resolve the winetricks binary (the one bundled with Lutris, unless the game explicitly
+# uses system winetricks; same choice Lutris would make, see find_winetricks() in its source)
+# ---
 embedded_winetricks="${runtime_dir}/winetricks/winetricks"
 winetricks_bin=""
 if [[ "${system_winetricks}" = "1" ]] || [[ ! -x "${embedded_winetricks}" ]]; then
@@ -225,23 +251,22 @@ else
   winetricks_bin="${embedded_winetricks}"
 fi
 
-# --- 4. Lancement en tâche de fond, détaché de ce script (setsid) -- confirmé voulu
-# ainsi pour les 5 outils qui ouvrent une fenêtre (winetricks/regedit/winecfg/
-# console/exe) : lpm ne doit jamais bloquer en attendant leur fermeture.
+# --- 4. Launch in the background, detached from this script (setsid), for the 5 tools that open
+# a window (winetricks/regedit/winecfg/console/exe): lpm must never block waiting for them to
+# close. ---
 zgt_launch_detached() {
   setsid "$@" >/dev/null 2>&1 </dev/null &
   disown
 }
 
-# zgt_already_running <motif_pgrep>
-# Vérifie si un process correspondant au motif donné (ex: "winecfg\.exe") tourne DÉJÀ
-# pour CE prefixe précis (${prefix_dir}) -- pas juste "un winecfg quelque part sur la
-# machine", qui pourrait très bien appartenir à un AUTRE jeu en cours d'édition en
-# parallèle, ce qui ne doit surtout pas être bloqué. Le filtre se fait en lisant
-# /proc/<pid>/environ (WINEPREFIX exact), pas en devinant depuis la ligne de commande
-# (qui ne contient pas le prefixe pour winecfg.exe/regedit.exe -- seul WINEDLLOVERRIDES/
-# WINEPREFIX sont passés en variables d'environnement, pas en argument).
-# Code de retour 0 si un process tourne déjà pour ce prefixe, 1 sinon.
+# zgt_already_running <pgrep_pattern>
+# Checks whether a process matching the pattern (e.g. "winecfg\.exe") is ALREADY running for
+# THIS exact prefix (${prefix_dir}), not just "a winecfg somewhere on the machine", which could
+# belong to ANOTHER game being edited in parallel and must not be blocked. Filtering reads
+# /proc/<pid>/environ (exact WINEPREFIX) instead of guessing from the command line (which does
+# not contain the prefix for winecfg.exe/regedit.exe; WINEDLLOVERRIDES/WINEPREFIX are passed as
+# environment variables).
+# Returns 0 if a process is already running for this prefix, 1 otherwise.
 zgt_already_running() {
   local pattern="$1" pid environ_file
   while IFS= read -r pid; do
@@ -287,41 +312,35 @@ run_winecfg() {
 }
 
 run_console() {
-  # CORRIGÉ après vérification directe dans le code source de Lutris (lutris/runners/
-  # wine.py) : l'entrée "Ouvrir la console Wine" de son menu (le bouton verre de vin)
-  # appelle run_wineconsole(), qui fait juste :
-  #     self._run_executable("wineconsole")
-  # et _run_executable() lance : wineexec("wineconsole", wine_path=self.get_executable(), ...)
-  # -- c'est-à-dire, au final, simplement : "<binaire wine résolu> wineconsole". PAS de
-  # cmd.exe en argument, PAS de recherche d'un fichier "wineconsole" séparé sur le disque.
+  # Lutris (lutris/runners/wine.py): its "Open Wine console" menu entry calls
+  # run_wineconsole(), which runs self._run_executable("wineconsole"), i.e.
+  # wineexec("wineconsole", wine_path=self.get_executable(), ...). The result is simply
+  # "<resolved wine binary> wineconsole": no cmd.exe argument, no search for a separate
+  # "wineconsole" file on disk.
   #
-  # "wineconsole" est un composant INTÉGRÉ à Wine lui-même (comme "wine notepad" ou
-  # "wine cmd") -- présent dans absolument tous les builds Wine, Proton inclus, même
-  # quand aucun fichier "bin/wineconsole" séparé n'existe sur le disque (constaté : les
-  # runners Proton de l'utilisateur n'ont pas ce fichier, contrairement aux vrais builds
-  # Wine -- mais ça n'a jamais été la bonne piste : Lutris ne cherche jamais ce fichier
-  # non plus, il passe toujours par le binaire wine principal).
+  # "wineconsole" is BUILT INTO Wine itself (like "wine notepad" or "wine cmd") and present in
+  # every Wine build, Proton included, even when no separate "bin/wineconsole" file exists
+  # (Proton runners do not have it). Lutris never looks for that file either; it always goes
+  # through the main wine binary.
   #
-  # Explique aussi pourquoi la version précédente (repli sur "wine cmd.exe" en lancement
-  # détaché, sans wineconsole) n'affichait rien : cmd.exe est une appli console qui
-  # cherche à s'attacher à un terminal existant, alors que "wine wineconsole" ouvre son
-  # PROPRE hôte de console graphique intégré à Wine -- comportement totalement différent,
-  # qui n'a besoin d'aucun terminal hôte pour s'afficher. "cmd" est passé explicitement en
-  # argument (plutôt que de compter sur un défaut non documenté) pour garantir le shell
-  # attendu par l'utilisateur (une vraie console MS-DOS), au lieu du comportement par
-  # défaut de wineconsole seul, jamais confirmé avec certitude dans sa documentation.
+  # Running "wine cmd.exe" detached without wineconsole displays nothing: cmd.exe is a console
+  # app that tries to attach to an existing terminal, whereas "wine wineconsole" opens its OWN
+  # graphical console host built into Wine and needs no host terminal. "cmd" is passed
+  # explicitly (rather than relying on an undocumented default) to guarantee the expected
+  # shell (a real MS-DOS console).
   #
-  # Répertoire de démarrage : Wine calque son "répertoire courant" Windows sur le
-  # répertoire courant UNIX du process au moment du lancement -- rien à voir avec
-  # WINEPREFIX. Sans intervention, le script hérite du répertoire courant de lpm
-  # lui-même (typiquement la racine du système ou le dossier d'où lpm a été lancé), donc
-  # la console s'ouvrait là, hors du prefixe. On se place explicitement dans
-  # "<prefixe>/drive_c" (le lecteur C: du prefixe) avant de lancer, pour que la console
-  # démarre bien dans le prefixe du jeu -- avec repli sur la racine du prefixe si
-  # "drive_c" n'existe pas pour une raison quelconque (prefixe non standard/corrompu).
+  # Start directory: Wine maps its Windows current directory to the UNIX current directory of
+  # the process at launch time, unrelated to WINEPREFIX. Without intervention, the script
+  # inherits lpm's own cwd (typically the filesystem root or wherever lpm was launched), so
+  # the console would open outside the prefix. We cd into "<prefix>/drive_c" (the prefix C:
+  # drive) first, falling back to the prefix root if "drive_c" does not exist
+  # (non-standard/corrupt prefix).
   local console_start_dir="${prefix_dir}/drive_c"
   [[ -d "${console_start_dir}" ]] || console_start_dir="${prefix_dir}"
   (
+    # prefix_dir exists (checked by resolve_prefix_dir_by_slug); if both cd still failed,
+    # the console would simply open in the current folder, harmlessly.
+    # shellcheck disable=SC2164
     cd "${console_start_dir}" 2>/dev/null || cd "${prefix_dir}"
     zgt_launch_detached env WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="${overrides_env}" "${wine_bin}" wineconsole cmd
   )
@@ -330,8 +349,7 @@ run_console() {
 
 run_exe() {
   local exe_path="$1"
-  # Chemin obligatoire : bin/lpm n'a plus aucun point d'entrée interactif, plus de
-  # sélecteur de fichier Zenity de secours si absent.
+  # Path required (no interactive file picker fallback).
   if [[ -z "${exe_path}" ]]; then
     zgu_cli_error "$(t game_tools.exe_not_found_cli "${exe_path}")"
     return 1
@@ -349,30 +367,25 @@ run_folder() {
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
 }
 
-# run_favorite <dossier_reel>
+# run_favorite <real_folder>
 #
-# Ajoute <dossier_reel> comme raccourci "Place0" dans les fenêtres Windows natives
-# Ouvrir/Enregistrer de ce jeu (comdlg32, PAS les fenêtres modernes IFileOpenDialog) --
-# vérifié dans le code source de Wine (dlls/comdlg32/filedlg.c,
-# filedlg_collect_places_pidls()) : registre HKCU\Software\Microsoft\Windows\
-# CurrentVersion\Policies\Comdlg32\Placesbar, valeurs "Place0" à "Place4" (5 emplacements
-# maximum, tableau places[5] dans le code), lues DEPUIS LE PREFIXE DU JEU (registre
-# per-prefix, pas global au système). Une seule valeur écrite ici ("Place0"), choix
-# délibéré de garder cette feature volontairement simple plutôt que de gérer plusieurs
-# emplacements : Place0 est toujours écrasé si la commande est relancée pour ce jeu.
+# Adds <real_folder> as the "Place0" shortcut in this game's native Windows Open/Save dialogs
+# (comdlg32, NOT the modern IFileOpenDialog windows). Checked in the Wine source
+# (dlls/comdlg32/filedlg.c, filedlg_collect_places_pidls()): registry
+# HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Comdlg32\Placesbar, values "Place0" to
+# "Place4" (5 slots max, places[5] array in the code), read FROM THE GAME'S PREFIX (per-prefix
+# registry, not system-wide). Only "Place0" is written, to keep the feature simple instead of
+# managing several slots; Place0 is always overwritten if the command is re-run for this game.
 #
-# Un chemin RÉEL Linux ne peut pas être écrit tel quel dans cette clé : Wine attend un
-# chemin côté Windows (résolu ensuite via SHParseDisplayName), donc converti au préalable
-# avec "winepath -w", exactement comme le fait déjà zgl-launcher-manager.sh pour les
-# chemins d'exécutable/dossier de travail du LPM Launcher (même binaire winepath choisi :
-# celui du runner CONFIGURÉ POUR CE JEU en priorité, repli sur un winepath générique du
-# PATH sinon -- garantit la même résolution de lettres de lecteur que "wine_bin" plus
-# haut dans ce script).
+# A real Linux path cannot be written as-is to this key: Wine expects a Windows-side path
+# (resolved later via SHParseDisplayName), so it is converted first with "winepath -w", as
+# zgl-launcher-manager.sh already does for the LPM Launcher executable/working-directory paths
+# (same winepath choice: the runner CONFIGURED FOR THIS GAME first, falling back to a generic
+# winepath from PATH; this gives the same drive-letter resolution as "wine_bin" above).
 run_favorite() {
   local target_dir="$1" winepath_bin="" win_path
 
-  # Dossier obligatoire : bin/lpm n'a plus aucun point d'entrée interactif, plus de
-  # sélecteur de dossier Zenity de secours si absent.
+  # Folder required (no interactive folder picker fallback).
   if [[ -z "${target_dir}" ]]; then
     zgu_cli_error "$(t game_tools.favorite_not_found_cli "${target_dir}")"
     return 1
@@ -409,8 +422,41 @@ run_favorite() {
   fi
 }
 
-# --- 5. Choix de l'outil (CLI uniquement : bin/lpm n'a plus aucun point d'entrée
-# interactif, le menu radiolist de secours a été entièrement retiré) ---
+# --- Game environment variables (system.env in the Lutris YAML), one game at a time. Edited
+# line by line (see lib/zgu-env-edit.py) so YAML comments are never destroyed. ---
+run_env() {
+  local action="${cli_exe_path}"
+  local yml_file="${lutris_config_dir}/${target_configpath}.yml"
+  if [[ -z "${target_configpath}" ]] || [[ ! -f "${yml_file}" ]]; then
+    zgu_cli_error "$(t game_tools.env_config_missing_cli "${target_name}")"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
+    zgu_cli_error "$(t game_tools.env_yaml_missing_cli)"
+    return 1
+  fi
+  case "${action}" in
+    list)
+      python3 "${script_dir}/zgu-env-edit.py" "${yml_file}" list
+      ;;
+    set|unset|apply)
+      local env_edit_args=()
+      [[ "${cli_argc}" -ge 4 ]] && env_edit_args+=("${cli_arg4}")
+      [[ "${cli_argc}" -ge 5 ]] && env_edit_args+=("${cli_arg5}")
+      if ! python3 "${script_dir}/zgu-env-edit.py" "${yml_file}" "${action}" "${env_edit_args[@]}"; then
+        zgu_cli_error "$(t game_tools.env_write_failed_cli "${target_name}")"
+        return 1
+      fi
+      zgu_cli_ok "$(t game_tools.env_saved_cli "${target_name}")"
+      ;;
+    *)
+      zgu_cli_error "$(t game_tools.env_invalid_action_cli "${action}")"
+      return 1
+      ;;
+  esac
+}
+
+# --- 5. Tool selection (CLI only) ---
 case "${cli_tool}" in
   winetricks) run_winetricks ;;
   regedit) run_regedit ;;
@@ -419,6 +465,7 @@ case "${cli_tool}" in
   exe) run_exe "${cli_exe_path}" ;;
   folder) run_folder ;;
   favorite) run_favorite "${cli_exe_path}" ;;
+  env) run_env ;;
   *)
     zgu_cli_error "$(t game_tools.invalid_tool_cli "${cli_tool}")"
     exit 1

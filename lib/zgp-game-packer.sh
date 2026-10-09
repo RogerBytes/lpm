@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# --- Récupération des arguments du routeur lpm ---
-# $1 = Niveau de compression optionnel (ex: "5" ou vide)
-# $2 = generate_hash_flag ("yes" si --hash)
-# $3, $4, ... = Liste des dossiers de jeux cibles
+# --- Arguments from the lpm router ---
+# $1 = optional compression level (e.g. "5" or empty)
+# $2 = generate_hash_flag ("yes" if --hash)
+# $3, $4, ... = target game folders
 compression_arg="${1:-}"
 shift || true
 generate_hash_flag="${1:-}"
 shift || true
 cli_games=("$@")
 
-# Configuration des chemins et variables de base
+# Paths and base variables
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
 source "${script_dir}/zgl-lang-loader.sh"
@@ -28,10 +28,9 @@ GENERATE_HASH=false
 
 OUTPUT_DIR="${HOME}"
 
-# Configuration des chemins Lutris (Flatpak vs paquet natif), avec la même détection que
-# tous les autres scripts de lib/ (via zgu-lutris-utils.sh). Un test d'existence de fichiers
-# résiduels pourrait lire la mauvaise base de données si un ancien profil Flatpak ou natif
-# traîne encore sur le disque, d'où l'usage de la détection centralisée.
+# Lutris paths (Flatpak vs native package), using the same detection as all other lib/ scripts
+# (via zgu-lutris-utils.sh). Checking for leftover files could read the wrong database if an old
+# Flatpak or native profile still lies around.
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
@@ -43,13 +42,13 @@ lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
 GAMES_DIR="${HOME}/Games"
 
-# Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout aussi
-# le cas des deux installées en même temps)
+# Detect Flatpak vs native package (function from zgu-lutris-utils.sh; also handles both being
+# installed)
 lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 if [[ -z "${lutris_version}" ]]; then
-  # Détection explicite (alignée sur les autres scripts de lib/) : un repli silencieux
-  # vers les chemins natifs donnerait un message "dossier introuvable" plus tard dans le
-  # script, bien moins clair que la vraie cause (Lutris non installé).
+  # Explicit detection (aligned with the other lib/ scripts): a silent fallback to native
+  # paths would give a "folder not found" message later, much less clear than the real cause
+  # (Lutris not installed).
   zgu_cli_error "$(t pack_game.lutris_missing_cli)"
   exit 1
 fi
@@ -66,56 +65,53 @@ case "${lutris_version}" in
     ;;
 esac
 
-# Chemin Games personnalisé (si défini dans Lutris) : même lecture dynamique que dans
-# zgp-game-installer.sh et zgp-game-uninstaller.sh. Cette préférence globale vit dans
-# system.yml ("system: game_path:"), PAS dans runners/wine.yml (qui ne contient que des
-# options propres au runner Wine, comme system_winetricks/version).
+# Custom Games path (if set in Lutris): read dynamically as in zgp-game-installer.sh and
+# zgp-game-uninstaller.sh. This global preference lives in system.yml ("system: game_path:"),
+# NOT in runners/wine.yml (which only holds Wine runner options such as
+# system_winetricks/version).
 if [[ -f "${lutris_system_file}" ]]; then
   extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
   [[ -n "${extracted_path}" ]] && GAMES_DIR="${extracted_path}"
 fi
 
-# Anonymise tout chemin utilisateur (Windows "Users\\<nom>\\" / "Users\<nom>\" et
-# POSIX "/home/<nom>/") vers "anonuser", quel que soit le nom d'utilisateur rencontré :
-# une liste figée de noms connus laisserait passer silencieusement tout autre nom
-# d'utilisateur (ancien testeur, autre machine, .reg hérité...). Le YAML embarqué est
-# nettoyé dynamiquement de la même façon (voir plus bas dans ce fichier) ; les .reg /
-# goglog.ini / lutris.json passent par cette fonction commune.
+# Anonymize any user path (Windows "Users\\<name>\\" / "Users\<name>\\" and POSIX
+# "/home/<name>/") to "anonuser", whatever the user name: a fixed list of known names would
+# silently miss any other (former tester, other machine, inherited .reg...). The embedded YAML
+# is cleaned dynamically the same way (see below); .reg / goglog.ini / lutris.json go through
+# this shared function.
 anonymize_user_paths() {
   local f="$1"
   [[ -f "${f}" ]] || return 0
-  # Chemins Windows échappés dans les .reg ("Users\\\\<nom>\\\\") et non échappés
+  # Windows paths, escaped in .reg files ("Users\\\\<name>\\\\") and unescaped
   sed -i -E 's#([Uu]sers\\\\)[^\\"'"'"']+(\\\\)#\1anonuser\2#g' "${f}"
   sed -i -E 's#([Uu]sers\\)[^\\"'"'"']+(\\)#\1anonuser\2#g' "${f}"
-  # Chemins POSIX ("/home/<nom>/")
+  # POSIX paths ("/home/<name>/")
   sed -i -E 's#(/home/)[^/"'"'"']+(/)#\1anonuser\2#g' "${f}"
-  # Filet de sécurité : le $USER courant, même hors contexte de chemin
-  sed -i "s|${USER}|anonuser|g" "${f}"
+  # Safety net: the current $USER, even outside a path context
+  local current_user="${USER:-$(id -un 2>/dev/null)}"
+  [[ -n "${current_user}" ]] && sed -i "s|${current_user}|anonuser|g" "${f}"
+  return 0
 }
 
-# Récupération dynamique du runner par défaut global de Lutris (fonction partagée,
-# voir zgu-lutris-utils.sh)
+# Global default Lutris runner (shared function, see zgu-lutris-utils.sh)
 default_runner=$(zgu_get_default_runner)
 
-# Vérification de zstd (toujours requis)
+# zstd check (always required)
 if ! command -v zstd >/dev/null 2>&1; then
   zgu_cli_error "$(t pack_game.zstd_missing)"
   exit 1
 fi
 
-# python3 lui-même est requis, distinctement de PyYAML ci-dessous : sans cette vérification
-# séparée, une machine sans python3 du tout recevait le même message "PyYAML manquant" qu'une
-# machine avec python3 mais sans le module, ce qui égarait l'utilisateur sur la vraie cause.
-# Même style que la vérification zstd juste au-dessus (stderr uniquement, pas de dialogue
-# Zenity dédié) : ce script n'a jamais distingué cli/gui pour ses erreurs de dépendances.
+# python3 itself is checked separately from PyYAML so the user gets the message matching the
+# real cause. Same style as the zstd check above (stderr only, no dedicated Zenity dialog).
 if ! command -v python3 >/dev/null 2>&1; then
   zgu_cli_error "$(t pack_game.python3_missing)"
   exit 1
 fi
 
-# Le module PyYAML est requis pour nettoyer/réécrire le YAML Lutris embarqué dans le .zgp.
-# Sans lui, le paquet pouvait être créé avec un zgp-game-config.yml non nettoyé (chemins
-# absolus, version de runner manquante) sans qu'aucune erreur ne soit visible.
+# PyYAML is required to clean/rewrite the Lutris YAML embedded in the .zgp. Without it, the
+# package could be created with an uncleaned zgp-game-config.yml (absolute paths, missing runner
+# version) and no visible error.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   zgu_cli_error "$(t pack_game.pyyaml_missing_cli)"
   exit 1
@@ -126,15 +122,15 @@ if [[ ! -d "${GAMES_DIR}" ]]; then
   exit 1
 fi
 
-declare -A folder_by_name  # game_real_name -> chemin réel absolu du préfixe (depuis pga.db)
-declare -A slug_by_name    # game_real_name -> slug (pour la relecture de configpath plus bas)
+declare -A folder_by_name  # game_real_name -> absolute real prefix path (from pga.db)
+declare -A slug_by_name    # game_real_name -> slug (to re-read configpath below)
 games_to_export=()
 
-# Jeux vivant dans un préfixe de store partagé (Epic Games Store, EA App, Ubisoft
-# Connect...) : jamais empaquetables via lpm. Un .zgp mélangerait plusieurs jeux dans une
-# seule archive, et le nettoyage/anonymisation appliqué plus bas (fait pour être rejoué
-# à l'installation sur une autre machine) abîmerait le préfixe partagé pour les autres
-# jeux qui y vivent encore (voir zgu_get_blacklisted_slugs dans zgu-lutris-utils.sh).
+# Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) can never
+# be packed with lpm. A .zgp would mix several games in one archive, and the
+# cleanup/anonymization applied below (meant to be replayed on install on another machine) would
+# damage the shared prefix for the other games still using it (see zgu_get_blacklisted_slugs in
+# zgu-lutris-utils.sh).
 declare -A blacklisted_slugs
 if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
   while IFS= read -r bl_slug; do
@@ -142,16 +138,15 @@ if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
   done < <(zgu_get_blacklisted_slugs "${lutris_db_path}")
 fi
 
-# Résout un slug Lutris (jeu runner='wine') vers le chemin réel et sûr de son préfixe.
-# Découverte via pga.db (colonne "directory") plutôt que par scan de GAMES_DIR/*/ à un seul
-# niveau : un scan à un seul niveau raterait tout jeu imbriqué plus profondément (ex:
-# gog/<jeu>/, comme les jeux GOG de Lutris) et, pire, empaquetterait un dossier
-# intermédiaire (ex: "gog/") en bloc si plusieurs jeux y vivaient, mélangeant leurs
-# préfixes dans une seule archive.
-# "directory" peut provenir de N'IMPORTE QUEL jeu wine de la base pga.db, pas uniquement
-# ceux gérés par lpm : même garde anti-évasion que zgp-game-uninstaller.sh (le chemin
-# résolu doit rester un sous-dossier réel de GAMES_DIR).
-# Sortie : chemin réel sur stdout, rien si introuvable/dangereux (code de retour 1).
+# Resolves a Lutris slug (runner='wine' game) to the real, safe path of its prefix.
+# Discovery goes through pga.db (column "directory") rather than scanning GAMES_DIR/*/ one level
+# deep: a one-level scan would miss games nested deeper (e.g. gog/<game>/, like Lutris GOG
+# games) and would pack an intermediate folder (e.g. "gog/") wholesale if several games lived
+# there, mixing their prefixes in one archive.
+# "directory" may come from ANY wine game in pga.db, not only those managed by lpm: same
+# anti-escape guard as zgp-game-uninstaller.sh (the resolved path must remain a real subfolder
+# of GAMES_DIR).
+# Output: real path on stdout, nothing if not found/unsafe (return code 1).
 resolve_prefix_dir_by_slug() {
   local slug="$1" safe_slug raw_dir real_dir real_games_dir
   safe_slug="${slug//\'/\'\'}"
@@ -166,11 +161,13 @@ resolve_prefix_dir_by_slug() {
   echo "${real_dir}"
 }
 
-# --all (CLI uniquement) : remplace le seul argument "--all" par la liste triée de tous
-# les slugs de jeux wine non blacklistés, connue via pga.db -- exactement la même source
-# que la liste proposée en mode interactif. La boucle CLI ci-dessous n'a ensuite besoin
-# d'aucun changement : elle retraite chaque slug comme si l'utilisateur l'avait tapé.
+# --all (CLI only): replaces the lone "--all" argument with the sorted list of all
+# non-blacklisted wine game slugs from pga.db, so the CLI loop below processes each slug as if
+# typed by the user.
+pack_all_mode=false
+pack_skipped=0
 if [[ ${#cli_games[@]} -eq 1 ]] && [[ "${cli_games[0]}" = "--all" ]]; then
+  pack_all_mode=true
   all_wine_slugs=()
   if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
     while IFS= read -r all_slug; do
@@ -186,15 +183,19 @@ if [[ ${#cli_games[@]} -eq 1 ]] && [[ "${cli_games[0]}" = "--all" ]]; then
   cli_games=("${all_wine_slugs[@]}")
 fi
 
-# --- Sélection des jeux cibles ---
-# Ancien mode interactif Zenity (liste à cocher avec bouton "Tout cocher/décocher", puis
-# questions de compression/hash) supprimé : bin/lpm n'a plus aucun point d'entrée
-# interactif, "cli_games" est donc toujours non vide ici.
+# --- Target game selection ---
+# "cli_games" is always non-empty here (bin/lpm has no interactive entry point).
+# No argument: explicit error (not a false "completed successfully").
+if [[ ${#cli_games[@]} -eq 0 ]]; then
+  zgu_cli_error "$(t common.missing_target_cli "lpm pack")"
+  exit 1
+fi
+
 LEVEL="${compression_arg:-3}"
 
 for target_slug_raw in "${cli_games[@]}"; do
-  # basename() neutralise toute tentative de traversée de chemin ("../", chemin absolu...)
-  # dans le slug fourni en CLI, par cohérence avec le reste du projet.
+  # basename() neutralizes any path traversal attempt ("../", absolute path...) in the
+  # CLI-provided slug, for consistency with the rest of the project.
   target_slug=$(basename -- "${target_slug_raw}")
 
   if [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
@@ -205,6 +206,12 @@ for target_slug_raw in "${cli_games[@]}"; do
   resolved_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
   if [[ -z "${resolved_dir}" ]]; then
     zgu_cli_error "$(t pack_game.folder_not_found_cli "${target_slug_raw}" "${GAMES_DIR}")"
+    # With --all, a game whose folder is missing must not prevent packing the others: it is
+    # reported, processing continues, and the command ends with an error (exit code 1).
+    if [[ "${pack_all_mode}" = true ]]; then
+      pack_skipped=1
+      continue
+    fi
     exit 1
   fi
 
@@ -214,8 +221,11 @@ for target_slug_raw in "${cli_games[@]}"; do
     game_real_name=$(sqlite3 "${lutris_db_path}" "SELECT name FROM games WHERE slug='${safe_target_slug}' LIMIT 1;" 2>/dev/null)
   fi
   [[ -z "${game_real_name}" ]] && game_real_name="${target_slug}"
+  # A "/" in the name would target a wrong archive path (same neutralization as
+  # zgp-game-installer.sh).
+  game_real_name="${game_real_name//\//-}"
 
-  # Vérification anti-écrasement en CLI
+  # Anti-overwrite check in CLI
   archive_path="${OUTPUT_DIR}/${game_real_name}.zgp"
   if [[ -f "${archive_path}" ]]; then
     zgu_cli_error "$(t pack_game.archive_exists_cli "${game_real_name}" "${OUTPUT_DIR}")"
@@ -228,19 +238,48 @@ for target_slug_raw in "${cli_games[@]}"; do
   slug_by_name["${game_real_name}"]="${target_slug}"
 done
 
-# Traitement de chaque jeu sélectionné
+# --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
+# removes the HALF-WRITTEN .zgp of the current game (and its hash file) plus the temporary
+# "zgp-game-config.yml" copied into its prefix. Archives already completed in the batch are
+# never touched here (the GUI offers to delete them, see the "[EXPORTED]" lines). KNOWN
+# LIMITATION: the prefix cleanup done before archiving (symlinks, dosdevices, Temp, anonymized
+# user names...) is applied directly to the installed game, as in a normal export; a cancel
+# cannot undo it, but it has no effect on how the game runs (Wine/Proton recreate those items).
+# Exit code 130. ---
+inprogress_archive=""
+inprogress_yml=""
+
+lpm_cancel_cleanup() {
+  trap '' TERM INT
+  [[ -n "${inprogress_archive}" ]] && rm -f -- "${inprogress_archive}" \
+    "${OUTPUT_DIR}/hash/$(basename -- "${inprogress_archive}").sha256"
+  [[ -n "${inprogress_yml}" ]] && rm -f -- "${inprogress_yml}"
+  zgu_log "pack" "INFO" "archive=${inprogress_archive} raison=annule_nettoye"
+  echo "[CANCELLED]"
+  t pack_game.cancelled_run_cli
+  exit 130
+}
+trap lpm_cancel_cleanup TERM INT
+
+# Descriptor 3 = real script stdout (see zgp-game-installer.sh for details): needed to emit
+# "[PROGRESS] <pct>" from inside the tar | pv | zstd pipe.
+exec 3>&1
+export_idx=0
+export_total_count="${#games_to_export[@]}"
+
+# Process each selected game
 for game_real_name in "${games_to_export[@]}"; do
   WINEPREFIX_DIR="${folder_by_name[${game_real_name}]}"
   game_slug="${slug_by_name[${game_real_name}]}"
 
   [[ -z "${WINEPREFIX_DIR}" ]] && continue
   [[ ! -d "${WINEPREFIX_DIR}" ]] && continue
+  export_idx=$((export_idx + 1))
 
-  # Racine plate de l'archive nommée d'après le dossier réel du préfixe (dirname/basename
-  # du chemin résolu depuis pga.db) plutôt que GAMES_DIR + nom : fonctionne quelle que soit
-  # la profondeur du préfixe (ex: gog/<jeu>/), l'archive garde toujours une racine plate
-  # nommée d'après le dossier du jeu -- zéro changement côté installeur (zgp-game-installer.sh
-  # ne connaît que cette racine plate, jamais la profondeur d'origine).
+  # Flat archive root named after the real prefix folder (dirname/basename of the path
+  # resolved from pga.db) rather than GAMES_DIR + name: works whatever the prefix depth (e.g.
+  # gog/<game>/), and the archive always has a flat root named after the game folder, which is
+  # all zgp-game-installer.sh knows.
   PARENT_DIR=$(dirname -- "${WINEPREFIX_DIR}")
   WINEPREFIX_NAME=$(basename -- "${WINEPREFIX_DIR}")
 
@@ -254,9 +293,9 @@ for game_real_name in "${games_to_export[@]}"; do
   ARCHIVE_NAME="${game_real_name}"
   archive_path="${OUTPUT_DIR}/${ARCHIVE_NAME}.zgp"
 
-  # Recherche robuste du sous-dossier de jeu interne (2>/dev/null : si "drive_c/Games"
-  # n'existe pas pour ce préfixe, on veut basculer silencieusement sur le fallback
-  # ci-dessous plutôt qu'afficher une erreur "find: No such file or directory" inutile)
+  # Robust search for the inner game subfolder (2>/dev/null: if "drive_c/Games" does not exist
+  # for this prefix, fall back silently below instead of printing a useless "find: No such
+  # file or directory")
   GAME_DIR=$(basename "$(find "${WINEPREFIX_DIR}/drive_c/Games" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -n 1)")
   [[ -z "${GAME_DIR}" ]] && GAME_DIR="${WINEPREFIX_NAME}"
 
@@ -272,7 +311,7 @@ for game_real_name in "${games_to_export[@]}"; do
     anonymize_user_paths "${lutris_json}"
   fi
 
-  # Nettoyage des liens symboliques et dossiers temporaires inutiles
+  # Remove symlinks and useless temporary folders
   [[ -d "${WINEPREFIX_DIR}/dosdevices" ]] && rm -rf "${WINEPREFIX_DIR}/dosdevices"
   [[ -L "${WINEPREFIX_DIR}/drive_c/users/steamuser" ]] && unlink "${WINEPREFIX_DIR}/drive_c/users/steamuser"
   [[ -L "${WINEPREFIX_DIR}/drive_c/users/${USER}" ]] && unlink "${WINEPREFIX_DIR}/drive_c/users/${USER}"
@@ -283,14 +322,12 @@ for game_real_name in "${games_to_export[@]}"; do
     [[ -L "${WINEPREFIX_DIR}/drive_c/users/steamuser/${link_name}" ]] && unlink "${WINEPREFIX_DIR}/drive_c/users/steamuser/${link_name}"
   done
 
-  # "Local Settings" (ancien chemin XP : Local Settings/Application Data, Temp, History...)
-  # est entièrement reconstruit par Proton/Wine à la prochaine initialisation du préfixe.
-  # S'il survit à l'empaquetage, il peut contenir à la fois "Application Data" (vrai dossier,
-  # pas encore migré) ET "Application Data BACKUP" (résidu d'une migration Proton déjà faite
-  # avant le pack) : à la réinstallation, Proton retente sa migration automatique et échoue
-  # avec "Directory not empty" car la destination existe déjà et n'est pas vide. Supprimé sans
-  # condition (comme les liens ci-dessus) pour repartir sur une migration propre à chaque
-  # install, plutôt que de traquer un par un tous les sous-dossiers/BACKUP qu'il peut contenir.
+  # "Local Settings" (old XP path: Local Settings/Application Data, Temp, History...) is fully
+  # rebuilt by Proton/Wine at the next prefix initialization. If it survives packing, it may
+  # contain both "Application Data" (real folder, not yet migrated) AND "Application Data
+  # BACKUP" (leftover from a Proton migration already done before packing): on reinstall,
+  # Proton retries its automatic migration and fails with "Directory not empty". Removed
+  # unconditionally (like the links above) rather than chasing each subfolder/BACKUP.
   [[ -e "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings" || -L "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings" ]] \
     && rm -rf -- "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings"
 
@@ -299,18 +336,14 @@ for game_real_name in "${games_to_export[@]}"; do
   [[ -d "${WINEPREFIX_DIR}/drive_c" ]] && mkdir -p "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp"
 
   find "${WINEPREFIX_DIR}/drive_c" -type l ! -exec test -e {} \; -delete
-  # "{}" est passé en argument positionnel plutôt qu'interpolé dans le texte du script :
-  # un nom de fichier contenant des caractères spéciaux (`, $, guillemets...) ne peut plus
-  # être interprété comme du code par bash.
+  # "{}" is passed as a positional argument rather than interpolated into the script text: a
+  # file name with special characters (`, $, quotes...) cannot be interpreted as bash code.
   #
-  # Copie-puis-remplace (et non supprime-puis-copie) : "cp -L" résout lui-même la cible du
-  # lien, qu'elle soit relative ou absolue -- contrairement à un "readlink" manuel suivi
-  # d'un "cp" sur ce chemin brut, qui échouait silencieusement pour tout lien RELATIF (la
-  # cible lue par readlink est relative au dossier du lien, pas au répertoire courant du
-  # script). Le lien était alors déjà supprimé avant l'échec de la copie : le fichier
-  # disparaissait purement et simplement de l'archive .zgp, sans erreur bloquante visible.
-  # En copiant d'abord vers un fichier temporaire avant de supprimer le lien, un échec de
-  # copie laisse le lien original intact au lieu de perdre le fichier.
+  # Copy-then-replace (not delete-then-copy): "cp -L" resolves the link target itself,
+  # relative or absolute, whereas a manual "readlink" followed by "cp" fails silently for
+  # RELATIVE links (the target is relative to the link's folder, not the script's cwd), after
+  # the link was already removed, so the file would vanish from the .zgp. Copying to a temp
+  # file first leaves the original link intact if the copy fails.
   find "${WINEPREFIX_DIR}/drive_c" -type l -exec bash -c '
     for link; do
       tmp="${link}.zgp-tmp"
@@ -331,25 +364,22 @@ for game_real_name in "${games_to_export[@]}"; do
     fi
   done
 
-  # --- PLUS DE FICHIER MÊTA SÉPARÉ POUR LE VRAI NOM DU JEU ---
-  # zgp-meta.json existait uniquement pour transporter le nom réel du jeu jusqu'à
-  # l'installation. Inutile : le YAML Lutris embarqué juste en dessous (zgp-game-config.yml)
-  # contient déjà nativement une clé racine "name" avec cette même valeur (confirmé sur un
-  # vrai export Lutris), et ce YAML n'est de toute façon jamais retiré de cette clé par le
-  # nettoyage ci-dessous (seuls "script", "version" et "slug" y sont retirés). L'installeur
-  # lit donc directement "name" depuis ce YAML plutôt que depuis un second fichier redondant.
+  # --- NO SEPARATE META FILE FOR THE REAL GAME NAME ---
+  # The Lutris YAML embedded below (zgp-game-config.yml) already has a root "name" key with
+  # the real name, and the cleanup below never removes it (only "script", "version" and "slug"
+  # are removed). The installer reads "name" directly from that YAML.
 
-  # --- EMBARQUEMENT PROPRE DU YAML LUTRIS (si disponible) ---
+  # --- CLEAN EMBEDDING OF THE LUTRIS YAML (if available) ---
   if [[ -n "${configpath}" ]] && [[ -f "${lutris_config_dir}/${configpath}.yml" ]]; then
+    inprogress_yml="${WINEPREFIX_DIR}/zgp-game-config.yml"
     cp "${lutris_config_dir}/${configpath}.yml" "${WINEPREFIX_DIR}/zgp-game-config.yml"
 
-    # Le préfixe absolu du wineprefix (ex: /home/harry/Games/mariovania) est remplacé par
-    # le placeholder natif de Lutris "$GAMEDIR" dans tous les chemins du YAML embarqué,
-    # résolu dynamiquement à l'installation d'après le dossier de jeux réellement configuré
-    # chez l'utilisateur qui installe (voir zgp-game-installer.sh). Le remplacement doit
-    # couvrir tout le chemin (pas seulement le segment "/home/<nom>/") : sinon, un dossier
-    # de jeux personnalisé ou différent de celui de la machine ayant créé le paquet reste
-    # figé dans le YAML et casse l'installation.
+    # The absolute wineprefix path (e.g. /home/user/Games/mariovania) is replaced by Lutris'
+    # native "$GAMEDIR" placeholder in all paths of the embedded YAML, resolved at install
+    # time from the configured games folder (see zgp-game-installer.sh).
+    # The replacement must cover the whole path (not only the "/home/<name>/" segment):
+    # otherwise a custom games folder, or one different from the packaging machine, stays
+    # frozen in the YAML and breaks the install.
     YML_PATH="${WINEPREFIX_DIR}/zgp-game-config.yml" WINEPREFIX_DIR_ENV="${WINEPREFIX_DIR}" DEFAULT_RUNNER="${default_runner}" ERR_YAML_LABEL="$(t pack_game.yaml_cleanup_error)" python3 -c '
 import yaml, re, os
 
@@ -366,16 +396,14 @@ try:
         data.pop("version", None)
         data.pop("slug", None)
 
-        # GAMEID (system.env.GAMEID) est generee par lpm a l installation (voir
-        # zgu_write_game_shortcut dans zgu-desktop-utils.sh) a partir de l id Lutris du jeu
-        # dans LA BASE DE CETTE MACHINE -- un simple compteur auto-incremente, jamais le
-        # meme d une machine a l autre. La conserver dans le .zgp exporte referencerait un
-        # id perime des la reinstallation ailleurs (ou meme ici apres une reinstallation),
-        # avec un risque reel de collision entre deux jeux differents portant par coincidence
-        # le meme vieil id -- exactement le bug de fusion dans le panel qu on vient de
-        # corriger. Retiree specifiquement (pas tout "env", qui peut contenir des reglages
-        # legitimes et voulus comme WINEDLLOVERRIDES/MANGOHUD) : chaque installation la
-        # recalcule de toute facon automatiquement, aucune fonctionnalite perdue.
+        # GAMEID (system.env.GAMEID) is generated by lpm at install time (see
+        # zgu_write_game_shortcut in zgu-desktop-utils.sh) from the game Lutris id in
+        # this machine database, an auto-incremented counter that differs between
+        # machines. Keeping it in the exported .zgp would reference a stale id after
+        # reinstalling elsewhere (or even here), with a real risk of collision between
+        # two different games sharing the same old id. Removed specifically (not all of
+        # "env", which may hold legitimate settings such as WINEDLLOVERRIDES/MANGOHUD):
+        # each install recomputes it automatically.
         system_cfg = data.get("system")
         if isinstance(system_cfg, dict):
             env_cfg = system_cfg.get("env")
@@ -391,9 +419,9 @@ try:
                 s = obj
                 if prefix_pattern:
                     s = re.sub(prefix_pattern + r"(?=/|$)", "$GAMEDIR", s)
-                # Filet de sécurité : anonymise tout chemin utilisateur qui référencerait
-                # encore /home/<nom> en dehors du prefix, pour tout chemin non couvert par
-                # le placeholder ci-dessus
+                # Safety net: anonymize any user path still referencing
+                # /home/<name> outside the prefix, for paths not covered by the
+                # placeholder above
                 s = re.sub(r"/home/[^/]+/", "/home/anonuser/", s)
                 return s
             return obj
@@ -414,24 +442,31 @@ except Exception as e:
   fi
   # ---------------------------------------------------------
 
+  # Array (not a single string): "zstd '--ultra -22'" passed ONE argument "--ultra -22" to
+  # zstd, which rejected it ("Incorrect parameters"), so levels 20 to 22 always failed.
   if [[ "${LEVEL}" -gt 19 ]]; then
-    zstd_opt="--ultra -${LEVEL}"
+    zstd_args=(--ultra "-${LEVEL}")
   else
-    zstd_opt="-${LEVEL}"
+    zstd_args=("-${LEVEL}")
   fi
 
-  # --- EXÉCUTION DE LA COMPRESSION --- (ancienne branche interactive déléguée à
-  # zgu_gui_compress_zstd supprimée : bin/lpm n'a plus aucun point d'entrée interactif)
-  # Utilisation de pv pour une barre textuelle propre si dispo, sinon simple message.
-  t pack_game.compressing_cli "${ARCHIVE_NAME}" "${LEVEL}"
+  # --- RUN THE COMPRESSION ---
+  # Use pv for a clean text progress bar if available, otherwise a plain message.
+  t pack_game.compressing_cli "${export_idx}" "${export_total_count}" "${game_real_name}" "${LEVEL}"
+  inprogress_archive="${archive_path}"
   if command -v pv >/dev/null 2>&1; then
     source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
     [[ -z "${source_size}" ]] && source_size=0
 
-    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | pv -s "${source_size}" | zstd "${zstd_opt}" > "${archive_path}"
+    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
+      # tar adds its headers: the stream may exceed the folder size -> capped at 100.
+      [[ "${_lpm_pct}" =~ ^[0-9]+$ ]] || continue
+      (( _lpm_pct > 100 )) && _lpm_pct=100
+      printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+    done) | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   else
-    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | zstd "${zstd_opt}" > "${archive_path}"
+    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   fi
 
@@ -439,12 +474,12 @@ except Exception as e:
     zgu_cli_error "$(t pack_game.compression_failed_cli "${ARCHIVE_NAME}")"
     zgu_log "pack" "ERREUR" "slug=${game_slug} nom=${game_real_name} raison=compression_echouee code=${tar_exit}"
     rm -f "${archive_path}"
+    [[ -n "${inprogress_yml}" ]] && rm -f -- "${inprogress_yml}"
     exit 1
   fi
 
-  # Le .zgp peut embarquer des données sensibles (registre Wine : clés de licence,
-  # chemins...) : restreint aux seuls droits du propriétaire pour éviter qu'un autre
-  # utilisateur local de la même machine puisse le lire avant un partage volontaire.
+  # The .zgp may embed sensitive data (Wine registry: license keys, paths...): restricted to
+  # owner-only permissions so another local user cannot read it before a deliberate share.
   chmod 600 "${archive_path}"
 
   if [[ "${GENERATE_HASH}" = true ]]; then
@@ -452,13 +487,19 @@ except Exception as e:
   fi
 
   zgu_log "pack" "OK" "slug=${game_slug} nom=${game_real_name} archive=${archive_path}"
+  # Line read by the GUI (see CommandPage.run_command): this archive is done, offered for
+  # deletion if the batch is cancelled afterwards.
+  printf '[EXPORTED] %s\n' "${archive_path}"
+  inprogress_archive=""
 
   zgu_cli_ok "$(t pack_game.done_cli "${archive_path}")"
 
-  # Nettoyage des fichiers temporaires embarqués avant la fin
+  # Clean up the embedded temporary files before finishing
   rm -f "${WINEPREFIX_DIR}/zgp-game-config.yml"
+  inprogress_yml=""
 
 done
 
+[[ "${pack_skipped}" -eq 0 ]] || exit 1
 zgu_cli_ok "$(t pack_game.cli_done)"
 exit 0

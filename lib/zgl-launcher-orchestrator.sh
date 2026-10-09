@@ -1,48 +1,39 @@
 #!/bin/bash
 
-# --- lpm launcher : point d'entrée UNIQUE de tous les raccourcis (.desktop) créés par lpm ---
+# --- lpm launcher: SINGLE entry point of all shortcuts (.desktop) created by lpm ---
 #
-# Appelé directement par "Exec=" du .desktop (voir zgu_write_game_shortcut dans
-# zgu-desktop-utils.sh) -- strictement identique pour tous les jeux Wine, avec ou sans
-# LPM Launcher ("picker" multi-entrées) actif. Rôle : afficher le fond de chargement
-# (noir, ou l'image splash/splash.png si présente) avec un petit indicateur "en cours de
-# chargement" (texte traduit + spinner) en bas à droite -- jamais recouvert par une
-# éventuelle bannière -- PUIS céder la place à Lutris pour le lancement réel.
+# Called directly by "Exec=" of the .desktop (see zgu_write_game_shortcut in
+# zgu-desktop-utils.sh), identical for all Wine games, with or without the LPM Launcher
+# (multi-entry "picker"). Role: show the loading background (black, or splash/splash.png if
+# present) with a small "loading" indicator (translated text + spinner) at the bottom right,
+# never covered by a banner, THEN hand over to Lutris for the real launch.
 #
-# Usage : zgl-launcher-orchestrator.sh <game_id> <version:package|flatpak>
+# Usage: zgl-launcher-orchestrator.sh <game_id> <version:package|flatpak>
 #
-# Volontairement DEUX arguments seulement, tous deux toujours sûrs sans échappement (un
-# entier, un mot fixe) -- "slug"/"game_dir" ne transitent jamais par Exec= du .desktop : ce
-# champ suit les règles d'échappement du format Desktop Entry, distinctes de celles d'un
-# shell, et un chemin avec espaces y serait un risque inutile. Ce script re-interroge donc
-# lui-même la base Lutris (pga.db) pour retrouver "slug"/"directory" à partir de
-# "game_id" -- même requête, mêmes chemins de base et même repli "games_dir/slug" que
-# zgp-game-shortcutter.sh / zgp-game-installer.sh (voir zgu-lutris-utils.sh).
+# Deliberately only TWO arguments, both safe without escaping (an integer, a fixed word):
+# "slug"/"game_dir" never go through the .desktop "Exec=", whose escaping rules differ from
+# a shell's and where a path with spaces would be an unnecessary risk. This script queries
+# the Lutris database (pga.db) itself to get "slug"/"directory" from "game_id", with the same
+# query, base paths and "games_dir/slug" fallback as zgp-game-shortcutter.sh /
+# zgp-game-installer.sh (see zgu-lutris-utils.sh).
 #
-# Conception (voir l'échange complet qui y a mené) :
-#   - Écran de chargement actif pour TOUS les raccourcis lpm par défaut ; désactivable par
-#     jeu via la présence de "${game_dir}/.lpm-no-loadingscreen" (case "Écran de chargement"
-#     décochée à la création/régénération du raccourci -- voir zgp-game-shortcutter.sh /
-#     zgp-game-installer.sh). Dans ce cas : lancement direct, comportement identique à avant
-#     l'introduction de l'orchestrateur, zéro overhead.
-#   - Le picker multi-entrées (plusieurs exécutables possibles pour un même jeu) reste
-#     entièrement gérée par zgl-launcher-runtime.sh, déclenché comme avant par Lutris via
-#     system.prelaunch_command -- CE script-ci ne s'en occupe pas et ne vérifie même pas si
-#     cette fonctionnalité est active : les deux sont indépendantes. Le picker réutilise le
-#     fond déjà ouvert par CE script (voir le fichier de contrôle à chemin fixe ci-dessous),
-#     il n'en ouvre jamais un second.
-#   - Une fois le fond lancé, ce script fait "exec" vers la commande Lutris normale
-#     (strictement la même que celle utilisée directement en Exec= avant l'orchestrateur) --
-#     remplace le process bash par le process lutris (même PID), donc aucun wrapper ne
-#     traîne dans l'arbre des process : zéro impact sur le suivi de fenêtre/dock (WM_CLASS,
-#     StartupWMClass) qui fonctionne exactement comme avant.
-#   - Aucune vérification/fermeture d'une instance Lutris déjà ouverte : inutile ici, la
-#     détection de fin de chargement se fait par apparition de LA FENÊTRE du jeu (watcher
-#     détaché ci-dessous), pas par la fin du process Lutris -- ce dernier signal n'est donc
-#     jamais nécessaire, qu'une instance Lutris tourne déjà ou non (voir l'échange détaillé :
-#     "lutris lutris:rungameid/<id>" fonctionne identiquement dans les deux cas pour lancer
-#     RÉELLEMENT le jeu, seul le comportement de blocage du process appelant diffère, et on
-#     ne s'en sert pas).
+# Design:
+#   - Loading screen enabled for ALL lpm shortcuts by default; disabled per game by the
+#     presence of "${game_dir}/.lpm-no-loadingscreen" ("Loading screen" checkbox unchecked
+#     when creating/regenerating the shortcut, see zgp-game-shortcutter.sh /
+#     zgp-game-installer.sh). Then: direct launch, zero overhead.
+#   - The multi-entry picker (several executables per game) is handled by
+#     zgl-launcher-runtime.sh, triggered by Lutris via system.prelaunch_command. THIS script
+#     does not check whether that feature is active; the two are independent. The picker
+#     reuses the background already opened by THIS script (fixed-path control file below).
+#   - Once the background is up, this script "exec"s the normal Lutris command (the same as
+#     the one used in Exec= before the orchestrator): the bash process is replaced by lutris
+#     (same PID), so no wrapper stays in the process tree and window/dock tracking
+#     (WM_CLASS, StartupWMClass) is unaffected.
+#   - No check/closing of an already-running Lutris instance: end of loading is detected by
+#     the appearance of THE GAME WINDOW (detached watcher below), not by the end of the
+#     Lutris process. "lutris lutris:rungameid/<id>" really launches the game either way;
+#     only the blocking behaviour of the calling process differs, and it is not used.
 
 set -u
 
@@ -55,20 +46,20 @@ source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# --- Commande Lutris finale : strictement celle utilisée en Exec= avant l'orchestrateur ---
+# --- Final Lutris command: the same as the one used in Exec= before the orchestrator ---
 launch_lutris() {
   if [[ "${version}" = "flatpak" ]]; then
     exec env LUTRIS_SKIP_INIT=1 flatpak run net.lutris.Lutris "lutris:rungameid/${game_id}"
   else
     exec env LUTRIS_SKIP_INIT=1 lutris "lutris:rungameid/${game_id}"
   fi
-  # "exec" ne rend jamais la main en cas de succès -- si on arrive ici, exec a échoué
-  # (lutris/flatpak introuvable) : dernier recours, log et sortie en erreur.
+  # "exec" never returns on success: reaching here means exec failed (lutris/flatpak not
+  # found); last resort, log and exit with an error.
   zgu_log "launcher-orchestrator" "ERREUR" "game_id=${game_id} raison=exec_lutris_echoue"
   exit 1
 }
 
-# --- Argument manquants : on ne bloque jamais un lancement pour si peu, repli direct ---
+# --- Missing arguments: never block a launch for that, fall back to a direct launch ---
 if [[ -z "${game_id}" ]] || [[ -z "${version}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "raison=arguments_manquants argv=$*"
   launch_lutris
@@ -79,68 +70,66 @@ if [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
   has_display=true
 fi
 
-# --- Pas d'affichage possible (session sans GUI, python3 absent, sqlite3 absent...) :
-# repli direct -- inutile d'aller interroger la base Lutris pour un écran qu'on ne pourra
-# de toute façon pas afficher. ---
+# --- No display possible (no GUI session, python3 or sqlite3 missing...): direct launch;
+# no point querying the Lutris database for a screen that cannot be shown. ---
 if [[ "${has_display}" = false ]] || ! command -v python3 >/dev/null 2>&1 || ! command -v sqlite3 >/dev/null 2>&1; then
   launch_lutris
 fi
 
-# --- Résolution de la base Lutris à interroger : mêmes chemins et même convention
-# ("version" = "flatpak" ou "package", jamais "native" -- voir zgp-game-shortcutter.sh) que
-# partout ailleurs dans le projet. Pas d'appel à zgu_resolve_lutris_version ici : la version
-# à utiliser est déjà connue (reçue en argument, figée au moment de la création du
-# raccourci), inutile de la redétecter/redemander à chaque lancement. ---
+# --- Lutris database to query: same paths and convention ("version" = "flatpak" or
+# "package", never "native"; see zgp-game-shortcutter.sh) as elsewhere in the project. No call
+# to zgu_resolve_lutris_version: the version is already known (argument, fixed when the
+# shortcut was created). ---
 if [[ "${version}" = "flatpak" ]]; then
   lutris_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
   lutris_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
+  lutris_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
 else
   lutris_db="${HOME}/.local/share/lutris/pga.db"
   lutris_system_file="${HOME}/.config/lutris/system.yml"
+  lutris_config_dir="${HOME}/.config/lutris/games"
 fi
 
-# --- Base introuvable : repli direct, silencieux (juste un log) -- un lancement de jeu ne
-# doit jamais échouer pour si peu. ---
+# --- Database not found: silent direct launch (just a log); a game launch must never fail
+# for that. ---
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=db_introuvable db=${lutris_db}"
   launch_lutris
 fi
 
-# --- slug + directory, par id -- même requête (colonnes) et même repli "games_dir/slug"
-# que zgp-game-shortcutter.sh / zgp-game-installer.sh. game_id vient de Exec= (donc du
-# .desktop lui-même, jamais d'une entrée utilisateur libre à ce stade), mais reste
-# interpolé tel quel dans le SQL comme ailleurs dans le projet -- filtré ici pour rester un
-# entier pur par précaution, avant toute utilisation. ---
+# --- slug + directory, by id: same query (columns) and "games_dir/slug" fallback as
+# zgp-game-shortcutter.sh / zgp-game-installer.sh. game_id comes from Exec= (the .desktop
+# itself, not free user input) but is interpolated as-is into the SQL as elsewhere in the
+# project; filtered here to a pure integer as a precaution. ---
 game_id="${game_id//[^0-9]/}"
 if [[ -z "${game_id}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "raison=game_id_invalide"
   launch_lutris
 fi
 
-row=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || directory || char(31) || name FROM games WHERE id = ${game_id} AND runner = 'wine' LIMIT 1;" 2>/dev/null)
+row=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || directory || char(31) || name || char(31) || COALESCE(configpath,'') FROM games WHERE id = ${game_id} AND runner = 'wine' LIMIT 1;" 2>/dev/null)
 
 if [[ -z "${row}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=jeu_introuvable_en_base"
   launch_lutris
 fi
 
-IFS=$'\x1f' read -r slug game_dir game_name <<< "${row}"
+IFS=$'\x1f' read -r slug game_dir game_name configpath <<< "${row}"
 
 if [[ -z "${slug}" ]]; then
   zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=slug_vide_en_base"
   launch_lutris
 fi
 
-# Titre affiché dans le coin bas-droite de l'écran de chargement (voir
-# zgu-launcher-blackscreen.py) : le nom du jeu tel quel par défaut -- remplacé par
-# zgl-launcher-runtime.sh une fois le picker résolu, SEULEMENT si le jeu a plusieurs
-# entrées LPM Launcher actives (voir ce script). \n/\r retirés : "name" vient de la base
-# Lutris (donc potentiellement forgé par un tiers, paquet .zgp partagé), et le protocole du
-# fichier de contrôle est ligne par ligne.
+# Title shown at the bottom right of the loading screen (see zgu-launcher-screen.py): the
+# game name by default; replaced by zgl-launcher-runtime.sh once the picker is resolved, ONLY
+# if the game has several active LPM Launcher entries. \n/\r are stripped: "name" comes from
+# the Lutris database (possibly forged by a third party via a shared .zgp package) and the
+# control file protocol is line-based.
 title_text="${game_name//[$'\n\r']/}"
 
-# Chemin Games personnalisé (si défini dans Lutris) : même repli que zgp-game-shortcutter.sh
-# / zgp-game-installer.sh, utilisé seulement si "directory" est vide en base.
+# Custom Games path (if set in Lutris): same fallback as zgp-game-shortcutter.sh /
+# zgp-game-installer.sh, used only if "directory" is empty in the database.
 games_dir="${HOME}/Games"
 if [[ -f "${lutris_system_file}" ]]; then
   extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
@@ -148,17 +137,15 @@ if [[ -f "${lutris_system_file}" ]]; then
 fi
 [[ -z "${game_dir}" ]] && game_dir="${games_dir}/${slug}"
 
-# --- Fichier de contrôle à chemin FIXE (dérivé de game_dir, pas de mktemp aléatoire) --
-# -- pour que zgl-launcher-runtime.sh (lancé séparément, plus tard, par Lutris) retrouve le
-# même fichier sans qu'aucune donnée n'ait besoin de circuler explicitement entre les deux
-# scripts. sha256sum de game_dir plutôt que son basename : robuste même si le nom du
-# répertoire du jeu ne correspond pas exactement au slug (colonne "directory" de Lutris).
+# --- FIXED-path control file (derived from game_dir, no random mktemp), so that
+# zgl-launcher-runtime.sh (started separately, later, by Lutris) finds the same file with no
+# data passed between the two scripts. sha256sum of game_dir rather than its basename: robust
+# even if the game directory name does not match the slug (Lutris "directory" column). ---
 ctrl_key=$(printf '%s' "${game_dir}" | sha256sum | cut -c1-24)
 control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
-# --- Écran de chargement désactivé pour ce jeu, ou dossier introuvable : lancement direct,
-# rien d'autre (donc aussi pas de picker LPM Launcher -- voir zgl-launcher-runtime.sh pour
-# son propre repli dans ce cas précis, en mode dégradé). ---
+# --- Loading screen disabled for this game, or folder not found: direct launch, nothing else
+# (so no LPM Launcher picker either; see zgl-launcher-runtime.sh for its fallback here). ---
 if [[ ! -d "${game_dir}" ]] || [[ -f "${game_dir}/.lpm-no-loadingscreen" ]]; then
   launch_lutris
 fi
@@ -168,19 +155,24 @@ if [[ "${XDG_SESSION_TYPE,,}" = "wayland" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]];
   session_kind="wayland"
 fi
 
-# --- LPM Launcher (picker multi-entrées) : le YAML est lu ICI, AVANT même le premier
-# affichage du fond, uniquement pour savoir si un picker va être montré -- pas encore
-# pour l'afficher (la manette n'est pas encore démarrée à ce stade, voir plus bas). Sert
-# à décider le fond INITIAL juste en dessous : si un picker va suivre, le splash ne doit
-# apparaître qu'APRÈS le choix, jamais avant pour disparaître aussitôt (clignotement
-# constaté, corrigé ici plutôt que côté fond, qui ne peut pas deviner à l'avance).
+# --- LPM Launcher (multi-entry picker): the YAML is read HERE, BEFORE the first background
+# display, only to know whether a picker will be shown (the gamepad is not started yet). It
+# decides the INITIAL background: if a picker follows, the splash must only appear AFTER the
+# choice, never before only to vanish at once (flicker). ---
 launcher_yml="${game_dir}/lpm-launcher.yml"
-# PAS sous /tmp : le /tmp du bac à sable Flatpak de Lutris est totalement invisible
-# depuis l'hôte (confirmé réel), donc zgl-launcher-runtime.sh (qui tourne DEDANS pour un
-# Lutris Flatpak) ne trouverait jamais ce fichier écrit ICI, sur l'hôte. "${game_dir}"
-# est lui forcément visible des deux côtés -- voir zgl-launcher-runtime.sh.
+# NOT under /tmp: the /tmp of the Flatpak Lutris sandbox is invisible from the host, so
+# zgl-launcher-runtime.sh (running INSIDE it for Flatpak Lutris) would never find a file
+# written HERE on the host. "${game_dir}" is visible from both sides.
 launcher_choice_file="${game_dir}/.lpm-launcher-choice"
 rm -f "${launcher_choice_file}" 2>/dev/null
+
+# Protocol of the picker embedded in the single window (see zgu-launcher-screen.py, file
+# header): two fixed-path files derived from "control_file", never mixed into its 4 lines.
+# Cleaned here as a precaution (leftover of an interrupted launch), before knowing whether
+# a picker will be shown this time.
+picker_request_file="${control_file}.picker-req"
+picker_result_file="${control_file}.picker-res"
+rm -f "${picker_request_file}" "${picker_result_file}" 2>/dev/null
 
 picker_title="" picker_prompt=""
 entry_labels=()
@@ -228,35 +220,31 @@ for e in entries:
   [[ ${#entry_labels[@]} -gt 1 ]] && will_show_picker=true
 fi
 
-# --- Fond : image splash si présente, sinon noir uni -- SAUF si un picker va être
-# montré, auquel cas NONE jusqu'au choix (voir bloc ci-dessus). ---
+# --- Background: splash image if present, else plain black, EXCEPT when a picker will be
+# shown: then NONE until the choice (see block above). ---
 splash_image="${game_dir}/splash/splash.png"
 bg_state="NONE"
 if [[ "${will_show_picker}" = false ]] && [[ -f "${splash_image}" ]]; then
   bg_state="${splash_image}"
 fi
 
-# --- Logo : à côté du splash (même dossier). Dessiné DIRECTEMENT par
-# zgu-launcher-blackscreen.py dans sa propre fenêtre (voir son en-tête de fichier) --
-# PAS de process séparé : le picker ne recouvre jamais cette zone (en haut de l'écran,
-# au-dessus de son propre encadré toujours centré), donc pas besoin d'une fenêtre "toujours
-# au sommet" en plus -- ça évite tous les problèmes de calques/focus d'un essai précédent
-# (fenêtre logo séparée, voir l'historique). Si absent, zgu-launcher-blackscreen.py affiche
-# le titre à cet emplacement à la place (voir son en-tête de fichier) -- passé même s'il
-# n'existe pas, la vérification d'existence se fait côté Python.
+# --- Logo: next to the splash (same folder). Drawn DIRECTLY by zgu-launcher-screen.py in its
+# own window (see its file header), no separate process: the picker never covers that area
+# (top of the screen, above its always-centered frame), so no "always on top" window is
+# needed. If absent, zgu-launcher-screen.py shows the title there instead; passed even if
+# missing, the existence check is done on the Python side.
 logo_image="${game_dir}/splash/logo.png"
 
-# Connu à l'avance (voir bloc YAML plus haut, "will_show_picker") : "1" si ce jeu n'a
-# qu'une seule entrée (ou aucune) -- donc aucun libellé ne sera jamais affiché sur l'écran
-# de chargement -- voir <no_label> dans l'en-tête de zgu-launcher-blackscreen.py, qui
-# recentre alors la bannière au lieu de réserver une bande qui resterait vide.
+# Known in advance (see YAML block above, "will_show_picker"): "1" if this game has a single
+# entry (or none), so no label is ever shown on the loading screen; see <no_label> in the
+# header of zgu-launcher-screen.py, which then recenters the banner instead of reserving an
+# empty band.
 no_label_flag="1"
 [[ "${will_show_picker}" = true ]] && no_label_flag="0"
 
-# Connu à l'avance aussi : "1" si ce jeu affichera une bannière (splash.png présent) --
-# voir <has_banner> dans l'en-tête de zgu-launcher-blackscreen.py. Ne sert qu'en
-# combinaison avec no_label_flag="1" ci-dessus (tant qu'un picker reste possible, la
-# disposition ne change jamais, quelle que soit cette valeur).
+# Also known in advance: "1" if this game will show a banner (splash.png present); see
+# <has_banner> in the header of zgu-launcher-screen.py. Only used together with
+# no_label_flag="1" above (while a picker remains possible the layout never changes).
 has_banner_flag="0"
 [[ -f "${splash_image}" ]] && has_banner_flag="1"
 
@@ -270,43 +258,56 @@ has_banner_flag="0"
 indicator_text="$(t launcher.loading_text)"
 
 blackscreen_pid=""
-bridge_pid=""
 
-python3 "${script_dir}/zgu-launcher-blackscreen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
+# zgu-launcher-screen.py reads the gamepad itself via SDL2, in its own process (see that
+# file): no separate bridge is started here. A bridge injecting keys through xdotool/ydotool
+# into the focused window depended on the window manager (X11: focus stealing prevention;
+# Wayland: no portable equivalent). Reading the gamepad inside the window and acting on its
+# own widgets avoids this (see also zgu-gamepad-nav-utils.sh, no caller left).
+# Forced foreground recovery by the loading screen (see on_active_changed in
+# zgu-launcher-screen.py): DISABLED by default. A fullscreen Wine game that loses focus gets
+# iconified, so forcing focus back always minimized it; a fullscreen game naturally covers the
+# loading screen. A game whose window is recreated several times at startup (e.g. Momodora)
+# can re-enable it by creating an empty ".lpm-keep-focus" file in its folder (never created
+# automatically, same convention as ".lpm-no-loadingscreen").
+# WM_CLASS of the game = StartupWMClass of the .desktop generated by lpm (see
+# zgu_write_game_shortcut): the loading window reuses it to group under the same panel icon as
+# the game. Empty if the menu shortcut does not exist (behaviour unchanged).
+screen_wm_class=""
+shortcut_file="${HOME}/.local/share/applications/net.lutris.${slug}.desktop"
+if [[ -f "${shortcut_file}" ]]; then
+  screen_wm_class=$(sed -n 's/^StartupWMClass=//p' "${shortcut_file}" | head -n1)
+  screen_wm_class="${screen_wm_class//[$'\n\r\t']/}"
+fi
+keep_focus_env=0
+[[ -f "${game_dir}/.lpm-keep-focus" ]] && keep_focus_env=1
+LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
-# Démarré ICI, AVANT le picker LPM Launcher ci-dessous (pas seulement pour le jeu une
-# fois lancé) : la manette doit déjà être captée quand le picker s'affiche, par-dessus ce
-# même fond noir/splash -- pas un second bac à sable ou pont séparé pour ça.
-python3 "${script_dir}/zgu-gamepad-bridge.py" "${session_kind}" >/dev/null 2>&1 &
-bridge_pid=$!
-disown "${bridge_pid}" 2>/dev/null
-
-sleep 0.3  # laisse le temps au fond de s'afficher avant que Lutris (ou le picker) ne fasse quoi que ce soit
+sleep 0.3  # let the background render before Lutris (or the picker) does anything
 
 zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=fond_lance ctrl=${control_file}"
 
-# --- LPM Launcher (picker multi-entrées) : résolu ICI, sur la machine hôte, PAS par
-# zgl-launcher-runtime.sh (lancé plus tard par Lutris) -- ce dernier tourne, pour un
-# Lutris Flatpak, à l'intérieur de son bac à sable, où ni la manette ni même la souris
-# n'atteignaient fiablement Zenity, malgré plusieurs contournements successifs (voir
-# l'échange qui a mené à ce choix). Le choix est donc fait ICI -- exactement comme le
-# menu interactif de lpm, qui n'a jamais eu ce problème pour la même raison : hors de
-# tout bac à sable, et avec le même pont manette déjà démarré ci-dessus -- et transmis à
-# zgl-launcher-runtime.sh via un fichier à chemin fixe, dérivé de game_dir comme le
-# fichier de contrôle. Ce dernier n'a alors plus qu'à le lire et écrire lpm-launch.bat,
-# sans jamais avoir besoin d'afficher quoi que ce soit lui-même dans le cas normal (son
-# propre picker reste en repli, voir ce script, pour le cas où CE script-ci n'aurait pas
-# tourné -- raccourci lpm contourné, jeu lancé autrement).
+# --- LPM Launcher (multi-entry picker): resolved HERE, on the host, NOT by
+# zgl-launcher-runtime.sh (started later by Lutris), which for Flatpak Lutris runs inside its
+# sandbox, where neither gamepad nor mouse reliably reached Zenity. The choice is made HERE and
+# passed to zgl-launcher-runtime.sh via a fixed-path file derived from game_dir, like the
+# control file. The runtime script then only reads it and writes lpm-launch.bat (its own
+# picker remains a fallback if THIS script did not run: lpm shortcut bypassed, game launched
+# another way).
 #
-# YAML déjà lu plus haut (entry_labels/picker_title/picker_prompt/will_show_picker),
-# avant même le premier affichage du fond -- voir ce bloc pour pourquoi.
+# YAML already read above (entry_labels/picker_title/picker_prompt/will_show_picker), before
+# the first background display; see that block for why.
+#
+# The picker is INTEGRATED in the single window launched above (see zgu-launcher-screen.py,
+# "Gtk.Overlay"): no second process/window, so no stacking ("always on top") issue; GTK4
+# removed "set_keep_above" with no portable equivalent. The request goes through
+# "picker_request_file", the answer comes back through "picker_result_file"; see their format
+# in the header of zgu-launcher-screen.py.
 if [[ "${will_show_picker}" = true ]]; then
-    # IND_HIDE : dit aussi au fond noir/splash de passer SOUS le picker le temps du choix
-    # (voir zgu-launcher-blackscreen.py) -- sans ça, son "keep_above" le remet toujours
-    # par-dessus. Fond déjà "NONE" depuis le tout premier affichage (voir plus haut) --
-    # rien à changer ici, juste l'indicateur. Titre inchangé à ce stade.
+    # IND_HIDE: the loading indicator disappears during the choice. Background is already "NONE"
+    # since the first display (see above), only the indicator changes. Title unchanged.
     {
       printf '%s\n' "NONE"
       printf '%s\n' "IND_HIDE"
@@ -314,55 +315,63 @@ if [[ "${will_show_picker}" = true ]]; then
       printf '%s\n' ""
     } > "${control_file}" 2>/dev/null
 
-    # Laisse le temps au fond (sondage toutes les 150ms, voir zgu-launcher-blackscreen.py)
-    # de lever son "keep_above" AVANT que le picker n'apparaisse -- sinon sa fenêtre se
-    # retrouve créée pendant que le fond est encore sur le calque "toujours au-dessus", et
-    # rien ne la fait remonter par-dessus ensuite (constaté réel : le focus peut être
-    # confirmé côté WM sans que la fenêtre soit visuellement remontée au-dessus d'un
-    # "always on top").
-    sleep 0.3
+    {
+      printf '%s\n' "${picker_title}"
+      printf '%s\n' "${picker_prompt}"
+      printf '%s\n' "$(t launcher.picker_validate_button)"
+      printf '%s\n' "$(t launcher.picker_cancel_button)"
+      for entry in "${entry_labels[@]}"; do
+        printf '%s\n' "${entry}"
+      done
+    } > "${picker_request_file}" 2>/dev/null
 
-    # Picker maison (zgu-launcher-picker.py), PAS Zenity : boutons Valider/Annuler définis
-    # PAR CE SCRIPT (jamais ceux, imposés, de Zenity), ni croix de fermeture -- accessible
-    # au clavier (flèches/Entrée/Échap), à la manette (A/B) ET à la souris (clic, double-
-    # clic, ou les deux boutons) -- voir ce script pour le détail. Sa propre fenêtre se
-    # maintient elle-même au-dessus (set_keep_above(True) et grab_focus() dans le script),
-    # plus besoin du va-et-vient xdotool de zgu-focus-utils.sh ici.
-    selection=$(python3 "${script_dir}/zgu-launcher-picker.py" \
-      "${picker_title}" "${picker_prompt}" \
-      "$(t launcher.picker_validate_button)" "$(t launcher.picker_cancel_button)" \
-      "${entry_labels[@]}" 2>/dev/null)
-    picker_rc=$?
+    # Wait for the result by polling, like the control file itself, with no time limit (the
+    # user may take as long as needed). Also exits if the window ended meanwhile (crash,
+    # "kill -9"...), otherwise the loop would wait forever for a file that never comes.
+    picker_rc=1
+    selection=""
+    while true; do
+      if [[ -f "${picker_result_file}" ]]; then
+        mapfile -t _picker_result_lines < "${picker_result_file}" 2>/dev/null
+        rm -f "${picker_result_file}" 2>/dev/null
+        if [[ "${_picker_result_lines[0]:-}" = "OK" ]]; then
+          selection="${_picker_result_lines[1]:-}"
+          picker_rc=0
+        fi
+        break
+      fi
+      if [[ -n "${blackscreen_pid}" ]] && ! kill -0 "${blackscreen_pid}" 2>/dev/null; then
+        zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=fenetre_fermee_pendant_picker"
+        break
+      fi
+      sleep 0.1
+    done
+    rm -f "${picker_request_file}" 2>/dev/null
 
     if [[ "${picker_rc}" -ne 0 ]] || [[ -z "${selection}" ]]; then
-      # Annulé (bouton Annuler, Échap, bouton B, ou fermeture de la fenêtre -- toutes
-      # traitées pareil, voir zgu-launcher-picker.py) OU erreur du picker : le flux est
-      # arrêté ENTIÈREMENT, le jeu n'est PAS lancé. Avec Zenity, "Annuler" finissait quand
-      # même par lancer le jeu (rien ne distinguait vraiment annulé de "choix par défaut") --
-      # constaté réel, corrigé ici : annuler doit vouloir dire annuler.
+      # Cancelled (Cancel button, Escape, B button, all treated alike, see
+      # zgu-launcher-screen.py) OR error/window gone: the flow is stopped ENTIRELY, the game is NOT
+      # launched ("cancel" must mean cancel).
       rm -f "${launcher_choice_file}" 2>/dev/null
       zgu_log "launcher-orchestrator" "INFO" "slug=${slug} raison=picker_annule action=arret_complet"
       echo "STOP" > "${control_file}" 2>/dev/null
-      [[ -n "${bridge_pid}" ]] && kill "${bridge_pid}" 2>/dev/null
       sleep 0.3
       [[ -n "${blackscreen_pid}" ]] && kill "${blackscreen_pid}" 2>/dev/null
       rm -f "${control_file}" 2>/dev/null
       exit 0
     fi
 
-    # Écrit ce fichier dès qu'un choix a été validé : sa seule PRÉSENCE dit à
-    # zgl-launcher-runtime.sh que CE script a bien tourné et pris la décision -- absence =
-    # repli sur son propre picker (voir plus haut), jamais une case à part à gérer côté
-    # runtime.
+    # Written as soon as a choice is validated: its mere PRESENCE tells zgl-launcher-runtime.sh
+    # that THIS script ran and decided; absence means fallback on its own picker.
     printf '%s' "${selection}" > "${launcher_choice_file}" 2>/dev/null
 
-    # Fond APRÈS le choix : le splash (s'il existe) n'apparaît qu'à partir de maintenant --
-    # jamais avant le picker (voir plus haut pourquoi bg_state valait "NONE" jusqu'ici).
+    # Background AFTER the choice: the splash (if any) only appears from now on, never before
+    # the picker (bg_state was "NONE" until here).
     post_choice_bg="NONE"
     [[ -f "${splash_image}" ]] && post_choice_bg="${splash_image}"
 
-    # Titre INCHANGÉ (toujours le nom du jeu, voir zgu-launcher-blackscreen.py) : le
-    # libellé choisi vient s'ajouter EN PLUS, sur sa propre ligne, jamais à sa place.
+    # Title UNCHANGED (still the game name, see zgu-launcher-screen.py): the chosen label is
+    # added on its own line, never in its place.
     {
       printf '%s\n' "${post_choice_bg}"
       printf '%s\n' "IND_SHOW"
@@ -372,17 +381,149 @@ if [[ "${will_show_picker}" = true ]]; then
     zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choix entree=${selection}"
 fi
 
-# --- Watcher détaché : détection de la fenêtre du jeu + durée minimum d'affichage, puis
-# nettoyage complet -- tourne indépendamment, CE script fait "exec" juste après et disparaît
-# (remplacé par le process lutris), le watcher continue de vivre en tâche de fond. ---
+# --- Universal game window detection (WIN_CreateWindowEx via WINEDEBUG) ---------
+#
+# Replaces X11-only detection (xdotool, see below) with a signal independent of the display
+# server (X11/Wayland), the runner (Wine-GE, Proton/umu, plain Wine) and the game graphics
+# API (validated on three runners and two engines): Wine traces the creation of EVERY Win32
+# window via WIN_CreateWindowEx before talking to the display server. The REAL game window
+# is told apart from internal technical windows (Shell_TrayWnd, WineDdeServerName,
+# SDLHelperWindowInputMsgWindow...) by a significant size (all others: 0x0 or tiny); see the
+# generated relay below for the exact trace format.
+#
+# "prefix_command" (Lutris system option, YAML key "system: prefix_command") is NOT
+# interpreted by a shell: a REAL script is needed to set WINEDEBUG="+win" and redirect the
+# trace to a file. Patched at EVERY launch (this script runs each time): idempotent (YAML
+# only written if the value changes) and chains only ONCE; a user-defined "Command prefix"
+# (e.g. gamemoderun) is always kept, never overwritten (see the Python script below).
+#
+# NEVER a machine-fixed path (neither "${script_dir}/..." under /usr/lib/lpm or
+# /usr/local/lib/lpm, nor /tmp). With Flatpak Lutris, a path under /usr is invisible from
+# inside the sandbox (/usr there is the Flatpak runtime's, not the host's) and made Lutris'
+# "exec" fail, and a trace file written in the sandbox's PRIVATE /tmp is never seen by this
+# script running on the host (same trap as "launcher_choice_file" above). For the same
+# reason a "lpm ..." command would not work either: "lpm" is installed under /usr (or
+# /usr/local), not in the sandbox PATH.
+#
+# Hence the same convention as "${game_dir}/scripts/lpm-launcher.sh" for the LPM Launcher
+# (see zgl-launcher-manager.sh): a GENERATED relay (never copied from a separate file of the
+# lpm install) under "${game_dir}/scripts", already proven visible on both sides of the
+# sandbox (see "launcher_choice_file"), containing all the logic (a few lines). Portable in
+# a .zgp export: no absolute path specific to this machine or install mode (.deb vs
+# install.sh); the relay is regenerated at every launch anyway.
+winetrace_scripts_dir="${game_dir}/scripts"
+winetrace_wrapper="${winetrace_scripts_dir}/lpm-winetrace.sh"
+trace_file="${winetrace_scripts_dir}/lpm-winetrace.log"
+rm -f "${trace_file}" 2>/dev/null
+
+use_winetrace=false
+
+if [[ -n "${configpath}" ]] && command -v python3 >/dev/null 2>&1 \
+    && python3 -c "import yaml" >/dev/null 2>&1; then
+  # "scripts/" may not exist yet (no game necessarily enables the LPM Launcher, the only other
+  # place creating it; see zgl-launcher-manager.sh): create it here if needed.
+  mkdir -p "${winetrace_scripts_dir}" 2>/dev/null
+
+  cat > "${winetrace_wrapper}" <<'WRAPPER_EOF'
+#!/bin/bash
+# Relay generated by lpm (universal game-window detection) -- do not edit by hand, it is
+# rewritten on every launch.
+#
+# Usage: lpm-winetrace.sh <trace_file> <real_command...>
+#
+# Lutris does not interpret "prefix_command" with a shell (it splits it into words and runs the
+# resulting argv directly), so this real bash script does the redirection instead: it sets
+# WINEDEBUG="+win", then execs the real command (everything after the first argument) while
+# filtering its stderr live into <trace_file>, keeping only lines containing "WIN_CreateWindowEx".
+set -u
+trace_file="${1:-}"
+shift || true
+if [[ -z "${trace_file}" ]] || [[ $# -eq 0 ]]; then
+  exec "$@"
+fi
+export WINEDEBUG="+win"
+exec "$@" 2> >(grep --line-buffered "WIN_CreateWindowEx" >> "${trace_file}")
+WRAPPER_EOF
+  chmod +x "${winetrace_wrapper}" 2>/dev/null
+
+  if [[ -x "${winetrace_wrapper}" ]]; then
+    yml_path="${lutris_config_dir}/${configpath}.yml"
+    if [[ -f "${yml_path}" ]]; then
+      patch_result=$(YML_PATH="${yml_path}" WRAPPER="${winetrace_wrapper}" TRACE_FILE="${trace_file}" python3 -c '
+import os
+import shutil
+import sys
+
+import yaml
+
+yml_path = os.environ["YML_PATH"]
+wrapper_cmd = os.environ["WRAPPER"]
+trace_file_path = os.environ["TRACE_FILE"]
+wanted_prefix = f"{wrapper_cmd} {trace_file_path}"
+
+try:
+    with open(yml_path, "r") as f:
+        data = yaml.safe_load(f)
+except Exception:
+    sys.exit(1)
+
+if not isinstance(data, dict):
+    sys.exit(1)
+
+system_cfg = data.get("system")
+if not isinstance(system_cfg, dict):
+    system_cfg = {}
+    data["system"] = system_cfg
+
+# Never overwrite a user "Command prefix": if our wrapper is already there (previous launch),
+# strip the user-specific tail and rebuild it behind the up-to-date wrapper (the trace path
+# is normally identical, so this usually changes nothing).
+current = str(system_cfg.get("prefix_command") or "")
+if current.startswith(wanted_prefix):
+    user_tail = current[len(wanted_prefix):].lstrip()
+else:
+    user_tail = current
+new_value = wanted_prefix if not user_tail else f"{wanted_prefix} {user_tail}"
+
+if new_value == current:
+    print("OK")
+    sys.exit(0)
+
+system_cfg["prefix_command"] = new_value
+
+try:
+    shutil.copy2(yml_path, yml_path + ".lpm-bak")
+    with open(yml_path, "w") as f:
+        yaml.dump(data, f, sort_keys=False)
+except Exception:
+    sys.exit(1)
+
+try:
+    os.remove(yml_path + ".lpm-bak")
+except OSError:
+    pass
+
+print("OK")
+' 2>/dev/null)
+
+      [[ "${patch_result}" = "OK" ]] && use_winetrace=true
+    fi
+  fi
+fi
+
+if [[ "${use_winetrace}" = false ]]; then
+  zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=winetrace_indisponible_repli_xdotool"
+fi
+
+# --- Detached watcher: game window detection + minimum display time, then full cleanup.
+# Runs independently: THIS script "exec"s right after and disappears (replaced by lutris),
+# the watcher keeps running in the background. ---
 MIN_DISPLAY_MS=1000
 
-# Marge de sécurité APRÈS la détection de la fenêtre du jeu (ou après l'attente fixe côté
-# Wayland) : la fenêtre qui vient d'apparaître n'a pas forcément fini de s'initialiser --
-# un outil de génération de frames comme LSFG, par exemple, peut provoquer un petit accroc
-# juste après l'apparition de la fenêtre. Sans cette marge, le fond disparaissait pile au
-# moment où ce genre de à-coup pouvait être visible.
-POST_WINDOW_GRACE_MS=500
+# Safety margin AFTER the game window detection (or after the fixed wait on Wayland): the
+# new window may not be fully initialized (e.g. a frame generation tool like LSFG can cause a
+# small hitch right after it appears). Without it the background vanished exactly then.
+POST_WINDOW_GRACE_MS=1000
 
 (
   start_ms=$(date +%s%3N 2>/dev/null || echo 0)
@@ -390,7 +531,57 @@ POST_WINDOW_GRACE_MS=500
   waited=0
   window_detected=""
 
-  if [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; then
+  # Extra per-game margin: VISIBLE file (no leading dot) at the prefix root, created with "0"
+  # if missing, never overwritten, so a user-edited value survives all later launches. Added to
+  # POST_WINDOW_GRACE_MS above; useful for a game whose window appears before it is really
+  # playable (e.g. shader compilation right after the window appears).
+  extra_ms_file="${game_dir}/lpm-extra-loading-ms"
+  [[ -f "${extra_ms_file}" ]] || printf '0' > "${extra_ms_file}" 2>/dev/null
+  extra_ms=$(tr -cd '0-9' < "${extra_ms_file}" 2>/dev/null)
+  [[ -z "${extra_ms}" ]] && extra_ms=0
+
+  if [[ "${use_winetrace}" = true ]]; then
+    # Universal detection (X11/Wayland alike, any runner): re-reads the trace file (already
+    # filtered live by the lpm-winetrace.sh relay, so every line contains "WIN_CreateWindowEx")
+    # looking for a size (width x height) above WIN_SIZE_THRESHOLD. A literal "x" between two
+    # numbers immediately followed by "parent=" is the only place of the format with this pattern
+    # (confirmed on a real capture), so no false positive from a hexadecimal field (ex=, style=,
+    # inst=...). Internal Wine/SDL/GLFW windows always have a null or tiny size, which the
+    # threshold discards.
+    #
+    # Second criterion (e.g. Kirby Soft And Wet, GameMaker): some games create their real window
+    # very small (here 106x132) and resize it later without creating a new one, so the threshold
+    # never saw it. An application window has a title bar (WS_CAPTION bits, 0x00C00000, in
+    # "style="), unlike Wine/SDL technical windows (style 0 or popup only): it is accepted from
+    # WIN_CAPTION_MIN_SIZE x WIN_CAPTION_MIN_SIZE regardless of its size. The size-only criterion
+    # is unchanged for all other cases.
+    WIN_SIZE_THRESHOLD=200
+    WIN_CAPTION_MIN_SIZE=32
+    WIN_CAPTION_STYLE_MASK=$(( 0x00C00000 ))
+    while [[ "${waited}" -lt "${max_wait_s}" ]]; do
+      if [[ -s "${trace_file}" ]]; then
+        while IFS= read -r trace_line; do
+          if [[ "${trace_line}" =~ ([0-9]+)x([0-9]+)[[:space:]]+parent= ]]; then
+            win_w="${BASH_REMATCH[1]}"
+            win_h="${BASH_REMATCH[2]}"
+            if [[ "${win_w}" -gt "${WIN_SIZE_THRESHOLD}" ]] && [[ "${win_h}" -gt "${WIN_SIZE_THRESHOLD}" ]]; then
+              window_detected="1"
+              break
+            fi
+            if [[ "${win_w}" -ge "${WIN_CAPTION_MIN_SIZE}" ]] && [[ "${win_h}" -ge "${WIN_CAPTION_MIN_SIZE}" ]] \
+               && [[ "${trace_line}" =~ style=([0-9A-Fa-f]{1,8})[[:space:]] ]] \
+               && [[ $(( 0x${BASH_REMATCH[1]} & WIN_CAPTION_STYLE_MASK )) -eq "${WIN_CAPTION_STYLE_MASK}" ]]; then
+              window_detected="1"
+              break
+            fi
+          fi
+        done < "${trace_file}"
+      fi
+      [[ -n "${window_detected}" ]] && break
+      sleep 1
+      waited=$(( waited + 1 ))
+    done
+  elif [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; then
     before_windows=$(xdotool search --onlyvisible "" 2>/dev/null | sort)
     while [[ "${waited}" -lt "${max_wait_s}" ]]; do
       sleep 1
@@ -403,25 +594,25 @@ POST_WINDOW_GRACE_MS=500
       fi
     done
   elif [[ "${session_kind}" = "x11" ]]; then
-    # xdotool absent sur une session X11 : dégradation vers l'attente fixe Wayland, MAIS
-    # journalisée -- avant ce correctif, cette dégradation était totalement silencieuse
-    # (mêmes symptômes que Wayland : toujours 12s pile, même pour un jeu qui se lance en
-    # 2s, sans aucun moyen de comprendre pourquoi depuis les logs). "lpm check" recommande
-    # maintenant aussi l'installation de xdotool sur une session X11 -- voir
-    # zgc-dependency-checker.sh.
+    # xdotool missing on an X11 session: degrades to the Wayland fixed wait, but LOGGED (same
+    # symptoms as Wayland: always exactly 12s, even for a game starting in 2s). "lpm check" also
+    # recommends installing xdotool on an X11 session; see zgc-dependency-checker.sh.
     zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=xdotool_absent_degradation_attente_fixe"
     sleep 12
   else
-    # Wayland : même limite documentée qu'avant (xdotool ne peut pas lister/détecter les
-    # fenêtres d'autres applications) -- attente fixe raisonnable.
+    # Wayland: xdotool cannot list/detect windows of other applications, so a reasonable fixed
+    # wait. This fallback should only happen without PyYAML/configpath (see "use_winetrace"
+    # above): universal detection works on both Wayland and X11.
     sleep 12
   fi
 
-  # Marge de sécurité post-détection (voir POST_WINDOW_GRACE_MS ci-dessus) -- s'applique
-  # dans tous les cas (fenêtre détectée sur X11, ou attente fixe écoulée sur Wayland).
-  sleep "$(awk -v ms="${POST_WINDOW_GRACE_MS}" 'BEGIN { printf "%.3f", ms / 1000 }')"
+  # Post-detection safety margin (see POST_WINDOW_GRACE_MS above) + extra per-game margin (see
+  # extra_ms above). Applies in all cases (window detected via trace/xdotool, or fixed wait
+  # elapsed).
+  total_grace_ms=$(( POST_WINDOW_GRACE_MS + extra_ms ))
+  sleep "$(awk -v ms="${total_grace_ms}" 'BEGIN { printf "%.3f", ms / 1000 }')"
 
-  # Durée minimum : évite un flash si le jeu démarre anormalement vite.
+  # Minimum duration: avoids a flash if the game starts abnormally fast.
   if [[ "${start_ms}" != "0" ]]; then
     now_ms=$(date +%s%3N 2>/dev/null || echo 0)
     elapsed_ms=$(( now_ms - start_ms ))
@@ -431,15 +622,13 @@ POST_WINDOW_GRACE_MS=500
     fi
   fi
 
-  # --- Délai dépassé sans qu'aucune fenêtre ne soit apparue (SEULEMENT détectable sur X11
-  # avec xdotool -- aucun signal fiable équivalent sur Wayland ni sans xdotool, voir
-  # ci-dessus, donc jamais de faux avertissement dans ces deux cas) : plutôt que de
-  # disparaître en silence comme si tout s'était bien passé, affiche un avertissement
-  # quelques secondes avant de fermer -- réutilise la ligne "titre" (voir
-  # zgu-launcher-blackscreen.py) pour ça, aucune modification de ce script nécessaire.
-  # L'indicateur "chargement"/spinner est masqué en même temps : ce n'est plus "en train de
-  # charger" à ce stade, plus la peine de le prétendre. ---
-  if [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1 && [[ -z "${window_detected}" ]]; then
+  # --- Timeout without any window appearing (detectable when universal detection is active,
+  # "use_winetrace", or as fallback on X11 with xdotool; no reliable signal otherwise, so never
+  # a false warning there): instead of vanishing silently as if all went well, shows a warning
+  # a few seconds before closing, reusing the "title" line (see zgu-launcher-screen.py). The
+  # "loading"/spinner indicator is hidden at the same time. ---
+  if { [[ "${use_winetrace}" = true ]] || { [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; }; } \
+      && [[ -z "${window_detected}" ]]; then
     zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=aucune_fenetre_detectee_apres_delai delai_s=${max_wait_s}"
     {
       printf '%s\n' "${bg_state}"
@@ -450,33 +639,31 @@ POST_WINDOW_GRACE_MS=500
   fi
 
   echo "STOP" > "${control_file}" 2>/dev/null
-  [[ -n "${bridge_pid}" ]] && kill "${bridge_pid}" 2>/dev/null
   sleep 0.3
   [[ -n "${blackscreen_pid}" ]] && kill "${blackscreen_pid}" 2>/dev/null
   rm -f "${control_file}" 2>/dev/null
+  rm -f "${trace_file}" 2>/dev/null
 ) </dev/null >/dev/null 2>&1 &
 disown $! 2>/dev/null
 
-# --- Combo manette "quitter le jeu" (Alt+F4) -- voir zgu-gamepad-exit-watcher.py pour le
-# détail complet (pourquoi un script à part du pont manette, pourquoi pas de grab(), pourquoi
-# pas de filet de sécurité). Lancé ICI, juste avant de passer la main à Lutris ("exec" un peu
-# plus bas ne rend jamais la main -- l'orchestrateur perd alors toute trace du jeu, donc ce
-# surveillant doit déjà tourner avant ce point, pas après).
+# --- Gamepad "quit game" combo (SIGTERM to the prefix Wine processes); see
+# zgu-gamepad-exit-watcher.py for details (why a script apart from the gamepad bridge, why no
+# grab(), why no safety net). Started HERE, just before handing over to Lutris (the "exec"
+# below never returns, so the orchestrator loses track of the game: the watcher must already
+# run before that point).
 #
-# "pkill" avant de relancer : ce script s'arrête tout seul une fois le combo utilisé, mais
-# PAS si le jeu est quitté autrement (aucun moyen de le détecter depuis ici, voir le fichier)
-# -- sans ce nettoyage, une instance orpheline d'une partie précédente resterait active en
-# plus de la nouvelle. Suppose un seul jeu à la fois (cohérent avec le reste de lpm, jamais
-# pensé pour plusieurs parties simultanées).
+# "pkill" before restarting: this script stops by itself once the combo is used, but NOT if
+# the game is quit another way (undetectable from here), so without this cleanup an orphan
+# instance from a previous session would stay active next to the new one. Assumes one game
+# at a time (consistent with the rest of lpm).
 if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
-  python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" >/dev/null 2>&1 &
+  python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &
   disown $! 2>/dev/null
 
-  # --- Combo manette "changer de fenêtre" (Alt+Tab) -- voir zgu-gamepad-alttab-watcher.py.
-  # Contrairement au combo quitter ci-dessus, celui-ci tourne pendant TOUTE la session de
-  # jeu (pas de coup unique) -- même logique de "pkill" avant relance pour éviter une
-  # instance orpheline d'une partie précédente.
+  # --- Gamepad "switch window" combo (Alt+Tab); see zgu-gamepad-alttab-watcher.py. Unlike the
+  # quit combo above, this one runs during the WHOLE game session (not one-shot); same "pkill"
+  # before restart to avoid an orphan instance from a previous session.
   pkill -f "zgu-gamepad-alttab-watcher.py" 2>/dev/null
   python3 "${script_dir}/zgu-gamepad-alttab-watcher.py" "${session_kind}" >/dev/null 2>&1 &
   disown $! 2>/dev/null

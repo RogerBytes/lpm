@@ -1,29 +1,24 @@
 #compdef lpm
 
-# --- Complétion zsh pour lpm ---
+# --- zsh completion for lpm ---
 #
-# Complète les sous-commandes, les options (-y, -niveau) et, dynamiquement, les slugs de
-# jeux / noms de runners déjà installés -- en interrogeant lpm lui-même ("lpm list" /
-# "lpm list-runner"), jamais la base Lutris directement : ça évite de dupliquer ici la
-# logique de détection Flatpak/paquet natif et le filtrage des jeux blacklistés (giga-
-# préfixes partagés), qui ne vivent qu'à un seul endroit (zgu-lutris-utils.sh).
+# Completes subcommands, options (-y, -level) and, dynamically, installed game slugs /
+# runner names -- by querying lpm itself ("lpm list" / "lpm list-runner"), never the
+# Lutris database directly, so the Flatpak/native detection and the blacklisted-game
+# filtering (shared giga-prefixes) live in one place only (zgu-lutris-utils.sh).
 #
-# Installation manuelle (si install.sh ne l'a pas déjà fait) :
-#   1. Copier ce fichier dans un dossier de votre $fpath, ex :
+# Manual install (if install.sh has not done it):
+#   1. Copy this file into a folder of your $fpath, e.g.:
 #        mkdir -p ~/.zsh/completions && cp completions/_lpm ~/.zsh/completions/
-#      puis, dans .zshrc, AVANT "autoload -Uz compinit && compinit" :
+#      then, in .zshrc, BEFORE "autoload -Uz compinit && compinit":
 #        fpath=(~/.zsh/completions $fpath)
-#   2. Régénérer le cache de complétion une fois :
+#   2. Regenerate the completion cache once:
 #        rm -f ~/.zcompdump && compinit
 #
-# Coloration des groupes de complétion : une couleur par tag utilisé dans les
-# _describe ci-dessous (commands/slugs/runners/stores), pour distinguer d'un
-# coup d'œil une sous-commande, un slug de jeu, un nom de runner et un code de
-# store. Scopé à ":*:lpm:*" pour ne jamais changer la coloration des autres
-# complétions du shell -- retirer ces 5 lignes désactive juste la couleur sans
-# rien casser. Uniquement zsh : bash n'a pas d'équivalent pour colorer une
-# complétion de liste de mots (seule la complétion de noms de fichiers peut
-# être colorée là-bas, via LS_COLORS).
+# Completion group colors: one per tag used in the _describe calls below
+# (commands/slugs/runners/stores). Scoped to ":*:lpm:*" so other completions are never
+# affected; removing these lines only disables the colors. zsh only: bash cannot color
+# a word-list completion.
 zstyle ':completion:*:*:lpm:*' group-name ''
 zstyle ':completion:*:*:lpm:*:commands' list-colors '=(#b)*=1;36'
 zstyle ':completion:*:*:lpm:*:slugs' list-colors '=(#b)*=1;32'
@@ -48,74 +43,73 @@ _lpm_commands() {
     'shortcut:(Re)generate shortcuts for one or more installed games'
     'icon:Fetch a SteamGridDB icon for one or more installed games'
     'splash:Fetch a SteamGridDB loading-screen banner for one or more installed games'
+    'logo:Fetch a transparent game logo for one or more installed games'
+    'sync-media:Download Lutris native media (banner, icon, cover) for games that lack them'
     'lsfg:Enable/disable lsfg-vk (frame generation) for one or more games'
     'launcher:Enable/disable the LPM Launcher multi-executable picker for one or more games'
-    'tools:Open a Wine tools menu for an installed game (winetricks, registry, winecfg...)'
+    'launcher-entries:Read/replace a game'\''s LPM Launcher picker entries (JSON)'
+    'tools:Run a Wine tool on an installed game (winetricks, registry, winecfg, env, runner...)'
+    'vsync:Force VSync off for a game with environment variables (Direct3D 9/11/12, OpenGL)'
     'killwine:Immediately kill any running Wine/Winetricks/umu-run/Proton process'
     'list-runner:List installed runners'
     'list-remote-runners:List runners available for download'
     'check:Check lpm system dependencies'
     'lutris-version:Show/force the Lutris version (Flatpak or native) used by lpm'
+    'self-update:Check for / install a newer lpm release (deb, rpm or Arch package installs)'
     'log:View the lpm action log'
   )
   _describe -t commands 'lpm command' commands
 }
 
-# Slugs des jeux installés (colonne 1 de "lpm list", format "slug  Nom du jeu") -- exclut
-# déjà, via lpm list lui-même, les jeux vivant dans un giga-préfixe partagé (ceux-là ne se
-# désinstallent/empaquettent jamais individuellement, voir zgu_get_blacklisted_slugs).
+# Installed game slugs (column 1 of "lpm list", format "slug  Name"). "lpm list" already
+# excludes games living in a shared giga-prefix (never uninstalled/packaged individually,
+# see zgu_get_blacklisted_slugs).
 _lpm_installed_slugs() {
   local -a slugs
-  # "lpm list" sépare slug et nom par DEUX espaces (voir zgp-game-lister.sh : echo "${slug}
-  # ${name}") -- filtre volontairement sur ce séparateur structurel plutôt que sur le texte
-  # du message "Aucun jeu installé."/"No games installed." (imprimé sur stdout quand la
-  # liste est vide) : indépendant de la langue active de lpm, contrairement à un filtre sur
-  # le contenu du message.
+  # "lpm list" separates slug and name by TWO spaces (see zgp-game-lister.sh). Filter on
+  # that separator rather than on the "no games installed" message (printed on stdout
+  # when the list is empty) so it works in any lpm language.
   slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
   (( ${#slugs[@]} )) && _describe -t slugs 'installed game (slug)' slugs
 }
 
-# Noms des runners Wine/Proton installés ("lpm list-runner", un nom par ligne). Un nom de
-# runner réel est toujours un seul mot (basename de dossier) ; filtre NF==1 pour ignorer le
-# message "Aucun runner installé."/"No runner installed." (plusieurs mots), sans dépendre
-# de la langue active de lpm -- même logique que _lpm_installed_slugs ci-dessus.
+# Installed Wine/Proton runner names ("lpm list-runner", one per line). A real runner
+# name is a single word, so filter NF==1 to skip the multi-word "no runner" message
+# regardless of language (same logic as _lpm_installed_slugs above).
 _lpm_installed_runners() {
   local -a runners
   runners=(${(f)"$(lpm list-runner 2>/dev/null | awk 'NF==1{print $1}')"})
   (( ${#runners[@]} )) && _describe -t runners 'installed runner' runners
 }
 
-# Arguments acceptés par "lpm lsfg" : un ou plusieurs slugs de jeux Wine/Proton installés,
-# puis "on" ou "off" en dernière position (voir zgl-lsfg-manager.sh) -- même modèle que
-# _lpm_isolable_slugs ci-dessous (deux _describe combinés dans une seule fonction), plutôt
-# que deux specs "*:" séparées dans _arguments qui ne se combinent pas correctement en zsh.
+# Arguments of "lpm lsfg": one or more installed Wine/Proton game slugs, then "on" or
+# "off" last (see zgl-lsfg-manager.sh). Same pattern as _lpm_isolable_slugs below (two
+# _describe calls in one function): separate "*:" specs in _arguments do not combine
+# properly in zsh.
 _lpm_lsfg_args() {
   local -a actions slugs
-  actions=('on' 'off')
+  actions=('on' 'off' 'status')
   slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
   _describe -t commands 'action' actions
   (( ${#slugs[@]} )) && _describe -t slugs 'installed game (slug)' slugs
 }
 
-# Arguments acceptés par "lpm launcher" : même schéma que "lpm lsfg" ci-dessus (un ou
-# plusieurs slugs de jeux Wine/Proton installés, puis "on" ou "off" en dernière
-# position -- voir zgl-launcher-manager.sh). Fonction dédiée plutôt qu'une réutilisation
-# directe de _lpm_lsfg_args, pour rester cohérent avec le reste de ce fichier (une
-# fonction par sous-commande) même si le corps est identique.
+# Arguments of "lpm launcher": same scheme as "lpm lsfg" above (see
+# zgl-launcher-manager.sh). Kept as its own function, one per subcommand, even though
+# the body is identical.
 _lpm_launcher_args() {
   local -a actions slugs
-  actions=('on' 'off')
+  actions=('on' 'off' 'status')
   slugs=(${(f)"$(lpm list 2>/dev/null | awk -F'  ' 'NF>1{print $1}')"})
   _describe -t commands 'action' actions
   (( ${#slugs[@]} )) && _describe -t slugs 'installed game (slug)' slugs
 }
 
-# Arguments acceptés par "lpm isolate" : les 4 codes de store internes, ainsi que les slugs
-# des jeux isolables (colonne 1 de "lpm list-isolable", même format à deux espaces que
-# "lpm list") -- un slug ne sert qu'à retrouver son store, "isolate" isole ensuite tout ce
-# store, pas seulement le jeu nommé. list-isolable réutilise exactement la même détection de
-# store que l'isolateur (zgu_detect_isolation_store), donc jamais un argument proposé ici que
-# "lpm isolate" refuserait ensuite.
+# Arguments of "lpm isolate": the 4 internal store codes plus the slugs of isolable games
+# (column 1 of "lpm list-isolable", same two-space format as "lpm list"). A slug only
+# identifies its store; "isolate" isolates that whole store. list-isolable uses the same
+# store detection as the isolator (zgu_detect_isolation_store), so it never offers an
+# argument "lpm isolate" would refuse.
 _lpm_isolable_slugs() {
   local -a stores slugs
   stores=('egs' 'ea' 'ubisoft' 'battlenet')
@@ -124,21 +118,28 @@ _lpm_isolable_slugs() {
   (( ${#slugs[@]} )) && _describe -t slugs 'isolable game (slug, resolves to its store)' slugs
 }
 
-# Niveaux de compression valides (0 à 22, voir bin/lpm : "-[0-9]|-1[0-9]|-2[0-2]") --
-# c'est un token collé ("-9", comme gzip), pas une option suivie d'une valeur séparée :
-# énuméré ci-dessous directement dans _lpm() comme 23 options mutuellement exclusives.
+# Valid compression levels (0 to 22, see bin/lpm: "-[0-9]|-1[0-9]|-2[0-2]") -- a single
+# attached token ("-9", like gzip), listed in _lpm() below as 23 mutually exclusive options.
 _lpm_compression_opts=(-0 -1 -2 -3 -4 -5 -6 -7 -8 -9 -10 -11 -12 -13 -14 -15 -16 -17 -18 -19 -20 -21 -22)
 
-# 3e argument de "lpm tools" : un fichier .exe si l'outil choisi est "exe", un dossier
-# réel si c'est "favorite" -- sans intérêt pour les 4 autres outils. zsh ne sait pas
-# conditionner le type du 3e argument sur la valeur du 2e dans une seule spec
-# _arguments statique, donc on propose les deux types de complétion ensemble via
-# _alternative ; sans consequence, zgp-game-tools.sh ignore de toute façon l'argument
-# qui ne correspond pas à l'outil réellement choisi.
+# 3rd argument of "lpm tools": a .exe file if the tool is "exe", a real folder if it is
+# "favorite"; unused for the other 4 tools. A static _arguments spec cannot condition the
+# 3rd argument on the 2nd, so both types are offered via _alternative; harmless, since
+# zgp-game-tools.sh ignores an argument that does not match the chosen tool.
 _lpm_tools_arg3() {
   _alternative \
     'files:executable:_files -g "*.exe"' \
-    'dirs:folder:_files -/'
+    'dirs:folder:_files -/' \
+    'actions:env action:(list set unset apply)' \
+    'runners:runner:_lpm_installed_runners'
+}
+
+# 1st argument of "lpm vsync": the "status" action (games with VSync disabled) or an
+# installed game slug.
+_lpm_vsync_arg1() {
+  _alternative \
+    'actions:action:(status)' \
+    'slugs:installed game:_lpm_installed_slugs'
 }
 
 _lpm() {
@@ -148,6 +149,10 @@ _lpm() {
   _arguments -C \
     '(-v --version)'{-v,--version}'[show lpm version]' \
     '(-h --help)'{-h,--help}'[show lpm help]' \
+    '-y[answer yes to every confirmation (before the command)]' \
+    '--allow-scripts[approve embedded scripts (before the command)]' \
+    '--ignore-hash[skip the sha256 check (before the command)]' \
+    '--hash[write sha256 files when packaging (before the command)]' \
     '1: :_lpm_commands' \
     '*::arg:->args' && return 0
 
@@ -156,16 +161,22 @@ _lpm() {
       _arguments \
         '-y[install without confirmation]' \
         '--allow-scripts[automatically approve embedded scripts (prelaunch_command...)]' \
+        '--ignore-hash[skip the sha256 signature check]' \
+        '(-s --shortcut)'{-s,--shortcut}'[where to create shortcuts]:mode:(menu desktop both none)' \
+        '--desktop-dir=[folder for the desktop shortcut]:folder:_files -/' \
+        '(-n --no-loadingscreen)'{-n,--no-loadingscreen}'[disable lpm loading screen]' \
         '*:.zgp file:_files -g "*.zgp"'
       ;;
     install-runner)
       _arguments \
         '-y[install without confirmation]' \
+        '--ignore-hash[skip the sha256 signature check]' \
         '*:.zgr file or remote runner name:_files -g "*.zgr"'
       ;;
     uninstall)
       _arguments \
         '-y[uninstall without confirmation]' \
+        '--desktop-dir=[folder where a desktop shortcut was created]:folder:_files -/' \
         '*:installed game:_lpm_installed_slugs'
       ;;
     uninstall-runner)
@@ -176,68 +187,99 @@ _lpm() {
     pack)
       _arguments \
         '--all[package all installed games]' \
+        '--hash[write a sha256 signature file next to each archive]' \
         "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[compression level (0-22)]' \
         '*:installed game:_lpm_installed_slugs'
       ;;
     pack-runner)
       _arguments \
         '--all[package all installed runners]' \
+        '--hash[write a sha256 signature file next to each archive]' \
         "(${_lpm_compression_opts[*]})"{${(j:,:)_lpm_compression_opts}}'[compression level (0-22)]' \
         '*:installed runner:_lpm_installed_runners'
       ;;
     isolate)
-      # Sans argument : sélection interactive via Zenity. Avec argument : complétion sur
-      # "lpm list-isolable" (voir _lpm_isolable_slugs ci-dessus).
-      _arguments '*:isolable game:_lpm_isolable_slugs'
+      # A store (egs, ea, ubisoft, battlenet) or an isolable game slug is required:
+      # complete from "lpm list-isolable" (see _lpm_isolable_slugs above).
+      _arguments \
+        '-y[isolate without confirmation]' \
+        '*:isolable game:_lpm_isolable_slugs'
       ;;
     info)
       _arguments '1:installed game:_lpm_installed_slugs'
       ;;
     create-prefix)
-      # Noms libres ("Nom affiché" ou "Nom affiché|slug-personnalise") : pas de
-      # source de complétion dynamique, juste l'option -y.
+      # Free-form names ("Display name" or "Display name|custom-slug"): no dynamic
+      # completion source, only the -y option.
       _arguments \
         '-y[create without confirmation]' \
+        '(-r --runner)'{-r,--runner}'[runner to use]:runner:_lpm_installed_runners' \
+        '(-a --arch)'{-a,--arch}'[wine architecture]:architecture:(win32 win64)' \
         '*:wineprefix name:'
       ;;
     exe-install)
-      # Un seul fichier attendu ("fichier[|nom[|slug]]") : la complétion ne porte
-      # que sur le chemin du fichier, la partie "|nom|slug" se tape à la main.
+      # A single file ("file[|name[|slug]]"): complete only the file path; the
+      # "|name|slug" part is typed by hand.
       _arguments \
         '-y[create without confirmation]' \
+        '(-r --runner)'{-r,--runner}'[runner to use]:runner:_lpm_installed_runners' \
+        '(-a --arch)'{-a,--arch}'[wine architecture]:architecture:(win32 win64)' \
+        '(-f --final-exe)'{-f,--final-exe}'[executable to launch the game with]:file:_files' \
         '1:Windows installer:_files -g "*.(exe|msi|bat|cmd)"'
       ;;
     shortcut)
       _arguments \
         '--all[all installed Wine games]' \
+        '(-s --shortcut)'{-s,--shortcut}'[where to create shortcuts]:mode:(menu desktop both none)' \
+        '(-n --no-loadingscreen)'{-n,--no-loadingscreen}'[disable lpm loading screen]' \
+        '(-k --allow-hooks)'{-k,--allow-hooks}'[keep the Lutris launch hooks active]' \
+        '--desktop-dir=[folder for the desktop shortcut]:folder:_files -/' \
         '*:installed game:_lpm_installed_slugs'
       ;;
-    icon)
+    icon|splash|logo)
       _arguments \
         '--all[all installed games]' \
+        '--url[use this exact image URL (single game)]:URL:' \
         '*:installed game:_lpm_installed_slugs'
       ;;
-    splash)
+    sync-media)
       _arguments \
         '--all[all installed games]' \
         '*:installed game:_lpm_installed_slugs'
       ;;
     lsfg)
-      # "lpm lsfg [slugs...] [on|off]" : voir _lpm_lsfg_args ci-dessus.
+      # "lpm lsfg <slugs...> on|off" or "lpm lsfg status": see _lpm_lsfg_args above.
       _arguments '*:installed game or action:_lpm_lsfg_args'
       ;;
     launcher)
-      # "lpm launcher [slugs...] [on|off]" : voir _lpm_launcher_args ci-dessus.
-      _arguments '*:installed game or action:_lpm_launcher_args'
+      # "lpm launcher [slugs...] [on|off]": see _lpm_launcher_args above.
+      _arguments \
+        '--if-needed[only act when the state would change]' \
+        '*:installed game or action:_lpm_launcher_args'
       ;;
     tools)
-      # "lpm tools [slug] [outil] [exe|dossier]" : 1er argument = slug de jeu installé,
-      # 2e = outil, 3e = fichier .exe (si outil=exe) ou dossier réel (si outil=favorite),
-      # voir _lpm_tools_arg3 ci-dessus.
+      # "lpm tools [slug] [tool] [exe|folder]": 1st = installed game slug, 2nd = tool,
+      # 3rd = .exe file (tool=exe) or real folder (tool=favorite), see _lpm_tools_arg3
+      # above.
       _arguments \
         '1:installed game:_lpm_installed_slugs' \
-        '2:tool:(winetricks regedit winecfg console exe folder favorite)' \
-        '3:executable or folder:_lpm_tools_arg3'
+        '2:tool:(winetricks regedit winecfg console exe folder favorite env runner)' \
+        '3:executable, folder, env action or runner:_lpm_tools_arg3' \
+        '*:env argument:'
+      ;;
+    vsync)
+      # "lpm vsync status" | "lpm vsync <slug> [status|on|off] [setting...]"
+      _arguments \
+        '1:installed game or status:_lpm_vsync_arg1' \
+        '2:action:(status on off)' \
+        '*:setting:(d3d9 d3d11 d3d12 gl-nvidia gl-mesa)'
+      ;;
+    launcher-entries)
+      # "lpm launcher-entries <slug> get|set <file.json>"
+      _arguments \
+        '1:installed game:_lpm_installed_slugs' \
+        '2:action:(get set)' \
+        '3:JSON file:_files -g "*.json"'
       ;;
     killwine)
       _arguments '-y[kill without confirmation]'
@@ -245,9 +287,12 @@ _lpm() {
     check)
       _arguments '-y[automatically answer yes to verification prompts]'
       ;;
+    self-update)
+      _values 'action' 'check' 'install'
+      ;;
     lutris-version)
-      # Sans argument : affiche l'état. Sinon : force un choix ou l'efface -- jamais
-      # d'autre valeur acceptée par zgc-lutris-version-checker.sh.
+      # No argument: show the state. Otherwise force a choice or clear it -- no other
+      # value is accepted by zgc-lutris-version-checker.sh.
       _values 'action' 'flatpak' 'native' 'reset'
       ;;
     log)

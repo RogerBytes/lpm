@@ -3,8 +3,8 @@
     Gabarit de fond "carton" pour les icônes de fichiers lpm (.zgp / .zgr), vierge (sans
     glyphe), pour validation avant d'y coller un glyphe.
 
-    Silhouette reprise telle quelle (coordonnées non modifiées) du thème d'icônes de Harry
-    (Mint-L-Blue), depuis le dépôt public linuxmint/mint-l-icons (licence GPLv3),
+    Silhouette reprise telle quelle (coordonnées non modifiées) du thème d'icônes
+    Mint-L-Blue, depuis le dépôt public linuxmint/mint-l-icons (licence GPLv3),
     src/mimetypes/48/package-x-generic.svg : path87 (corps du carton) + path91 (ligne
     d'adhésif). Viewport d'origine 48x48, mis à l'échelle x2.5 pour remplir notre canevas
     120x120 (48 * 2.5 = 120), sans autre transformation ; la marge/proportions internes du
@@ -23,7 +23,7 @@
     Choisie à la place d'un carré plein (lpm.svg) ou d'un coin corné "page" : la forme de
     boîte est un repère universel de "ceci est un paquet/fichier", donc bien distincte de
     l'icône carrée pleine de l'appli lpm elle-même, tout en restant cohérente avec le thème
-    système de Harry.
+    d'icônes Mint-L-Blue.
 
     Ce fichier n'est pas utilisé tel quel par lpm (ni installé, ni référencé par
     install.sh) ; c'est un gabarit de réserve, à dupliquer avec ce même fond pour y coller

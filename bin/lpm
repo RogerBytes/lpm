@@ -3,24 +3,22 @@
 # --- 0. Version ---
 readonly LPM_VERSION="v0.9.3"
 
-# --- 1. Détection automatique de l'emplacement des libs (Dev vs Global) ---
-# Deux emplacements d'installation "système" possibles selon l'origine du binaire
-# (install.sh manuel vs paquet .deb/.rpm/Arch, voir packaging/) -- en dehors de ces deux
-# cas connus, on suppose le mode dev (lancé directement depuis le dépôt).
+# --- 1. Locate the libs (dev vs system install) ---
+# Two possible system install locations depending on how the binary was installed
+# (manual install.sh vs .deb/.rpm/Arch package, see packaging/); anything else is
+# assumed to be dev mode (run straight from the repo).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "${SCRIPT_DIR}" in
-    /usr/local/bin) LIB_DIR="/usr/local/lib/lpm" ;;  # install.sh (install manuelle)
-    /usr/bin)       LIB_DIR="/usr/lib/lpm" ;;        # paquet .deb/.rpm/Arch
-    *)              LIB_DIR="${SCRIPT_DIR}/../lib" ;; # mode dev
+    /usr/local/bin) LIB_DIR="/usr/local/lib/lpm" ;;  # install.sh (manual install)
+    /usr/bin)       LIB_DIR="/usr/lib/lpm" ;;        # .deb/.rpm/Arch package
+    *)              LIB_DIR="${SCRIPT_DIR}/../lib" ;; # dev mode
 esac
 
 if [[ ! -d "${LIB_DIR}" ]]; then
-    # Message volontairement non localisé : le chargeur de langue vit lui-même
-    # dans lib/, impossible de le charger si ce dossier est introuvable. Plus de
-    # "zenity --error" ici (dernier appel retiré) : ce message sur stderr suffit, et un
-    # terminal est toujours disponible pour le lire (lpm ne peut pas se lancer sans son
-    # dossier lib/, donc pas non plus via lpm-gui).
+    # Deliberately not localized: the language loader lives in lib/ itself, so it
+    # cannot be loaded when that folder is missing. A message on stderr is enough
+    # (lpm cannot start without lib/, so lpm-gui cannot either).
     echo "Erreur critique : Le dossier des bibliothèques (lib) est introuvable à : ${LIB_DIR}"
     exit 1
 fi
@@ -28,50 +26,55 @@ fi
 # shellcheck source=./lib/zgl-lang-loader.sh
 source "${LIB_DIR}/zgl-lang-loader.sh"
 
-# --- 1bis. Affichage de la version (--version / -v) ---
+# --- 1bis. Version display (--version / -v) ---
 if [[ "$1" = "--version" ]] || [[ "$1" = "-v" ]]; then
     echo "lpm ${LPM_VERSION}"
     exit 0
 fi
 
-# --- 1ter. Affichage de l'aide (--help / -h) ---
+# --- 1ter. Help display (--help / -h) ---
 print_help() {
     t help.title
     echo ""
     t help.usage_header
     printf "  %-38s %s\n" "lpm" "$(t help.usage_menu)"
-    printf "  %-38s %s\n" "lpm <fichier.zgp|.zgr>" "$(t help.usage_direct)"
+    printf "  %-38s %s\n" "lpm-gui [file.zgp|.zgr]" "$(t help.usage_direct)"
     echo ""
     t help.games_header
-    printf "  %-42s %s\n" "lpm install [-y] <fichiers.zgp...>" "$(t help.games_install)"
+    printf "  %-42s %s\n" "lpm install [-y] <files.zgp...>" "$(t help.games_install)"
     printf "  %-42s %s\n" "lpm uninstall [-y] <slugs...>" "$(t help.games_uninstall)"
-    printf "  %-42s %s\n" "lpm pack [-niveau] <dossiers...>" "$(t help.games_pack)"
-    printf "  %-42s %s\n" "lpm isolate [store]" "$(t help.games_isolate)"
+    printf "  %-42s %s\n" "lpm pack [-LEVEL] [--hash] <slugs...|--all>" "$(t help.games_pack)"
+    printf "  %-42s %s\n" "lpm isolate [-y] <store|slug>" "$(t help.games_isolate)"
     printf "  %-42s %s\n" "lpm list" "$(t help.games_list)"
     printf "  %-42s %s\n" "lpm list-isolable" "$(t help.games_list_isolable)"
     printf "  %-42s %s\n" "lpm info <slug>" "$(t help.games_info)"
-    printf "  %-42s %s\n" "lpm create-prefix [-y] <noms...>" "$(t help.games_create_prefix)"
+    printf "  %-42s %s\n" "lpm create-prefix [-y] <names...>" "$(t help.games_create_prefix)"
     printf "  %-42s %s\n" "" "$(t help.games_create_prefix_cont)"
-    printf "  %-42s %s\n" "lpm exe-install [-y] <fichier[|nom[|slug]]>" "$(t help.games_exe_install)"
+    printf "  %-42s %s\n" "lpm exe-install [-y] <file[|name[|slug]]>" "$(t help.games_exe_install)"
     printf "  %-42s %s\n" "" "$(t help.games_exe_install_cont)"
     printf "  %-42s %s\n" "lpm shortcut <slugs...|--all>" "$(t help.games_shortcut)"
     printf "  %-42s %s\n" "" "$(t help.games_shortcut_cont)"
-    printf "  %-42s %s\n" "lpm icon [slugs...|--all]" "$(t help.games_icon)"
-    printf "  %-42s %s\n" "lpm splash [slugs...|--all]" "$(t help.games_splash)"
-    printf "  %-42s %s\n" "lpm logo [slugs...|--all]" "$(t help.games_logo)"
-    printf "  %-42s %s\n" "lpm tools [slug] [outil] [exe]" "$(t help.games_tools)"
+    printf "  %-42s %s\n" "lpm icon <slugs...|--all>" "$(t help.games_icon)"
+    printf "  %-42s %s\n" "lpm splash <slugs...|--all>" "$(t help.games_splash)"
+    printf "  %-42s %s\n" "lpm logo <slugs...|--all>" "$(t help.games_logo)"
+    printf "  %-42s %s\n" "lpm sync-media <slugs...|--all>" "$(t help.games_sync_media)"
+    printf "  %-42s %s\n" "lpm tools <slug> <tool> [args]" "$(t help.games_tools)"
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
-    printf "  %-42s %s\n" "lpm lsfg [slugs...] [on|off]" "$(t help.games_lsfg)"
+    printf "  %-42s %s\n" "lpm vsync status | <slug> on|off [setting...]" "$(t help.games_vsync)"
+    printf "  %-42s %s\n" "" "$(t help.games_vsync_cont)"
+    printf "  %-42s %s\n" "lpm lsfg <slugs...> on|off" "$(t help.games_lsfg)"
     printf "  %-42s %s\n" "" "$(t help.games_lsfg_cont)"
-    printf "  %-42s %s\n" "lpm launcher [slugs...] [on|off]" "$(t help.games_launcher)"
+    printf "  %-42s %s\n" "lpm launcher <slugs...> on|off" "$(t help.games_launcher)"
     printf "  %-42s %s\n" "" "$(t help.games_launcher_cont)"
+    printf "  %-42s %s\n" "lpm launcher-entries <slug> get" "$(t help.games_launcher_entries_get)"
+    printf "  %-42s %s\n" "lpm launcher-entries <slug> set <file.json>" "$(t help.games_launcher_entries_set)"
     printf "  %-42s %s\n" "lpm killwine [-y]" "$(t help.games_killwine)"
     echo ""
     t help.runners_header
-    printf "  %-52s %s\n" "lpm install-runner [-y] <fichiers.zgr|noms...>" "$(t help.runners_install)"
+    printf "  %-52s %s\n" "lpm install-runner [-y] <files.zgr|names...>" "$(t help.runners_install)"
     printf "  %-52s %s\n" "" "$(t help.runners_install_cont)"
-    printf "  %-52s %s\n" "lpm uninstall-runner [-y] <noms...>" "$(t help.runners_uninstall)"
-    printf "  %-52s %s\n" "lpm pack-runner [-niveau] <noms...>" "$(t help.runners_pack)"
+    printf "  %-52s %s\n" "lpm uninstall-runner [-y] <names...>" "$(t help.runners_uninstall)"
+    printf "  %-52s %s\n" "lpm pack-runner [-LEVEL] [--hash] <names...|--all>" "$(t help.runners_pack)"
     printf "  %-52s %s\n" "lpm list-runner" "$(t help.runners_list)"
     printf "  %-52s %s\n" "lpm list-remote-runners" "$(t help.runners_list_remote)"
     printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"
@@ -81,11 +84,12 @@ print_help() {
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont1)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont2)"
     printf "  %-36s %s\n" "lpm lutris-version [flatpak|native|reset]" "$(t help.lutris_version)"
+    printf "  %-36s %s\n" "lpm self-update [check|install]" "$(t help.self_update)"
     echo ""
     t help.log_header
     printf "  %-36s %s\n" "lpm log [-n N]" "$(t help.log_show)"
     printf "  %-36s %s\n" "lpm log --all" "$(t help.log_all)"
-    printf "  %-36s %s\n" "lpm log --grep <motif>" "$(t help.log_grep)"
+    printf "  %-36s %s\n" "lpm log --grep <pattern>" "$(t help.log_grep)"
     printf "  %-36s %s\n" "lpm log --clear" "$(t help.log_clear)"
     echo ""
     t help.options_header
@@ -93,16 +97,17 @@ print_help() {
     printf "  %-36s %s\n" "--allow-scripts" "$(t help.opt_allow_scripts)"
     printf "  %-36s %s\n" "--ignore-hash" "$(t help.opt_ignore_hash)"
     printf "  %-36s %s\n" "--hash" "$(t help.opt_hash)"
-    printf "  %-36s %s\n" "-niveau (0 à 22)" "$(t help.opt_level)"
+    printf "  %-36s %s\n" "-LEVEL (0-22)" "$(t help.opt_level)"
     printf "  %-36s %s\n" "--version, -v" "$(t help.opt_version)"
     printf "  %-36s %s\n" "--help, -h" "$(t help.opt_help)"
+    echo ""
+    t help.footer
 }
 
 if [[ "$1" = "--help" ]] || [[ "$1" = "-h" ]]; then
-    # Si la page man est installée (voir install.sh), elle fait référence : plus complète
-    # et déjà au format attendu par l'utilisateur (man lpm, less, recherche "/"...). Repli
-    # sur le texte intégré ci-dessus si lpm tourne depuis les sources (non installé) ou sur
-    # un système sans "man" (environnement minimal) -- --help doit toujours fonctionner.
+    # Prefer the installed man page (see install.sh) when available: it is more complete.
+    # Fall back to the built-in text above when running from sources or on a system
+    # without "man" -- --help must always work.
     if command -v man >/dev/null 2>&1 && man -w lpm >/dev/null 2>&1; then
         exec man lpm
     fi
@@ -110,35 +115,7 @@ if [[ "$1" = "--help" ]] || [[ "$1" = "-h" ]]; then
     exit 0
 fi
 
-# --- 2. Gestion du lancement direct par fichier (Double-clic / MimeType) ---
-# Si un seul argument est passé et que c'est un fichier valide existant (ex: double-clic sur un fichier)
-# Délégué entièrement à l'interface graphique GTK4/Libadwaita (lpm-gui), ouverte directement
-# sur la page d'installation adéquate avec le fichier déjà pré-rempli : ancien chemin "click"
-# (zenity) entièrement retiré. GTK4/Libadwaita sont désormais une dépendance obligatoire du
-# paquet (voir packaging/) : plus de vérification ici, le gestionnaire de paquets garantit
-# déjà leur présence au moment de l'installation.
-if [[ $# -eq 1 ]] && [[ -f "$1" ]]; then
-    extension="${1##*.}"
-    # shellcheck disable=SC2249 # pas de défaut voulu : une extension inconnue doit tomber
-    # dans le fallthrough documenté ci-dessous, pas être interceptée ici.
-    case "${extension}" in
-        zgp|zgr)
-            if ! command -v lpm-gui >/dev/null 2>&1; then
-                echo "Erreur : l'interface graphique (lpm-gui) est introuvable sur le PATH." >&2
-                exit 1
-            fi
-            exec lpm-gui "$1"
-            ;;
-    esac
-    # Ni .zgp ni .zgr : ce n'était pas une ouverture mimetype, on continue normalement vers
-    # le routage de commandes CLI ci-dessous. Sans ce fallthrough, un fichier qui existerait
-    # par coïncidence dans le répertoire courant sous le même nom qu'une sous-commande sans
-    # argument (ex: "check", "list", "list-runner", "list-remote-runners" -- les seules qui
-    # vérifient exactement $# -eq 1) interceptait la commande ici et affichait à tort
-    # "extension non supportée" au lieu de s'exécuter.
-fi
-
-# --- 3. Routage des Commandes CLI ---
+# --- 3. CLI command routing ---
 if [[ $# -gt 0 ]]; then
     command="$1"
     shift
@@ -217,14 +194,32 @@ if [[ $# -gt 0 ]]; then
         logo)
             exec bash "${LIB_DIR}/zgp-game-logo.sh" "$@"
             ;;
+        sync-media)
+            exec bash "${LIB_DIR}/zgp-game-sync-media.sh" "$@"
+            ;;
         tools)
             exec bash "${LIB_DIR}/zgp-game-tools.sh" "$@"
+            ;;
+        vsync)
+            exec bash "${LIB_DIR}/zgp-game-vsync.sh" "$@"
             ;;
         lsfg)
             exec bash "${LIB_DIR}/zgl-lsfg-manager.sh" "$@"
             ;;
+        lsfg-dll)
+            exec bash "${LIB_DIR}/zgl-lsfg-dll.sh" "$@"
+            ;;
+        sgdb-key)
+            exec bash "${LIB_DIR}/zgl-sgdb-key.sh" "$@"
+            ;;
+        sgdb-images)
+            exec bash "${LIB_DIR}/zgl-sgdb-images.sh" "$@"
+            ;;
         launcher)
             exec bash "${LIB_DIR}/zgl-launcher-manager.sh" "$@"
+            ;;
+        launcher-entries)
+            exec bash "${LIB_DIR}/zgl-launcher-entries.sh" "$@"
             ;;
         killwine)
             exec bash "${LIB_DIR}/zgc-wine-killer.sh" "cli" "${confirm_flag}"
@@ -234,6 +229,9 @@ if [[ $# -gt 0 ]]; then
             ;;
         lutris-version)
             exec bash "${LIB_DIR}/zgc-lutris-version-checker.sh" "cli" "$@"
+            ;;
+        self-update)
+            exec bash "${LIB_DIR}/zgc-self-update.sh" "${LPM_VERSION}" "$@"
             ;;
         list)
             exec bash "${LIB_DIR}/zgp-game-lister.sh"
@@ -261,17 +259,9 @@ if [[ $# -gt 0 ]]; then
     esac
 fi
 
-# --- 4. Lancement de l'interface graphique (Lancé sans argument) ---
-# L'ancien menu principal Zenity (--list --radiolist) a été entièrement retiré : "lpm-gui"
-# (GTK4/Libadwaita, voir gui/ et bin/lpm-gui) est désormais le SEUL point d'entrée graphique,
-# sans aucun repli zenity. GTK4/Libadwaita sont une dépendance obligatoire du paquet (voir
-# packaging/) depuis la version 0.9.3 : plus de vérification de leur présence ici, seulement
-# que le binaire lpm-gui lui-même est bien sur le PATH (ça, ça peut rater même avec le
-# paquet installé si le PATH de l'utilisateur est mal configuré).
-if ! command -v lpm-gui >/dev/null 2>&1; then
-    echo "Erreur : l'interface graphique (lpm-gui) est introuvable sur le PATH." >&2
-    echo "Vérifie que le paquet lpm a bien installé bin/lpm-gui (voir packaging/)." >&2
-    exit 1
-fi
-
-exec lpm-gui
+# --- 4. No argument: show help ---
+# "lpm" is a scriptable terminal command and never opens a window. The GUI is started
+# with "lpm-gui" (or from the application menu / by double-clicking a .zgp/.zgr file,
+# see the Exec= field of lpm.desktop).
+print_help
+exit 0

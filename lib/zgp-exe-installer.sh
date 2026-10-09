@@ -8,37 +8,31 @@ source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
-# --- lpm exe-install : créer un prefix (comme "prefix vierge") puis lancer un
-# installateur Windows (.exe/.msi/.bat/.cmd) DEDANS, en conditions réelles (fenêtre
-# visible, attente de la fermeture), exactement comme l'assistant "Installer un
-# exécutable Windows" de Lutris (vérifié dans son code source) :
-#   - initialisation du prefix identique à "prefix vierge" (wineboot / umu-run
-#     createprefix, attente des .reg)
-#   - puis lancement du fichier choisi via "wine <fichier>" (runner classique) ou
-#     "umu-run <fichier>" (Proton) au premier plan, sans rediriger stdout/stderr :
-#     Wine associe nativement .msi -> msiexec et .bat/.cmd -> cmd.exe, donc appeler
-#     directement le fichier suffit quel que soit son type (même logique que Lutris,
-#     qui appelle simplement "wine %s" sans distinguer l'extension)
-#   - code de sortie non-zéro -> proposition de tout supprimer (même geste que la
-#     case "Supprimer les fichiers du jeu" de Lutris sur annulation/échec, vérifié
-#     dans lutris/gui/installerwindow.py)
-#   - code de sortie 0 -> sélection optionnelle du .exe final du jeu installé
-#     (sélecteur de fichier ouvert dans le prefix), puis écriture yml + pga.db
+# --- lpm exe-install: create a prefix (like "blank prefix"), then run a Windows
+# installer (.exe/.msi/.bat/.cmd) inside it, in the foreground and waiting for it to
+# close, like the Lutris "Install a Windows executable" wizard:
+#   - prefix initialisation identical to "blank prefix" (wineboot / umu-run
+#     createprefix, wait for the .reg files)
+#   - the file is run via "wine <file>" (regular runner) or "umu-run <file>" (Proton),
+#     without redirecting stdout/stderr. Wine natively maps .msi -> msiexec and
+#     .bat/.cmd -> cmd.exe, so the file is passed directly whatever its type.
+#   - non-zero exit code -> offer to delete everything (same as Lutris "Remove game
+#     files" on failure, see lutris/gui/installerwindow.py)
+#   - exit code 0 -> optional selection of the installed game's final .exe (file chooser
+#     opened in the prefix), then write the yml + pga.db
 #
-# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
-#      en position pour rester cohérent avec les autres scripts de lib/, mais sa valeur
-#      n'est plus lue ici)
-# $2 = confirm_flag ("yes" si -y -- ne s'applique qu'à la confirmation de lancement,
-#      jamais à la proposition de suppression en cas d'échec, qui est toujours posée)
-# $3 = cible CLI ("chemin/vers/setup.exe" ou "chemin/vers/setup.exe|Nom perso")
-# $4+ = options reconnues après la cible CLI, toutes optionnelles (absence = comportement
-# actuel inchangé -- runner/arch par défaut, question interactive pour l'exécutable final).
-# Permettent à un appelant automatisé (future interface GTK4, script...) de fournir ces choix
-# d'avance, pour qu'aucun prompt interactif ne vienne jamais bloquer l'exécution :
-#   -r, --runner=<nom>              runner à utiliser (sinon : zgu_get_default_runner)
-#   -a, --arch=<win32|win64>        architecture du prefix (sinon : win64)
-#   -f, --final-exe=<chemin|none>   exécutable final du jeu installé ("none" = aucun, sans
-#                                    jamais poser la question en CLI)
+# $1 = mode (always "cli"; kept only so the positional layout matches the other lib/
+#      scripts, its value is not read here)
+# $2 = confirm_flag ("yes" if -y; applies only to the launch confirmation, never to the
+#      deletion prompt on failure, which is always asked)
+# $3 = CLI target ("path/to/setup.exe" or "path/to/setup.exe|Custom name")
+# $4+ = optional options after the CLI target (defaults apply when absent). They let an
+# automated caller (GTK4 UI, scripts...) supply these choices up front so that no
+# interactive prompt blocks execution:
+#   -r, --runner=<name>             runner to use (default: zgu_get_default_runner)
+#   -a, --arch=<win32|win64>        prefix architecture (default: win64)
+#   -f, --final-exe=<path|none>     installed game's final executable ("none" = none, and
+#                                    the question is never asked in CLI)
 shift || true
 confirm_flag="${1:-}"
 shift || true
@@ -52,7 +46,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -r|--runner)
       cli_runner="${2:-}"
-      shift 2
+      shift $(( $# >= 2 ? 2 : 1 ))
       ;;
     --runner=*)
       cli_runner="${1#--runner=}"
@@ -60,7 +54,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -a|--arch)
       cli_arch="${2:-}"
-      shift 2
+      shift $(( $# >= 2 ? 2 : 1 ))
       ;;
     --arch=*)
       cli_arch="${1#--arch=}"
@@ -68,15 +62,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     -f|--final-exe)
       cli_final_exe="${2:-}"
-      shift 2
+      shift $(( $# >= 2 ? 2 : 1 ))
       ;;
     --final-exe=*)
       cli_final_exe="${1#--final-exe=}"
       shift
       ;;
     *)
-      # Argument non reconnu : ignoré plutôt que de faire échouer tout le script --
-      # même tolérance que le reste du routeur lpm face à des options inconnues.
+      # Unrecognised argument: ignored rather than failing the whole script (same tolerance
+      # as the rest of the lpm router).
       shift
       ;;
   esac
@@ -87,7 +81,7 @@ if [[ -n "${cli_arch}" ]] && [[ "${cli_arch}" != "win32" ]] && [[ "${cli_arch}" 
   exit 1
 fi
 
-# 1. Vérification des dépendances
+# 1. Dependency check
 for cmd in sqlite3 python3; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     t create_prefix.cmd_missing "${cmd}"
@@ -100,14 +94,14 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
   exit 1
 fi
 
-# 2. Fermeture préalable de Lutris pour libérer la BDD
+# 2. Close Lutris first to release the DB
 if flatpak list 2>/dev/null | grep -q lutris; then
   flatpak kill net.lutris.Lutris 2>/dev/null
 fi
 pkill -9 -x lutris 2>/dev/null
 pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
-# 3. Détection Flatpak vs paquet natif (identique à zgp-prefix-creator.sh)
+# 3. Flatpak vs native package detection (same as zgp-prefix-creator.sh)
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
@@ -167,8 +161,8 @@ if [[ ! -d "${runner_dir}" ]]; then
   exit 1
 fi
 
-# --- Détection du type de runner / liste des runners utilisables / recherche de
-# umu-run / slugification : identiques à zgp-prefix-creator.sh ---
+# --- Runner type detection / usable runners list / umu-run lookup / slugification: same as
+# zgp-prefix-creator.sh ---
 zgp_detect_runner_type() {
   local r_dir="$1"
   if [[ -x "${r_dir}/bin/wine" ]]; then
@@ -224,8 +218,7 @@ print(slug)
 '
 }
 
-# 4. Choix du runner et de l'architecture (CLI uniquement : sélection interactive via
-# Zenity retirée, bin/lpm n'a plus aucun point d'entrée interactif)
+# 4. Runner and architecture choice (CLI only)
 runner_choice="${cli_runner:-$(zgu_get_default_runner)}"
 arch_choice="${cli_arch:-win64}"
 
@@ -243,9 +236,7 @@ if [[ "${runner_type}" = "proton" ]]; then
   fi
 fi
 
-# 5. Choix du fichier d'installation + nom d'affichage + slug (CLI uniquement :
-# sélecteur Zenity + champs --entry retirés, bin/lpm n'a plus aucun point d'entrée
-# interactif)
+# 5. Installer file, display name and slug (CLI only)
 exe_path=""
 display_name=""
 explicit_slug=""
@@ -281,11 +272,9 @@ if [[ -z "${display_name}" ]]; then
   exit 1
 fi
 
-# 6. Génération du slug (déduplication contre pga.db uniquement -- un seul jeu à la
-# fois ici, pas de lot). Le slug fourni après le 2e "|" (CLI) est toujours repassé
-# par zgp_slugify avant usage -- même principe que le tableau de révision de
-# "prefix vierge" : une valeur éditée à la main ne doit jamais pouvoir contenir un
-# caractère invalide.
+# 6. Slug generation (dedup against pga.db only; one game at a time, no batch). A slug given
+# after the 2nd "|" is always re-run through zgp_slugify, so a hand-edited value can never
+# contain an invalid character.
 declare -A existing_slugs=()
 if [[ -f "${lutris_db}" ]]; then
   while IFS= read -r s; do
@@ -312,22 +301,21 @@ if [[ -d "${prefix_dir}" ]]; then
   exit 1
 fi
 
-# 7. Confirmation (uniquement pour lancer la création + l'installation -- la
-# proposition de suppression en cas d'échec, plus loin, est toujours posée quel que
-# soit -y).
+# 7. Confirmation (only for starting creation + installation; the deletion prompt on
+# failure, further down, is always asked regardless of -y).
 if [[ "${confirm_flag}" != "yes" ]]; then
   t exe_install.confirm_cli_header "${display_name}" "${final_slug}" "${exe_path}" "${runner_choice}" "${arch_choice}"
-  read -r -p "$(t exe_install.confirm_cli_prompt)" response
+  read -r -p "$(t exe_install.confirm_cli_prompt)" response || response="n"  # EOF (no terminal) = cancel
   case "${response}" in
-    [oOyY]) : ;;
+    ""|[oOyY]) : ;;
     *)
-      t create_prefix.cancelled_cli
+      t exe_install.cancelled_cli
       exit 0
       ;;
   esac
 fi
 
-# 8. Initialisation du prefix (identique à "prefix vierge")
+# 8. Prefix initialisation (same as "blank prefix")
 ZGP_REG_TIMEOUT_TICKS=360 # 360 x 0.5s = 180s max
 
 zgp_wait_for_prefix() {
@@ -361,8 +349,8 @@ if ! zgp_wait_for_prefix "${prefix_dir}"; then
   exit 1
 fi
 
-# 9. Lancement réel de l'installateur, au premier plan, fenêtre visible -- on
-# attend sa fermeture (comme Lutris) puis on regarde son code de sortie.
+# 9. Run the installer in the foreground with a visible window, wait for it to close (like
+# Lutris), then check its exit code.
 if [[ "${runner_type}" = "wine" ]]; then
   env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" \
     "${runner_dir}/${runner_choice}/bin/wine" "${exe_path}"
@@ -373,8 +361,8 @@ else
   install_exit_code=$?
 fi
 
-# 10. Code de sortie non-zéro -> proposition de tout supprimer (toujours posée,
-# indépendamment de -y : c'est une action destructive irréversible).
+# 10. Non-zero exit code -> offer to delete everything (always asked, even with -y:
+# destructive and irreversible).
 if [[ "${install_exit_code}" -ne 0 ]]; then
   wants_delete=false
   t exe_install.error_delete_cli "${install_exit_code}"
@@ -389,22 +377,20 @@ if [[ "${install_exit_code}" -ne 0 ]]; then
     zgu_cli_ok "$(t exe_install.deleted_cli)"
     exit 0
   fi
-  # Sinon, on continue quand même (l'utilisateur estime que ça a fonctionné malgré
-  # le code de sortie).
+  # Otherwise continue anyway (the user considers it worked despite the exit code).
 fi
 
-# 11. Sélection optionnelle du .exe final du jeu installé (CLI uniquement : sélecteur
-# Zenity retiré)
+# 11. Optional selection of the installed game's final .exe (CLI only)
 final_executable=""
 if [[ -n "${cli_final_exe}" ]]; then
-  # "none" explicite : aucun exécutable final, sans jamais poser la question.
+  # Explicit "none": no final executable, never ask.
   [[ "${cli_final_exe}" != "none" ]] && final_executable="${cli_final_exe}"
 else
   t exe_install.pick_exe_cli
   read -r -p "$(t exe_install.pick_exe_prompt)" final_executable
 fi
 
-# 12. Écriture du yml + insertion en base (identique à "prefix vierge")
+# 12. Write the yml + insert into the DB (same as "blank prefix")
 zgp_write_config_yml() {
   local yml_path="$1" p_dir="$2" p_slug="$3" p_name="$4" p_runner="$5" p_exe="$6"
   YML_PATH="${yml_path}" P_DIR="${p_dir}" P_SLUG="${p_slug}" P_NAME="${p_name}" P_RUNNER="${p_runner}" P_EXE="${p_exe}" python3 -c '
@@ -451,7 +437,15 @@ VALUES (
 );
 EOF
 
-# 13. Résumé final
+# 13. Final summary
 zgu_cli_ok "$(t exe_install.summary_done "${display_name}")"
+
+# Best-effort update of the native Lutris media (banner/icon/cover art, see "lpm
+# sync-media") for the newly installed game. Run in the background and detached ("&" +
+# "disown"), as in zgp-game-installer.sh: purely cosmetic, so nothing waits on it, and a
+# lutris.net network problem must never fail this command. Results are viewable via "lpm
+# log".
+bash "${script_dir}/zgp-game-sync-media.sh" "${final_slug}" >/dev/null 2>&1 &
+disown
 
 exit 0

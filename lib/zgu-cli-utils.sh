@@ -1,28 +1,23 @@
 #!/bin/bash
 
-# --- Utilitaire partagé : coloration ANSI des messages CLI (succès en vert, erreur en rouge) ---
+# --- Shared utility: ANSI coloring of CLI messages (success in green, error in red) ---
 #
-# Source aussi zgu-log-utils.sh : "zgu_cli_error" en a besoin (voir plus bas) pour journaliser
-# automatiquement CHAQUE erreur CLI affichée, sans que le script appelant n'ait besoin de le
-# sourcer lui-même -- ainsi, tout script qui source déjà zgu-cli-utils.sh (donc tous, "zgu_cli_error"
-# étant utilisé partout dans le projet) obtient la journalisation gratuitement, y compris les
-# ~24 scripts qui n'appelaient jamais "zgu_log" avant ce correctif, et tout futur message
-# d'erreur ajouté plus tard dans le projet, sans jamais avoir besoin d'y repenser.
+# Also sources zgu-log-utils.sh: "zgu_cli_error" needs it (see below) to automatically log EVERY
+# CLI error displayed, without the calling script having to source it itself -- any script that
+# already sources zgu-cli-utils.sh gets logging for free, including future error messages.
 _zgu_cli_utils_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgu-log-utils.sh
 source "${_zgu_cli_utils_dir}/zgu-log-utils.sh"
 #
-# Ne concerne QUE les messages effectivement imprimés sur le terminal en mode CLI : un texte
-# capturé via "$(t ...)" pour un --text=... de Zenity ne passe jamais par ces fonctions, donc
-# aucun risque d'afficher des codes ANSI bruts dans une boîte de dialogue graphique.
+# Only concerns messages actually printed on the terminal in CLI mode: text captured via "$(t ...)"
+# for a Zenity --text=... never goes through these functions, so no raw ANSI codes in a dialog.
 #
-# Désactivé automatiquement si la sortie/l'erreur standard n'est pas un vrai terminal
-# (redirection vers un fichier, pipe vers une autre commande...) via "[[ -t N ]]" : sans ce
-# garde-fou, "lpm list > jeux.txt" ou "lpm log --grep foo | less" se retrouverait avec des
-# séquences d'échappement littérales (\033[32m...) polluant le fichier ou cassant le pager.
+# Automatically disabled if stdout/stderr is not a real terminal (redirect to a file, pipe to another
+# command...) via "[[ -t N ]]": otherwise "lpm list > games.txt" or "lpm log --grep foo | less" would
+# get literal escape sequences (\033[32m...) polluting the file or breaking the pager.
 #
-# zgu_cli_ok <texte> : imprime <texte> en vert sur stdout (succès/confirmation finale d'une
-# opération CLI -- pas les messages de progression intermédiaires, qui restent neutres).
+# zgu_cli_ok <text>: prints <text> in green on stdout (success/final confirmation of a CLI operation
+# -- not intermediate progress messages, which stay neutral).
 zgu_cli_ok() {
   if [[ -t 1 ]]; then
     printf '\033[32m%s\033[0m\n' "$1"
@@ -31,19 +26,14 @@ zgu_cli_ok() {
   fi
 }
 
-# zgu_cli_error <texte> : imprime <texte> en rouge sur stderr (tous les messages d'erreur CLI,
-# déjà systématiquement redirigés vers stderr dans tout le projet -- c'est ce signal existant
-# qui permet de coloriser les erreurs de façon mécanique, sans avoir à rejuger au cas par cas
-# si un message donné est "une erreur").
+# zgu_cli_error <text>: prints <text> in red on stderr (all CLI error messages, already redirected to
+# stderr throughout the project -- this existing signal allows coloring errors mechanically).
 #
-# Journalise AUSSI systématiquement chaque appel dans lpm.log (STATUT=ERREUR), avant même
-# d'imprimer le message -- couvre d'un coup toutes les erreurs de pré-vérification (zenity/
-# python3/pyyaml/zstd absents, base Lutris introuvable, argument invalide...) qui, avant ce
-# correctif, n'étaient jamais loguées nulle part : seules les erreurs survenant DANS une
-# boucle de traitement (via des appels "zgu_log" explicites ajoutés au cas par cas) l'étaient.
-# "commande" est déduit automatiquement du script appelant (BASH_SOURCE[1], un niveau au-dessus
-# de cette fonction) plutôt que d'exiger un paramètre supplémentaire à chaque site d'appel
-# existant -- aucun des ~100+ appels à "zgu_cli_error" dans le projet n'a besoin d'être modifié.
+# ALSO logs every call to lpm.log (STATUS=ERREUR), before printing the message -- this covers all
+# pre-check errors (zenity/python3/pyyaml/zstd missing, Lutris database not found, invalid argument...),
+# not only errors inside a processing loop (explicit "zgu_log" calls). "command" is deduced from the
+# calling script (BASH_SOURCE[1], one level above this function) rather than requiring an extra
+# parameter at every existing call site.
 zgu_cli_error() {
   local caller
   caller=$(basename -- "${BASH_SOURCE[1]:-inconnu}" .sh)

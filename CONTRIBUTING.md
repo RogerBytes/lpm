@@ -19,9 +19,16 @@ The software version lives in a single place, `LPM_VERSION` in `bin/lpm`; it is 
 
 ## Building and testing locally
 
-There is currently no automated test suite — changes are verified by running the affected commands manually against a real Lutris install.
+Two smoke tests live in `tests/`, both running against a throwaway fake `HOME` (fake Lutris, demo database, fake Wine runner), so they never touch your real install:
+
+- `bash tests/cli_smoke.sh` — runs the main CLI commands (list, info, launcher, tools, vsync, shortcut, a pack → uninstall → install round trip, error cases) and checks exit codes and output. Needs `sqlite3`, `python3` with PyYAML, `zstd`.
+- `bash tests/run_gui_smoke.sh` — builds every page of the GTK4 interface under a virtual display. Needs `xvfb`, `dbus-run-session`, PyGObject, GTK4 and libadwaita ≥ 1.5.
+
+Run them after any change, then verify what they do not cover (a real Lutris, `pkexec`, double-clicking a `.zgp`) by hand.
 
 While working on a fix, the fastest loop is to run `sudo ./install.sh` directly from your modified checkout and test with the real `lpm` command — no need to rebuild a package for every iteration.
+
+`install.sh` and `uninstall.sh` never touch a `/usr/local/bin/lpm` that is not Ludis Prefix Manager (they recognise their own script by its `LPM_VERSION=` line). `LPM_INSTALL_BIN_DIR` overrides that folder; the automated tests use it.
 
 To verify that the final packaging still works before a release (requires Docker):
 

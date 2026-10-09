@@ -12,18 +12,15 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-lsfg-utils.sh
 source "${script_dir}/zgu-lsfg-utils.sh"
 
-# --- Récupération des arguments du routeur lpm ---
-# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
-#      en position pour rester cohérent avec les autres scripts de lib/)
-# $2 = confirm_flag ("yes" si -y, même convention que zgc-wine-killer.sh) : saute la seule
-# vraie question de ce script (installer le runtime Flatpak lsfg-vk ?) sans jamais l'afficher
-# (plus de "read") -- nécessaire pour qu'un appelant automatisé (future interface graphique
-# GTK4, script, etc.) puisse lancer ce script sans qu'aucun prompt interactif ne vienne
-# jamais le bloquer.
+# --- Arguments passed by the lpm router ---
+# $1 = mode (always "cli"; kept for positional consistency with other lib/ scripts)
+# $2 = confirm_flag ("yes" if -y, same convention as zgc-wine-killer.sh): skips the only real
+# question of this script (install the lsfg-vk Flatpak runtime?) so automated callers (GUI,
+# scripts) are never blocked by an interactive prompt.
 mode="${1:-cli}"
 confirm_flag="${2:-}"
 
-# Configuration des chemins Lutris
+# Lutris paths
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
@@ -33,25 +30,38 @@ lutris_package_config_dir="${HOME}/.config/lutris/games"
 lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-# GITHUB_RELEASE_URL est définie dans zgu-github-release-utils.sh (sourcé plus haut),
-# seul endroit à modifier pour changer le dépôt/la release des runners.
+# GITHUB_RELEASE_URL is defined in zgu-github-release-utils.sh; change the repo/release there.
 
 say() {
   echo "$1"
 }
 
+# FD 3 = real script output (for "[PROGRESS]" from inside a pipe or command substitution, see
+# zgp-game-installer.sh).
+exec 3>&1
+
+# Lines read by the GUI (see CommandPage.run_command / page_check):
+#   "[STEP] <n> <total> <label>" = current check step (progress bar);
+#   "[REPORT] <ok|warn|error>|<text>" = one line of the final summary shown in a window.
+check_total_steps=5
+step() {
+  printf '[STEP] %s %s %s\n' "$1" "${check_total_steps}" "$2"
+}
+report() {
+  printf '[REPORT] %s|%s\n' "$1" "$2"
+}
+
 say_err() {
-  # Point de passage unique pour toutes les erreurs de ce script : un seul "zgu_log" ici
-  # suffit, pas besoin d'un par site d'appel.
+  # Single point for all errors of this script: one "zgu_log" here is enough.
   zgu_log "zgc-dependency-checker" "ERREUR" "$1"
+  report error "$1"
   echo "$1" >&2
 }
 
-# Présence d'AntimicroX (fork maintenu du projet "antimicro", voir
-# https://github.com/AntiMicroX/antimicrox) : binaire natif sous l'un ou l'autre nom (l'ancien
-# "antimicro" original n'est plus maintenu mais reste installable sur certaines distros), ou
-# application Flatpak "io.github.antimicrox.antimicrox" (id vérifié sur Flathub). Présence
-# uniquement, comme zgu_lsfg_vk_present : aucune vérification de version.
+# AntimicroX presence (maintained fork of "antimicro", see https://github.com/AntiMicroX/antimicrox):
+# native binary under either name (the original "antimicro" is unmaintained but still installable
+# on some distros), or the Flatpak "io.github.antimicrox.antimicrox" (id checked on Flathub).
+# Presence only, like zgu_lsfg_vk_present: no version check.
 zgu_antimicro_present() {
   command -v antimicrox >/dev/null 2>&1 && return 0
   command -v antimicro >/dev/null 2>&1 && return 0
@@ -59,12 +69,11 @@ zgu_antimicro_present() {
   return 1
 }
 
-# 1. Vérification des dépendances nécessaires
-# bsdtar (paquet "libarchive-tools" sur Debian/Ubuntu) remplace tar -I zstd pour l'extraction
-# des runners téléchargés : ses protections par défaut ARCHIVE_EXTRACT_SECURE_NODOTDOT /
-# ARCHIVE_EXTRACT_SECURE_SYMLINKS refusent tout membre d'archive tentant de sortir de son
-# dossier de destination via "../" ou un lien symbolique piégé. bsdtar lit le zstd nativement
-# (libzstd liée en dur), donc zstd externe n'est plus nécessaire pour ce script.
+# 1. Required dependencies check
+step 1 "$(t check.step_tools)"
+# bsdtar (libarchive-tools) replaces tar -I zstd to extract downloaded runners: its default
+# ARCHIVE_EXTRACT_SECURE_NODOTDOT / _SYMLINKS protections reject archive members escaping the
+# destination via "../" or a malicious symlink. bsdtar reads zstd natively, so no external zstd.
 for cmd in sqlite3 python3 bsdtar sha256sum; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     say_err "$(t check.cmd_missing "${cmd}")"
@@ -72,44 +81,42 @@ for cmd in sqlite3 python3 bsdtar sha256sum; do
   fi
 done
 
-# curl OU wget est requis pour interroger la release GitHub des runners (section 5 plus bas).
-# Sans cette vérification explicite (alignée sur zgr-runner-remote-lister.sh et
-# zgr-runner-installer.sh), l'absence des deux outils faisait échouer zgu_fetch_url en
-# silence : release_json restait vide, et TOUS les runners manquants étaient alors listés
-# comme "non résolus" en fin d'exécution, sans jamais indiquer que la vraie cause était
-# l'absence d'outil réseau plutôt qu'une release GitHub introuvable.
+# curl OR wget is required to query the runners GitHub release (section 5 below). Without this
+# explicit check (as in zgr-runner-remote-lister.sh and zgr-runner-installer.sh), zgu_fetch_url
+# would fail silently, release_json would stay empty and ALL missing runners would be reported as
+# "unresolved" without hinting that the real cause is the missing network tool.
 if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
   say_err "$(t check.network_tool_missing)"
   exit 1
 fi
 
-# Le module PyYAML est requis pour lire la clé wine.version des YAML des jeux installés.
-# Sans lui, chaque jeu était silencieusement traité comme n'ayant aucun runner requis,
-# ce qui rendait `lpm check` inutile sans jamais le signaler.
+# PyYAML is required to read the wine.version key of installed games' YAML. Without it every game
+# would silently be treated as needing no runner, making `lpm check` useless without any warning.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   say_err "$(t check.pyyaml_missing)"
   exit 1
 fi
 
-# xdotool sur une session X11 : optionnel (jamais bloquant, ce n'est pas ici un paquet
-# absent qui casse une fonctionnalité entière), mais son absence dégradait plusieurs points
-# en silence -- la navigation manette dans le picker de repli de zgl-launcher-runtime.sh
-# (zgu-gamepad-nav-utils.sh) et surtout la détection réelle de la fenêtre du jeu par
-# l'orchestrateur de l'écran de chargement (lib/zgl-launcher-orchestrator.sh), qui retombe
-# alors sur une attente fixe de 12s au lieu de disparaître dès que le jeu s'affiche vraiment.
-# Non applicable sous Wayland (xdotool n'y fonctionne pas,
-# quelle que soit son installation -- ydotool est l'équivalent, déjà utilisé là où c'est
-# possible, voir les fichiers cités).
+# xdotool on an X11 session: optional (never blocking), but its absence silently degrades several
+# things -- gamepad combos during play (alt-tab, quit game; see zgu-gamepad-alttab-watcher.py /
+# zgu-gamepad-exit-watcher.py) and the real game-window detection of the loading-screen
+# orchestrator (lib/zgl-launcher-orchestrator.sh), which then falls back to a fixed 12s wait.
+# Gamepad navigation inside the picker does not use xdotool (read directly via SDL2).
+# Not applicable on Wayland (xdotool does not work there; ydotool is the equivalent, already used
+# where possible).
 session_kind_check="x11"
 if [[ "${XDG_SESSION_TYPE,,}" = "wayland" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
   session_kind_check="wayland"
 fi
 if [[ "${session_kind_check}" = "x11" ]] && ! command -v xdotool >/dev/null 2>&1; then
   say "$(t check.xdotool_missing)"
+  report warn "$(t check.report_xdotool_missing)"
 fi
+report ok "$(t check.report_tools_ok)"
 
-# 2. Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout
-# aussi le cas des deux installées en même temps, voir zgu_resolve_lutris_version)
+step 2 "$(t check.step_lutris)"
+# 2. Flatpak vs native Lutris detection (from zgu-lutris-utils.sh; also handles both being installed,
+# see zgu_resolve_lutris_version)
 lutris_version=$(zgu_resolve_lutris_version "${mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
 if [[ -z "${lutris_version}" ]]; then
   say_err "$(t check.lutris_missing)"
@@ -134,20 +141,21 @@ if [[ ! -f "${lutris_db}" ]]; then
 fi
 
 mkdir -p "${runner_dir}"
+report ok "$(t check.report_lutris_ok "${lutris_version}")"
 
 # ---------------------------------------------------------------------------------------------
-# 3. Détermination des runners requis par les jeux installés (clé wine.version des YAML)
+# 3. Required runners of installed games (wine.version key of the YAML files)
 # ---------------------------------------------------------------------------------------------
 
+step 3 "$(t check.step_games)"
 games_list=$(sqlite3 "${lutris_db}" "SELECT name || char(31) || slug || char(31) || configpath FROM games WHERE runner='wine';" 2>/dev/null)
 
-declare -A games_needing_runner   # runner_name -> "jeu1, jeu2, ..."
+declare -A games_needing_runner   # runner_name -> "game1, game2, ..."
 required_runners=()
 
-# Jeux référençant lsfg-vk (LSFGVK_ENV=1 dans system.env) et/ou AntimicroX (clé
-# system.antimicro_config, gérée nativement par Lutris) -- alimentés dans la MÊME boucle que
-# la lecture du runner requis ci-dessous, pour ne lire chaque YAML qu'une seule fois (un
-# python3 par jeu, pas trois).
+# Games referencing lsfg-vk (LSFGVK_ENV=1 in system.env) and/or AntimicroX (system.antimicro_config
+# key, handled natively by Lutris) -- filled in the SAME loop as the required runner below, so
+# each YAML is read once (one python3 per game, not three).
 lsfg_games=()
 antimicro_games=()
 
@@ -181,14 +189,11 @@ except Exception:
 
   [[ -z "${required_runner}" ]] && continue
 
-  # Durcissement par cohérence avec le filtrage déjà appliqué à "slug" dans
-  # zgp-game-installer.sh : required_runner (clé wine.version) vient du YAML Lutris du jeu,
-  # potentiellement issu d'un .zgp partagé par un tiers et non validé à l'installation sur
-  # ce champ précis. required_runner sert plus bas à construire des chemins sous runner_dir
-  # (test d'existence, et rm -rf en cas d'échec/annulation d'extraction) : sans ce filtre,
-  # une valeur comme "../../..." resterait théoriquement possible ici, même si elle est déjà
-  # neutralisée en pratique par ailleurs (le téléchargement n'a lieu que si cette valeur
-  # correspond exactement au nom d'un asset publié sur la release GitHub officielle).
+  # Hardening, consistent with the filtering applied to "slug" in zgp-game-installer.sh:
+  # required_runner (wine.version key) comes from the game's Lutris YAML, possibly from a third-party
+  # .zgp and not validated at install time for this field. It is used below to build paths under
+  # runner_dir (existence test, and rm -rf on extraction failure/cancellation), so a value like
+  # "../../.." must be rejected here.
   case "${required_runner}" in
     */*|.|..)
       continue
@@ -204,20 +209,20 @@ except Exception:
 done <<< "${games_list}"
 
 # ---------------------------------------------------------------------------------------------
-# 3bis. Vérification lsfg-vk et AntimicroX -- placée AVANT les "exit 0" anticipés de la
-# section runners ci-dessous : ces deux dépendances sont indépendantes des runners (un jeu
-# peut avoir son runner présent et lsfg-vk/AntimicroX absent, ou l'inverse), donc ce bloc ne
-# doit jamais être court-circuité par un "aucun runner requis"/"tous les runners présents".
-# Chacune des deux n'est vérifiée que si au moins un jeu installé la référence réellement
-# (LSFGVK_ENV=1 pour lsfg-vk, system.antimicro_config pour AntimicroX) : comme pour les
-# runners, on ne signale jamais une dépendance que l'utilisateur n'utilise pas.
+# 3bis. lsfg-vk and AntimicroX check -- placed BEFORE the early "exit 0" of the runners section
+# below: these dependencies are independent of runners, so this block must never be short-circuited
+# by "no runner required"/"all runners present". Each one is only checked if at least one installed
+# game references it (LSFGVK_ENV=1 for lsfg-vk, system.antimicro_config for AntimicroX).
 # ---------------------------------------------------------------------------------------------
 
+step 4 "$(t check.step_extras)"
 if [[ ${#lsfg_games[@]} -gt 0 ]]; then
   lutris_is_flatpak_bool=false
   [[ "${lutris_version}" = "flatpak" ]] && lutris_is_flatpak_bool=true
 
-  if ! zgu_lsfg_vk_present "${lutris_is_flatpak_bool}"; then
+  if zgu_lsfg_vk_present "${lutris_is_flatpak_bool}"; then
+    report ok "$(t check.report_lsfg_ok)"
+  else
     lsfg_game_list=$(IFS=', '; echo "${lsfg_games[*]}")
 
     t check.lsfg_missing_cli "${lsfg_game_list}"
@@ -229,8 +234,7 @@ if [[ ${#lsfg_games[@]} -gt 0 ]]; then
       else
         lsfg_do_install=false
         if [[ "${confirm_flag}" = "yes" ]]; then
-          # -y déjà donné au lancement : on ne pose plus jamais cette question (plus de
-          # "read").
+          # -y already given at launch: this question is never asked.
           lsfg_do_install=true
         else
           t lsfg.install_flatpak_confirm_cli "${lsfg_runtime_version}"
@@ -242,34 +246,43 @@ if [[ ${#lsfg_games[@]} -gt 0 ]]; then
           lsfg_install_err=$(zgu_lsfg_install_flatpak_do "${lsfg_runtime_version}")
           if [[ $? -eq 0 ]]; then
             say "$(t check.lsfg_installed_success)"
+            report ok "$(t check.lsfg_installed_success)"
           else
             say_err "$(t lsfg.flatpak_install_failed "${lsfg_install_err}")"
           fi
+        else
+          report warn "$(t check.report_lsfg_missing "${lsfg_game_list}")"
         fi
       fi
     else
-      # Natif : pas d'install auto possible (pas de paquet universel lsfg-vk), même limite
-      # que "lpm lsfg" -- on se contente d'indiquer où trouver les instructions.
+      # Native: no automatic install possible (no universal lsfg-vk package), same limit as "lpm lsfg";
+      # just point to where the instructions are.
       say "$(t check.lsfg_native_hint)"
+      report warn "$(t check.report_lsfg_missing "${lsfg_game_list}")"
     fi
   fi
 fi
 
 if [[ ${#antimicro_games[@]} -gt 0 ]]; then
-  if ! zgu_antimicro_present; then
+  if zgu_antimicro_present; then
+    report ok "$(t check.report_antimicro_ok)"
+  else
     antimicro_game_list=$(IFS=', '; echo "${antimicro_games[*]}")
 
     t check.antimicro_missing_cli "${antimicro_game_list}"
+    report warn "$(t check.report_antimicro_missing "${antimicro_game_list}")"
   fi
 fi
 
+step 5 "$(t check.step_runners)"
 if [[ ${#required_runners[@]} -eq 0 ]]; then
   say "$(t check.no_games_reference_runner)"
+  report ok "$(t check.no_games_reference_runner)"
   exit 0
 fi
 
 # ---------------------------------------------------------------------------------------------
-# 4. Comparaison avec les runners réellement installés
+# 4. Comparison with the runners actually installed
 # ---------------------------------------------------------------------------------------------
 
 missing_runners=()
@@ -281,6 +294,7 @@ done
 
 if [[ ${#missing_runners[@]} -eq 0 ]]; then
   say "$(t check.all_runners_present)"
+  report ok "$(t check.all_runners_present)"
   exit 0
 fi
 
@@ -291,11 +305,12 @@ done
 echo ""
 
 # ---------------------------------------------------------------------------------------------
-# 5. Récupération unique de la liste des assets de la release GitHub (avec taille et digest SHA256)
+# 5. Single fetch of the release asset list (with size and SHA256 digest)
 # ---------------------------------------------------------------------------------------------
 
-declare -A release_asset_url     # runner_name (sans .zgr) -> url de téléchargement
-declare -A release_asset_digest  # runner_name (sans .zgr) -> "sha256:<hash>" (vide si non fourni par GitHub)
+declare -A release_asset_url     # runner_name (without .zgr) -> download URL
+declare -A release_asset_size    # runner_name (without .zgr) -> size in bytes (for progress)
+declare -A release_asset_digest  # runner_name (without .zgr) -> "sha256:<hash>" (empty if not provided by GitHub)
 
 api_url=$(zgu_github_api_url "${GITHUB_RELEASE_URL}")
 release_json=$(zgu_fetch_url "${api_url}")
@@ -320,30 +335,44 @@ except Exception:
     [[ -z "${asset_name}" ]] && continue
     release_asset_url["${asset_name%.zgr}"]="${download_url}"
     release_asset_digest["${asset_name%.zgr}"]="${asset_digest}"
+    release_asset_size["${asset_name%.zgr}"]="${asset_size}"
   done <<< "${parsed_assets}"
 fi
 
 # ---------------------------------------------------------------------------------------------
-# 6. Fonctions de téléchargement et d'extraction avec barres de progression réelles
+# 6. Download and extraction functions with real progress bars
 # ---------------------------------------------------------------------------------------------
 
 download_cli() {
   local url="$1" runner_name="$2"
   local dest
-  # Pas de "-u" : "-u" se contente de choisir un nom sans créer le fichier, laissant une
-  # fenêtre entre le choix du nom et l'écriture par wget/curl pendant laquelle un autre
-  # utilisateur du même systeme peut y placer un lien symbolique dans /tmp (partagé, world-
-  # writable) et rediriger l'écriture vers un chemin arbitraire (TOCTOU classique). Sans
-  # "-u", mktemp crée réellement le fichier tout de suite, de façon atomique et sous nos
-  # seuls droits, avant tout téléchargement dedans.
+  # No "-u": "-u" only picks a name without creating the file, leaving a window before wget/curl
+  # writes in which another user could plant a symlink in /tmp (shared, world-writable) and redirect
+  # the write to an arbitrary path (classic TOCTOU). Without "-u", mktemp atomically creates the file
+  # under our own permissions before anything is downloaded into it.
   dest=$(mktemp "/tmp/${runner_name}-XXXXXX.zgr")
 
-  zgu_cli_error "$(t check.download_cli_start "${runner_name}")"
-  if command -v wget >/dev/null 2>&1; then
-    wget --show-progress -O "${dest}" "${url}"
+  t check.download_cli_start "${runner_name}"
+  # Background download + file size polling: "[PROGRESS] <pct>" (0-50 % of this runner's bar;
+  # extraction takes 50-100 %). Expected size: "size" field of the asset (GitHub API). Same
+  # mechanism as zgr-runner-installer.sh.
+  local expected_size="${release_asset_size[${runner_name}]:-0}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -Lfs -o "${dest}" "${url}" &
   else
-    curl -Lf -# -o "${dest}" "${url}"
+    wget -q -O "${dest}" "${url}" &
   fi
+  local dl_pid=$! cur pct
+  while kill -0 "${dl_pid}" 2>/dev/null; do
+    if [[ "${expected_size}" =~ ^[0-9]+$ ]] && (( expected_size > 0 )); then
+      cur=$(stat -c%s "${dest}" 2>/dev/null || echo 0)
+      pct=$(( cur * 50 / expected_size ))
+      (( pct > 50 )) && pct=50
+      printf '[PROGRESS] %s\n' "${pct}" >&3
+    fi
+    sleep 0.3
+  done
+  wait "${dl_pid}" || rm -f "${dest}"
 
   if [[ ! -f "${dest}" ]] || [[ ! -s "${dest}" ]]; then
     rm -f "${dest}"
@@ -352,19 +381,16 @@ download_cli() {
   echo "${dest}"
 }
 
-# Vérifie le SHA256 d'une archive téléchargée par rapport au digest de la release GitHub
-# (calcul factorisé dans zgu_sha256_matches, voir lib/zgu-github-release-utils.sh).
-# Retourne 0 si la vérification passe (ou si aucun digest n'est disponible pour cet asset),
-# 1 si le digest est présent mais ne correspond pas.
+# Checks the SHA256 of a downloaded archive against the GitHub release digest (computation in
+# zgu_sha256_matches, see lib/zgu-github-release-utils.sh). Returns 0 if the check passes (or no
+# digest is available for this asset), 1 if a digest is present but does not match.
 verify_checksum() {
   local archive_path="$1" runner_name="$2"
   local expected_digest="${release_asset_digest[${runner_name}]}"
 
   if [[ -z "${expected_digest}" ]]; then
-    # Avertissement non bloquant (l'extraction se poursuit normalement juste après) :
-    # say() plutôt que say_err(), pour ne pas afficher un message "erreur" trompeur alors
-    # qu'aucune vérification n'a en réalité échoué -- GitHub n'a simplement fourni aucun
-    # digest pour cet asset précis.
+    # Non-blocking warning (extraction continues right after): say() rather than say_err() to avoid a
+    # misleading "error" message -- no check failed, GitHub simply provided no digest for this asset.
     say "$(t check.checksum_missing "${runner_name}")"
   fi
 
@@ -380,13 +406,15 @@ extract_cli() {
   t check.extract_cli_start "${runner_name}"
   local archive_size
   archive_size=$(stat -c%s "${archive_path}" 2>/dev/null || stat -f%z "${archive_path}" 2>/dev/null)
-  # umask 022 le temps de l'extraction : même garde-fou que zgp-game-installer.sh/
-  # zgr-runner-installer.sh contre un .zgr forgé plantant un fichier trop permissif.
+  # umask 022 during extraction: same safeguard as zgp-game-installer.sh/zgr-runner-installer.sh
+  # against a forged .zgr planting overly permissive files.
   local _lpm_old_umask
   _lpm_old_umask=$(umask)
   umask 022
   if command -v pv >/dev/null 2>&1; then
-    pv -s "${archive_size:-0}" "${archive_path}" | bsdtar -xf - -C "${runner_dir}"
+    pv -n -s "${archive_size:-0}" "${archive_path}" 2> >(while IFS= read -r pct; do
+      printf '[PROGRESS] %s\n' "$(( 50 + ${pct:-0} / 2 ))" >&3
+    done) | bsdtar -xf - -C "${runner_dir}"
     local tar_exit="${PIPESTATUS[1]}"
   else
     bsdtar -xf "${archive_path}" -C "${runner_dir}"
@@ -397,14 +425,19 @@ extract_cli() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# 7. Traitement de chaque runner manquant : recherche distante uniquement, pas de question locale
+# 7. Processing of each missing runner: remote lookup only, no local question
 # ---------------------------------------------------------------------------------------------
 
 resolved_runners=()
 unresolved_runners=()
+missing_total=${#missing_runners[@]}
+missing_idx=0
 
 for runner_name in "${missing_runners[@]}"; do
+  missing_idx=$((missing_idx + 1))
   install_ok=false
+  # "[n/total] ..." parsed by the GUI (shown after the current step).
+  t check.runner_item_cli "${missing_idx}" "${missing_total}" "${runner_name}"
 
   if [[ -n "${release_asset_url[${runner_name}]}" ]]; then
     archive_path=$(download_cli "${release_asset_url[${runner_name}]}" "${runner_name}")
@@ -420,13 +453,17 @@ for runner_name in "${missing_runners[@]}"; do
   if [[ "${install_ok}" = true ]]; then
     resolved_runners+=("${runner_name}")
     t check.runner_installed_success "${runner_name}"
+    report ok "$(t check.report_runner_installed "${runner_name}")"
   else
     unresolved_runners+=("${runner_name}")
+    # Structured line "runner|<name>|<games>": each frontend (GUI, terminal) builds its own sentence
+    # (the GUI points to its pages, the terminal to "lpm install-runner").
+    report runner "${runner_name}|${games_needing_runner[${runner_name}]}"
   fi
 done
 
 # ---------------------------------------------------------------------------------------------
-# 8. Récapitulatif final
+# 8. Final summary
 # ---------------------------------------------------------------------------------------------
 
 if [[ ${#unresolved_runners[@]} -eq 0 ]]; then
@@ -434,7 +471,7 @@ if [[ ${#unresolved_runners[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Bloc de noms bruts, un par ligne, pour copier-coller facilement
+# Raw names block, one per line, for easy copy-paste
 recap_names=""
 for r in "${unresolved_runners[@]}"; do
   recap_names+="${r}

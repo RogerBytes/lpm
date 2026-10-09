@@ -2,27 +2,36 @@
 
 # --- lpm splash [slug...|--all] ---
 #
-# Récupère automatiquement une bannière de chargement ("Hero" SteamGridDB -- image large,
-# pensée comme fond d'écran/backdrop, PAS l'icône carrée ni la vignette de bibliothèque) pour
-# un ou plusieurs jeux déjà installés, et la pose comme $GAMEDIR/splash/splash.png -- l'image
-# affichée en plein écran par le LPM Launcher pendant le chargement (voir
-# zgl-launcher-manager.sh / zgu-launcher-blackscreen.py).
+# Fetches a loading banner (SteamGridDB "Hero": a wide image meant as a wallpaper/backdrop,
+# NOT the square icon or the library thumbnail) for one or more installed games and saves it
+# as $GAMEDIR/splash/splash.png -- the image the LPM Launcher shows full-screen while
+# loading (see zgl-launcher-manager.sh / zgu-launcher-screen.py).
 #
-# Commande à part, jamais greffée automatiquement à "lpm launcher ... on" : même principe que
-# "lpm icon" (voir zgp-game-icon.sh, dont ce fichier reprend la structure quasi à l'identique)
-# -- seule fonctionnalité qui dépend d'un service tiers (réseau + clé API), une panne de
-# SteamGridDB ou l'absence de clé ne doit jamais bloquer l'activation du launcher, qui reste
-# 100% autonome sans cette commande : "lpm launcher ... on" ne pose plus aucune image par
-# défaut, l'absence de $GAMEDIR/splash/splash.png donnant simplement un écran de chargement
-# noir uni côté orchestrateur (voir zgl-launcher-manager.sh / zgl-launcher-orchestrator.sh).
+# Separate command, never hooked into "lpm launcher ... on": it is the only feature that
+# depends on a third-party service (network + API key), so a SteamGridDB outage or a missing
+# key must not block enabling the launcher. "lpm launcher ... on" installs no default image;
+# without $GAMEDIR/splash/splash.png the orchestrator simply shows a plain black loading
+# screen (see zgl-launcher-manager.sh / zgl-launcher-orchestrator.sh). Structure mirrors
+# zgp-game-icon.sh ("lpm icon").
 #
-# Indépendant de l'état d'activation du launcher : $GAMEDIR/splash/ est créé ici si absent,
-# que "lpm launcher ... on" ait déjà été lancé pour ce jeu ou non -- rien n'oblige à activer
-# le launcher avant de choisir sa bannière, ni l'inverse.
+# Independent of the launcher's activation state: $GAMEDIR/splash/ is created here if
+# missing.
 #
-# $1, $2... = slugs de jeux cibles en CLI (toujours non vide : bin/lpm n'a plus aucun point
-# d'entrée interactif), ou "--all" pour tous les jeux éligibles.
-cli_targets=("$@")
+# $1, $2... = target game slugs (always non-empty in CLI), or "--all" for all eligible
+# games.
+#
+# "--url <url>" (optional): see zgp-game-icon.sh -- same mechanism, single target slug.
+cli_targets=()
+forced_url=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" = "--url" ]]; then
+    forced_url="${2:-}"
+    shift $(( $# >= 2 ? 2 : 1 ))
+  else
+    cli_targets+=("$1")
+    shift
+  fi
+done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -34,14 +43,13 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# Même principe que zgp-game-icon.sh : clé strictement personnelle, jamais partagée/embarquée
-# dans lpm, réutilise le MÊME fichier de clé que "lpm icon" -- un seul compte SteamGridDB
-# suffit pour les deux commandes, pas la peine de redemander une clé déjà validée.
+# Same as zgp-game-icon.sh: strictly personal key, never shared or bundled with lpm; uses
+# the SAME key file as "lpm icon", so one SteamGridDB account covers both commands.
 sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
 sgdb_api="https://www.steamgriddb.com/api/v2"
 sgdb_key=""
 
-# --- 1. Vérification des dépendances ---
+# --- 1. Dependency check ---
 zgp_splash_report_error_early() {
   local msg="$1"
   echo "${msg}" >&2
@@ -54,12 +62,11 @@ for cmd in sqlite3 curl python3 realpath; do
   fi
 done
 
-# ImageMagick : toute image récupérée (png/jpeg/webp) est systématiquement repassée par
-# "convert"/"magick" avant d'être posée en "splash.png" -- pas seulement les .ico comme pour
-# "lpm icon" (les Heroes n'existent jamais en .ico). Ça garantit un vrai PNG valide en sortie
-# quel que soit le format d'origine : zgu-launcher-blackscreen.py charge l'image via
-# "cairo.ImageSurface.create_from_png()", qui n'accepte QUE du PNG -- un fichier juste
-# renommé ".png" sans être réellement réencodé planterait ce chargement.
+# ImageMagick: every fetched image (png/jpeg/webp) is passed through "convert"/"magick"
+# before being saved as "splash.png" -- not only .ico files as in "lpm icon" (Heroes are
+# never .ico). This guarantees a valid PNG whatever the source format:
+# zgu-launcher-screen.py loads the image with cairo.ImageSurface.create_from_png(), which
+# only accepts PNG, so a file merely renamed ".png" would break loading.
 convert_bin=()
 if command -v magick >/dev/null 2>&1; then
   convert_bin=(magick)
@@ -75,7 +82,7 @@ if ! python3 -c "import sys" >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- 2. Détection Flatpak vs Paquet natif + résolution des chemins Lutris ---
+# --- 2. Flatpak vs native package detection + Lutris path resolution ---
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
@@ -114,7 +121,7 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# --- 3. Récupération des jeux Wine depuis la base Lutris ---
+# --- 3. Fetch Wine games from the Lutris DB ---
 games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
 
 if [[ -z "${games_list}" ]]; then
@@ -125,10 +132,10 @@ fi
 declare -A name_by_slug
 declare -A dir_by_slug
 
-# Jeux vivant dans un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...)
-# : hors du principe un-jeu-un-préfixe de lpm, jamais proposés ici -- écrire une bannière dans
-# $GAMEDIR/splash/ n'a de sens que si ce dossier est propre à CE jeu (même filtre que
-# zgp-game-icon.sh/zgp-game-uninstaller.sh/zgp-game-shortcutter.sh, voir
+# Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
+# outside lpm's one-game-one-prefix model and never listed here: writing a banner into
+# $GAMEDIR/splash/ only makes sense if that folder belongs to THIS game (same filter as
+# zgp-game-icon.sh/zgp-game-uninstaller.sh/zgp-game-shortcutter.sh, see
 # zgu_get_blacklisted_slugs).
 declare -A blacklisted_slugs
 while IFS= read -r bl_slug; do
@@ -152,10 +159,8 @@ if [[ ${#sorted_slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# --- 4. Sélection des jeux cibles ---
-# Ancien mode interactif Zenity (liste à cocher, précochant les jeux sans bannière
-# personnalisée) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, "cli_targets"
-# est donc toujours non vide ici.
+# --- 4. Target selection ---
+# ("cli_targets" is always non-empty here; the former interactive Zenity mode was removed.)
 targets=()
 
 if [[ "${cli_targets[0]}" = "--all" ]]; then
@@ -174,8 +179,13 @@ else
   done
 fi
 
-# --- 5. Clé API SteamGridDB (identique à zgp-game-icon.sh -- même fichier de clé, même
-# logique de validation avant stockage) ---
+if [[ -n "${forced_url}" ]] && [[ ${#targets[@]} -ne 1 ]]; then
+  zgu_cli_error "$(t splash.force_url_single_target)"
+  exit 1
+fi
+
+# --- 5. SteamGridDB API key (same as zgp-game-icon.sh: same key file, same validation
+# before storing) ---
 zgp_sgdb_read_key() {
   [[ -f "${sgdb_key_file}" ]] || return 1
   head -n1 "${sgdb_key_file}" 2>/dev/null | tr -d '[:space:]'
@@ -220,7 +230,7 @@ zgp_sgdb_ensure_key() {
   done
 }
 
-# --- 6. Appels SteamGridDB ---
+# --- 6. SteamGridDB calls ---
 zgp_sgdb_search() {
   local term="$1" encoded
   encoded=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${term}" 2>/dev/null)
@@ -243,20 +253,17 @@ for g in data.get("data", []) or []:
 '
 }
 
-# Sortie : une ligne par bannière candidate, "url_pleine_resolution<TAB>url_vignette".
-# Endpoint "/heroes/..." (et pas "/grids/..." ni "/icons/...") : c'est le nom que
-# SteamGridDB donne exactement à ce format -- une image large pensée comme fond
-# d'écran/backdrop (résolutions courantes : 1920x620, 3840x1240), par opposition aux
-# "Grids" (vignettes de bibliothèque, plutôt verticales) et aux "Icons" (déjà utilisées par
-# "lpm icon"). "types=static" exclut les Heroes animés (webm) -- injouables tels quels par
-# ImageMagick/Cairo, un splash de chargement n'a de toute façon pas besoin d'être animé.
-# "mimes=image/png,image/jpeg,image/webp" : les trois formats statiques réellement servis par
-# l'API, tous acceptés en entrée par ImageMagick puis réencodés en PNG (voir plus bas).
+# Output: one line per candidate banner, "full_res_url<TAB>thumbnail_url".
+# Uses "/heroes/..." (not grids/icons): the SteamGridDB name for wide wallpaper/backdrop
+# images (common sizes 1920x620, 3840x1240), unlike "Grids" (library thumbnails, mostly
+# vertical) and "Icons" (used by "lpm icon"). "types=static" excludes animated (webm)
+# Heroes, which ImageMagick/Cairo cannot use as-is (and a loading splash does not need
+# animation). "mimes=image/png,image/jpeg,image/webp": the three static formats the API
+# actually serves, all read by ImageMagick and re-encoded to PNG (see below).
 #
-# Pas de repli "Steam Client Hero" façon zgp-game-icon.sh (Client Icon) : SteamGridDB héberge
-# des Heroes pour l'immense majorité des jeux (bien plus densément peuplé que les Icons, qui
-# sont plus rares) -- la complexité d'un second appel via l'AppID Steam n'apportait pas assez
-# pour être justifiée ici.
+# No "Steam Client Hero" fallback like zgp-game-icon.sh (Client Icon): SteamGridDB has
+# Heroes for the vast majority of games (far more densely populated than Icons), so a second
+# lookup via the Steam AppID is not worth the complexity.
 zgp_sgdb_heroes() {
   local game_id="$1"
   curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" \
@@ -278,12 +285,11 @@ for h in obj.get("data", []) or []:
 '
 }
 
-# --- 7. Traitement d'un jeu ---
+# --- 7. Process one game ---
 #
-# Retourne 0 si une bannière a bien été posée, 1 sinon (jeu introuvable sur SteamGridDB,
-# aucune bannière disponible, téléchargement/conversion échoués, ou annulation par
-# l'utilisateur) -- jamais de silence : chaque échec passe par zgp_splash_report_skip,
-# affiché sur stderr.
+# Returns 0 if a banner was saved, 1 otherwise (game not found on SteamGridDB, no banner
+# available, download/conversion failed, or user cancelled). Never silent: each failure goes
+# through zgp_splash_report_skip, printed on stderr.
 zgp_splash_report_skip() {
   local msg="$1"
   echo "${msg}" >&2
@@ -292,6 +298,13 @@ zgp_splash_report_skip() {
 zgp_splash_process_one() {
   local slug="$1" g_name="$2" game_dir="$3"
 
+  local chosen_url=""
+
+  # "--url" already set by the caller (gui/page_images, manual mode) -- see zgp-game-icon.sh
+  # for this short-circuit.
+  if [[ -n "${forced_url}" ]]; then
+    chosen_url="${forced_url}"
+  else
   local search_results
   search_results=$(zgp_sgdb_search "${g_name}")
   if [[ -z "${search_results}" ]]; then
@@ -346,13 +359,13 @@ zgp_splash_process_one() {
     return 1
   fi
 
-  # Ancien sélecteur visuel Zenity ("--list --imagelist", vignettes téléchargées/recadrées en
-  # parallèle) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, donc en CLI on
-  # prend systématiquement la première bannière candidate.
-  local chosen_url=""
+  # The former Zenity visual picker was removed (no interactive entry point in bin/lpm); in
+  # CLI the first candidate banner is always taken. The visual picker exists again in the
+  # GUI (see "--url" above).
   chosen_url=$(printf '%s\n' "${banners_urls}" | head -n1 | cut -f1)
+  fi
 
-  # --- Téléchargement + conversion systématique en PNG ---
+  # --- Download + systematic conversion to PNG ---
   mkdir -p "${game_dir}/splash"
 
   local ext="${chosen_url##*.}"
@@ -379,7 +392,7 @@ zgp_splash_process_one() {
   return 0
 }
 
-# --- 8. Exécution ---
+# --- 8. Execution ---
 zgp_sgdb_ensure_key || { zgp_splash_report_error_early "$(t splash.no_key_cancelled)"; exit 1; }
 
 exit_code=0

@@ -1,27 +1,23 @@
 #!/bin/bash
 
-# --- Utilitaire partagé : vérification d'intégrité sha256 optionnelle des archives .zgp/.zgr ---
+# --- Shared utility: optional sha256 integrity check of .zgp/.zgr archives ---
 #
-# Le hash de référence est un fichier "sidecar" séparé, JAMAIS embarqué dans l'archive
-# elle-même : impossible par construction, puisque ajouter le hash dans l'archive après
-# l'avoir calculé changerait ses octets et invaliderait le hash qu'on vient de calculer
-# (voir zgp-game-packer.sh/zgr-runner-packer.sh pour la génération). Le sidecar contient
-# uniquement le hash hexadécimal, une seule ligne, rien d'autre -- pas le format classique
-# "sha256sum -c" qui inclut aussi le nom du fichier : un simple renommage de l'archive après
-# téléchargement (très courant, ex: "MonJeu (1).zgp") ferait alors échouer la vérification
-# à tort, alors que l'archive elle-même n'a pas bougé d'un octet.
+# The reference hash is a separate "sidecar" file, NEVER embedded in the archive: impossible by
+# construction, since adding the hash to the archive after computing it would change its bytes and
+# invalidate it (see zgp-game-packer.sh/zgr-runner-packer.sh for generation). The sidecar contains
+# only the hexadecimal hash, one line -- not the classic "sha256sum -c" format that includes the file
+# name: renaming the archive after download (e.g. "MyGame (1).zgp") would make the check fail wrongly
+# although the archive is unchanged.
 #
-# Deux emplacements possibles pour le sidecar d'une archive "<dossier>/<archive>" :
-#   1. "<dossier>/hash/<archive>.sha256" -- prioritaire, pour garder un ensemble de paquets
-#      organisé (plusieurs .zgp/.zgr partagés ensemble, tous leurs hash regroupés à part).
-#   2. "<dossier>/<archive>.sha256" -- repli, pour un partage simple d'un seul fichier sans
-#      dossier dédié.
-# Si les deux existent pour la même archive, celui dans hash/ l'emporte sans détection
-# particulière du désaccord entre les deux (cas limite jugé trop rare pour la complexité
-# que ça ajouterait).
+# Two possible sidecar locations for an archive "<dir>/<archive>":
+#   1. "<dir>/hash/<archive>.sha256" -- takes priority, to keep a set of packages organized (several
+#      .zgp/.zgr shared together, all hashes grouped apart).
+#   2. "<dir>/<archive>.sha256" -- fallback, for simple sharing of a single file without a dedicated folder.
+# If both exist, the one in hash/ wins; a disagreement between the two is not detected (edge case too
+# rare to justify the complexity).
 
 # zgu_find_hash_sidecar <archive_path>
-# Affiche sur stdout le chemin du sidecar trouvé, rien si absent (code de retour 1 dans ce cas).
+# Prints the path of the sidecar found on stdout, nothing if absent (return code 1).
 zgu_find_hash_sidecar() {
   local archive_path="$1"
   local dir base candidate
@@ -44,11 +40,10 @@ zgu_find_hash_sidecar() {
 }
 
 # zgu_verify_archive_hash <archive_path> <hash_file>
-# Code de retour 0 si le hash correspond, 1 sinon. Un sidecar illisible, vide, tronqué ou ne
-# contenant pas un hash sha256 valide (64 caractères hexadécimaux) est traité EXACTEMENT
-# comme un vrai mismatch, sans distinction côté appelant : un sidecar cassé n'inspire pas
-# plus confiance qu'un hash qui ne correspond pas, les deux doivent déclencher la même
-# alerte plutôt qu'échouer silencieusement ou planter le script.
+# Return code 0 if the hash matches, 1 otherwise. An unreadable, empty, truncated sidecar, or one not
+# containing a valid sha256 hash (64 hexadecimal characters), is treated EXACTLY like a real mismatch,
+# with no distinction for the caller: a broken sidecar is no more trustworthy than a mismatching hash,
+# and both must trigger the same alert rather than failing silently or crashing the script.
 zgu_verify_archive_hash() {
   local archive_path="$1"
   local hash_file="$2"
@@ -66,12 +61,11 @@ zgu_verify_archive_hash() {
 }
 
 # zgu_write_hash_sidecar <archive_path> <output_dir>
-# Calcule le sha256 de <archive_path> (déjà complètement écrite et figée sur le disque -- ne
-# JAMAIS appeler avant que l'archive soit terminée, voir l'explication en tête de fichier) et
-# écrit le sidecar dans "<output_dir>/hash/<basename archive_path>.sha256", en créant le
-# dossier hash/ si besoin. Code de retour 1 si le calcul échoue (archive introuvable, sha256sum
-# absent...), sans jamais faire échouer l'empaquetage lui-même côté appelant (l'archive reste
-# valide même sans son sidecar).
+# Computes the sha256 of <archive_path> (already completely written and frozen on disk -- NEVER call
+# before the archive is finished, see the header) and writes the sidecar to
+# "<output_dir>/hash/<basename archive_path>.sha256", creating hash/ if needed. Return code 1 if the
+# computation fails (archive not found, sha256sum missing...), without ever making the caller's
+# packaging fail (the archive stays valid without its sidecar).
 zgu_write_hash_sidecar() {
   local archive_path="$1"
   local output_dir="$2"

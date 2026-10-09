@@ -21,7 +21,7 @@ Requires:       desktop-file-utils
 Requires:       shared-mime-info
 Requires:       hicolor-icon-theme
 Requires:       gtk4 >= 4.10
-Requires:       libadwaita >= 1.4
+Requires:       libadwaita >= 1.5
 Recommends:     lutris
 Recommends:     wine
 Recommends:     winetricks

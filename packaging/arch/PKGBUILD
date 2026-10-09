@@ -8,7 +8,7 @@ url="https://rogerbytes.com"
 license=('MIT' 'GPL3')  # MIT: lpm code -- GPL3: assets/icons/application-x-zg{p,r}-*.svg
                         # (traced artwork from Mint-L-Blue, see packaging/debian/copyright)
 depends=('bash' 'python' 'python-yaml' 'python-gobject' 'python-evdev' 'sdl2' 'sqlite' 'zstd' 'libarchive'
-         'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme' 'gtk4>=4.10' 'libadwaita>=1.4')
+         'desktop-file-utils' 'shared-mime-info' 'hicolor-icon-theme' 'gtk4>=4.10' 'libadwaita>=1.5')
 optdepends=('lutris: manage Lutris games'
             'wine: run Windows games'
             'winetricks: Windows dependencies inside wineprefixes'

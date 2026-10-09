@@ -1,18 +1,15 @@
 """
---- Pont vers les scripts CLI de lpm (lib/*.sh), sans jamais passer par Zenity ---
+Bridge to lpm's CLI scripts (lib/*.sh), never going through Zenity.
 
-Chaque fonction ici construit un argv pour "bin/lpm <commande> ... <flags CLI>", exactement
-comme si on tapait la commande soi-même dans un terminal -- cette interface graphique n'est
-qu'une couche AU-DESSUS des scripts CLI déjà refactorés, jamais un doublon de leur logique.
+Each function builds an argv for "bin/lpm <command> ... <CLI flags>", exactly as if typed
+in a terminal: the GUI is only a layer on top of the CLI scripts, not a duplicate of their
+logic.
 
-Point important : tout subprocess est lancé avec stdin=DEVNULL. Certains scripts de lib/
-ont encore un "read -r -p" de repli pour un cas interactif très spécifique qui n'a pas
-(encore) d'équivalent en argument CLI dédié (ex: désambiguïsation d'un nom de jeu ambigu
-sur SteamGridDB) -- avec stdin fermé, ce "read" reçoit immédiatement un EOF et répond ""
-(chaîne vide), que ces scripts traitent déjà comme une annulation propre de CETTE étape
-précise (jamais un blocage, jamais un crash). C'est un comportement de repli acceptable
-pour cette interface : aucun écran ne doit jamais rester bloqué à attendre une réponse
-qui ne viendra jamais.
+Every subprocess is launched with stdin=DEVNULL. Some lib/ scripts still have a fallback
+"read -r -p" for a very specific interactive case with no CLI argument equivalent (e.g.
+disambiguating an ambiguous game name on SteamGridDB); with stdin closed, that "read" gets
+EOF and returns "", which those scripts treat as a clean cancellation of that step. No
+screen should ever block waiting for an answer that will never come.
 """
 
 from __future__ import annotations
@@ -22,16 +19,17 @@ import re
 import shutil
 import subprocess
 import threading
+import unicodedata
+import uuid
 from dataclasses import dataclass
 from typing import Callable
 
 
 def _resolve_bin_lpm() -> str:
-    """Résout le chemin de "bin/lpm" : en checkout source, gui/ et bin/ sont frères (même
-    dossier parent) -- mais après une installation via install.sh, "bin/lpm" part dans
-    /usr/local/bin/lpm alors que ce dossier gui/ part dans /usr/local/lib/lpm/gui, donc
-    PLUS frères du tout. On essaie donc d'abord le frère local (checkout source), puis on
-    retombe sur le PATH (cas d'une installation standard, /usr/local/bin y est normalement)."""
+    """Resolve the path of "bin/lpm". In a source checkout, gui/ and bin/ are siblings; after
+    install.sh, "bin/lpm" goes to /usr/local/bin/lpm while gui/ goes to
+    /usr/local/lib/lpm/gui, so they are no longer siblings. Try the local sibling first,
+    then fall back to PATH."""
     sibling = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin", "lpm")
     if os.path.isfile(sibling):
         return sibling
@@ -41,6 +39,48 @@ def _resolve_bin_lpm() -> str:
 BIN_LPM = _resolve_bin_lpm()
 
 
+def get_lpm_version() -> str:
+    """Version string shown on the home page, read via "bin/lpm --version" so that
+    LPM_VERSION (see bin/lpm) stays the single source of truth.
+
+    Called once (page_home is cached by show_page, see MainWindow), before the GTK loop
+    starts, so the blocking call does not freeze a visible UI. "--version" is handled by
+    bin/lpm right after loading the language loader, so it is almost instant.
+
+    Best-effort: returns "?" if the command fails or the format is unexpected, so a
+    secondary display never crashes the home page."""
+    try:
+        result = run_lpm(["--version"])
+        if result.returncode != 0:
+            return "?"
+        # Expected output: "lpm v0.9.3\n"
+        match = re.search(r"\bv?\d+\.\d+\.\d+\b", result.stdout)
+        return match.group(0) if match else "?"
+    except OSError:
+        return "?"
+
+
+def slugify_preview(name: str) -> str:
+    """Reproduce zgp_slugify (lib/zgp-prefix-creator.sh, which itself mirrors Lutris'
+    lutris/util/strings.py::slugify): NFD normalization + ASCII encoding (strips accents),
+    lowercase, remove everything except letters/digits/spaces/hyphens, collapse runs of
+    spaces/hyphens into one hyphen. Falls back to a deterministic UUID5 if the result is
+    empty (name entirely in non-Latin characters), like zgp_slugify.
+
+    Used ONLY for a live preview while typing (see PrefixEntryRow in
+    gui/widgets_rows.py); computed in pure Python because relaunching "bin/lpm" on each
+    keystroke is too slow. Deduplication against existing Lutris slugs (pga.db) or the rest
+    of the batch is done by bin/lpm at actual creation (see zgp-prefix-creator.sh), so the
+    real slug may get a "-2", "-3"... suffix; this preview shows the base slug only.
+    """
+    v = unicodedata.normalize("NFD", name).encode("ascii", "ignore").decode("utf-8")
+    v = re.sub(r"[^\w\s-]", "", v).strip().lower()
+    slug = re.sub(r"[-\s]+", "-", v)
+    if not slug:
+        slug = str(uuid.uuid5(uuid.NAMESPACE_URL, name))
+    return slug
+
+
 @dataclass
 class CommandResult:
     returncode: int
@@ -48,10 +88,18 @@ class CommandResult:
     stderr: str
 
 
-def run_lpm(args: list[str], on_line: Callable[[str], None] | None = None) -> CommandResult:
-    """Lance "bin/lpm <args>" de façon synchrone (bloquante) -- à appeler uniquement
-    depuis un thread d'arrière-plan, jamais depuis le thread principal GTK (sans quoi
-    toute l'interface se gèle pendant la durée de la commande)."""
+def run_lpm(
+    args: list[str],
+    on_line: Callable[[str], None] | None = None,
+    on_proc: Callable[[subprocess.Popen], None] | None = None,
+    new_session: bool = False,
+) -> CommandResult:
+    """Run "bin/lpm <args>" synchronously. Call only from a background thread, never from
+    the GTK main thread (the UI would freeze for the duration of the command).
+
+    "new_session": run the command in its own process group, so it can be interrupted as a
+    whole with os.killpg without ever targeting the GUI itself.
+    "on_proc": called with the Popen right after launch (to keep a handle)."""
     proc = subprocess.Popen(
         [BIN_LPM, *args],
         stdin=subprocess.DEVNULL,
@@ -59,7 +107,10 @@ def run_lpm(args: list[str], on_line: Callable[[str], None] | None = None) -> Co
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
+        start_new_session=new_session,
     )
+    if on_proc is not None:
+        on_proc(proc)
 
     out_lines: list[str] = []
 
@@ -79,13 +130,15 @@ def run_lpm_async(
     args: list[str],
     on_line: Callable[[str], None] | None = None,
     on_done: Callable[[CommandResult], None] | None = None,
+    on_proc: Callable[[subprocess.Popen], None] | None = None,
+    new_session: bool = False,
 ) -> threading.Thread:
-    """Variante non bloquante : lance run_lpm() dans un thread séparé. on_line/on_done
-    sont appelés depuis CE thread d'arrière-plan -- à l'appelant de les re-poster sur le
-    thread principal GTK via GLib.idle_add avant de toucher un quelconque widget."""
+    """Non-blocking variant: runs run_lpm() in a separate thread. on_line/on_done are called
+    from that background thread; the caller must re-post to the GTK main thread via
+    GLib.idle_add before touching any widget."""
 
     def _worker():
-        result = run_lpm(args, on_line=on_line)
+        result = run_lpm(args, on_line=on_line, on_proc=on_proc, new_session=new_session)
         if on_done is not None:
             on_done(result)
 
@@ -94,7 +147,7 @@ def run_lpm_async(
     return thread
 
 
-# --- Listers : parsing du texte déjà produit par lib/zg*-lister.sh ---
+# --- Listers: parsing the text already produced by lib/zg*-lister.sh ---
 
 _SLUG_NAME_RE = re.compile(r"^(\S+)\s+(.*)$")
 

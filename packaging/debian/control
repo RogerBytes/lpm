@@ -22,7 +22,7 @@ Depends: ${misc:Depends},
  shared-mime-info,
  hicolor-icon-theme,
  gir1.2-gtk-4.0 (>= 4.10),
- gir1.2-adw-1 (>= 1.4)
+ gir1.2-adw-1 (>= 1.5)
 Recommends: lutris, wine, winetricks, imagemagick, curl, xdotool, ydotool, bash-completion
 Description: Prefix manager for Lutris
  lpm (Ludis Prefix Manager) packages, installs and manages Wine/Proton

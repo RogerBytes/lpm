@@ -1,34 +1,45 @@
 #!/bin/bash
-# --- Lanceur de l'interface graphique GTK4/Libadwaita de lpm ---
+# --- Launcher for lpm's GTK4/Libadwaita graphical interface ---
 #
-# Remplace entièrement l'ancien menu Zenity (voir gui/lpm_gtk.py) : cette interface
-# n'implémente aucune logique métier, elle appelle les mêmes scripts de lib/ en mode CLI,
-# exactement comme le ferait un terminal.
+# The GUI implements no business logic: it calls the same lib/ scripts in CLI mode,
+# exactly as a terminal would.
 set -euo pipefail
 
-# Même détection Dev vs Global que bin/lpm (voir ce fichier) : deux emplacements
-# d'installation système possibles selon l'origine du binaire (install.sh vs paquet
-# .deb/.rpm/Arch), sinon on suppose le mode dev (lancé directement depuis le dépôt).
+# Same dev vs system detection as bin/lpm (see that file).
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "${script_dir}" in
-  /usr/local/bin) gui_dir="/usr/local/lib/lpm/gui" ;;
-  /usr/bin)       gui_dir="/usr/lib/lpm/gui" ;;
-  *)              gui_dir="$(dirname "${script_dir}")/gui" ;;
+  /usr/local/bin) gui_dir="/usr/local/lib/lpm/gui"; lib_dir="/usr/local/lib/lpm" ;;
+  /usr/bin)       gui_dir="/usr/lib/lpm/gui";       lib_dir="/usr/lib/lpm" ;;
+  *)              gui_dir="$(dirname "${script_dir}")/gui"; lib_dir="$(dirname "${script_dir}")/lib" ;;
 esac
 
+# Language loader is sourced before the error messages below so they go through t()
+# like the rest of the CLI. If lib_dir or the loader itself is missing, fall back to
+# the hard-coded French message below (it cannot be localized; same reason as bin/lpm).
+if [[ -f "${lib_dir}/zgl-lang-loader.sh" ]]; then
+  # shellcheck source=../lib/zgl-lang-loader.sh
+  source "${lib_dir}/zgl-lang-loader.sh"
+fi
+
 if [[ ! -f "${gui_dir}/lpm_gtk.py" ]]; then
-  echo "Erreur critique : l'interface graphique est introuvable à : ${gui_dir}" >&2
+  if declare -F t >/dev/null 2>&1; then
+    echo "$(t launcher.gui_not_found "${gui_dir}")" >&2
+  else
+    echo "Erreur critique : l'interface graphique est introuvable à : ${gui_dir}" >&2
+  fi
   exit 1
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "Erreur : python3 est requis pour l'interface graphique." >&2
+  if declare -F t >/dev/null 2>&1; then
+    echo "$(t launcher.python3_missing)" >&2
+  else
+    echo "Erreur : python3 est requis pour l'interface graphique." >&2
+  fi
   exit 1
 fi
 
-# PyGObject + GTK4 (>= 4.10) + Libadwaita (>= 1.4) sont une dépendance obligatoire du
-# paquet lpm depuis la version 0.9.3 (voir packaging/) : plus de vérification ici, un
-# paquet installé les garantit déjà présents. Si lpm_gtk.py plante quand même à l'import
-# de "gi"/Gtk/Adw, c'est que l'installation elle-même est cassée (installation manuelle
-# hors paquet, environnement bricolé...), pas un cas à gérer silencieusement ici.
+# PyGObject + GTK4 (>= 4.10) + Libadwaita (>= 1.5) are a hard dependency of the lpm
+# package since 0.9.3 (see packaging/), so they are not checked here. If lpm_gtk.py
+# crashes on importing gi/Gtk/Adw, the installation itself is broken.
 exec python3 "${gui_dir}/lpm_gtk.py" "$@"

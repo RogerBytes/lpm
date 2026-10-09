@@ -2,16 +2,15 @@
 
 # --- lpm lutris-version ---
 #
-# Affiche les versions de Lutris détectées sur la machine (Flatpak / paquet natif), avec leur
-# numéro de version et un statut à jour/dépassé, et permet de forcer/réinitialiser le choix
-# utilisé par lpm quand les deux sont installées en même temps (voir zgu_resolve_lutris_version
-# dans zgu-lutris-utils.sh, qui applique ce choix silencieusement à chaque lancement une fois
-# sauvegardé). Cette commande ne fait QUE de l'affichage/configuration : la résolution
-# effective utilisée par les autres commandes de lpm reste centralisée là-bas.
+# Shows the Lutris versions detected on the machine (Flatpak / native package) with their version
+# number and an up-to-date/outdated status, and lets the user force/reset the choice lpm uses when
+# both are installed (see zgu_resolve_lutris_version in zgu-lutris-utils.sh, which applies the saved
+# choice silently on every run). This command ONLY displays/configures: the effective resolution
+# used by other lpm commands stays centralized there.
 
-# --- Récupération des arguments du routeur lpm ---
-# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif)
-# $2 = sous-commande optionnelle : "flatpak", "native", "reset", ou vide (affichage seul)
+# --- Arguments passed by the lpm router ---
+# $1 = mode (always "cli")
+# $2 = optional subcommand: "flatpak", "native", "reset", or empty (display only)
 sub_arg="${2:-}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +30,7 @@ say_err() {
   echo "$1" >&2
 }
 
-# --- 1. Détection des installations réelles (mêmes chemins que les autres commandes) ---
+# --- 1. Detection of actual installations (same paths as the other commands) ---
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
@@ -45,16 +44,15 @@ if [[ "${has_flatpak}" = false ]] && [[ "${has_native}" = false ]]; then
   exit 1
 fi
 
-# --- 2. Numéro de version installé, par méthode ---
-# Flatpak : lu directement depuis "flatpak info", jamais deviné.
+# --- 2. Installed version number, per method ---
+# Flatpak: read directly from "flatpak info", never guessed.
 flatpak_version=""
 if [[ "${has_flatpak}" = true ]]; then
   flatpak_version=$(flatpak info net.lutris.Lutris 2>/dev/null | awk -F': ' '/^ *Version:/ {print $2; exit}')
 fi
 
-# Paquet natif : en chaîne selon le gestionnaire de paquets réellement présent -- jamais une
-# valeur de repli devinée si aucun des trois ne répond (même philosophie ailleurs dans le
-# projet : échouer proprement plutôt que deviner).
+# Native package: chained according to the package manager actually present -- never a guessed
+# fallback value if none of the three answers.
 native_version=""
 if [[ "${has_native}" = true ]]; then
   if command -v dpkg-query >/dev/null 2>&1; then
@@ -68,10 +66,10 @@ if [[ "${has_native}" = true ]]; then
   fi
 fi
 
-# --- 3. Dernière version connue en amont (GitHub, meilleur effort, jamais bloquant) ---
-# Pas de nouvelle dépendance : curl/wget est déjà requis ailleurs dans lpm (runners). Un échec
-# ici (hors ligne, rate-limit GitHub) ne doit jamais empêcher l'affichage des versions locales,
-# seul le statut à jour/dépassé est alors simplement omis.
+# --- 3. Latest known upstream version (GitHub, best effort, never blocking) ---
+# No new dependency: curl/wget is already required elsewhere in lpm (runners). A failure here
+# (offline, GitHub rate limit) must not prevent showing local versions; only the up-to-date/outdated
+# status is omitted.
 latest_version=""
 if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
   latest_json=""
@@ -92,12 +90,11 @@ except Exception:
   fi
 fi
 
-# Compare une version installée à latest_version. Écrit un statut traduit sur stdout, ou rien
-# si la comparaison est impossible (version installée ou distante inconnue) -- l'appelant
-# n'affiche alors que le numéro de version, sans statut, plutôt qu'une supposition.
-# $2 = "native" ou "flatpak", pour le libellé "dépassée" adapté (voir décision : le paquet
-# natif Debian/dérivés traîne structurellement derrière l'upstream, ce n'est pas une erreur
-# utilisateur -- message court, sans détailler pourquoi, l'utilisateur saura chercher).
+# Compares an installed version to latest_version. Writes a translated status on stdout, or nothing
+# if the comparison is impossible (installed or remote version unknown) -- the caller then shows
+# only the version number rather than a guess.
+# $2 = "native" or "flatpak", for the matching "outdated" label (the native Debian-like package
+# structurally lags behind upstream, which is not a user error -- hence a short message).
 zgc_version_status() {
   local installed="$1" kind="$2"
   [[ -z "${installed}" ]] && return 0
@@ -117,9 +114,9 @@ zgc_version_status() {
       t lutris_version.status_outdated_flatpak
     fi
   else
-    # Version installée plus récente que le dernier tag GitHub connu (ex: build de dev,
-    # pré-version) : pas "dépassée", mais "à jour" serait trompeur -- on n'affiche rien de
-    # plus que le numéro, comme pour une comparaison impossible.
+    # Installed version newer than the latest known GitHub tag (e.g. dev build, pre-release): not
+    # "outdated", but "up to date" would be misleading -- show only the number, as for an impossible
+    # comparison.
     return 0
   fi
 }
@@ -146,7 +143,28 @@ print_detected_list() {
   fi
 }
 
-# --- 4. Sous-commandes : forcer un choix, ou le réinitialiser ---
+# --- 3bis. GUI-readable mode: "lpm lutris-version status" ---
+# Lines "[LUTRIS] <flatpak|native>|<version>|<status>" for each DETECTED version, and
+# "[LUTRIS-SAVED] <flatpak|native>" if a saved choice points to a version that is still installed.
+if [[ "${sub_arg}" = "status" ]]; then
+  if [[ "${has_flatpak}" = true ]]; then
+    printf '[LUTRIS] flatpak|%s|%s\n' "${flatpak_version}" "$(zgc_version_status "${flatpak_version}" "flatpak")"
+  fi
+  if [[ "${has_native}" = true ]]; then
+    printf '[LUTRIS] native|%s|%s\n' "${native_version}" "$(zgc_version_status "${native_version}" "native")"
+  fi
+  if [[ -f "${ZGU_LUTRIS_VERSION_CONFIG}" ]]; then
+    saved_choice=$(<"${ZGU_LUTRIS_VERSION_CONFIG}")
+    saved_choice="${saved_choice//[$'\t\r\n ']/}"
+    if { [[ "${saved_choice}" = "flatpak" ]] && [[ "${has_flatpak}" = true ]]; } \
+      || { [[ "${saved_choice}" = "native" ]] && [[ "${has_native}" = true ]]; }; then
+      printf '[LUTRIS-SAVED] %s\n' "${saved_choice}"
+    fi
+  fi
+  exit 0
+fi
+
+# --- 4. Subcommands: force a choice, or reset it ---
 if [[ "${sub_arg}" = "reset" ]]; then
   if [[ -f "${ZGU_LUTRIS_VERSION_CONFIG}" ]]; then
     rm -f "${ZGU_LUTRIS_VERSION_CONFIG}"
@@ -186,7 +204,7 @@ if [[ -n "${sub_arg}" ]]; then
   exit 1
 fi
 
-# --- 5. Sans sous-commande : affichage, et proposition de choix si les deux sont présentes ---
+# --- 5. No subcommand: display, and offer a choice if both are present ---
 print_detected_list
 
 if [[ "${has_flatpak}" = true ]] && [[ "${has_native}" = true ]]; then

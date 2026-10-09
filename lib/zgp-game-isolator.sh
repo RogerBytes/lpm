@@ -2,23 +2,17 @@
 
 # --- lpm isolate ---
 #
-# Isole TOUT un store d'un coup : sépare chaque jeu vivant dans un giga-préfixe partagé
-# (Epic Games Store, EA App/EA Desktop, Ubisoft Connect, Battle.net) en son propre wineprefix
-# indépendant -- un jeu = un préfixe, pour chacun des jeux du store visé, jamais un seul jeu
-# isolé en laissant les autres derrière. Distinction centrale utilisée dans tout ce fichier :
-# le "socle" (launcher partagé -- binaires, config, credentials, session, identique et copié
-# pour chaque instance) vs le "dossier du jeu" (sous-dossier propre à un jeu précis, inclus
-# uniquement dans son instance, exclu de toutes les autres).
+# Isolates a WHOLE store at once: splits every game living in a shared giga-prefix (Epic Games
+# Store, EA App/EA Desktop, Ubisoft Connect, Battle.net) into its own independent wineprefix,
+# one game = one prefix, for every game of the targeted store (never a single game with the
+# others left behind). Key distinction used throughout this file: the "base" (shared launcher:
+# binaries, config, credentials, session; identical and copied for every instance) vs the "game
+# folder" (subfolder specific to one game, included only in its instance and excluded from all
+# others).
 #
-# --- Récupération des arguments du routeur lpm ---
-# $1 = confirm_flag ("yes" si -y) : saute la confirmation finale (nombre de jeux isolés) en
-#      mode CLI strict, même convention que les autres scripts de lib/.
-# $2 = store à isoler entièrement (optionnel) : code interne (egs/ea/ubisoft/battlenet), alias
-#      courant (ex. "epic", "blizzard"), ou slug d'un jeu actuellement détecté dans ce
-#      giga-préfixe (juste pour retrouver le store à viser, tous les jeux de ce store seront
-#      isolés, pas seulement celui nommé). Vide => aucun store trouvé/sélectionné : erreur
-#      propre (voir plus bas) -- bin/lpm n'a plus aucun point d'entrée interactif pour proposer
-#      une liste de stores à la place.
+# --- Arguments from the lpm router ---
+# $1 = confirm_flag ("yes" if -y): skips the final confirmation (number of games to isolate) in strict CLI mode, same convention as the other lib/ scripts.
+# $2 = store to isolate entirely (optional): internal code (egs/ea/ubisoft/battlenet), common alias (e.g. "epic", "blizzard"), or slug of a game currently detected in that giga-prefix (only used to find the store to target; ALL games of that store are isolated, not just the named one). Empty => no store found/selected: clean error (see below).
 confirm_flag="${1:-}"
 shift || true
 cli_store_arg="${1:-}"
@@ -35,7 +29,7 @@ source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# 1. Vérification des dépendances
+# 1. Dependency check
 for cmd in sqlite3 realpath; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     zgu_cli_error "$(t isolate.cmd_missing "${cmd}")"
@@ -52,15 +46,15 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
   exit 1
 fi
 
-# 2. Fermeture préalable de Lutris pour libérer la BDD (même geste qu'install/uninstall/pack)
+# 2. Close Lutris first to release the database (same as install/uninstall/pack)
 if flatpak list 2>/dev/null | grep -q lutris; then
   flatpak kill net.lutris.Lutris 2>/dev/null
 fi
 pkill -9 -x lutris 2>/dev/null
 pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
-# 3. Détection Flatpak vs paquet natif + résolution des chemins Lutris (voir
-# zgu_get_default_runner ci-dessus pour la même logique de détection centralisée)
+# 3. Detect Flatpak vs native package + resolve Lutris paths (same centralized detection logic
+# as zgu_get_default_runner above)
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
@@ -113,15 +107,15 @@ if [[ -z "${real_games_dir}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------------------------
-# --- Détection du store (Epic/EA/Ubisoft/Battle.net) pour un giga-préfixe donné ---
-# Voir zgu_detect_isolation_store dans zgu-lutris-utils.sh (déjà sourcé plus haut) : partagée
-# avec zgp-isolable-lister.sh ("lpm list-isolable") pour que les deux commandes s'accordent
-# toujours sur le store détecté.
+# --- Store detection (Epic/EA/Ubisoft/Battle.net) for a given giga-prefix ---
+# See zgu_detect_isolation_store in zgu-lutris-utils.sh (sourced above): shared with
+# zgp-isolable-lister.sh ("lpm list-isolable") so both commands always agree on the detected
+# store.
 
-# Transforme un nom de jeu libre en identifiant de slug sûr (minuscules, [a-z0-9-] uniquement,
-# tirets collapsés) -- utilisé uniquement pour le suffixe de renommage EA App (décision n°3 du
-# document de spec : slug partagé "ea-app" entre le launcher et chaque jeu EA, donc renommé à
-# l'isolation en "ea-app-<suffixe>" plutôt que ciblé par rowid).
+# Turns a free-form game name into a safe slug identifier (lowercase, [a-z0-9-] only, collapsed
+# dashes). Only used for the EA App rename suffix (spec decision #3: the slug "ea-app" is shared
+# between the launcher and each EA game, so it is renamed to "ea-app-<suffix>" at isolation
+# instead of being targeted by rowid).
 zgp_slugify() {
   local s="$1"
   s="${s,,}"
@@ -130,23 +124,23 @@ zgp_slugify() {
   printf '%s' "${s}"
 }
 
-# Résout, pour un store et un giga-préfixe donnés, l'ensemble des chemins relatifs (à
-# giga_dir) appartenant EN PROPRE au jeu ciblé -- jamais le socle, jamais les autres jeux.
-# Écrit les chemins trouvés (un par ligne) sur stdout, ne fait aucune copie ni suppression.
-# Retourne 1 si rien de spécifique au jeu n'a été trouvé (le jeu ne peut alors pas être isolé
-# en toute sécurité : mieux vaut échouer proprement que de deviner un mauvais dossier).
+# Resolves, for a given store and giga-prefix, the set of paths (relative to giga_dir) belonging
+# specifically to the targeted game, never the base, never other games. Writes the paths found
+# (one per line) to stdout; copies and deletes nothing. Returns 1 if nothing game-specific was
+# found (the game cannot then be isolated safely: better to fail cleanly than guess a wrong
+# folder).
 #
-# Repose sur un relevé empirique par store (motifs de dossiers observés pour chaque launcher) ;
-# certains motifs (ex: Ubisoft "AppData/Roaming/<Variant>Air") n'ont pas de règle générique
-# confirmée et sont donc volontairement omis plutôt que devinés.
+# Based on an empirical survey per store (folder patterns observed for each launcher); some
+# patterns (e.g. Ubisoft "AppData/Roaming/<Variant>Air") have no confirmed generic rule and are
+# deliberately omitted rather than guessed.
 zgp_resolve_game_paths() {
   local store="$1" giga_dir="$2" game_name="$3" old_args="$4"
   local found=0 p
 
   case "${store}" in
     egs)
-      # Le dossier du jeu (MandatoryAppFolderName) se lit dans le manifeste .item dont
-      # DisplayName correspond au nom du jeu -- pas de scan de dossier "à l'aveugle".
+      # The game folder (MandatoryAppFolderName) is read from the .item manifest whose
+      # DisplayName matches the game name, not by blind folder scanning.
       local manifests_dir="${giga_dir}/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Manifests"
       local folder_name=""
       if [[ -d "${manifests_dir}" ]]; then
@@ -195,9 +189,9 @@ for path in glob.glob(os.path.join(os.environ["MANIFESTS_DIR"], "*.item")):
         echo "${p}"
         found=1
       fi
-      # L'ID numérique (dossier data/<ID>/) est le même identifiant que celui utilisé dans
-      # l'argument de lancement "uplay://launch/<ID>", déjà présent dans les args existants
-      # du jeu -- on le relit de là plutôt que de le deviner.
+      # The numeric ID (data/<ID>/ folder) is the same one used in the
+      # "uplay://launch/<ID>" launch argument already present in the game's existing args;
+      # it is read from there rather than guessed.
       local uid
       uid=$(printf '%s' "${old_args}" | grep -oE 'uplay://launch/[0-9]+' | head -n1 | grep -oE '[0-9]+$')
       if [[ -n "${uid}" ]]; then
@@ -212,9 +206,9 @@ for path in glob.glob(os.path.join(os.environ["MANIFESTS_DIR"], "*.item")):
       ;;
 
     battlenet)
-      # Un jeu = un dossier top-level sous "Program Files (x86)/", au même niveau que
-      # "Battle.net/" (pas imbriqué dedans). "Battle.net" lui-même est explicitement
-      # exclu (c'est le socle).
+      # One game = one top-level folder under "Program Files (x86)/", at the same level as
+      # "Battle.net/" (not nested inside it). "Battle.net" itself is explicitly excluded
+      # (it is the base).
       p="drive_c/Program Files (x86)/${game_name}"
       if [[ -d "${giga_dir}/${p}" ]] && [[ "${game_name}" != "Battle.net" ]]; then
         echo "${p}"
@@ -226,9 +220,9 @@ for path in glob.glob(os.path.join(os.environ["MANIFESTS_DIR"], "*.item")):
   [[ "${found}" -eq 1 ]]
 }
 
-# Chemins "socle" (partagés, à dupliquer intégralement pour chaque jeu isolé) par store.
-# Cas particulier Ubisoft : traité séparément dans zgp_copy_socle (le socle EST le dossier
-# du launcher moins les sous-dossiers per-jeu "games/" et "data/", jamais une liste figée).
+# "Base" paths (shared, copied in full for each isolated game) per store. Ubisoft is a special
+# case handled in zgp_copy_socle (the base IS the launcher folder minus the per-game "games/"
+# and "data/" subfolders, never a fixed list).
 zgp_socle_paths() {
   local store="$1"
   case "${store}" in
@@ -255,9 +249,9 @@ zgp_socle_paths() {
   esac
 }
 
-# Copie une entrée (fichier ou dossier) de src_root/rel vers dst_root/rel, en préservant les
-# attributs (cp -a) et en créant les dossiers parents nécessaires. Ne fait rien si la source
-# est absente. Retourne 1 en cas d'échec de copie.
+# Copies an entry (file or folder) from src_root/rel to dst_root/rel, preserving attributes (cp
+# -a) and creating parent folders as needed. Does nothing if the source is absent. Returns 1 if
+# the copy fails.
 zgp_copy_rel_cli() {
   local src_root="$1" dst_root="$2" rel="$3"
   local src="${src_root}/${rel}" dst="${dst_root}/${rel}"
@@ -267,7 +261,7 @@ zgp_copy_rel_cli() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# --- Construction de la liste des jeux blacklistés candidats (avec store détecté) ---
+# --- Build the list of candidate blacklisted games (with detected store) ---
 declare -A bl_name_by_slug
 declare -A bl_dir_by_slug
 sorted_bl_slugs=()
@@ -286,15 +280,14 @@ done < <(
 )
 
 # ---------------------------------------------------------------------------------------------
-# --- Regroupement des jeux blacklistés par store détecté ---
-# "lpm isolate" opère par STORE, jamais par jeu isolé : tous les jeux actuellement vivants dans
-# le giga-préfixe d'un même store sont isolés en une seule passe, chacun recevant son propre
-# préfixe indépendant (s'il y a 200 jeux dans le store visé, 200 préfixes sont créés). Un
-# store peut en théorie être réparti sur plusieurs giga-préfixes (dossier "directory" distinct
-# en base) -- on les fusionne tous sous le même code de store ici, pour que "isoler le store X"
-# couvre bien tous les jeux X, quel que soit le dossier où ils vivent.
-declare -A store_slugs      # code de store -> slugs concernés, séparés par des espaces
-declare -A dir_store_cache  # giga_dir résolu -> code de store (mémoïsation par dossier)
+# --- Group blacklisted games by detected store ---
+# "lpm isolate" works per STORE, never per single game: all games currently living in a store's
+# giga-prefix are isolated in one pass, each getting its own independent prefix (200 games in
+# the store = 200 prefixes). A store can in theory be spread over several giga-prefixes
+# (distinct "directory" in the database); they are all merged under the same store code so
+# "isolate store X" covers every X game wherever it lives.
+declare -A store_slugs      # store code -> matching slugs, space-separated
+declare -A dir_store_cache  # resolved giga_dir -> store code (per-folder memoization)
 
 for b_slug in "${sorted_bl_slugs[@]}"; do
   b_dir="${bl_dir_by_slug[${b_slug}]}"
@@ -307,17 +300,17 @@ for b_slug in "${sorted_bl_slugs[@]}"; do
   b_store="${dir_store_cache[${real_b_dir}]}"
   [[ -z "${b_store}" ]] && continue
 
-  # Le launcher lui-même (voir zgu_is_store_launcher_name) n'est jamais un jeu à isoler :
-  # il est déjà dupliqué dans le préfixe de chaque jeu isolé du store -- l'exclure ici,
-  # avant même la moindre tentative, plutôt que de le laisser échouer à chaque exécution.
+  # The launcher itself (see zgu_is_store_launcher_name) is never a game to isolate: it is
+  # already duplicated in each isolated game's prefix. Excluded here, before any attempt,
+  # instead of failing on every run.
   zgu_is_store_launcher_name "${b_store}" "${bl_name_by_slug[${b_slug}]}" && continue
 
   store_slugs["${b_store}"]+="${b_slug} "
 done
 
-# Traduit un argument utilisateur (code de store, alias courant, ou slug d'un jeu isolable) en
-# code de store interne (egs/ea/ubisoft/battlenet). N'affiche rien, retourne 1 si rien ne
-# correspond -- laisse l'appelant décider du message d'erreur.
+# Translates a user argument (store code, common alias, or slug of an isolable game) into the
+# internal store code (egs/ea/ubisoft/battlenet). Prints nothing, returns 1 if nothing matches;
+# the caller decides the error message.
 zgp_resolve_store_arg() {
   local raw="$1" arg
   arg="${raw,,}"
@@ -332,8 +325,8 @@ zgp_resolve_store_arg() {
       echo "battlenet"; return 0 ;;
   esac
 
-  # Sinon : peut-être le slug d'un jeu actuellement isolable -- on réutilise le store déjà
-  # résolu ci-dessus pour son dossier plutôt que de le redétecter une seconde fois.
+  # Otherwise: possibly the slug of a currently isolable game; reuse the store already
+  # resolved above for its folder rather than detecting it again.
   local slug_dir real_slug_dir slug_store
   slug_dir="${bl_dir_by_slug[${raw}]:-}"
   [[ -z "${slug_dir}" ]] && return 1
@@ -345,7 +338,7 @@ zgp_resolve_store_arg() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# --- Sélection du store à isoler entièrement ---
+# --- Select the store to isolate entirely ---
 target_store=""
 
 if [[ -n "${cli_store_arg}" ]]; then
@@ -361,7 +354,7 @@ if [[ -z "${target_store}" ]] || [[ -z "${store_slugs[${target_store}]:-}" ]]; t
   exit 0
 fi
 
-slugs_to_isolate=(${store_slugs[${target_store}]})
+read -r -a slugs_to_isolate <<< "${store_slugs[${target_store}]}"
 
 # ---------------------------------------------------------------------------------------------
 # --- Confirmation ---
@@ -370,35 +363,35 @@ if [[ "${confirm_flag}" != "yes" ]]; then
   for s in "${slugs_to_isolate[@]}"; do
     t isolate.confirm_cli_item "${bl_name_by_slug[${s}]}" "${s}"
   done
-  read -r -p "$(t isolate.confirm_cli_prompt)" response
+  read -r -p "$(t isolate.confirm_cli_prompt)" response || response="n"  # EOF (no terminal) = cancel, never an implicit confirmation
   case "${response}" in
     [nN]) t isolate.cancelled_cli; exit 0 ;;
     *) ;;
   esac
 fi
 
-# Signale l'échec d'isolation d'un jeu donné : toujours affiché sur stderr.
+# Reports an isolation failure for a given game: always printed on stderr.
 zgp_isolate_report_error() {
   local msg="$1"
   echo "${msg}" >&2
 }
 
 # ---------------------------------------------------------------------------------------------
-# --- Isolation d'un jeu ---
+# --- Isolating one game ---
 #
-# Retourne 0 en cas de succès, 1 sinon. Les erreurs passent par zgp_isolate_report_error
-# ci-dessus (stderr) ; la progression normale (copie en cours, etc.) reste affichée séparément
-# via les messages "t isolate.copying_*_cli" au fil de la copie.
+# Returns 0 on success, 1 otherwise. Errors go through zgp_isolate_report_error above (stderr);
+# normal progress (copy in progress, etc.) is printed separately via the "t
+# isolate.copying_*_cli" messages.
 zgp_isolate_one() {
   local slug="$1"
   local giga_dir="${bl_dir_by_slug[${slug}]}"
   local game_name="${bl_name_by_slug[${slug}]}"
   local safe_slug="${slug//\'/\'\'}"
 
-  # Sécurité : le giga_dir vient de la base Lutris, potentiellement éditée à la main ou
-  # provenant d'un jeu ajouté hors lpm -- même garde que resolve_prefix_dir_by_slug
-  # (zgp-game-packer.sh) et safe_delete_prefix_dir (zgp-game-uninstaller.sh) : le chemin réel
-  # doit rester un sous-dossier de games_dir.
+  # Security: giga_dir comes from the Lutris database, possibly hand-edited or from a game
+  # added outside lpm. Same guard as resolve_prefix_dir_by_slug (zgp-game-packer.sh) and
+  # safe_delete_prefix_dir (zgp-game-uninstaller.sh): the real path must stay a subfolder of
+  # games_dir.
   local real_giga_dir
   real_giga_dir=$(realpath -e "${giga_dir}" 2>/dev/null)
   if [[ -z "${real_giga_dir}" ]] || [[ "${real_giga_dir}" != "${real_games_dir}/"* ]]; then
@@ -416,42 +409,40 @@ zgp_isolate_one() {
     return 1
   fi
 
-  # Ligne existante complète (id, executable, configpath, installer_slug) -- un
-  # UPDATE simple ne suffit pas pour le cas EA App (slug partagé "ea-app" entre le
-  # launcher et chaque jeu, voir décision n°3 du document de spec) : cibler par "id"
-  # plutôt que par "slug" pour le DELETE ci-dessous évite de toucher la ligne du
-  # launcher partagé dans tous les cas, pas seulement pour EA.
+  # Full existing row (id, executable, configpath, installer_slug). A plain UPDATE is not
+  # enough for EA App (slug "ea-app" shared between the launcher and each game, spec decision
+  # #3): targeting by "id" rather than "slug" for the DELETE below never touches the shared
+  # launcher row, for any store.
   local old_row old_id old_executable old_configpath old_installer_slug
   old_row=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') || char(31) || COALESCE(installer_slug,'') FROM games WHERE slug='${safe_slug}' AND directory='${giga_dir//\'/\'\'}' LIMIT 1;" 2>/dev/null)
   IFS=$'\x1f' read -r old_id old_executable old_configpath old_installer_slug <<< "${old_row}"
-  # Sécurité : "id" vient lui aussi de la base Lutris, potentiellement éditée à la main
-  # (même méfiance que pour "directory"/"configpath" ci-dessous). Contrairement à ces
-  # deux-là, il n'était jusqu'ici interpolé nulle part avec échappement -- il est utilisé
-  # sans guillemets dans un "DELETE ... WHERE id=${old_id}" plus bas (id est numérique,
-  # jamais mis entre quotes). Sans cette validation, un id corrompu en base contenant du
-  # SQL (ex: "1); DROP TABLE games; --") s'y injecterait directement.
+  # Security: "id" also comes from the Lutris database, possibly hand-edited. Unlike
+  # "directory"/"configpath" below, it is not escaped anywhere: it is used unquoted in "DELETE
+  # ... WHERE id=${old_id}" below (id is numeric, never put in quotes). Without this
+  # validation, a corrupted id containing SQL (e.g. "1); DROP TABLE games; --") would be
+  # injected directly.
   if [[ -z "${old_id}" ]] || [[ ! "${old_id}" =~ ^[0-9]+$ ]]; then
     zgp_isolate_report_error "$(t isolate.game_paths_not_found "${game_name}")"
     zgu_log "isolate" "ERREUR" "slug=${slug} raison=id_base_invalide"
     return 1
   fi
 
-  # Sécurité : configpath vient de la base Lutris, potentiellement éditée à la main (même
-  # méfiance que pour "directory" plus haut). Contrairement à "directory", ce n'est pas un
-  # chemin absolu mais un simple identifiant sans composant de dossier (toujours généré ici
-  # et à l'installation sous la forme "<slug>-<timestamp>", voir new_config_id ci-dessous et
-  # config_id dans zgp-game-installer.sh) : on rejette donc tout ce qui contiendrait un "/"
-  # avant de bâtir un chemin avec, pour empêcher un configpath du type "../../etc/cron.d/x"
-  # de faire sortir old_yml -- et surtout le "rm -f" final -- de lutris_config_dir.
+  # Security: configpath comes from the Lutris database, possibly hand-edited (same distrust
+  # as "directory" above). Unlike "directory", it is not an absolute path but a plain
+  # identifier with no folder component (always generated here and at install time as
+  # "<slug>-<timestamp>", see new_config_id below and config_id in zgp-game-installer.sh), so
+  # anything containing a "/" is rejected before building a path with it, to stop a configpath
+  # like "../../etc/cron.d/x" from moving old_yml, and above all the final "rm -f", out of
+  # lutris_config_dir.
   if [[ -z "${old_configpath}" ]] || [[ "${old_configpath}" == *"/"* ]]; then
     zgp_isolate_report_error "$(t isolate.configpath_invalid "${game_name}")"
     zgu_log "isolate" "ERREUR" "slug=${slug} raison=configpath_invalide"
     return 1
   fi
 
-  # Args de lancement (protocole propriétaire) lus depuis le YAML déjà en place -- jamais
-  # reconstruits à la main (constat transversal à tous les stores gérés ici : le jeu est
-  # toujours lancé via le launcher partagé + un identifiant de jeu en paramètre).
+  # Launch args (proprietary protocol) read from the YAML already in place, never rebuilt by
+  # hand: for every store handled here, the game is always launched via the shared launcher +
+  # a game identifier as parameter.
   local old_yml="${lutris_config_dir}/${old_configpath}.yml"
   local old_args=""
   if [[ -f "${old_yml}" ]]; then
@@ -467,8 +458,8 @@ except Exception:
 ' 2>/dev/null)
   fi
 
-  # Résolution des chemins propres au jeu (jamais le socle, jamais un autre jeu du même
-  # giga-préfixe) : échec net plutôt que de deviner si rien n'est trouvé.
+  # Resolve the game-specific paths (never the base, never another game of the same
+  # giga-prefix): fail cleanly rather than guess if nothing is found.
   local game_rel_paths=()
   local rp
   while IFS= read -r rp; do
@@ -481,9 +472,9 @@ except Exception:
     return 1
   fi
 
-  # Slug du jeu isolé : renommé uniquement pour EA App (slug partagé "ea-app" entre le
-  # launcher et chaque jeu -- voir décision n°3 du document de spec), inchangé pour les 3
-  # autres stores (slug déjà unique par jeu, confirmé via pga.db).
+  # Slug of the isolated game: renamed only for EA App (slug "ea-app" shared between the
+  # launcher and each game, spec decision #3), unchanged for the 3 other stores (slug already
+  # unique per game, confirmed via pga.db).
   local new_slug="${slug}"
   if [[ "${store}" = "ea" ]]; then
     local suffix
@@ -509,10 +500,10 @@ except Exception:
     return 1
   }
 
-  # --- 1. Copie du socle (launcher, credentials, session) ---
+  # --- 1. Copy the base (launcher, credentials, session) ---
   if [[ "${store}" = "ubisoft" ]]; then
-    # Cas particulier : le socle EST "Ubisoft Game Launcher/" moins les sous-dossiers
-    # per-jeu "games/" et "data/" (traités comme dossier du jeu ci-dessous).
+    # Special case: the base IS "Ubisoft Game Launcher/" minus the per-game "games/" and
+    # "data/" subfolders (handled as the game folder below).
     local ubi_root="drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher"
     local entry entry_rel
     while IFS= read -r entry; do
@@ -539,7 +530,7 @@ except Exception:
     done < <(zgp_socle_paths "${store}")
   fi
 
-  # --- 2. Copie du dossier du jeu (uniquement celui-ci, jamais les autres jeux) ---
+  # --- 2. Copy the game folder (only this one, never the other games) ---
   for rp in "${game_rel_paths[@]}"; do
     t isolate.copying_game_cli "${game_name}"
     zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${rp}" || {
@@ -554,12 +545,12 @@ except Exception:
   ln -sf "../drive_c" "${new_prefix_dir}/dosdevices/c:"
   [[ ! -e "${new_prefix_dir}/pfx" ]] && ln -sf "." "${new_prefix_dir}/pfx"
 
-  # --- 3. Clonage du YAML Lutris : mêmes clés que l'original (game.args notamment, qui
-  # porte l'identifiant de jeu propriétaire -- AppName/offerIds/ID/code produit -- inchangé
-  # par l'isolation, seul le chemin de préfixe change), chemins substitués giga_dir -> nouveau
-  # prefix. Même filtre anti-hooks qu'à l'installation (zgp-game-installer.sh) : un YAML
-  # d'origine potentiellement édité à la main ne doit pas pouvoir embarquer une commande
-  # exécutée automatiquement par Lutris.
+  # --- 3. Clone the Lutris YAML: same keys as the original (notably game.args, which carries
+  # the proprietary game identifier -- AppName/offerIds/ID/product code -- unchanged by
+  # isolation; only the prefix path changes), paths substituted giga_dir -> new prefix. Same
+  # anti-hook policy as at install (zgp-game-installer.sh): a possibly hand-edited source YAML
+  # must not be able to carry a command run automatically by Lutris; it is commented out, not
+  # deleted.
   t isolate.registering
   local timestamp new_config_id new_yml new_executable=""
   timestamp=$(date +%s%N)
@@ -583,19 +574,6 @@ def swap_prefix(obj):
         return re.sub(prefix_pattern + r"(?=/|$)", new_prefix, obj)
     return obj
 
-def strip_exec_hooks(obj):
-    if isinstance(obj, dict):
-        cleaned = {}
-        for k, v in obj.items():
-            kl = k.lower() if isinstance(k, str) else ""
-            if kl.endswith("_command") or kl.endswith("_script") or kl.endswith("_wait") or "exec" in kl:
-                continue
-            cleaned[k] = strip_exec_hooks(v)
-        return cleaned
-    elif isinstance(obj, list):
-        return [strip_exec_hooks(v) for v in obj]
-    return obj
-
 try:
     with open(os.environ["OLD_YML"], "r") as f:
         data = yaml.safe_load(f)
@@ -603,7 +581,6 @@ try:
         data.pop("script", None)
         data.pop("version", None)
         data = swap_prefix(data)
-        data = strip_exec_hooks(data)
         if "game" not in data or not isinstance(data["game"], dict):
             data["game"] = {}
         data["game"]["prefix"] = new_prefix
@@ -612,6 +589,10 @@ try:
 except Exception:
     pass
 ' 2>/dev/null
+
+    # Launch hooks (prelaunch_command...): neutralized as a COMMENT (marker
+    # "lpm:hook-disabled", restorable), as at install, never deleted.
+    [[ -f "${new_yml}" ]] && zgu_apply_hook_policy "${new_yml}" false broad
 
     if [[ -f "${new_yml}" ]]; then
       new_executable=$(YML_PATH="${new_yml}" python3 -c '
@@ -627,8 +608,8 @@ except Exception:
     fi
   fi
 
-  # Repli si le YAML d'origine était absent/illisible ou n'a donné aucun exe : substitution
-  # directe de préfixe sur le chemin déjà connu en base (old_executable), même logique.
+  # Fallback if the source YAML was missing/unreadable or yielded no exe: direct prefix
+  # substitution on the path already known in the database (old_executable), same logic.
   if [[ -z "${new_executable}" ]]; then
     new_executable="${old_executable/${giga_dir}/${new_prefix_dir}}"
   fi
@@ -641,10 +622,9 @@ except Exception:
   local safe_executable="${new_executable//\'/\'\'}"
   local safe_installer_slug="${old_installer_slug//\'/\'\'}"
 
-  # DELETE par id (jamais par slug) : le slug peut être partagé par plusieurs lignes (cas
-  # EA App confirmé, voir décision n°3 du document de spec) -- cibler par id, valeur fraîche
-  # relue juste au-dessus dans la même exécution, retire précisément la ligne du jeu isolé
-  # sans jamais risquer de supprimer la ligne du launcher partagé, quel que soit le store.
+  # DELETE by id (never by slug): the slug may be shared by several rows (EA App case, spec
+  # decision #3). The fresh id re-read just above in the same run removes exactly the isolated
+  # game's row without ever risking the shared launcher row, for any store.
   sqlite3 "${lutris_db}" "DELETE FROM games WHERE id=${old_id};"
   sqlite3 "${lutris_db}" <<EOF
 INSERT INTO games (name, slug, installer_slug, parent_slug, runner, executable, directory, configpath, updated, installed, installed_at)
@@ -663,10 +643,10 @@ VALUES (
 );
 EOF
 
-  # --- 4. Purge des seuls dossiers propres au jeu dans le giga-préfixe d'origine (jamais le
-  # socle, qui reste partagé par les jeux qui y vivent encore -- décision n°5 du document de
-  # spec) : réalisée seulement après confirmation que la copie a bien produit un préfixe non
-  # vide, pour ne jamais perdre les fichiers du jeu si la copie a échoué à mi-chemin.
+  # --- 4. Purge only the game-specific folders in the original giga-prefix (never the base,
+  # which stays shared by the games still living there; spec decision #5): done only after
+  # confirming the copy produced a non-empty prefix, so game files are never lost if the copy
+  # failed midway.
   if [[ -n "$(find "${new_prefix_dir}" -mindepth 1 -maxdepth 1 2>/dev/null)" ]]; then
     t isolate.purging
     for rp in "${game_rel_paths[@]}"; do
@@ -686,11 +666,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------------------------
-# --- Exécution ---
-# bin/lpm n'a plus aucun point d'entrée interactif : la fenêtre de progression Zenity partagée
-# et le résumé/notification de fin de lot qui l'accompagnaient ont été retirés ci-dessous, ainsi
-# que l'annulation en cours de lot (code retour 2 de zgp_isolate_one, qui ne peut plus se
-# produire sans la fenêtre Zenity qui la déclenchait).
+# --- Execution ---
 exit_code=0
 for target_slug in "${slugs_to_isolate[@]}"; do
   zgp_isolate_one "${target_slug}"

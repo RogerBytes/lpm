@@ -1,43 +1,32 @@
 #!/bin/bash
 
-# --- Utilitaires partagés pour la détection de l'installation Lutris (Flatpak vs paquet natif) ---
+# --- Shared utilities for detecting the Lutris installation (Flatpak vs native package) ---
 #
-# check_flatpak_lutris_installed() est utilisée par les 9 fichiers de lib/ qui ont besoin
-# de savoir si Lutris est installé (zgc-dependency-checker.sh, zgp-game-installer.sh,
-# zgp-game-lister.sh, zgp-game-uninstaller.sh, zgr-runner-installer.sh, zgr-runner-lister.sh,
-# zgr-runner-packer.sh, zgr-runner-remote-lister.sh, zgr-runner-uninstaller.sh). Une seule
-# définition, sourcée par tous les appelants, garantit qu'une correction de la détection
-# s'applique partout à la fois : une détection basée sur la simple existence de fichiers
-# résiduels (pga.db, dossier games/) plutôt que sur l'application réellement installée
-# risquerait de lire la mauvaise base de données si un ancien profil Flatpak ou natif traîne
-# encore sur le disque après un changement de méthode d'installation.
+# check_flatpak_lutris_installed() is used by the 9 lib/ files that need to know whether Lutris is
+# installed (zgc-dependency-checker.sh, zgp-game-installer.sh, zgp-game-lister.sh,
+# zgp-game-uninstaller.sh, zgr-runner-installer.sh, zgr-runner-lister.sh, zgr-runner-packer.sh,
+# zgr-runner-remote-lister.sh, zgr-runner-uninstaller.sh). A single sourced definition keeps the
+# detection consistent everywhere. Detection based on leftover files (pga.db, games/ folder) rather
+# than the installed application could read the wrong database if an old Flatpak or native profile
+# lingers after switching install method.
 #
-# Ce fichier ne fait AUCUN affichage (pas de zenity, pas d'echo) : c'est une pure fonction de
-# détection, chaque appelant reste responsable de la résolution des chemins qui en dépendent.
+# This file prints nothing (no zenity, no echo): it is a pure detection function; each caller stays
+# responsible for resolving the paths that depend on it.
 
-# Retourne 0 (vrai) si Lutris est installé via Flatpak, 1 (faux) sinon (paquet natif ou absent).
+# Returns 0 (true) if Lutris is installed via Flatpak, 1 (false) otherwise (native package or absent).
 check_flatpak_lutris_installed() {
   flatpak list 2>/dev/null | grep -q lutris
 }
 
-# Retourne 0 (vrai) si Lutris semble installé en paquet natif (par opposition à Flatpak),
-# 1 (faux) sinon.
+# Returns 0 (true) if Lutris appears installed as a native package (as opposed to Flatpak), 1 (false)
+# otherwise.
 #
-# ANCIENNE VERSION (bug corrigé) : combinait "command -v lutris" avec l'existence de pga.db
-# et du dossier des runners Wine natifs -- l'idée étant qu'un signal seul (le PATH) laisserait
-# passer une installation non standard. Problème réel, remonté par un utilisateur : désinstaller
-# le paquet natif (apt/dnf/pacman) ne touche JAMAIS à "~/.local/share/lutris/" -- c'est un
-# dossier de données UTILISATEUR, jamais géré par un gestionnaire de paquets, sur aucune
-# distro. pga.db et runners/wine y restent donc orphelins indéfiniment après désinstallation,
-# et les deux signaux "fichiers résiduels" restaient vrais pour toujours -- lpm continuait de
-# croire Lutris natif installé alors qu'il avait été retiré, avec Flatpak comme seule version
-# restante (confirmé réel : un utilisateur a désinstallé le paquet natif, gardé Flatpak, et
-# lpm continuait de lui proposer le choix "les deux versions sont installées").
-#
-# Nouvelle détection : uniquement l'EXÉCUTABLE réel, présent sur le disque -- dans le PATH
-# (cas normal), ou à un des emplacements standards des paquets Lutris (Debian/RPM/Arch)
-# même si le PATH ne le contient pas (installation non standard). Jamais de fichier de
-# données : seule la présence du binaire lui-même signale une installation encore active.
+# Detection is based only on the real EXECUTABLE being on disk -- in the PATH (normal case), or at one
+# of the standard Lutris package locations (Debian/RPM/Arch) even if the PATH does not contain it
+# (non-standard install). Never on data files: uninstalling the native package (apt/dnf/pacman) never
+# touches "~/.local/share/lutris/" (USER data, not managed by any package manager), so pga.db and
+# runners/wine stay orphaned there forever and would keep reporting a removed native Lutris as
+# installed.
 check_native_lutris_installed() {
   command -v lutris >/dev/null 2>&1 && return 0
 
@@ -49,12 +38,12 @@ check_native_lutris_installed() {
   return 1
 }
 
-# Retourne (sur stdout) le runner Wine/Proton par défaut configuré globalement dans
-# Lutris (clé "version:" de runners/wine.yml, quel que soit l'emplacement Flatpak ou
-# paquet natif), ou "proton-cachyos-x86_64" si aucun fichier n'est trouvé ou lisible.
+# Returns (on stdout) the default Wine/Proton runner configured globally in Lutris (key "version:" of
+# runners/wine.yml, whether Flatpak or native package), or "proton-cachyos-x86_64" if no file is
+# found or readable.
 #
-# Utilisée par zgp-game-installer.sh et zgp-game-packer.sh : une seule définition garantit
-# que le runner de repli par défaut reste identique partout si jamais il doit être changé.
+# Used by zgp-game-installer.sh and zgp-game-packer.sh: a single definition keeps the default
+# fallback runner identical everywhere.
 zgu_get_default_runner() {
   local runners_path found=""
   for runners_path in \
@@ -70,30 +59,27 @@ zgu_get_default_runner() {
   echo "${found}"
 }
 
-# --- Détection des jeux vivant dans un préfixe de store partagé (Epic Games Store,
-# EA App, Ubisoft Connect...) ---
+# --- Detection of games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) ---
 #
-# lpm applique le principe un-jeu-un-préfixe, mais Lutris ne crée pas systématiquement
-# un wineprefix par jeu : certains launchers tiers (client installé + jeux dedans) créent
-# UN SEUL wineprefix partagé par plusieurs jeux ("directory" identique pour plusieurs
-# lignes de la table games). Ces jeux-là ne doivent apparaître nulle part dans lpm (ni
-# listés, ni empaquetables, ni désinstallables), sous peine de casser le préfixe partagé
-# pour les autres jeux qui y vivent encore.
+# lpm applies the one-game-one-prefix principle, but Lutris does not always create a wineprefix per
+# game: some third-party launchers (client installed + games inside) create ONE wineprefix shared by
+# several games (identical "directory" on several rows of the games table). Those games must appear
+# nowhere in lpm (not listed, packable or uninstallable), or the shared prefix would break for the
+# other games living in it.
 #
-# GOG, itch.io et ZOOM Platform ont été vérifiés comme respectant déjà un-jeu-un-préfixe
-# (chaque jeu a son propre "directory" en base, même si rangé dans un sous-dossier comme
-# gog/<jeu>/) : ils ne sont donc PAS dans cette liste.
+# GOG, itch.io and ZOOM Platform were verified to already follow one-game-one-prefix (each game has
+# its own "directory" in the database, even if in a subfolder like gog/<game>/): they are NOT in this
+# list.
 ZGU_STORE_KEYWORDS=("Epic Games Store" "EA App" "EA Desktop" "Ubisoft Connect" "Battle.net" "Steam")
 
-# Retourne (sur stdout, un slug par ligne) l'ensemble des slugs de jeux runner='wine' à
-# exclure de lpm : ceux dont le "directory" est partagé par au moins une autre entrée de
-# la table games (signal principal, détecte automatiquement tout store à préfixe partagé
-# dès qu'un jeu y est installé, sans connaître son nom à l'avance), complété par un filet
-# de sécurité par mots-clés (ZGU_STORE_KEYWORDS) pour bloquer aussi un store fraîchement
-# installé mais encore vide (donc sans "directory" dupliqué détectable pour l'instant).
+# Returns (on stdout, one slug per line) the slugs of runner='wine' games to exclude from lpm: those
+# whose "directory" is shared by at least one other entry of the games table (main signal, detects any
+# shared-prefix store automatically without knowing its name), plus a keyword safety net
+# (ZGU_STORE_KEYWORDS) to also block a freshly installed but still empty store (no duplicated
+# "directory" detectable yet).
 #
-# Ne fait aucun affichage, ne modifie rien : pure fonction de lecture, à appeler par
-# chaque script (lister/packer/uninstaller) pour filtrer sa propre liste de jeux.
+# Prints nothing and modifies nothing: a pure read function, called by each script
+# (lister/packer/uninstaller) to filter its own game list.
 zgu_get_blacklisted_slugs() {
   local lutris_db="$1"
   [[ -f "${lutris_db}" ]] || return 0
@@ -120,7 +106,8 @@ zgu_get_blacklisted_slugs() {
 
     if [[ "${is_blacklisted}" -eq 0 ]]; then
       for kw in "${ZGU_STORE_KEYWORDS[@]}"; do
-        if [[ "${name}" == *"${kw}"* ]]; then
+        # Whole word only: "Steam" must not hide "SteamWorld Dig".
+        if [[ " ${name} " == *[^[:alnum:]]"${kw}"[^[:alnum:]]* ]]; then
           is_blacklisted=1
           break
         fi
@@ -131,18 +118,17 @@ zgu_get_blacklisted_slugs() {
   done <<< "${rows}"
 }
 
-# --- Détection du store (Epic/EA/Ubisoft/Battle.net) pour un giga-préfixe donné ---
+# --- Store detection (Epic/EA/Ubisoft/Battle.net) for a given giga-prefix ---
 #
-# Partagée par zgp-game-isolator.sh ("lpm isolate") et zgp-isolable-lister.sh
-# ("lpm list-isolable") : une seule définition garantit que la liste affichée par
-# list-isolable et le store effectivement ciblé par isolate ne divergent jamais.
+# Shared by zgp-game-isolator.sh ("lpm isolate") and zgp-isolable-lister.sh ("lpm list-isolable"):
+# a single definition keeps the list shown by list-isolable and the store actually targeted by
+# isolate consistent.
 #
-# Distinct de ZGU_STORE_KEYWORDS ci-dessus, qui inclut aussi "Steam" pour le filet de
-# sécurité de la blacklist générale : Steam est explicitement hors sujet ici (les jeux
-# Steam ne sont pas gérés par lpm). Seuls les 4 stores documentés sont reconnus ; un
-# préfixe partagé qui n'en fait pas partie (store inconnu, ou blacklisté uniquement par
-# détection générique de "directory" dupliqué) retourne 1, sans rien afficher : ni isolate
-# ni list-isolable ne doivent deviner un store qu'ils ne savent pas traiter.
+# Distinct from ZGU_STORE_KEYWORDS above, which also includes "Steam" for the general blacklist safety
+# net: Steam is out of scope here (lpm does not manage Steam games). Only the 4 documented stores are
+# recognized; a shared prefix that is not one of them (unknown store, or blacklisted only by generic
+# duplicated-"directory" detection) returns 1 and prints nothing: neither isolate nor list-isolable
+# must guess a store they cannot handle.
 zgu_detect_isolation_store() {
   local lutris_db="$1" giga_dir="$2" safe_dir rows name
   safe_dir="${giga_dir//\'/\'\'}"
@@ -158,8 +144,8 @@ zgu_detect_isolation_store() {
   return 1
 }
 
-# Convertit un code de store interne (retourné par zgu_detect_isolation_store) en son nom
-# d'affichage complet, pour l'humain (list-isolable, messages isolate).
+# Converts an internal store code (returned by zgu_detect_isolation_store) to its full display name,
+# for humans (list-isolable, isolate messages).
 zgu_store_display_name() {
   case "$1" in
     egs) echo "Epic Games Store" ;;
@@ -170,19 +156,16 @@ zgu_store_display_name() {
   esac
 }
 
-# Le launcher lui-même (Epic Games Launcher, EA App/Desktop, Ubisoft Connect, Battle.net)
-# vit dans le même giga-préfixe partagé que les jeux, et se retrouve donc lui aussi comme
-# une entrée "runner=wine" dans pga.db avec un "directory" partagé -- exactement le même
-# signal que pour un vrai jeu (voir zgu_get_blacklisted_slugs ci-dessus). Ce n'est pourtant
-# jamais un jeu à isoler individuellement : il est déjà dupliqué en entier (le "socle")
-# dans le nouveau préfixe de CHAQUE jeu isolé (voir "1. Copie du socle" dans
-# zgp-game-isolator.sh), donc "isoler le launcher" à part n'a pas de sens et échoue
-# systématiquement (aucun "dossier de jeu" propre à lui à isoler).
+# The launcher itself (Epic Games Launcher, EA App/Desktop, Ubisoft Connect, Battle.net) lives in the
+# same shared giga-prefix as the games, so it also shows up as a "runner=wine" entry in pga.db with a
+# shared "directory" -- the same signal as a real game (see zgu_get_blacklisted_slugs above). It is
+# never a game to isolate individually: it is already duplicated entirely (the "base") into the new
+# prefix of EACH isolated game (see "1. Copie du socle" in zgp-game-isolator.sh), so isolating the
+# launcher on its own makes no sense and always fails (no game folder of its own).
 #
-# Noms exacts sous lesquels Lutris/lpm connaît ces entrées (voir ZGU_STORE_KEYWORDS
-# ci-dessus, dont ceux-ci sont un sous-ensemble) -- partagé par "lpm isolate" (qui ne doit
-# jamais tenter de l'isoler) et "lpm list-isolable" (qui ne doit jamais le lister), pour que
-# les deux commandes s'accordent toujours.
+# Exact names under which Lutris/lpm knows these entries (a subset of ZGU_STORE_KEYWORDS above) --
+# shared by "lpm isolate" (must never try to isolate it) and "lpm list-isolable" (must never list
+# it), so both commands always agree.
 zgu_is_store_launcher_name() {
   local store="$1" name="$2"
   case "${store}" in
@@ -194,44 +177,38 @@ zgu_is_store_launcher_name() {
   esac
 }
 
-# --- Résolution de la version Lutris à utiliser (Flatpak vs paquet natif) quand les deux
-# sont installées en même temps ---
+# --- Resolution of the Lutris version to use (Flatpak vs native package) when both are installed ---
 #
-# Avant cette fonction, chaque appelant faisait "if check_flatpak_lutris_installed; then ...
-# elif check_native_lutris_installed; then ..." : si les deux étaient présentes, Flatpak
-# gagnait systématiquement, silencieusement, sans qu'aucun message n'indique à l'utilisateur
-# que sa bibliothèque native (jeux/runners) était ignorée. Statistiquement, une machine avec
-# les deux installées (test Flatpak jamais désinstallé, dépendance d'une autre appli, etc.)
-# n'est pas un cas si rare -- voir l'échange qui a mené à cette fonction.
+# Callers used to do "if check_flatpak_lutris_installed; then ... elif check_native_lutris_installed;
+# then ...": with both present, Flatpak silently won, with no message telling the user their native
+# library (games/runners) was ignored.
 #
-# Fichier de config persistant pour le choix forcé par l'utilisateur, même dossier que la
-# clé SteamGridDB (~/.config/lpm/) : mêmes conventions de persistance dans tout le projet.
+# Persistent config file for the choice forced by the user, in the same folder as the SteamGridDB key
+# (~/.config/lpm/): same persistence conventions across the project.
 ZGU_LUTRIS_VERSION_CONFIG="${HOME}/.config/lpm/lutris-version"
 
-# Résout la version à utiliser pour CETTE exécution de lpm, dans cet ordre :
-#   1. Variable d'environnement LPM_LUTRIS_VERSION ("flatpak" ou "native") -- override
-#      ponctuel, jamais écrit sur disque, pour un test rapide sans toucher au choix sauvegardé.
-#   2. Fichier de config sauvegardé (ZGU_LUTRIS_VERSION_CONFIG), SEULEMENT s'il désigne une
-#      version encore installée -- sinon il est supprimé ici (silencieusement) plutôt que
-#      laissé en place : un choix "zombie" ne doit jamais ressurgir plus tard si l'autre
-#      version est réinstallée dans un contexte différent, sans que l'utilisateur s'en souvienne.
-#   3. Une seule version installée -> utilisée directement, rien d'affiché, rien de sauvegardé
-#      (c'est le cas de l'immense majorité des utilisateurs : ils ne voient jamais ce mécanisme).
-#   4. Les deux installées, rien de sauvegardé -> avertissement + choix interactif immédiat,
-#      sauvegardé ensuite pour ne plus jamais redemander tant que les deux restent installées.
-#      Un choix annulé (Zenity fermé, ou réponse vide en CLI en dehors du raccourci "2") retombe
-#      sur Flatpak pour CETTE exécution uniquement, sans rien sauvegarder -- pour redemander
-#      normalement au prochain lancement plutôt que de figer un choix jamais confirmé.
+# Resolves the version to use for THIS lpm run, in this order:
+#   1. Environment variable LPM_LUTRIS_VERSION ("flatpak" or "native") -- one-off override, never
+#      written to disk.
+#   2. Saved config file (ZGU_LUTRIS_VERSION_CONFIG), ONLY if it designates a version still installed
+#      -- otherwise it is deleted here (silently) so a "zombie" choice cannot resurface later if the
+#      other version is reinstalled in a different context.
+#   3. Only one version installed -> used directly, nothing displayed, nothing saved.
+#   4. Both installed, nothing saved -> warning + immediate interactive choice, then saved so it is
+#      not asked again while both remain installed. A cancelled choice (Zenity closed, or empty CLI
+#      answer other than the "2" shortcut) falls back to Flatpak for THIS run only, without saving,
+#      so it is asked again next time rather than freezing an unconfirmed choice.
 #
-# $1 = mode d'affichage ("cli" ou "gui", même convention que les appelants).
-# $2 = chemin de la pga.db du paquet natif (chaîne vide si l'appelant ne l'a pas sous la main).
-# $3 = dossier des runners Wine natifs, ou chaîne vide (voir check_native_lutris_installed).
+# $1 = display mode ("cli" or "gui", same convention as the callers).
+# $2 = path of the native package's pga.db (empty string if the caller does not have it).
+# $3 = native Wine runners folder, or empty string (see check_native_lutris_installed).
 #
-# Écrit "flatpak" ou "native" sur stdout. Retourne 1 si aucune des deux n'est installée --
-# ce n'est pas le rôle de cette fonction d'afficher l'erreur "Lutris introuvable", chaque
-# appelant garde son propre message pour ça, inchangé.
+# Writes "flatpak" or "native" on stdout. Returns 1 if neither is installed -- displaying the "Lutris
+# not found" error is not this function's job; each caller keeps its own message.
 zgu_resolve_lutris_version() {
-  local display_mode="$1" package_db="$2" package_runner_dir="$3"
+  # $1 (display mode, "cli" for all callers) is no longer used; kept in first position so callers
+  # need no change.
+  local package_db="$2" package_runner_dir="$3"
 
   local has_flatpak=false has_native=false
   check_flatpak_lutris_installed && has_flatpak=true
@@ -266,10 +243,9 @@ zgu_resolve_lutris_version() {
     echo "native"; return 0
   fi
 
-  # Les deux sont installées et rien n'est sauvegardé : avertissement + choix immédiat.
-  # "display_mode" est systématiquement "cli" désormais (bin/lpm n'a plus aucun point
-  # d'entrée interactif -- menu et double-clic délèguent tous les deux à lpm-gui, qui
-  # appelle toujours ce script avec des cibles explicites) : plus de branche zenity ici.
+  # Both are installed and nothing is saved: warning + immediate choice. "display_mode" is always
+  # "cli" now (bin/lpm has no interactive entry point; the GUI always calls this script with explicit
+  # targets): no zenity branch here.
   local choice="" confirmed=true
   t common.dual_lutris_warning_cli >&2
   local response
@@ -289,23 +265,20 @@ zgu_resolve_lutris_version() {
 }
 
 # zgu_get_wine_binary <runner_dir> <version>
-# Résout le chemin du binaire wine pour la version de runner donnée. DEUX structures de
-# dossier possibles, vérifiées dans le code source de Lutris (lutris/runners/wine.py :
-# get_executable() appelle proton.get_proton_wine_path(version) pour une version Proton,
-# vs get_path_for_version() -- donc "bin/wine" -- pour un vrai build Wine ; confirmé aussi
-# par un mainteneur du projet Proton-GE sur github.com/lutris/lutris/issues/6673, qui
-# décrit explicitement la structure "files/bin/wine" des runners Proton) :
-#   - Un vrai build Wine (ex: "lutris-ge-8.7-x86_64", "wine-11.14-amd64") :
+# Resolves the path of the wine binary for the given runner version. TWO possible folder layouts,
+# checked in the Lutris source (lutris/runners/wine.py: get_executable() calls
+# proton.get_proton_wine_path(version) for a Proton version, vs get_path_for_version() -- i.e.
+# "bin/wine" -- for a real Wine build; also confirmed by a Proton-GE maintainer on
+# github.com/lutris/lutris/issues/6673, describing the "files/bin/wine" layout of Proton runners):
+#   - A real Wine build (e.g. "lutris-ge-8.7-x86_64", "wine-11.14-amd64"):
 #     <runner_dir>/<version>/bin/wine
-#   - Un runner Proton (ex: "GE-Proton11-3", "proton-cachyos-..."), qui embarque une
-#     structure héritée de Steam Play (compatibilitytools.d) :
+#   - A Proton runner (e.g. "GE-Proton11-3", "proton-cachyos-..."), which carries a layout inherited
+#     from Steam Play (compatibilitytools.d):
 #     <runner_dir>/<version>/files/bin/wine
-# Plutôt que deviner lequel des deux s'applique en inspectant le NOM de la version (motif
-# fragile : rien ne garantit qu'un nom de runner Proton contienne littéralement le mot
-# "proton", et l'inverse non plus), on sonde directement le disque : les deux emplacements
-# sont testés dans l'ordre, et le premier binaire réellement exécutable trouvé est utilisé
-# -- reproduit le même résultat que Lutris sans dépendre d'une convention de nommage.
-# Sortie : chemin sur stdout, rien si introuvable/non exécutable (code de retour 1).
+# Rather than guess from the version NAME (fragile: nothing guarantees a Proton runner name contains
+# "proton", or the reverse), the disk is probed directly: both locations are tested in order and the
+# first really executable binary is used -- same result as Lutris without a naming convention.
+# Output: path on stdout, nothing if not found/not executable (return code 1).
 zgu_get_wine_binary() {
   local runner_dir="$1" version="$2" candidate
   [[ -z "${version}" ]] && return 1

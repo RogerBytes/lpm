@@ -1,19 +1,17 @@
 #!/bin/bash
 
-# --- Détection/installation partagées de lsfg-vk ---
+# --- Shared detection/installation of lsfg-vk ---
 #
-# Utilisé à la fois par "lpm lsfg" (zgl-lsfg-manager.sh) et "lpm check"
-# (zgc-dependency-checker.sh). Centralisé ici pour qu'une seule version de cette logique
-# existe : une divergence entre deux copies aurait pu rester invisible jusqu'à ce qu'un
-# utilisateur tombe sur un cas où l'une dit "présent" et l'autre "absent".
+# Used by both "lpm lsfg" (zgl-lsfg-manager.sh) and "lpm check" (zgc-dependency-checker.sh).
+# Centralized so only one version of this logic exists: two copies could disagree ("present" vs
+# "absent") unnoticed.
 #
-# Ce fichier ne fait aucune hypothèse sur le mode d'affichage (CLI/GUI) ni sur les traductions
-# (t()) : chaque appelant reste responsable de ses propres messages/confirmations. Ces
-# fonctions ne font que détecter et exécuter l'installation elle-même.
+# This file makes no assumption about the display mode (CLI/GUI) or translations (t()): each caller
+# is responsible for its own messages/confirmations. These functions only detect and run the install.
 
-# Présence du layer Vulkan lsfg-vk (présence uniquement, pas une confirmation du schéma
-# 2.0+ -- voir l'avertissement en tête de zgl-lsfg-manager.sh pour le détail de cette limite).
-# $1 = "true" si Lutris est en Flatpak, "false" sinon.
+# Presence of the lsfg-vk Vulkan layer (presence only, not a confirmation of the 2.0+ schema -- see
+# the warning at the top of zgl-lsfg-manager.sh for this limit).
+# $1 = "true" if Lutris is Flatpak, "false" otherwise.
 zgu_lsfg_vk_present() {
   local lutris_is_flatpak="$1"
 
@@ -35,22 +33,18 @@ zgu_lsfg_vk_present() {
   return 1
 }
 
-# Le layer VulkanLayer.lsfgvk n'est publié QUE pour des versions de "org.freedesktop.Platform"
-# (23.08/24.08/25.08). Mais Lutris (comme beaucoup d'applis GNOME) tourne sur
-# "org.gnome.Platform/x86_64/<version GNOME, ex: 49>", pas directement sur
-# org.freedesktop.Platform -- et CE runtime GNOME n'expose, via "flatpak info", AUCUNE ligne
-# "Runtime:" permettant de retrouver la version freedesktop sous-jacente (vérifié en
-# conditions réelles : ce champ n'existe tout simplement pas pour un runtime, seulement pour
-# une appli). Pas de mapping GNOME-vers-freedesktop fiable et documenté non plus (change à
-# chaque cycle de sortie) -- deviner serait aussi fragile que le premier essai raté.
+# The VulkanLayer.lsfgvk layer is published ONLY for versions of "org.freedesktop.Platform"
+# (23.08/24.08/25.08). But Lutris (like many GNOME apps) runs on
+# "org.gnome.Platform/x86_64/<GNOME version, e.g. 49>", not directly on org.freedesktop.Platform --
+# and that GNOME runtime exposes NO "Runtime:" line in "flatpak info" to recover the underlying
+# freedesktop version (that field only exists for apps, not runtimes). There is no reliable,
+# documented GNOME-to-freedesktop mapping either (it changes every release cycle).
 #
-# Solution retenue, vérifiée en conditions réelles : réutiliser la version freedesktop d'une
-# extension VulkanLayer DÉJÀ installée sur la machine (ex: org.freedesktop.Platform.
-# VulkanLayer.MangoHud, très répandue) -- la preuve la plus fiable qui soit qu'un layer
-# freedesktop de cette version fonctionne déjà avec ce runtime GNOME/KDE précis, sur cette
-# machine précise, sans avoir à deviner de correspondance théorique. À défaut, repli sur la
-# version la plus récente de org.freedesktop.Platform réellement installée (system ou user) :
-# une base déjà présente sur la machine, jamais une version choisie au hasard.
+# Chosen solution: reuse the freedesktop version of a VulkanLayer extension ALREADY installed on the
+# machine (e.g. org.freedesktop.Platform.VulkanLayer.MangoHud, very common) -- the most reliable proof
+# that a freedesktop layer of that version already works with this GNOME/KDE runtime. Otherwise fall
+# back to the newest org.freedesktop.Platform actually installed (system or user): a base already
+# present on the machine, never a random version.
 zgu_lsfg_resolve_freedesktop_runtime_version() {
   local existing latest
   existing=$(flatpak list --runtime --columns=application,branch 2>/dev/null | awk -F'\t' '$1 ~ /^org\.freedesktop\.Platform\.VulkanLayer\./ {print $2; exit}')
@@ -68,21 +62,31 @@ zgu_lsfg_resolve_freedesktop_runtime_version() {
   return 1
 }
 
-# Installe réellement l'extension Flatpak lsfg-vk pour la version de runtime donnée. Aucune
-# confirmation ici : à l'appelant de demander l'accord avant d'appeler cette fonction (chaque
-# appelant a son propre texte de confirmation CLI/GUI). En cas d'échec, imprime le message
-# d'erreur brut de "flatpak install" sur stdout (jamais stderr, pour rester capturable par
-# l'appelant via "$(...)") et retourne un code non nul.
-# $1 = version de runtime freedesktop (ex: "24.08").
+# Resolves the native install link of lsfg-vk (AUR if Arch/pacman detected, otherwise the generic link
+# from the official docs) -- shared by zgl-lsfg-manager.sh (CLI confirmation of "lpm lsfg <slug...> on"
+# AND the non-interactive GUI command "lsfg install-info") so the detection exists in one place. Prints
+# "<link>\t<label key>" on stdout -- the label KEY, not translated text: each caller does its own
+# "t <key>" with its own zgl-lang-loader.sh (bash) or t() function (GUI Python).
+zgu_lsfg_native_link_info() {
+  if command -v pacman >/dev/null 2>&1; then
+    printf '%s\t%s\n' "https://aur.archlinux.org/packages/lsfg-vk" "lsfg.install_native_arch_label"
+  else
+    printf '%s\t%s\n' "https://lsfg-vk.dev/docs/installation/" "lsfg.install_native_generic_label"
+  fi
+}
+
+# Actually installs the lsfg-vk Flatpak extension for the given runtime version. No confirmation here:
+# the caller must ask for consent before calling (each has its own CLI/GUI confirmation text). On
+# failure, prints the raw "flatpak install" error message on stdout (never stderr, so the caller can
+# capture it via "$(...)") and returns non-zero.
+# $1 = freedesktop runtime version (e.g. "24.08").
 zgu_lsfg_install_flatpak_do() {
   local runtime_version="$1"
 
-  # "flatpak install --user" échoue silencieusement en "No remote refs found" si aucun
-  # dépôt --user (Flathub) n'est configuré à ce niveau -- cas fréquent sur une machine où
-  # Flathub n'a été ajouté qu'en système (--system) au moment de l'install de Lutris, pas
-  # en --user : les deux dépôts sont indépendants dans Flatpak. On s'assure donc que le
-  # dépôt Flathub --user existe (idempotent, "--if-not-exists" ne fait rien s'il est déjà
-  # là) avant de tenter l'install, plutôt que de deviner et d'échouer sans piste.
+  # "flatpak install --user" fails silently with "No remote refs found" if no --user remote (Flathub) is
+  # configured -- common when Flathub was only added system-wide (--system) when Lutris was installed:
+  # the two remotes are independent in Flatpak. So ensure the --user Flathub remote exists (idempotent,
+  # "--if-not-exists" does nothing if already there) before installing.
   flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo >/dev/null 2>&1
 
   local install_err

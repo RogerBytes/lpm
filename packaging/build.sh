@@ -1,25 +1,23 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- build.sh : construit les paquets lpm (.deb / .rpm / Arch) chacun dans un conteneur
-# Docker dédié à sa distribution cible -- reproductible, rien à installer sur l'hôte à part
-# Docker lui-même. Les paquets finis atterrissent dans packaging/dist/.
+# --- build.sh: builds the lpm packages (.deb / .rpm / Arch), each in a Docker container
+# dedicated to its target distribution -- reproducible, only Docker needed on the host.
+# Finished packages land in packaging/dist/.
 #
-# Usage : ./build.sh [deb|rpm|arch|all]   (défaut : all)
+# Usage: ./build.sh [deb|rpm|arch|all]   (default: all)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${SCRIPT_DIR}/dist"
 
 mkdir -p "${DIST_DIR}"
-chmod 777 "${DIST_DIR}"   # écrit par root (deb/rpm) ET par l'utilisateur non-root du conteneur Arch
+chmod 777 "${DIST_DIR}"   # written by root (deb/rpm) AND by the non-root user of the Arch container
 
-# UID/GID de l'utilisateur hôte : les paquets sont construits en root dans les conteneurs
-# (nécessaire pour dpkg-buildpackage/rpmbuild, et pour installer les dépendances pacman côté
-# Arch), donc sans ce chown de rattrapage, les fichiers copiés dans /dist appartiennent à
-# root:root côté hôte -- lisibles mais pas modifiables/supprimables sans sudo par l'utilisateur
-# normal (le "cadenas" affiché par les gestionnaires de fichiers). Le chown se fait DEPUIS le
-# conteneur (juste après chaque cp), où root a le droit de changer le propriétaire.
+# Host user's UID/GID: packages are built as root in the containers (needed by
+# dpkg-buildpackage/rpmbuild and for pacman dependencies on Arch), so without a chown the
+# files copied to /dist would be root:root on the host (not modifiable without sudo). The
+# chown runs FROM the container, right after each cp, where root may change ownership.
 HOST_UID="$(id -u)"
 HOST_GID="$(id -g)"
 
@@ -38,9 +36,8 @@ build_deb() {
       rm -rf /build && mkdir -p /build && cp -a /src/. /build/
       cd /build
       cp -a packaging/debian debian
-      # Numéro de version injecté depuis bin/lpm (source unique) -- le "-1" (révision du
-      # paquetage, distincte de la version du logiciel) reste géré à la main dans le
-      # changelog d'\''origine.
+      # Version injected from bin/lpm (single source); the "-1" package revision is
+      # maintained by hand in the original changelog.
       sed -i "s/^lpm (\([^)]*\))/lpm (${VERSION}-1)/" debian/changelog
       dpkg-buildpackage -us -uc -b
       cp ../lpm_*.deb /dist/
@@ -60,8 +57,8 @@ build_rpm() {
       set -e
       rpmdev-setuptree
       tar --transform "s,^,lpm-${VERSION}/," -czf ~/rpmbuild/SOURCES/lpm-${VERSION}.tar.gz -C /src .
-      # Numéro de version injecté depuis bin/lpm (source unique), à la place du "Version:"
-      # écrit en dur dans le .spec d'\''origine.
+      # Version injected from bin/lpm (single source), replacing the hardcoded "Version:"
+      # in the original .spec.
       sed "s/^Version:.*/Version:        ${VERSION}/" /src/packaging/rpm/lpm.spec > ~/rpmbuild/SPECS/lpm.spec
       rpmbuild -bb ~/rpmbuild/SPECS/lpm.spec
       cp ~/rpmbuild/RPMS/noarch/*.rpm /dist/
@@ -75,11 +72,10 @@ build_arch() {
   echo "--- Préparation de l'image (téléchargement + outils, peut prendre plusieurs minutes la 1ère fois) ---"
   docker build -t lpm-builder-arch -f "${SCRIPT_DIR}/docker/Dockerfile.arch" "${SCRIPT_DIR}/docker"
   echo "--- Construction du paquet ---"
-  # makepkg refuse de tourner en root (exigence d'Arch) -- mais alors rien ne peut
-  # installer les dépendances manquantes avec pacman. On tourne donc en root par défaut
-  # (installation des dépendances, lues directement dans le PKGBUILD -- source unique de
-  # vérité, jamais dupliquées ici), puis on bascule sur l'utilisateur non privilégié
-  # "builder" seulement pour la compilation elle-même.
+  # makepkg refuses to run as root (Arch requirement), but then nothing could install missing
+  # dependencies with pacman. So run as root by default (installing dependencies read straight
+  # from the PKGBUILD, the single source of truth), then switch to the unprivileged "builder"
+  # user only for the build itself.
   docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
     -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-arch \
     bash -c '
@@ -89,8 +85,8 @@ build_arch() {
 
       mkdir -p /build/pkg && cd /build/pkg
       tar --transform "s,^,lpm-${VERSION}/," -czf "lpm-${VERSION}.tar.gz" -C /src .
-      # Numéro de version injecté depuis bin/lpm (source unique), à la place du "pkgver="
-      # écrit en dur dans le PKGBUILD d'\''origine.
+      # Version injected from bin/lpm (single source), replacing the hardcoded "pkgver="
+      # in the original PKGBUILD.
       sed "s/^pkgver=.*/pkgver=${VERSION}/" /src/packaging/arch/PKGBUILD > PKGBUILD
       chown -R builder:builder /build
 

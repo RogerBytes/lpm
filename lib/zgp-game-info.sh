@@ -2,16 +2,15 @@
 
 # --- lpm info <slug> ---
 #
-# Affiche les métadonnées connues d'un jeu Wine installé, en croisant la base Lutris
-# (pga.db) et le fichier de configuration YAML du jeu (games/<configpath>.yml) : nom,
-# slug, dossier du wineprefix, exécutable, version du runner Wine/Proton utilisée, date
-# d'installation, et statut d'isolement (préfixe dédié, ou store partagé + store visé
-# par "lpm isolate" le cas échéant).
+# Shows the known metadata of an installed Wine game, combining the Lutris DB (pga.db) and
+# the game's YAML config file (games/<configpath>.yml): name, slug, wineprefix folder,
+# executable, Wine/Proton runner version used, install date, and isolation status (dedicated
+# prefix, or shared store + the store targeted by "lpm isolate" if any).
 #
-# Un seul slug à la fois (contrairement à install/uninstall/pack qui acceptent une
-# liste) : c'est une commande de consultation détaillée, pas d'action en lot.
+# One slug at a time (unlike install/uninstall/pack, which accept a list): this is a
+# detailed lookup command, not a batch action.
 
-# --- Récupération des arguments du routeur lpm ---
+# --- Arguments from the lpm router ---
 slug="${1:-}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,14 +32,14 @@ lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
 lutris_package_config_dir="${HOME}/.config/lutris/games"
 
-# 1. Vérification de sqlite3
+# 1. sqlite3 check
 if ! command -v sqlite3 >/dev/null 2>&1; then
   zgu_cli_error "$(t info.sqlite_missing)"
   exit 1
 fi
 
-# 2. Détection Flatpak vs Paquet natif (fonction fournie par zgu-lutris-utils.sh -- résout
-# aussi le cas des deux installées en même temps)
+# 2. Flatpak vs native package detection (function from zgu-lutris-utils.sh; also handles
+# both being installed)
 lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
 case "${lutris_version}" in
   flatpak)
@@ -62,9 +61,8 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# 3. Lecture de la ligne du jeu -- "runner='wine'" comme partout ailleurs dans lpm : un
-# slug existant mais avec un autre runner (piste ajoutée manuellement à la base par
-# l'utilisateur, hors lpm) n'est pas un jeu que lpm connaît.
+# 3. Read the game row -- runner='wine' as everywhere else in lpm: an existing slug with
+# another runner (entry added manually to the DB, outside lpm) is not a game lpm knows.
 safe_slug="${slug//\'/\'\'}"
 row=$(sqlite3 "${lutris_db}" "SELECT COALESCE(name,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') || char(31) || COALESCE(installed_at,'') FROM games WHERE runner='wine' AND slug='${safe_slug}' LIMIT 1;" 2>/dev/null)
 
@@ -75,21 +73,21 @@ fi
 
 IFS=$'\x1f' read -r game_name game_dir game_exe game_configpath game_installed_at <<< "${row}"
 
-# 4. Résolution en chemin réel du wineprefix (même prudence que le reste de lpm : la
-# valeur vient de la base Lutris, potentiellement éditée à la main) -- purement pour
-# affichage ici, jamais utilisée pour écrire ou supprimer quoi que ce soit.
+# 4. Resolve to the real wineprefix path (same caution as the rest of lpm: the value comes
+# from the Lutris DB, possibly hand-edited) -- for display only, never used to write or
+# delete anything.
 real_dir=$(realpath -e "${game_dir}" 2>/dev/null)
 [[ -z "${real_dir}" ]] && real_dir="${game_dir}"
 
-# 5. Version du runner Wine/Proton effectivement utilisée par CE jeu (clé wine.version
-# du YAML de config, même lecture que zgc-dependency-checker.sh) -- distincte du runner
-# par défaut global (zgu_get_default_runner) : un jeu peut avoir été installé avec un
-# runner spécifique différent du défaut actuel.
+# 5. Wine/Proton runner version actually used by THIS game (wine.version key of the YAML
+# config, read as in zgc-dependency-checker.sh) -- distinct from the global default runner
+# (zgu_get_default_runner): a game may have been installed with a specific runner different
+# from the current default.
 runner_version=""
 if [[ -n "${game_configpath}" ]]; then
-  # configpath vient de la base Lutris : même filtrage anti-traversée que
-  # zgp-game-isolator.sh (pas de "/", sinon on refuse de construire le chemin) -- ici en
-  # lecture seule, mais la prudence reste la même qu'ailleurs dans lpm.
+  # configpath comes from the Lutris DB: same path-traversal filter as zgp-game-isolator.sh
+  # (no "/", otherwise refuse to build the path). Read-only here, but same caution as
+  # elsewhere in lpm.
   if [[ "${game_configpath}" != *"/"* ]]; then
     yml_path="${lutris_config_dir}/${game_configpath}.yml"
     if [[ -f "${yml_path}" ]] && command -v python3 >/dev/null 2>&1; then
@@ -108,9 +106,9 @@ except Exception:
 fi
 [[ -z "${runner_version}" ]] && runner_version="$(t info.unknown)"
 
-# 6. Date d'installation (installed_at, timestamp Unix en secondes -- voir l'INSERT dans
-# zgp-game-installer.sh/zgp-game-isolator.sh) -- repli sur la valeur brute si "date" ne
-# sait pas la formater (locale/format inattendu) plutôt que d'afficher un champ vide.
+# 6. Install date (installed_at, Unix timestamp in seconds -- see the INSERT in
+# zgp-game-installer.sh/zgp-game-isolator.sh) -- falls back to the raw value if "date"
+# cannot format it (unexpected locale/format) rather than showing an empty field.
 installed_display="${game_installed_at}"
 if [[ "${game_installed_at}" =~ ^[0-9]+$ ]]; then
   formatted=$(date -d "@${game_installed_at}" +%F 2>/dev/null)
@@ -118,10 +116,10 @@ if [[ "${game_installed_at}" =~ ^[0-9]+$ ]]; then
 fi
 [[ -z "${installed_display}" ]] && installed_display="$(t info.unknown)"
 
-# 7. Statut d'isolement : préfixe dédié (un-jeu-un-préfixe, le cas normal), ou préfixe
-# partagé -- auquel cas on précise le store visé si reconnu (même détection que "lpm
-# isolate"/"lpm list-isolable", voir zgu_detect_isolation_store) pour ne jamais afficher
-# une info qui divergerait de ce que ces commandes feraient réellement.
+# 7. Isolation status: dedicated prefix (one-game-one-prefix, the normal case), or shared
+# prefix -- in which case the targeted store is given if recognised (same detection as "lpm
+# isolate"/"lpm list-isolable", see zgu_detect_isolation_store), so the displayed info never
+# diverges from what those commands would actually do.
 isolation_status="$(t info.isolation_dedicated)"
 if [[ -n "${real_dir}" ]]; then
   shared_count=$(sqlite3 "${lutris_db}" "SELECT COUNT(*) FROM games WHERE runner='wine' AND directory='${real_dir//\'/\'\'}';" 2>/dev/null)
@@ -136,7 +134,7 @@ if [[ -n "${real_dir}" ]]; then
   fi
 fi
 
-# 8. Affichage
+# 8. Display
 t info.field_name "${game_name}"
 t info.field_slug "${slug}"
 t info.field_directory "${real_dir}"

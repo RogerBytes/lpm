@@ -1,15 +1,14 @@
-# --- Complétion bash pour packaging/build.sh ---
+# --- bash completion for packaging/build.sh ---
 #
-# build.sh est un script de projet, lancé par chemin relatif ("./build.sh"), pas une
-# commande installée sur le système : contrairement à completions/lpm.bash (complétion de
-# la commande "lpm", installée par install.sh/les paquets), ce fichier ne s'installe nulle
-# part -- il faut le charger explicitement dans le shell courant.
+# build.sh is a project script run by relative path ("./build.sh"), not an installed command:
+# unlike completions/lpm.bash (completion for "lpm", installed by install.sh/packages), this
+# file is not installed anywhere and must be sourced explicitly.
 #
-# Usage ponctuel (le temps de la session de terminal) :
+# One-off usage (current terminal session):
 #   source packaging/build-completion.bash
 #
-# Usage permanent (à chaque nouveau terminal), ajouter dans ~/.bashrc :
-#   source "/chemin/complet/vers/Ludis Prefix Manager/packaging/build-completion.bash"
+# Permanent usage (every new terminal), add to ~/.bashrc:
+#   source "/full/path/to/Ludis Prefix Manager/packaging/build-completion.bash"
 
 _lpm_build_sh_complete() {
   local cur

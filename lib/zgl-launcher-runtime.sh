@@ -1,38 +1,33 @@
 #!/bin/bash
 
-# --- lpm launcher : exécuté à chaque lancement du jeu, via system.prelaunch_command ---
+# --- lpm launcher: runs at every game launch, via system.prelaunch_command ---
 #
-# Appelé UNIQUEMENT par le petit script relais $GAMEDIR/scripts/lpm-launcher.sh (voir
-# lib/zgl-launcher-manager.sh, "lpm launcher ... on"), jamais directement par l'utilisateur.
+# Called ONLY by the small relay script $GAMEDIR/scripts/lpm-launcher.sh (see
+# lib/zgl-launcher-manager.sh, "lpm launcher ... on"), never directly by the user.
 #
-# Usage : zgl-launcher-runtime.sh <gamedir>
+# Usage: zgl-launcher-runtime.sh <gamedir>
 #
-# Rôle, dans l'ordre (voir l'échange complet qui a mené à cette conception) :
-#   1. Lit lpm-launcher.yml (SEUL chemin en dur : celui-ci, passé en argument).
-#   2. S'il y a plusieurs entrées dans le YAML : affiche le picker Zenity. Une seule entrée :
-#      aucun menu, lancement direct.
-#   3. Réécrit lpm-launch.bat (vidé puis réécrit) avec l'entrée choisie.
+# Steps, in order:
+#   1. Reads lpm-launcher.yml (the only hardcoded path: passed as argument).
+#   2. If the YAML has several entries: shows the picker. A single entry: no menu, direct
+#      launch.
+#   3. Rewrites lpm-launch.bat (emptied then rewritten) with the chosen entry.
 #
-# CE QUE CE SCRIPT NE FAIT PLUS (voir lib/zgl-launcher-orchestrator.sh) : le fond noir/
-# splash, l'indicateur "chargement", le verrou manette et la détection de la fenêtre du jeu
-# sont désormais TOUJOURS gérés par l'orchestrateur, point d'entrée unique de tous les
-# raccourcis .desktop créés par lpm -- déjà en cours d'exécution (fond déjà affiché) par le
-# temps que CE script démarre, dans le cas normal. Ce script se contente de retrouver le
-# fichier de contrôle déjà ouvert (chemin fixe, dérivé de "gamedir" -- IDENTIQUE au calcul
-# fait par l'orchestrateur, les deux scripts partent de la même résolution "directory" de la
-# base Lutris, voir zgp-game-shortcutter.sh / zgl-launcher-manager.sh) pour y écrire
-# IND_HIDE/IND_SHOW autour du picker -- jamais pour le créer, jamais pour le fermer. Si le
-# jeu a plusieurs entrées, ce script remplace aussi le titre affiché (ligne 3 du fichier de
-# contrôle, posé au nom du jeu par l'orchestrateur) par le libellé de l'entrée choisie, une
-# fois le picker résolu -- un jeu à une seule entrée garde le nom du jeu tel quel. S'il
-# n'existe pas (jeu lancé autrement que via le raccourci lpm, ou écran de chargement
-# désactivé pour ce jeu via ".lpm-no-loadingscreen"), le picker fonctionne quand même, juste
-# sans fond derrière -- dégradation gracieuse, jamais une erreur.
+# Background/splash, "loading" indicator, gamepad lock and game window detection are handled
+# by the orchestrator (lib/zgl-launcher-orchestrator.sh), the single entry point of all
+# lpm .desktop shortcuts; normally it is already running when this script starts. This
+# script only finds the already-open control file (fixed path derived from "gamedir",
+# identical to the orchestrator's computation) to write IND_HIDE/IND_SHOW around the picker;
+# it never creates nor closes it. With several entries, it also replaces the displayed title
+# (line 3 of the control file, set to the game name by the orchestrator) with the chosen
+# entry label. If the control file does not exist (game not started via the lpm shortcut, or
+# loading screen disabled with ".lpm-no-loadingscreen"), the picker still works, without a
+# background.
 #
-# Ce script REND TOUJOURS LA MAIN (exit 0) même en cas de souci (YAML absent, etc.) :
-# system.prelaunch_command ne doit jamais bloquer indéfiniment le lancement du jeu -- une
-# erreur est journalisée et, si possible, signalée par une boîte Zenity, mais le jeu doit
-# pouvoir se lancer quand même (avec le .bat existant, potentiellement périmé).
+# This script ALWAYS returns control (exit 0), even on error (missing YAML, etc.):
+# system.prelaunch_command must never block the game launch indefinitely. Errors are logged
+# and, if possible, shown in a Zenity box; the game then launches with the existing .bat
+# (possibly stale).
 
 set -u
 
@@ -45,15 +40,11 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-gamepad-nav-utils.sh
-source "${script_dir}/zgu-gamepad-nav-utils.sh"
 
 bail() {
   local msg="$1"
-  # Pas de notification graphique ici (ancien "zenity --error" retiré) : ce cas est
-  # anormal mais déjà entièrement journalisé, et ce script ne doit JAMAIS bloquer le
-  # lancement du jeu (voir en-tête de fichier) -- une fenêtre d'erreur en plus n'aiderait
-  # pas à diagnostiquer après coup, le log ("lpm log") le fait déjà.
+  # No graphical notification here: this case is abnormal but already fully logged, and this
+  # script must NEVER block the game launch (see file header).
   zgu_log "launcher-runtime" "ERREUR" "gamedir=${gamedir} raison=${msg}"
   exit 0
 }
@@ -64,8 +55,8 @@ bail() {
 yaml_path="${gamedir}/lpm-launcher.yml"
 [[ -f "${yaml_path}" ]] || bail "yaml_introuvable"
 
-# --- 1. Lecture du YAML (titre, prompt, entrées actives -- les entrées commentées avec
-# "#" sont naturellement ignorées par yaml.safe_load, aucun traitement spécial requis) ---
+# --- 1. Read the YAML (title, prompt, active entries; entries commented with "#" are
+# ignored by yaml.safe_load) ---
 parsed=$(YML_PATH="${yaml_path}" python3 -c '
 import os, sys, yaml
 
@@ -95,17 +86,20 @@ for e in entries:
     label = str(e.get("label") or "").replace("\x1f", " ").replace("\n", " ")
     workdir = str(e.get("workdir") or "").replace("\x1f", " ").replace("\n", " ")
     exe = str(e.get("exe") or "").replace("\x1f", " ").replace("\n", " ")
+    # "args" (launch arguments, appended after the executable in lpm-launch.bat): optional,
+    # empty string by default, absent from older lpm-launcher.yml files.
+    args = str(e.get("args") or "").replace("\x1f", " ").replace("\n", " ")
     if not label or not workdir or not exe:
         continue
-    print("ENTRY\x1f" + label + "\x1f" + workdir + "\x1f" + exe)
+    print("ENTRY\x1f" + label + "\x1f" + workdir + "\x1f" + exe + "\x1f" + args)
 ' 2>/dev/null)
 
 [[ -z "${parsed}" ]] && bail "yaml_invalide_ou_vide"
 
 title="" prompt="" bat_path_yaml=""
-entry_labels=() entry_workdirs=() entry_exes=()
+entry_labels=() entry_workdirs=() entry_exes=() entry_args=()
 
-while IFS=$'\x1f' read -r kind a b c; do
+while IFS=$'\x1f' read -r kind a b c d; do
   case "${kind}" in
     TITLE) title="${a}" ;;
     PROMPT) prompt="${a}" ;;
@@ -114,28 +108,27 @@ while IFS=$'\x1f' read -r kind a b c; do
       entry_labels+=("${a}")
       entry_workdirs+=("${b}")
       entry_exes+=("${c}")
+      entry_args+=("${d}")
       ;;
   esac
 done <<< "${parsed}"
 
 [[ ${#entry_labels[@]} -eq 0 ]] && bail "aucune_entree_valide"
 
-# Repli pour un lpm-launcher.yml généré avant l'ajout de la clé "bat_path" (compatibilité
-# ascendante) : ancien emplacement, à la racine de $gamedir.
+# Fallback for a lpm-launcher.yml generated before the "bat_path" key existed: old
+# location, at the root of $gamedir.
 bat_path="${bat_path_yaml:-${gamedir}/lpm-launch.bat}"
 
-# --- Fichier de contrôle de l'orchestrateur (déjà ouvert, ou pas -- voir l'en-tête de
-# fichier). Même dérivation EXACTE que lib/zgl-launcher-orchestrator.sh : sha256sum de
-# gamedir, chemin fixe, pas de mktemp -- pour retrouver le même fichier sans coordination
-# explicite entre les deux scripts. ---
+# --- Orchestrator control file (may or may not be open; see file header). Same EXACT
+# derivation as lib/zgl-launcher-orchestrator.sh: sha256sum of gamedir, fixed path, no
+# mktemp, so both scripts find the same file without explicit coordination. ---
 ctrl_key=$(printf '%s' "${gamedir}" | sha256sum | cut -c1-24)
 control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
-# Relit les lignes 1 (fond) et 3 (titre) telles quelles depuis le fichier de contrôle --
-# utilisé par set_indicator/set_title ci-dessous pour ne modifier QUE la ligne qui les
-# concerne, sans jamais effacer l'autre (l'orchestrateur est seul à écrire la ligne 1, ce
-# script est seul à écrire les lignes 2 et 3, mais les trois doivent survivre à chaque
-# réécriture du fichier, qui remplace tout son contenu).
+# Re-reads lines 1 (background) and 3 (title) as-is from the control file; used by
+# set_indicator/set_title below to modify ONLY their own line. The orchestrator alone writes
+# line 1, this script lines 2 and 3, but all three must survive each rewrite (which replaces
+# the whole file).
 read_ctrl_lines() {
   local mapfile_lines=()
   mapfile -t mapfile_lines < "${control_file}" 2>/dev/null
@@ -145,9 +138,8 @@ read_ctrl_lines() {
 }
 
 set_indicator() {
-  # Best-effort : le fichier de contrôle peut ne pas exister (jeu lancé autrement que via
-  # le raccourci lpm, ou écran de chargement désactivé pour ce jeu) -- dans ce cas, on ne
-  # touche à rien, le picker s'affiche quand même, juste sans fond derrière.
+  # Best-effort: the control file may not exist (game not started via the lpm shortcut, or
+  # loading screen disabled); then do nothing, the picker still shows without a background.
   [[ -f "${control_file}" ]] || return 0
   local ctrl_bg_line ctrl_title_line
   read_ctrl_lines
@@ -159,8 +151,7 @@ set_indicator() {
 }
 
 set_title() {
-  # Même principe : remplace uniquement la ligne 3 (titre), préserve le fond et l'état de
-  # l'indicateur tels qu'ils sont au moment de l'appel.
+  # Same principle: replaces only line 3 (title), preserving background and indicator state.
   [[ -f "${control_file}" ]] || return 0
   local ctrl_bg_line ctrl_title_line ctrl_indicator_line
   read_ctrl_lines
@@ -173,22 +164,30 @@ set_title() {
   } > "${control_file}" 2>/dev/null
 }
 
-# --- 2. Picker (seulement si plusieurs entrées) ---
+# --- 2. Picker (only if several entries) ---
 chosen_workdir="" chosen_exe=""
 
+# Writes an lpm-launch.bat that does NOTHING (just "@echo off"); used only when the picker
+# is cancelled ("cancel" must mean cancel, not relaunch the last chosen episode). Lutris
+# always runs game.exe after a prelaunch_command regardless of its exit code (prelaunch_wait
+# only waits for the script to end; see the "prelaunch_wait" comment in
+# zgl-launcher-manager.sh), so launching something cannot be prevented; it can only do
+# nothing.
+write_noop_bat() {
+  mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
+  printf '@echo off\r\n' > "${bat_path}" 2>/dev/null
+}
+
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
-  # Choix déjà fait par l'orchestrateur (cas normal, lancement via le raccourci lpm) --
-  # voir zgl-launcher-orchestrator.sh : c'est LUI qui affiche désormais le picker, sur la
-  # machine hôte, AVANT même de lancer Lutris -- jamais ce script-ci, qui tourne (pour un
-  # Lutris Flatpak) à l'intérieur de son bac à sable, où ni la manette ni même la souris
-  # n'atteignaient fiablement Zenity malgré plusieurs contournements successifs (voir
-  # l'échange qui a mené à ce choix).
+  # Choice already made by the orchestrator (normal case, launch via the lpm shortcut; see
+  # zgl-launcher-orchestrator.sh): it shows the picker on the host BEFORE launching Lutris, not
+  # this script, which runs inside the sandbox with Flatpak Lutris where neither gamepad nor
+  # mouse reliably reached Zenity.
   #
-  # PAS sous /tmp (confirmé réel : le bac à sable Flatpak de Lutris a son PROPRE /tmp,
-  # totalement invisible depuis l'hôte et réciproquement -- ni directement, ni via
-  # "/run/host/tmp", qui n'existe pas du tout, contrairement à "/run/host/usr". Le
-  # fichier de choix doit donc vivre dans "${gamedir}", qui LUI est forcément visible des
-  # deux côtés : Lutris a besoin d'y lire/écrire pour lancer le jeu, avec ou sans Flatpak.
+  # NOT under /tmp: the Flatpak Lutris sandbox has its OWN /tmp, invisible from the host and
+  # vice versa (and "/run/host/tmp" does not exist, unlike "/run/host/usr"). The choice file
+  # must live in "${gamedir}", visible from both sides: Lutris must read/write there to launch
+  # the game, with or without Flatpak.
   choice_file="${gamedir}/.lpm-launcher-choice"
 
   if [[ -f "${choice_file}" ]]; then
@@ -206,35 +205,33 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
     fi
 
     if [[ "${chosen_idx}" -eq -1 ]]; then
-      # Picker annulé côté orchestrateur, ou libellé introuvable (YAML modifié entre les
-      # deux) : même repli que ci-dessous.
+      # Picker cancelled on the orchestrator side, or label not found (YAML modified in between):
+      # same fallback as below (see write_noop_bat above).
       zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
-      if [[ -f "${bat_path}" ]]; then
-        exit 0
-      fi
-      chosen_idx=0
+      write_noop_bat
+      exit 0
     fi
   else
-    # --- Repli : l'orchestrateur n'a pas tourné (raccourci lpm contourné, jeu lancé
-    # autrement) -- ce script affiche son propre picker, comme avant l'introduction du
-    # fichier de choix, en mode dégradé (manette/focus best-effort, pas garantis fiables
-    # dans un Lutris Flatpak). Même picker maison que l'orchestrateur (zgu-launcher-
-    # picker.py, GTK3, PAS Zenity -- voir zgl-launcher-orchestrator.sh pour le détail de ce
-    # choix) : dernier appel à zenity de tout le flux lancement retiré, pour rester cohérent
-    # même dans ce cas dégradé. Le picker gère lui-même son focus (set_keep_above +
-    # grab_focus, voir zgu-launcher-picker.py) : plus besoin du va-et-vient xdotool de
-    # zgu-focus-utils.sh ici (celui-ci ne surveillait de toute façon qu'une fenêtre
-    # Zenity, jamais une fenêtre GTK maison). ---
+    # --- Fallback: the orchestrator did not run (lpm shortcut bypassed, game launched another
+    # way); this script shows its own picker (zgu-launcher-picker.py, GTK4, NOT Zenity; see
+    # zgl-launcher-orchestrator.sh). Unlike the orchestrator picker (embedded in its single
+    # window, see zgu-launcher-screen.py), this one is a normal DECORATED window since there is
+    # no background in this case. The picker reads the gamepad itself via SDL2 and manages its
+    # own keyboard focus (grab_focus), so no separate gamepad bridge is started/stopped here. ---
     set_indicator "IND_HIDE"
-    zgu_start_gamepad_nav
 
-    selection=$(python3 "${script_dir}/zgu-launcher-picker.py" \
+    # "env -u LD_LIBRARY_PATH" -- REQUIRED: this script runs at actual game launch
+    # (prelaunch_command), with the LD_LIBRARY_PATH prepared by Lutris for Wine (Steam Ubuntu
+    # 18.04 runtime, old frozen libraries). With it, GTK4 loads the system libgtk-4.so.1, which
+    # depends on a GStreamer symbol missing from that runtime's bundled version, and crashes
+    # silently (error hidden by the "2>/dev/null" below). The picker is a native GTK4 window
+    # unrelated to Wine/game libraries, so the variable is removed before launching it.
+    selection=$(env -u LD_LIBRARY_PATH python3 "${script_dir}/zgu-launcher-picker.py" \
       "${title}" "${prompt}" \
       "$(t launcher.picker_validate_button)" "$(t launcher.picker_cancel_button)" \
       "${entry_labels[@]}" 2>/dev/null)
     picker_rc=$?
 
-    zgu_stop_gamepad_nav 2>/dev/null
     set_indicator "IND_SHOW"
 
     chosen_idx=-1
@@ -248,16 +245,12 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
     fi
 
     if [[ "${chosen_idx}" -eq -1 ]]; then
-      # Picker annulé (fenêtre fermée sans choix) : par sécurité, on NE TOUCHE PAS à
-      # lpm-launch.bat -- s'il existe déjà (lancement précédent), le jeu relance le même
-      # épisode que la dernière fois plutôt que de rester avec un .bat vide ou incohérent.
-      # S'il n'existe pas encore (tout premier lancement jamais validé), on retombe sur la
-      # première entrée du YAML plutôt que de ne rien lancer du tout.
+      # Picker cancelled (window closed without choice, "Cancel" button): writes a .bat that does
+      # nothing instead of relaunching the last chosen episode (see write_noop_bat above). Lutris
+      # will still run this .bat (unavoidable here), but it does nothing.
       zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
-      if [[ -f "${bat_path}" ]]; then
-        exit 0
-      fi
-      chosen_idx=0
+      write_noop_bat
+      exit 0
     fi
   fi
 else
@@ -266,26 +259,30 @@ fi
 
 chosen_workdir="${entry_workdirs[${chosen_idx}]}"
 chosen_exe="${entry_exes[${chosen_idx}]}"
+chosen_args="${entry_args[${chosen_idx}]:-}"
 
-# Titre affiché sur l'écran de chargement (voir zgu-launcher-blackscreen.py) : remplacé par
-# le libellé de l'entrée choisie SEULEMENT si le jeu a plusieurs entrées LPM Launcher
-# actives -- un jeu "normal" (une seule entrée, jamais de picker) garde le nom du jeu déjà
-# posé par l'orchestrateur, plus pertinent ici qu'un libellé générique ("Lancement"/"Launch").
+# Title shown on the loading screen (see zgu-launcher-screen.py): replaced by the chosen
+# entry label ONLY if the game has several active LPM Launcher entries; a "normal" game
+# (single entry, no picker) keeps the game name set by the orchestrator.
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
   set_title "${entry_labels[${chosen_idx}]}"
 fi
 
-# --- 3. Écriture de lpm-launch.bat (vidé puis réécrit, voir modèle validé par
-# l'utilisateur -- start "" avec titre vide, pas d'appel direct, pour gérer proprement les
-# chemins avec espaces et rendre la main correctement à cmd). Écrit dans "${bat_path}"
-# (résolu plus haut depuis le YAML, avec repli) -- CE chemin doit être à l'intérieur de
-# drive_c du préfixe Wine pour que Lutris/cmd.exe puisse l'exécuter (voir
-# zgl-launcher-manager.sh pour le détail de ce choix). ---
+# --- 3. Write lpm-launch.bat (emptied then rewritten; "start" with an empty title, no direct
+# call, to handle paths with spaces and return control to cmd properly). Written to
+# "${bat_path}" (resolved above from the YAML, with fallback); this path MUST be inside
+# the Wine prefix drive_c so Lutris/cmd.exe can run it (see zgl-launcher-manager.sh). ---
 mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
 {
   printf '@echo off\r\n'
   printf 'cd /d "%s"\r\n' "${chosen_workdir}"
-  printf 'start "" "%s"\r\n' "${chosen_exe}"
+  if [[ -n "${chosen_args}" ]]; then
+    # Pasted as-is after the executable, never reformatted/re-escaped: "args" is free text typed
+    # by the user (see zgl-launcher-entries.sh), like Lutris's own "Arguments" field.
+    printf 'start "" "%s" %s\r\n' "${chosen_exe}" "${chosen_args}"
+  else
+    printf 'start "" "%s"\r\n' "${chosen_exe}"
+  fi
 } > "${bat_path}" 2>/dev/null || bail "ecriture_bat_echouee"
 
 zgu_log "launcher-runtime" "OK" "gamedir=${gamedir} entree=${entry_labels[${chosen_idx}]}"

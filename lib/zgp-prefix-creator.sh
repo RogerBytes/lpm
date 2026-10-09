@@ -8,31 +8,20 @@ source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
-# --- lpm create-prefix : créer un ou plusieurs wineprefixes vierges enregistrés dans
-# Lutris, sans passer par l'assistant d'installation (pas de script, pas d'exécutable
-# à lancer) ---
+# --- lpm create-prefix: create one or more blank wineprefixes registered in Lutris, without the
+# install wizard (no script, no executable to run) ---
 #
-# Reproduit directement le mécanisme interne que Lutris utilise pour initialiser un
-# prefix (vérifié dans son code source, lutris/runners/commands/wine.py::create_prefix) :
-#   - runner Wine classique : lance le "wineboot" du runner choisi avec
-#     WINEARCH/WINEPREFIX/WINEDLLOVERRIDES, puis attend l'apparition de
-#     user.reg/userdef.reg/system.reg (preuve que le prefix est initialisé). Testé
-#     manuellement en conditions réelles (sans $DISPLAY) : fonctionne en ~13s.
-#   - runner Proton : Lutris ne lance pas wineboot pour un Proton, il shell-out vers
-#     "umu-run createprefix" (variables WINEPREFIX/PROTONPATH/GAMEID). Testé
-#     manuellement avec un vrai umu-run 1.4.4 : confirme que "createprefix" est un
-#     mot-clé supporté et que umu-run valide lui-même PROTONPATH en y cherchant
-#     toolmanifest.vdf -- exactement le même signal utilisé ici pour distinguer un
-#     runner Wine classique (bin/wine présent) d'un Proton (toolmanifest.vdf présent,
-#     pas de bin/ à la racine).
+# Directly reproduces the internal mechanism Lutris uses to initialize a prefix (checked in its
+# source, lutris/runners/commands/wine.py::create_prefix):
+#   - Classic Wine runner: runs the chosen runner's "wineboot" with WINEARCH/WINEPREFIX/WINEDLLOVERRIDES, then waits for user.reg/userdef.reg/system.reg to appear (proof the prefix is initialized). Tested in real conditions (no $DISPLAY): takes ~13s.
+#   - Proton runner: Lutris does not run wineboot for Proton, it shells out to "umu-run createprefix" (variables WINEPREFIX/PROTONPATH/GAMEID). Tested with a real umu-run 1.4.4: "createprefix" is a supported keyword and umu-run validates PROTONPATH itself by looking for toolmanifest.vdf, the same signal used here to tell a classic Wine runner (bin/wine present) from Proton (toolmanifest.vdf present, no bin/ at the root).
 #
-# $1 = mode (toujours "cli" : bin/lpm n'a plus aucun point d'entrée interactif -- conservé
-#      en position pour rester cohérent avec les autres scripts de lib/)
-# $2 = confirm_flag ("yes" si -y)
-# Reste des arguments = cibles CLI ("Nom affiché" ou "Nom affiché|slug-personnalise"), plus
-# optionnellement -r|--runner <nom> et -a|--arch <win32|win64> (même convention que
-# zgp-exe-installer.sh) pour choisir explicitement le runner/l'architecture -- sinon on
-# retombe sur zgu_get_default_runner / "win64".
+# $1 = mode (always "cli"; kept for consistency with the other lib/ scripts)
+# $2 = confirm_flag ("yes" if -y)
+# Remaining arguments = CLI targets ("Display name" or "Display name|custom-slug"), plus
+# optionally -r|--runner <name> and -a|--arch <win32|win64> (same convention as
+# zgp-exe-installer.sh) to choose the runner/architecture explicitly; otherwise falls back to
+# zgu_get_default_runner / "win64".
 mode="${1:-}"
 shift || true
 confirm_flag="${1:-}"
@@ -43,9 +32,9 @@ cli_arch=""
 cli_targets=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -r|--runner) cli_runner="${2:-}"; shift 2 ;;
+    -r|--runner) cli_runner="${2:-}"; shift $(( $# >= 2 ? 2 : 1 )) ;;
     --runner=*) cli_runner="${1#--runner=}"; shift ;;
-    -a|--arch) cli_arch="${2:-}"; shift 2 ;;
+    -a|--arch) cli_arch="${2:-}"; shift $(( $# >= 2 ? 2 : 1 )) ;;
     --arch=*) cli_arch="${1#--arch=}"; shift ;;
     *) cli_targets+=("$1"); shift ;;
   esac
@@ -56,10 +45,9 @@ if [[ "${mode}" = "cli" ]] && [[ -n "${cli_arch}" ]] && [[ "${cli_arch}" != "win
   exit 1
 fi
 
-# 1. Vérification des dépendances : sqlite3/python3/PyYAML systématiquement (le
-# wine/wineboot ou umu-run spécifique ne sont vérifiés qu'au moment de créer un
-# prefix, une fois le runner effectivement choisi -- inutile d'exiger wine si la
-# personne n'utilise que des runners Proton, et inversement).
+# 1. Dependency check: sqlite3/python3/PyYAML always (the specific wine/wineboot or umu-run is
+# only checked when creating a prefix, once the runner is chosen: no need to require wine if
+# only Proton runners are used, and vice versa).
 for cmd in sqlite3 python3; do
   if ! command -v "${cmd}" >/dev/null 2>&1; then
     t create_prefix.cmd_missing "${cmd}"
@@ -72,15 +60,15 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
   exit 1
 fi
 
-# 2. Fermeture préalable de Lutris pour libérer la BDD (même geste que l'installeur
-# et le désinstalleur : on écrit directement dans pga.db).
+# 2. Close Lutris first to release the database (same as the installer and uninstaller: pga.db
+# is written directly).
 if flatpak list 2>/dev/null | grep -q lutris; then
   flatpak kill net.lutris.Lutris 2>/dev/null
 fi
 pkill -9 -x lutris 2>/dev/null
 pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
-# 3. Détection Flatpak vs paquet natif
+# 3. Detect Flatpak vs native package
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
@@ -93,11 +81,10 @@ lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-# Emplacement du umu-run embarqué par Lutris lui-même (vérifié en vrai : chez un
-# utilisateur Flatpak, il vit sous data/lutris/runtime/umu/umu-run -- un fichier
-# normal sur le disque, pas caché dans le bac à sable Flatpak, donc appelable
-# directement sans passer par "flatpak run"). Le chemin natif est déduit du même
-# principe que tous les autres chemins paire Flatpak/natif de ce fichier.
+# Location of the umu-run bundled by Lutris itself (checked on a real Flatpak install:
+# data/lutris/runtime/umu/umu-run, a normal file on disk, not hidden in the Flatpak sandbox, so
+# callable directly without "flatpak run"). The native path follows the same principle as all
+# other Flatpak/native path pairs in this file.
 lutris_flatpak_umu="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runtime/umu/umu-run"
 lutris_package_umu="${HOME}/.local/share/lutris/runtime/umu/umu-run"
 
@@ -145,14 +132,12 @@ if [[ ! -d "${runner_dir}" ]]; then
   exit 1
 fi
 
-# --- Détection du type d'un runner : "wine" (bin/wine présent -- runner Wine
-# classique, initialisation via wineboot), "proton" (toolmanifest.vdf présent, pas
-# de bin/ à la racine -- initialisation via umu-run createprefix) ou "unknown"
-# (dossier incomplet/corrompu, ignoré). Ces deux signaux sont exactement ceux
-# vérifiés en vrai : bin/wine+bin/wineboot pour un Wine-GE/Wine-Staging classique,
-# toolmanifest.vdf pour un GE-Proton/proton-cachyos -- et umu-run lui-même valide
-# PROTONPATH en cherchant ce même toolmanifest.vdf (confirmé par son message
-# d'erreur exact quand ce fichier est absent).
+# --- Runner type detection: "wine" (bin/wine present: classic Wine runner, initialized via
+# wineboot), "proton" (toolmanifest.vdf present, no bin/ at the root: initialized via umu-run
+# createprefix) or "unknown" (incomplete/corrupt folder, ignored). Verified on real runners:
+# bin/wine+bin/wineboot for classic Wine-GE/Wine-Staging, toolmanifest.vdf for
+# GE-Proton/proton-cachyos; umu-run itself validates PROTONPATH by looking for that same
+# toolmanifest.vdf (confirmed by its exact error message when the file is absent). ---
 zgp_detect_runner_type() {
   local r_dir="$1"
   if [[ -x "${r_dir}/bin/wine" ]]; then
@@ -164,9 +149,9 @@ zgp_detect_runner_type() {
   fi
 }
 
-# Liste des runners installés dont le type est reconnu (wine ou proton), un par
-# ligne -- les dossiers "unknown" (incomplets) sont silencieusement exclus du choix
-# proposé plutôt que de risquer une création de prefix qui échoue au milieu.
+# Installed runners whose type is recognized (wine or proton), one per line. "unknown"
+# (incomplete) folders are silently excluded from the offered choice rather than risk a prefix
+# creation failing midway.
 zgp_list_usable_runners() {
   local entry r_type
   for entry in "${runner_dir}"/*/; do
@@ -178,11 +163,10 @@ zgp_list_usable_runners() {
   done
 }
 
-# Recherche de umu-run, dans l'ordre : PATH standard, emplacements connus vérifiés
-# dans le code source de Lutris (lutris/util/wine/proton.py::get_umu_path), puis en
-# dernier recours l'emplacement réel confirmé chez un utilisateur Lutris (Flatpak ou
-# natif selon "${version}" détecté plus haut). Retourne le chemin sur stdout, ou
-# rien (code 1) si introuvable.
+# Looks for umu-run, in order: standard PATH, known locations from the Lutris source
+# (lutris/util/wine/proton.py::get_umu_path), then as a last resort the real location confirmed
+# on a Lutris install (Flatpak or native per the "${version}" detected above). Prints the path
+# on stdout, or nothing (code 1) if not found.
 zgp_find_umu_run() {
   if command -v umu-run >/dev/null 2>&1; then
     command -v umu-run
@@ -202,17 +186,15 @@ zgp_find_umu_run() {
   return 1
 }
 
-# --- Slugification : reproduit exactement l'algorithme de Lutris (vérifié dans son
-# code source, lutris/util/strings.py::slugify) -- normalisation Unicode NFD +
-# encodage ASCII (retire les accents), minuscules, suppression de tout ce qui n'est
-# ni lettre/chiffre/espace/tiret, espaces/tirets consécutifs réduits à un seul
-# tiret. Si le résultat est vide (nom entièrement en caractères non-latins), repli
-# sur un UUID déterministe (uuid5 sur l'espace de nom URL), comme Lutris.
+# --- Slugification: reproduces Lutris's algorithm exactly (lutris/util/strings.py::slugify):
+# Unicode NFD normalization + ASCII encoding (strips accents), lowercase, removal of everything
+# that is not a letter/digit/space/dash, consecutive spaces/dashes collapsed to a single dash.
+# If the result is empty (name entirely in non-Latin characters), falls back to a deterministic
+# UUID (uuid5 on the URL namespace), as Lutris does.
 #
-# La valeur d'entrée passe par l'environnement plutôt que par interpolation directe
-# dans le code Python : un nom de jeu (ou un slug tapé à la main dans le tableau de
-# révision) contenant une apostrophe ou tout autre caractère spécial ne doit pas
-# pouvoir casser la chaîne littérale ni injecter du code Python arbitraire.
+# The input value goes through the environment rather than direct interpolation into the Python
+# code: a game name (or hand-typed slug) containing an apostrophe or any other special character
+# must not be able to break the string literal or inject arbitrary Python code.
 zgp_slugify() {
   SLUG_INPUT="$1" python3 -c '
 import os, re, unicodedata, uuid
@@ -227,11 +209,10 @@ print(slug)
 '
 }
 
-# 4. Choix du runner et de l'architecture
+# 4. Runner and architecture choice
 #
-# Ancien écran de sélection Zenity ("--list --radiolist") supprimé : bin/lpm n'a plus
-# aucun point d'entrée interactif, donc le runner/l'architecture ne peuvent venir que
-# de -r/--runner et -a/--arch (ou du runner par défaut de Lutris / "win64" à défaut).
+# The runner/architecture can only come from -r/--runner and -a/--arch (or Lutris default runner
+# / "win64" otherwise).
 runner_choice="${cli_runner:-$(zgu_get_default_runner)}"
 arch_choice="${cli_arch:-win64}"
 
@@ -249,7 +230,7 @@ if [[ "${runner_type}" = "proton" ]]; then
   fi
 fi
 
-# 5. Saisie des noms d'affichage
+# 5. Display names input
 declare -a raw_names=()
 
 for target in "${cli_targets[@]}"; do
@@ -262,10 +243,9 @@ if [[ ${#raw_names[@]} -eq 0 ]]; then
   exit 1
 fi
 
-# 6. Génération des slugs (avec déduplication contre pga.db et contre le lot en
-# cours) -- en CLI, un slug personnalisé après "|" est repassé lui aussi par
-# zgp_slugify, pour garantir sa validité (caractères interdits, espaces...) plutôt
-# que de faire confiance à une saisie manuelle telle quelle.
+# 6. Slug generation (deduplicated against pga.db and the current batch). A custom slug after
+# "|" is also passed through zgp_slugify, to guarantee its validity (forbidden characters,
+# spaces...) rather than trusting manual input as is.
 declare -A existing_slugs=()
 if [[ -f "${lutris_db}" ]]; then
   while IFS= read -r s; do
@@ -307,18 +287,16 @@ for entry in "${raw_names[@]}"; do
   batch_slugs+=("${final_slug}")
 done
 
-# 7. Récapitulatif + confirmation (CLI) -- ancien écran de révision Zenity
-# ("--list --checklist --editable") supprimé : bin/lpm n'a plus aucun point d'entrée
-# interactif, donc plus de moyen d'éditer nom/slug à la volée dans un tableau. En CLI,
-# le slug a déjà été validé/dédupliqué à l'étape 6 (via "|" ou repli automatique).
+# 7. Summary + confirmation (CLI). The slug was already validated/deduplicated in step 6 (via
+# "|" or automatic fallback).
 if [[ "${confirm_flag}" != "yes" ]]; then
   t create_prefix.confirm_cli_header
   for (( i=0; i<${#batch_names[@]}; i++ )); do
     t create_prefix.confirm_cli_item "${batch_names[i]}" "${batch_slugs[i]}"
   done
-  read -r -p "$(t create_prefix.confirm_cli_prompt)" response
+  read -r -p "$(t create_prefix.confirm_cli_prompt)" response || response="n"  # EOF (no terminal) = cancel
   case "${response}" in
-    [oOyY]) : ;;
+    ""|[oOyY]) : ;;
     *)
       t create_prefix.cancelled_cli
       exit 0
@@ -330,15 +308,13 @@ if [[ ${#batch_names[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# 8. Création réelle des prefixes
+# 8. Actual prefix creation
 #
-# wineboot (runner Wine classique) comme umu-run createprefix (runner Proton) sont
-# lancés en arrière-plan, sans attendre leur code de sortie : Lutris lui-même ne se
-# fie pas au code de sortie (umu-run "exit 0" même quand PROTONPATH est invalide,
-# voir le test manuel effectué plus haut dans la conversation), mais poll la
-# présence des 3 fichiers de registre pour confirmer la réussite -- exactement
-# reproduit ici.
-ZGP_REG_TIMEOUT_TICKS=360 # 360 x 0.5s = 180s max par prefix
+# wineboot (classic Wine runner) and umu-run createprefix (Proton runner) are launched in the
+# background without waiting for their exit code: Lutris itself does not rely on it (umu-run
+# exits 0 even when PROTONPATH is invalid) but polls for the 3 registry files to confirm
+# success. Reproduced exactly here.
+ZGP_REG_TIMEOUT_TICKS=360 # 360 x 0.5s = 180s max per prefix
 
 zgp_wait_for_prefix() {
   local p_dir="$1"
@@ -372,8 +348,11 @@ with open(os.environ["YML_PATH"], "w") as f:
 
 total="${#batch_names[@]}"
 
-# Trois fichiers temporaires pour faire remonter les résultats de la boucle ci-dessous.
+# Four temporary files carry the results out of the loop below. created_slugs_file is reused
+# afterwards for the best-effort update of Lutris native media (see the comment after the
+# zgp_run_creation_batch call).
 created_count_file=$(mktemp)
+created_slugs_file=$(mktemp)
 skipped_file=$(mktemp)
 failed_file=$(mktemp)
 echo "0" > "${created_count_file}"
@@ -392,9 +371,9 @@ zgp_run_creation_batch() {
 
     t create_prefix.creating_cli "${c_name}" "${c_slug}" "${step_num}" "${total}"
 
-    # Refus strict si le prefix existe déjà (même garde-fou que l'installeur) : on
-    # ignore cette ligne plutôt que d'écraser un dossier déjà présent, et on
-    # continue le reste du lot.
+    # Strict refusal if the prefix already exists (same guard as the installer): this entry
+    # is skipped rather than overwriting an existing folder, and the rest of the batch
+    # continues.
     if [[ -d "${prefix_dir}" ]]; then
       echo "${c_name}" >> "${skipped_file}"
       continue
@@ -444,11 +423,11 @@ VALUES (
 EOF
 
     created=$(( created + 1 ))
-    # Ecrit a CHAQUE reussite, pas seulement une fois a la fin de la boucle : si cette
-    # fonction devait s'interrompre prematurement, created_count_file garde quand meme
-    # le compte exact des prefixes deja crees avec succes jusque-la, plutot que de
-    # rester bloque a "0".
+    # Written on EACH success, not only once at the end of the loop: if this function were
+    # interrupted early, created_count_file still holds the exact count of prefixes created
+    # so far instead of staying at "0".
     echo "${created}" > "${created_count_file}"
+    echo "${c_slug}" >> "${created_slugs_file}"
   done
 }
 
@@ -467,9 +446,14 @@ while IFS= read -r line; do
   [[ -n "${line}" ]] && failed_names+=("${line}")
 done < "${failed_file}"
 
-rm -f "${created_count_file}" "${skipped_file}" "${failed_file}"
+created_slugs=()
+if [[ -f "${created_slugs_file}" ]]; then
+  mapfile -t created_slugs < "${created_slugs_file}" 2>/dev/null
+fi
 
-# 9. Résumé final
+rm -f "${created_count_file}" "${created_slugs_file}" "${skipped_file}" "${failed_file}"
+
+# 9. Final summary
 zgu_cli_ok "$(t create_prefix.summary_created "${created_count}")"
 if [[ ${#skipped_existing[@]} -gt 0 ]]; then
   t create_prefix.summary_skipped "${#skipped_existing[@]}"
@@ -478,4 +462,21 @@ if [[ ${#failed_names[@]} -gt 0 ]]; then
   t create_prefix.summary_failed "${#failed_names[@]}"
 fi
 
+# Best-effort update of Lutris native media (banner/icon/cover, see "lpm sync-media") for the
+# prefixes just created. Outside the creation loop: a lutris.net network problem must never fail
+# a prefix creation. A freshly created prefix has no executable configured yet, so it is
+# unlikely to be referenced on lutris.net, but calling "sync-media" here is harmless and becomes
+# useful once the game is configured in Lutris itself.
+if [[ ${#created_slugs[@]} -gt 0 ]]; then
+  # Run in the background, detached ("&" + "disown"), for the same reason as
+  # zgp-game-installer.sh: nothing here needs to wait for "sync-media" (purely cosmetic);
+  # results are available afterwards via "lpm log".
+  bash "${script_dir}/zgp-game-sync-media.sh" "${created_slugs[@]}" >/dev/null 2>&1 &
+  disown
+fi
+
+# Exit code reflects the real outcome: 1 if at least one prefix could not be created.
+if [[ ${#failed_names[@]} -gt 0 ]]; then
+  exit 1
+fi
 exit 0

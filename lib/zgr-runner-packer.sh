@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# --- Récupération des arguments du routeur lpm ---
-# $1 = Niveau de compression optionnel (ex: "5" ou vide)
-# $2 = generate_hash_flag ("yes" si --hash)
-# $3, $4, ... = Liste des runners cibles en CLI
+# --- Arguments passed by the lpm router ---
+# $1 = optional compression level (e.g. "5" or empty)
+# $2 = generate_hash_flag ("yes" if --hash)
+# $3, $4, ... = target runners given on the CLI
 compression_arg="${1:-}"
 shift || true
 generate_hash_flag="${1:-}"
@@ -20,30 +20,27 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
-# --hash décide seul si un sidecar sha256 est généré -- bin/lpm n'a plus aucun point d'entrée
-# interactif pour proposer la question équivalente à la place.
+# --hash alone decides whether a sha256 sidecar is generated (no interactive prompt exists).
 GENERATE_HASH=false
 [[ "${generate_hash_flag}" = "yes" ]] && GENERATE_HASH=true
 
-# Configuration des chemins des runners Lutris
+# Lutris runner paths
 lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 OUTPUT_DIR="${HOME}"
 
-# 1. Vérification de zstd (toujours requis)
+# 1. zstd check (always required)
 if ! command -v zstd >/dev/null 2>&1; then
   zgu_cli_error "$(t pack_runner.zstd_missing)"
   exit 1
 fi
 
-# 2. Détection du type de Lutris (Flatpak vs Paquet natif ; fonction fournie par
-# zgu-lutris-utils.sh -- résout aussi le cas des deux installées en même temps)
+# 2. Flatpak vs native Lutris detection (from zgu-lutris-utils.sh; also handles both being installed)
 lutris_version=$(zgu_resolve_lutris_version "cli" "" "${lutris_package_runner_dir}")
 if [[ -z "${lutris_version}" ]]; then
-  # Détection explicite (alignée sur les autres scripts de lib/) : un repli silencieux
-  # vers le chemin natif par défaut donnerait un message "dossier introuvable" plus loin
-  # dans le script, bien moins clair que la vraie cause (Lutris non installé).
+  # Explicit detection: a silent fallback to the default native path would give a misleading
+  # "folder not found" error later instead of the real cause (Lutris not installed).
   zgu_cli_error "$(t pack_runner.lutris_missing_cli)"
   exit 1
 fi
@@ -59,12 +56,9 @@ fi
 
 cd "${runner_dir}" || exit 1
 
-# --all (CLI uniquement) : remplace le seul argument "--all" par la liste triée de tous
-# les dossiers de runners présents sur le disque -- même source (nullglob + tri) que la
-# liste proposée en mode interactif juste en dessous. La boucle CLI n'a ensuite besoin
-# d'aucun changement : chaque nom existe forcément (on vient de le lister), donc la
-# vérification [[ -d ... ]] passera toujours ; seule la vérification anti-conflit
-# (archive .zgr déjà existante) s'applique encore normalement.
+# --all: replaces the single "--all" argument with the sorted list of all runner folders on disk
+# (nullglob + sort). Each name necessarily exists, so the [[ -d ... ]] check always passes; only the
+# conflict check (existing .zgr archive) still applies.
 if [[ ${#cli_runners[@]} -eq 1 ]] && [[ "${cli_runners[0]}" = "--all" ]]; then
   shopt -s nullglob
   all_runner_dirs=( */ )
@@ -80,18 +74,20 @@ fi
 declare -A path_by_runner
 runners_to_export=()
 
-# 3. Sélection des runners à exporter : bin/lpm n'a plus aucun point d'entrée interactif,
-# donc "lpm pack-runner" exige toujours des noms (ou "--all") en ligne de commande --
-# l'ancien mode interactif (checklist Zenity + questions taux de compression/sidecar sha256)
-# a été retiré.
+# 3. Runner selection: "lpm pack-runner" always requires names (or "--all") on the command line.
+# No arguments: explicit error (not a false "completed successfully").
+if [[ ${#cli_runners[@]} -eq 0 ]]; then
+  zgu_cli_error "$(t common.missing_target_cli "lpm pack-runner")"
+  exit 1
+fi
+
 LEVEL="${compression_arg:-3}"
 missing=()
 conflicts=()
 
 for target_runner_raw in "${cli_runners[@]}"; do
-  # basename() neutralise toute tentative de traversée de chemin ("../", chemin absolu...)
-  # dans un nom de runner fourni en CLI : sans cela, un nom comme "../../home/user/.ssh"
-  # aurait pu faire lire/archiver un dossier arbitraire du système en dehors de runner_dir.
+  # basename() neutralizes path traversal ("../", absolute path) in a CLI runner name; otherwise a
+  # name like "../../home/user/.ssh" could make an arbitrary system folder be read and archived.
   target_runner_arg=$(basename -- "${target_runner_raw}")
   if [[ ! -d "${runner_dir}/${target_runner_arg}" ]]; then
     missing+=("${target_runner_raw}")
@@ -107,7 +103,7 @@ for target_runner_raw in "${cli_runners[@]}"; do
   path_by_runner["${target_runner_arg}"]="${runner_dir}/${target_runner_arg}"
 done
 
-# Vérification stricte : le moindre runner manquant ou paquet déjà existant annule tout, rien n'est exporté
+# Strict check: any missing runner or already existing package aborts everything, nothing is exported
 if [[ ${#missing[@]} -gt 0 ]] || [[ ${#conflicts[@]} -gt 0 ]]; then
   if [[ ${#missing[@]} -gt 0 ]]; then
     zgu_cli_error "$(t pack_runner.missing_header_cli "${runner_dir}")"
@@ -126,9 +122,26 @@ if [[ ${#missing[@]} -gt 0 ]] || [[ ${#conflicts[@]} -gt 0 ]]; then
   exit 1
 fi
 
-# 4. Traitement de la compression
+# 4. Compression handling
 cd "${runner_dir}" || exit 1
 
+# FD 3 = real script output (for "[PROGRESS]" from inside the pipe).
+exec 3>&1
+
+# --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
+# removes the half-written .zgr archive of the current runner (and its hash file, if any).
+# Archives already completed are untouched (the GUI offers to remove them, see "[EXPORTED]" lines).
+# Exit code 130. ---
+inprogress_archive=""
+lpm_cancel_cleanup() {
+  trap '' TERM INT
+  [[ -n "${inprogress_archive}" ]] && rm -f -- "${inprogress_archive}" \
+    "${OUTPUT_DIR}/hash/$(basename -- "${inprogress_archive}").sha256"
+  echo "[CANCELLED]"
+  t pack_runner.cancelled_run_cli
+  exit 130
+}
+trap lpm_cancel_cleanup TERM INT
 total_runners=${#runners_to_export[@]}
 current=0
 
@@ -139,24 +152,32 @@ for runner in "${runners_to_export[@]}"; do
   ARCHIVE_NAME="${runner}"
   archive_path="${OUTPUT_DIR}/${ARCHIVE_NAME}.zgr"
 
-  # Commande de compression sécurisée avec support du mode ultra (20 à 22)
+  # Compression command as an array (not a single string): "zstd '--ultra -22'" passed ONE argument
+  # that zstd rejected, so levels 20-22 always failed.
   if [[ "${LEVEL}" -gt 19 ]]; then
-    zstd_opt="--ultra -${LEVEL}"
+    zstd_args=(--ultra "-${LEVEL}")
   else
-    zstd_opt="-${LEVEL}"
+    zstd_args=("-${LEVEL}")
   fi
 
-  # pv + zstd, barre de progression texte
+  # pv + zstd, text progress bar
   t pack_runner.compressing_cli "${current}" "${total_runners}" "${ARCHIVE_NAME}" "${LEVEL}"
 
+  inprogress_archive="${archive_path}"
   source_size=$(du -sb "${r_path}" 2>/dev/null | cut -f1)
   [[ -z "${source_size}" ]] && source_size=0
 
   if command -v pv >/dev/null 2>&1; then
-    tar -C "${runner_dir}" -cf - "${runner}" | pv -s "${source_size}" | zstd "${zstd_opt}" > "${archive_path}"
+    # "pv -n" -> "[PROGRESS] <pct>" on FD 3 (real script output, see zgp-game-packer.sh); capped at
+    # 100 because tar adds its headers.
+    tar -C "${runner_dir}" -cf - "${runner}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
+      [[ "${_lpm_pct}" =~ ^[0-9]+$ ]] || continue
+      (( _lpm_pct > 100 )) && _lpm_pct=100
+      printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+    done) | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   else
-    tar -C "${runner_dir}" -cf - "${runner}" | zstd "${zstd_opt}" > "${archive_path}"
+    tar -C "${runner_dir}" -cf - "${runner}" | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   fi
 
@@ -166,13 +187,15 @@ for runner in "${runners_to_export[@]}"; do
     exit 1
   fi
 
-  # Restreint aux seuls droits du propriétaire, par cohérence avec zgp-game-packer.sh.
+  # Owner-only permissions, consistent with zgp-game-packer.sh.
   chmod 600 "${archive_path}"
 
   if [[ "${GENERATE_HASH}" = true ]]; then
     zgu_write_hash_sidecar "${archive_path}" "${OUTPUT_DIR}"
   fi
 
+  inprogress_archive=""
+  printf '[EXPORTED] %s\n' "${archive_path}"
   zgu_cli_ok "$(t pack_runner.done_cli "${archive_path}")"
 done
 

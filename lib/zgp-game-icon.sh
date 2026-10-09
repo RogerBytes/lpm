@@ -2,19 +2,32 @@
 
 # --- lpm icon [slug...] ---
 #
-# Récupère automatiquement une icône pour un ou plusieurs jeux déjà installés, via
-# SteamGridDB (icônes carrées communautaires + icônes officielles "Steam Client Icon"
-# quand elles existent), et régénère les raccourcis existants du jeu (menu et/ou bureau)
-# pour qu'ils l'utilisent.
+# Automatically fetches an icon for one or more installed games via SteamGridDB (square
+# community icons + official "Steam Client Icon" when they exist), and regenerates the game's
+# existing shortcuts (menu and/or desktop) to use it.
 #
-# Commande à part, jamais greffée automatiquement dans install/shortcut : c'est la seule
-# fonctionnalité de lpm qui dépend d'un service tiers (réseau + clé API) -- une panne de
-# SteamGridDB ou l'absence de clé ne doit jamais faire échouer une installation ou la
-# création d'un raccourci, qui restent 100% autonomes.
+# Separate command, never hooked into install/shortcut: it is the only lpm feature that depends
+# on a third-party service (network + API key). A SteamGridDB outage or a missing key must never
+# make an installation or shortcut creation fail.
 #
-# $1, $2... = slugs de jeux cibles en CLI (toujours non vide : bin/lpm n'a plus aucun point
-# d'entrée interactif).
-cli_targets=("$@")
+# $1, $2... = target game slugs (always non-empty).
+#
+# "--url <url>" (optional, anywhere in the arguments): bypasses the SteamGridDB search and
+# first-result selection and applies the image at this URL directly. Used by gui/page_images
+# (manual mode, "Automatic download" unchecked) once the image is chosen in the GTK visual
+# picker (see lib/zgl-sgdb-images.sh); only one target slug at a time in that case, see the
+# check below.
+cli_targets=()
+forced_url=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" = "--url" ]]; then
+    forced_url="${2:-}"
+    shift $(( $# >= 2 ? 2 : 1 ))
+  else
+    cli_targets+=("$1")
+    shift
+  fi
+done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -28,14 +41,14 @@ source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# La clé SteamGridDB est strictement personnelle à l'utilisateur (voir zgp_sgdb_ensure_key
-# plus bas) : jamais partagée, jamais embarquée dans lpm -- un fichier dédié, hors de portée
-# du reste du projet, permissions 600 (lecture/écriture propriétaire seulement).
+# The SteamGridDB key is strictly personal to the user (see zgp_sgdb_ensure_key below): never
+# shared, never bundled with lpm. Kept in a dedicated file with 600 permissions (owner
+# read/write only).
 sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
 sgdb_api="https://www.steamgriddb.com/api/v2"
 sgdb_key=""
 
-# --- 1. Vérification des dépendances ---
+# --- 1. Dependency check ---
 zgp_icon_report_error_early() {
   local msg="$1"
   echo "${msg}" >&2
@@ -48,11 +61,10 @@ for cmd in sqlite3 curl python3 realpath; do
   fi
 done
 
-# ImageMagick : nécessaire pour convertir les icônes ".ico" (fréquentes, extraites
-# d'exécutables Windows à l'origine) en ".png", le seul format que la spec freedesktop
-# Desktop Entry attend de façon fiable pour "Icon=" -- voir zgp_icon_fetch_and_place plus
-# bas. ImageMagick 7 fusionne convert/identify dans un seul binaire "magick" ; ImageMagick 6
-# garde deux binaires séparés -- les deux formes sont acceptées.
+# ImageMagick: needed to convert ".ico" icons (common, originally extracted from Windows
+# executables) to ".png", the only format the freedesktop Desktop Entry spec reliably expects
+# for "Icon=" (see zgp_icon_fetch_and_place below). ImageMagick 7 merges convert/identify into a
+# single "magick" binary; ImageMagick 6 keeps two separate binaries. Both forms are accepted.
 convert_bin=()
 identify_bin=()
 if command -v magick >/dev/null 2>&1; then
@@ -66,7 +78,7 @@ else
   exit 1
 fi
 
-# --- 2. Détection Flatpak vs Paquet natif + résolution des chemins Lutris ---
+# --- 2. Flatpak vs native package detection + Lutris path resolution ---
 lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
 lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
@@ -113,7 +125,7 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# --- 3. Récupération des jeux Wine depuis la base Lutris ---
+# --- 3. Fetch Wine games from the Lutris database ---
 games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
 
 if [[ -z "${games_list}" ]]; then
@@ -127,9 +139,9 @@ declare -A id_by_slug
 declare -A exe_by_slug
 declare -A configpath_by_slug
 
-# Jeux vivant dans un préfixe de store partagé (Epic Games Store, EA App, Ubisoft
-# Connect...) : hors du principe un-jeu-un-préfixe de lpm, jamais proposés ici -- même
-# filtre que zgp-game-shortcutter.sh/zgp-game-uninstaller.sh (voir zgu_get_blacklisted_slugs).
+# Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
+# outside lpm's one-game-one-prefix principle and are never offered here. Same filter as
+# zgp-game-shortcutter.sh/zgp-game-uninstaller.sh (see zgu_get_blacklisted_slugs).
 declare -A blacklisted_slugs
 while IFS= read -r bl_slug; do
   [[ -n "${bl_slug}" ]] && blacklisted_slugs["${bl_slug}"]=1
@@ -155,10 +167,8 @@ if [[ ${#sorted_slugs[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# --- 4. Sélection des jeux cibles ---
-# Ancien mode interactif Zenity (liste à cocher, précochant les jeux sans icône
-# personnalisée) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, "cli_targets"
-# est donc toujours non vide ici.
+# --- 4. Target game selection ---
+# "cli_targets" is always non-empty here.
 targets=()
 
 if [[ "${cli_targets[0]}" = "--all" ]]; then
@@ -177,13 +187,17 @@ else
   done
 fi
 
-# --- 5. Clé API SteamGridDB ---
+if [[ -n "${forced_url}" ]] && [[ ${#targets[@]} -ne 1 ]]; then
+  zgu_cli_error "$(t icon.force_url_single_target)"
+  exit 1
+fi
+
+# --- 5. SteamGridDB API key ---
 #
-# Strictement personnelle à l'utilisateur : jamais de clé partagée/embarquée dans lpm (un
-# service à 10 millions d'utilisateurs sur une seule clé serait vite bloqué), et jamais de
-# compte imposé pour le reste de lpm -- seule cette commande, qui dépend de ce service tiers,
-# en a besoin. Testée avant d'être acceptée (jamais stockée sans avoir été validée par un
-# appel réel à l'API), et rebouclée sur elle-même en cas de refus plutôt que d'échouer net.
+# Strictly personal to the user: no shared/bundled key in lpm (one key for many users would
+# quickly be blocked), and no account imposed for the rest of lpm; only this command, which
+# depends on the third-party service, needs one. Validated before being accepted (never stored
+# without a real API call succeeding), and re-prompted on refusal instead of failing outright.
 zgp_sgdb_read_key() {
   [[ -f "${sgdb_key_file}" ]] || return 1
   head -n1 "${sgdb_key_file}" 2>/dev/null | tr -d '[:space:]'
@@ -228,7 +242,7 @@ zgp_sgdb_ensure_key() {
   done
 }
 
-# --- 6. Appels SteamGridDB ---
+# --- 6. SteamGridDB calls ---
 zgp_sgdb_search() {
   local term="$1" encoded
   encoded=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${term}" 2>/dev/null)
@@ -251,38 +265,34 @@ for g in data.get("data", []) or []:
 '
 }
 
-# Sortie : une ligne par icône candidate, "url_pleine_resolution<TAB>url_vignette" -- le champ
-# "thumb" de SteamGridDB (confirmé réel via la structure JSON documentée par un client officiel
-# tiers, node-steamgriddb/le wrapper Go steam-shortcut-manager : chaque icône a "url" ET "thumb")
-# est une vignette déjà réduite par SteamGridDB, bien plus légère et rapide à télécharger que
-# l'image pleine résolution -- utilisée uniquement pour l'aperçu visuel du sélecteur, jamais pour
-# l'icône finalement posée (qui reste toujours "url", en pleine qualité). Repli sur "url" si
-# jamais "thumb" est absent d'une réponse (ne devrait pas arriver, mais mieux vaut ne jamais
-# afficher une icône manquante que de se fier aveuglément à un champ optionnel).
+# Output: one line per candidate icon, "full_resolution_url<TAB>thumbnail_url". SteamGridDB's
+# "thumb" field (each icon has "url" AND "thumb", per the JSON structure documented by official
+# third-party clients such as node-steamgriddb and the Go steam-shortcut-manager) is a thumbnail
+# already reduced by SteamGridDB, much lighter and faster to download than the full-resolution
+# image. It is used only for the picker preview, never for the icon finally applied (always
+# "url", full quality). Falls back to "url" if "thumb" is ever missing from a response.
 zgp_sgdb_icons() {
   local game_id="$1" g_name="$2"
   local endpoint="${sgdb_api}/icons/game/${game_id}"
 
-  # Troisième source, différente des deux appels SteamGridDB ci-dessous : le vrai "Client
-  # Icon" Steam (hash "clienticon"/"icon" + AppID Steam), pour les jeux dont SteamGridDB
-  # n'héberge AUCUNE icône (0 Icons, quel que soit le style) -- ex: Crossbar Cards. SteamGridDB
-  # affiche bien un bouton "View Original Steam Assets" pour ces jeux, mais construit ce lien à
-  # partir d'une API interne au SITE steamgriddb.com ("/api/public/game/{id}"), non documentée
-  # et qui répond 403 à toute requête qui n'est pas un vrai navigateur (confirmé par un test
-  # direct) -- injouable depuis un script. La même donnée (mêmes hash "clienticon"/"icon",
-  # vérifié identique) est en revanche accessible par script via DEUX API publiques, sans clé,
-  # sans blocage anti-bot, faites précisément pour un usage programmatique :
-  #  1. store.steampowered.com/api/storesearch/ (API officielle Steam) : nom du jeu -> AppID.
-  #  2. api.steamcmd.net/v1/info/{appid} (projet open source "steamcmd/api",
-  #     https://github.com/steamcmd/api, instance publique déjà en ligne, rien à héberger) :
-  #     AppID -> hash "clienticon"/"icon" (dump JSON de app_info, exactement ce que lit le
-  #     client Steam lui-même).
-  # Ces deux hash sont ensuite combinés à l'AppID exactement comme le fait la page SteamGridDB :
+  # Third source, distinct from the two SteamGridDB calls below: the real Steam "Client Icon"
+  # (hash "clienticon"/"icon" + Steam AppID), for games for which SteamGridDB hosts NO icon (0
+  # icons, whatever the style), e.g. Crossbar Cards. SteamGridDB shows a "View Original Steam
+  # Assets" button for these games, but builds that link from an internal API of the
+  # steamgriddb.com SITE ("/api/public/game/{id}"), undocumented and answering 403 to anything
+  # that is not a real browser, so unusable from a script. The same data (same
+  # "clienticon"/"icon" hashes) is available from two public APIs, no key and no anti-bot
+  # blocking, built for programmatic use:
+  #  1. store.steampowered.com/api/storesearch/ (official Steam API): game name -> AppID.
+  #  2. api.steamcmd.net/v1/info/{appid} (open source project "steamcmd/api",
+  #     https://github.com/steamcmd/api, public instance, nothing to host): AppID ->
+  #     "clienticon"/"icon" hash (JSON dump of app_info, exactly what the Steam client reads).
+  # The hashes are combined with the AppID as the SteamGridDB page does:
   # "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/<appid>/<hash>.<ext>".
-  # "clienticon" (un vrai .ico) est essayé en premier : c'est le format le plus proche de ce que
-  # lpm pose déjà comme icône de raccourci. Best-effort à chaque étape : un jeu introuvable sur
-  # le Store Steam, ou sans "clienticon"/"icon" dans app_info, laisse simplement cette source
-  # vide -- on retombe alors sur les deux appels SteamGridDB seuls, jamais d'échec bloquant.
+  # "clienticon" (a real .ico) is tried first, as the closest to what lpm already uses as
+  # shortcut icon. Best-effort at each step: a game not found in the Steam Store, or without
+  # "clienticon"/"icon" in app_info, leaves this source empty and only the two SteamGridDB
+  # calls remain; never a blocking failure.
   local steam_appid=""
   if [[ -n "${g_name}" ]]; then
     local encoded_name
@@ -306,13 +316,13 @@ if items:
   {
     curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${endpoint}" 2>/dev/null
     echo
-    # Second appel explicite avec "styles=official" : "official" est une valeur de style
-    # confirmée réelle pour les icônes (vue dans le formulaire de filtre de la page d'un jeu sur
-    # steamgriddb.com : "Any Style" / "Official" / "Custom"), donc pour un jeu qui a bien des
-    # icônes "officielles" contribuées à la base SteamGridDB elle-même (par opposition à
-    # "custom"), ce filtre peut en révéler que l'appel par défaut n'inclut pas. Fusionné avec le
-    # premier (dédoublonné par URL côté Python ci-dessous), jamais en remplacement : si
-    # "styles=official" échoue, ce bloc est silencieusement ignoré et on retombe sur le premier.
+    # Second explicit call with "styles=official": "official" is a real style value for
+    # icons (seen in the filter form of a game page on steamgriddb.com: "Any Style" /
+    # "Official" / "Custom"). For a game with "official" icons contributed to SteamGridDB
+    # itself (as opposed to "custom"), this filter can reveal some that the default call
+    # does not include. Merged with the first call (deduplicated by URL in the Python code
+    # below), never replacing it: if "styles=official" fails, this block is silently ignored
+    # and the first call stands.
     curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${endpoint}?styles=official" 2>/dev/null
     echo
     if [[ -n "${steam_appid}" ]]; then
@@ -350,12 +360,13 @@ while idx < n:
         continue
     data = obj.get("data")
     if isinstance(data, list):
-        # Forme des deux appels SteamGridDB (icons/game/{id}, avec ou sans ?styles=official).
+        # Shape of the two SteamGridDB calls (icons/game/{id}, with or without
+        # ?styles=official).
         for i in data:
             add(i.get("url", ""), i.get("thumb", ""))
     elif isinstance(data, dict):
-        # Forme de la réponse api.steamcmd.net/v1/info/{appid} : {"<appid>": {"appid":...,
-        # "common": {"clienticon": "...", "icon": "...", ...}, ...}}.
+        # Shape of the api.steamcmd.net/v1/info/{appid} response: {"<appid>":
+        # {"appid":..., "common": {"clienticon": "...", "icon": "...", ...}, ...}}.
         for entry in data.values():
             if not isinstance(entry, dict):
                 continue
@@ -363,11 +374,11 @@ while idx < n:
             common = entry.get("common") or {}
             if not appid or not isinstance(common, dict):
                 continue
-            # "icon" (le petit favicon Steam, toujours basse resolution, ~32x32) est ajoute
-            # SEULEMENT si "clienticon" (le vrai Client Icon, jusqu a 256x256) est absent --
-            # jamais les deux en meme temps : proposer les deux dans le selecteur ne servait a
-            # rien, "icon" n etant jamais meilleur que "clienticon" quand celui-ci existe. "icon"
-            # reste un repli utile pour les (rares) jeux qui auraient "icon" sans "clienticon".
+            # "icon" (the small Steam favicon, always low resolution, ~32x32) is
+            # added ONLY if "clienticon" (the real Client Icon, up to 256x256) is
+            # absent, never both at once: "icon" is never better than "clienticon"
+            # when the latter exists. It remains a useful fallback for the (rare)
+            # games with "icon" but no "clienticon".
             clienticon = common.get("clienticon")
             if clienticon:
                 add(f"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{appid}/{clienticon}.ico")
@@ -381,11 +392,11 @@ for url, thumb in results:
 '
 }
 
-# --- 7. Traitement d'un jeu ---
+# --- 7. Processing one game ---
 #
-# Retourne 0 si une icône a bien été posée, 1 sinon (jeu introuvable sur SteamGridDB, aucune
-# icône disponible, téléchargement/conversion échoués, ou annulation par l'utilisateur) --
-# jamais de silence : chaque échec passe par zgp_icon_report_skip, affiché sur stderr.
+# Returns 0 if an icon was applied, 1 otherwise (game not found on SteamGridDB, no icon
+# available, download/conversion failed, or cancelled by the user). Never silent: every failure
+# goes through zgp_icon_report_skip, printed on stderr.
 zgp_icon_report_skip() {
   local msg="$1"
   echo "${msg}" >&2
@@ -394,6 +405,15 @@ zgp_icon_report_skip() {
 zgp_icon_process_one() {
   local slug="$1" g_name="$2" prefix_dir="$3" g_id="$4" g_exe="$5" g_configpath="$6"
 
+  local chosen_url=""
+
+  # "--url" already supplied by the caller (gui/page_images, manual mode): the user picked
+  # this image in the GTK visual picker (see lib/zgl-sgdb-images.sh), so the
+  # search/disambiguation/automatic choice below is skipped entirely, going straight to
+  # download/conversion/placement, unchanged.
+  if [[ -n "${forced_url}" ]]; then
+    chosen_url="${forced_url}"
+  else
   local search_results
   search_results=$(zgp_sgdb_search "${g_name}")
   if [[ -z "${search_results}" ]]; then
@@ -431,18 +451,16 @@ zgp_icon_process_one() {
     chosen_game_name=$(printf '%s\n' "${search_results}" | head -n1 | cut -f2)
   fi
 
-  # Le nom SteamGridDB CONFIRMÉ (celui de la ligne choisie), jamais le nom brut Lutris ("g_name")
-  # : Lutris peut contenir un nom personnalisé/mal orthographié par l'utilisateur (ex:
-  # "Crossybara" au lieu de "Crossbar Cards") -- l'autocomplete SteamGridDB tolère ce genre
-  # d'écart (recherche floue), mais la recherche officielle de store.steampowered.com utilisée
-  # par zgp_sgdb_icons pour retrouver l'AppID Steam (voir plus haut) ne le tolère pas, et renvoie
-  # alors 0 résultat -- confirmé réel : c'est exactement ce qui faisait échouer le Client Icon pour
-  # Crossbar Cards malgré la correction précédente.
+  # The CONFIRMED SteamGridDB name (that of the chosen row), never the raw Lutris name
+  # ("g_name"): Lutris may hold a user-customized or misspelled name (e.g. "Crossybara"
+  # instead of "Crossbar Cards"). The SteamGridDB autocomplete tolerates this (fuzzy search),
+  # but the official store.steampowered.com search used by zgp_sgdb_icons to find the Steam
+  # AppID (see above) does not, and returns 0 results, which made the Client Icon fail for
+  # Crossbar Cards.
   #
-  # Retrouvé ici en recherchant "chosen_game_id" dans "search_results" (une seule source de
-  # vérité, qui écrase toujours la valeur déjà réglée par les branches ci-dessus). Repli sur
-  # "g_name" seulement si l'ID choisi n'est, contre toute attente, pas retrouvé dans
-  # "search_results".
+  # Found here by looking up "chosen_game_id" in "search_results" (single source of truth,
+  # always overriding the value already set by the branches above). Falls back to "g_name"
+  # only if the chosen ID is, unexpectedly, not found in "search_results".
   local sr_gid sr_name
   while IFS=$'\t' read -r sr_gid sr_name; do
     if [[ "${sr_gid}" = "${chosen_game_id}" ]]; then
@@ -460,17 +478,16 @@ zgp_icon_process_one() {
     return 1
   fi
 
-  # Ancien sélecteur visuel Zenity ("--list --imagelist", vignettes téléchargées/recadrées en
-  # parallèle) supprimé : bin/lpm n'a plus aucun point d'entrée interactif, donc en CLI on
-  # prend systématiquement la première icône candidate (déjà la meilleure trouvée par
-  # zgp_sgdb_icons, "clienticon" puis "official" puis le reste, voir plus haut).
-  local chosen_url=""
+  # In CLI the first candidate icon is always taken (already the best found by zgp_sgdb_icons:
+  # "clienticon", then "official", then the rest, see above). The GUI visual picker (see
+  # "--url" above) is what imposes a choice other than the first result.
   chosen_url=$(printf '%s\n' "${icons_urls}" | head -n1 | cut -f1)
+  fi
 
-  # --- Téléchargement + conversion .ico -> .png si nécessaire ---
+  # --- Download + .ico -> .png conversion if needed ---
   mkdir -p "${prefix_dir}/icon"
-  # Purge les anciennes icônes (même filtre que zgu_write_game_shortcut ci-dessus -- jamais
-  # autre chose dans ce dossier, ex: des extras packagés dans un .zgp ne vivent pas ici).
+  # Purge old icons (same filter as zgu_write_game_shortcut above; nothing else in this
+  # folder, e.g. extras packed in a .zgp do not live here).
   find "${prefix_dir}/icon" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -delete 2>/dev/null
 
   local ext="${chosen_url##*.}"
@@ -485,9 +502,9 @@ zgp_icon_process_one() {
   fi
 
   if [[ "${ext}" = "ico" ]]; then
-    # Un .ico peut empiler plusieurs résolutions dans un seul fichier -- on prend la plus
-    # grande (3e colonne de "identify", triée numériquement), même méthode qu'un outil
-    # comparable établi (steamtinkerlaunch) pour ce même problème.
+    # A .ico can stack several resolutions in one file: take the largest (3rd column of
+    # "identify", numerically sorted), the same method as an established comparable tool
+    # (steamtinkerlaunch).
     local biggest
     biggest=$("${identify_bin[@]}" "${raw_file}" 2>/dev/null | sort -n -k3 | tail -n1 | grep -oP '\[\K[^\]]+')
     [[ -z "${biggest}" ]] && biggest=0
@@ -502,10 +519,9 @@ zgp_icon_process_one() {
     mv "${raw_file}" "${prefix_dir}/icon/icon.${ext}"
   fi
 
-  # --- Régénère les raccourcis existants (jamais n'en crée de nouveaux : seulement ceux
-  # déjà présents pour ce jeu, menu et/ou bureau) pour qu'ils pointent vers la nouvelle
-  # icône -- voir zgu_write_game_shortcut dans zgu-desktop-utils.sh, qui relit
-  # <prefix_dir>/icon au moment de la (re)génération.
+  # --- Regenerate existing shortcuts (never creates new ones: only those already present for
+  # this game, menu and/or desktop) so they point to the new icon; see zgu_write_game_shortcut
+  # in zgu-desktop-utils.sh, which re-reads <prefix_dir>/icon at (re)generation time. ---
   local menu_file="${HOME}/.local/share/applications/net.lutris.${slug}.desktop"
   local desktop_dir desktop_file
   desktop_dir=$(zgu_get_desktop_dir)
@@ -524,7 +540,7 @@ zgp_icon_process_one() {
   return 0
 }
 
-# --- 8. Exécution ---
+# --- 8. Execution ---
 zgp_sgdb_ensure_key || { zgp_icon_report_error_early "$(t icon.no_key_cancelled)"; exit 1; }
 
 exit_code=0

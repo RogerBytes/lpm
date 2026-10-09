@@ -12,13 +12,15 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
-# --- Analyse des arguments transmis par bin/lpm ---
-# $1 = mode (toujours "cli" désormais : bin/lpm n'a plus aucun point d'entrée interactif --
-#      conservé en position pour rester cohérent avec les autres scripts de lib/, mais sa
-#      valeur n'est plus lue ici)
-# $2 = confirm_flag ("yes" si -y)
-# $3 = ignore_hash_flag ("yes" si --ignore-hash)
-# $4, $5... = cibles (fichiers .zgr ou noms distants)
+# FD 3 = copy of the real stdout, taken before any pipe; needed for "[PROGRESS] <pct>" below
+# (see "exec 3>&1" in zgp-game-installer.sh).
+exec 3>&1
+
+# --- Arguments passed by bin/lpm ---
+# $1 = mode (always "cli"; kept for positional consistency with other lib/ scripts, not read here)
+# $2 = confirm_flag ("yes" if -y)
+# $3 = ignore_hash_flag ("yes" if --ignore-hash)
+# $4, $5... = targets (.zgr files or remote names)
 shift || true
 confirm_flag="${1:-}"
 shift || true
@@ -26,12 +28,11 @@ ignore_hash_flag="${1:-}"
 shift || true
 cli_targets=("$@")
 
-# zgr_hash_filter <nameref tableau de noms> <nameref tableau assoc chemin par nom>
-# Vérifie le sidecar sha256 (s'il existe) de chaque runner LOCAL du tableau donné (voir
-# zgu-hash-utils.sh) et retire du tableau, en place, ceux dont le hash ne correspond pas --
-# sauf si l'utilisateur choisit explicitement de les installer quand même, ou si
-# --ignore-hash a été passé (auquel cas la vérification est entièrement sautée). Un runner
-# sans sidecar n'est jamais considéré comme invalide (voir zgu_find_hash_sidecar).
+# zgr_hash_filter <nameref names array> <nameref assoc array: path by name>
+# Checks the sha256 sidecar (if any) of each LOCAL runner in the array (see zgu-hash-utils.sh) and
+# removes from the array, in place, those whose hash does not match -- unless the user chooses to
+# install them anyway, or --ignore-hash was passed (check skipped entirely). A runner without a
+# sidecar is never considered invalid (see zgu_find_hash_sidecar).
 zgr_hash_filter() {
   local -n names_ref="$1"
   local -n paths_ref="$2"
@@ -76,21 +77,17 @@ zgr_hash_filter() {
   fi
 }
 
-# Configuration des chemins des runners Lutris
+# Lutris runner paths
 lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
 lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-# GITHUB_RELEASE_URL est définie dans zgu-github-release-utils.sh (sourcé plus haut),
-# seul endroit à modifier pour changer le dépôt/la release des runners.
+# GITHUB_RELEASE_URL is defined in zgu-github-release-utils.sh; change the repo/release there.
 
-# 1. Vérification de bsdtar
-# bsdtar (paquet "libarchive-tools" sur Debian/Ubuntu) remplace tar -I zstd pour l'extraction :
-# ses protections par défaut ARCHIVE_EXTRACT_SECURE_NODOTDOT / ARCHIVE_EXTRACT_SECURE_SYMLINKS
-# refusent tout membre d'archive tentant de sortir de son dossier de destination via "../" ou
-# un lien symbolique piégé -- important ici puisqu'un .zgr peut être téléchargé depuis GitHub
-# OU partagé/importé localement (voir mode "browse"), donc potentiellement non fiable dans les
-# deux cas. bsdtar lit le zstd nativement (libzstd liée en dur), zstd externe n'est donc plus
-# nécessaire pour ce script.
+# 1. bsdtar check
+# bsdtar (libarchive-tools) is used instead of tar -I zstd: its default
+# ARCHIVE_EXTRACT_SECURE_NODOTDOT / _SYMLINKS protections reject archive members escaping the
+# destination via "../" or a malicious symlink. A .zgr may be downloaded or imported locally, so it
+# is untrusted. bsdtar reads zstd natively, so no external zstd is needed.
 if ! command -v bsdtar >/dev/null 2>&1; then
   zgu_cli_error "$(t install_runner.bsdtar_missing_fallback)"
   exit 1
@@ -106,8 +103,7 @@ if ! command -v sha256sum >/dev/null 2>&1; then
   exit 1
 fi
 
-# 2. Détection Flatpak vs Paquet natif pour les runners (fonction fournie par
-# zgu-lutris-utils.sh -- résout aussi le cas des deux installées en même temps)
+# 2. Flatpak vs native Lutris detection (from zgu-lutris-utils.sh; also handles both being installed)
 version=$(zgu_resolve_lutris_version "cli" "" "${lutris_package_runner_dir}")
 if [[ -z "${version}" ]]; then
   t install_runner.lutris_missing_cli
@@ -123,8 +119,7 @@ case "${version}" in
     lutris_runner_dir="${lutris_package_runner_dir}"
     ;;
   *)
-    # Ne devrait jamais arriver : $version n'est affecté qu'à "flatpak" ou "package"
-    # ci-dessus (sinon exit 1). Garde-fou si cette invariant venait à changer.
+    # Should never happen: $version is only set to "flatpak" or "package" above (else exit 1).
     echo "Erreur interne : version Lutris inattendue '${version}'." >&2
     exit 1
     ;;
@@ -133,13 +128,15 @@ esac
 mkdir -p "${lutris_runner_dir}"
 
 # ---------------------------------------------------------------------------------------------
-# bin/lpm n'a plus aucun point d'entrée interactif : ce script ne traite donc plus que des
-# cibles explicites données en ligne de commande (fichiers .zgr locaux et/ou noms distants
-# GitHub) -- l'ancien mode double-clic (scan du dossier parent) et l'ancien menu interactif
-# (liste en ligne + "Parcourir...") ont été retirés, avec les fonctions zenity dédiées
-# (download_runner/extract_runner_with_progress) qu'ils étaient seuls à utiliser.
-declare -A runner_source   # "local" ou "distant"
-  declare -A runner_archive  # chemin local, ou nom de fichier ciblé pour le distant
+# Only explicit command-line targets are handled (local .zgr files and/or remote GitHub names).
+# No arguments: explicit error (not a silent exit 0).
+if [[ ${#cli_targets[@]} -eq 0 ]]; then
+  zgu_cli_error "$(t common.missing_target_cli "lpm install-runner")"
+  exit 1
+fi
+
+declare -A runner_source   # "local" or "distant"
+  declare -A runner_archive  # local path, or targeted file name for remote
   runners_to_install=()
   conflicts=()
 
@@ -149,11 +146,8 @@ declare -A runner_source   # "local" ou "distant"
       runner_source["${runner_name}"]="local"
       runner_archive["${runner_name}"]="${target}"
     else
-      # basename() par cohérence défensive avec les autres cibles CLI du projet (jeux,
-      # runners locaux/à supprimer/à empaqueter) : un nom distant ne devrait normalement
-      # jamais matcher un asset GitHub réel s'il contient un séparateur de chemin, mais
-      # on neutralise quand même toute tentative de traversée ("../", chemin absolu...)
-      # avant construction de runner_dir/runner_name plus loin dans ce fichier.
+      # basename() neutralizes path traversal ("../", absolute path) before runner_dir/runner_name are
+      # built below, consistent with the other CLI targets.
       runner_name=$(basename -- "${target%.zgr}")
       runner_source["${runner_name}"]="distant"
       runner_archive["${runner_name}"]="${runner_name}.zgr"
@@ -166,7 +160,7 @@ declare -A runner_source   # "local" ou "distant"
     runners_to_install+=("${runner_name}")
   done
 
-  # Vérification stricte : si UN SEUL runner demandé est déjà installé, on annule tout, sans rien installer
+  # Strict check: if ANY requested runner is already installed, abort without installing anything
   if [[ ${#conflicts[@]} -gt 0 ]]; then
     zgu_cli_error "$(t install_runner.conflict_header_cli)"
     for name in "${conflicts[@]}"; do
@@ -176,9 +170,8 @@ declare -A runner_source   # "local" ou "distant"
     exit 1
   fi
 
-  # Vérification d'intégrité (sidecar sha256, voir zgu-hash-utils.sh) : seuls les runners
-  # LOCAUX peuvent avoir un sidecar (un runner distant récupéré depuis GitHub est déjà
-  # vérifié séparément, plus bas, via le digest fourni par l'API GitHub elle-même).
+  # Integrity check (sha256 sidecar, see zgu-hash-utils.sh): only LOCAL runners can have a sidecar
+  # (remote ones are verified later via the digest from the GitHub API).
   local_names_for_hash=()
   for name in "${runners_to_install[@]}"; do
     [[ "${runner_source[${name}]}" = "local" ]] && local_names_for_hash+=("${name}")
@@ -201,7 +194,7 @@ declare -A runner_source   # "local" ou "distant"
     fi
   fi
 
-  # Confirmation interactive si le flag -y n'est pas présent
+  # Interactive confirmation unless -y
   if [[ "${confirm_flag}" != "yes" ]]; then
     t install_runner.confirm_cli_header
     for name in "${runners_to_install[@]}"; do
@@ -211,7 +204,7 @@ declare -A runner_source   # "local" ou "distant"
         t install_runner.confirm_cli_item_remote "${name}"
       fi
     done
-    read -r -p "$(t install_runner.confirm_cli_prompt)" response
+    read -r -p "$(t install_runner.confirm_cli_prompt)" response || response="n"  # EOF (no terminal) = cancel, never an implicit confirmation
     case "${response}" in
       [nN])
         t install_runner.cancelled_cli
@@ -222,7 +215,7 @@ declare -A runner_source   # "local" ou "distant"
     esac
   fi
 
-  # Récupération unique des informations de la release GitHub si au moins un runner distant est demandé
+  # Fetch the GitHub release info once if at least one remote runner is requested
   release_json=""
   for name in "${runners_to_install[@]}"; do
     if [[ "${runner_source[${name}]}" = "distant" ]]; then
@@ -232,7 +225,32 @@ declare -A runner_source   # "local" ou "distant"
     fi
   done
 
+  # Computed BEFORE the loop to display "[n/total]" during installation.
+  runner_total_count=${#runners_to_install[@]}
+  runner_idx=0
+  install_failures=0
+
+  # --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
+  # removes the temporary download and the half-extracted runner. Runners already completed are
+  # untouched (the GUI offers to remove them, see "[INSTALLED]" lines). Exit code 130. ---
+  temp_cli_dir=""
+  inprogress_dir=""
+  lpm_cancel_cleanup() {
+    trap '' TERM INT
+    if [[ -n "${temp_cli_dir}" ]] && [[ "${temp_cli_dir}" == "${TMPDIR:-/tmp}"/* ]]; then
+      rm -rf -- "${temp_cli_dir}"
+    fi
+    if [[ -n "${inprogress_dir}" ]] && [[ "${inprogress_dir}" == "${lutris_runner_dir}/"* ]]; then
+      rm -rf -- "${inprogress_dir}"
+    fi
+    echo "[CANCELLED]"
+    t install_runner.cancelled_run_cli
+    exit 130
+  }
+  trap lpm_cancel_cleanup TERM INT
+
   for runner_name in "${runners_to_install[@]}"; do
+    runner_idx=$((runner_idx + 1))
     src="${runner_source[${runner_name}]}"
 
     expected_digest=""
@@ -242,6 +260,9 @@ declare -A runner_source   # "local" ou "distant"
       t install_runner.installing_local_cli "${runner_name}"
     else
       target_filename="${runner_archive[${runner_name}]}"
+      # Emit "[n/total] ..." at the START of the runner (before download) so the GUI shows
+      # "n / total - name" immediately (see CommandPage.run_command).
+      t install_runner.download_progress_cli "${runner_idx}" "${runner_total_count}" "${runner_name}"
       t install_runner.searching_remote_cli "${target_filename}"
 
       download_url=""
@@ -255,17 +276,18 @@ try:
         if asset.get("name", "") == target:
             url = asset.get("browser_download_url", "")
             digest = asset.get("digest") or ""
-            print(f"{url}\x1f{digest}")
+            size = asset.get("size") or 0
+            print(f"{url}\x1f{digest}\x1f{size}")
             break
 except Exception:
     pass
 ' "${release_json}" "${target_filename}")
-        download_url="${asset_info%%$'\x1f'*}"
-        expected_digest="${asset_info#*$'\x1f'}"
+        IFS=$'\x1f' read -r download_url expected_digest asset_size <<< "${asset_info}"
       fi
 
       if [[ -z "${download_url}" ]]; then
         zgu_cli_error "$(t install_runner.remote_not_found_cli "${target_filename}")"
+        install_failures=$((install_failures + 1))
         continue
       fi
 
@@ -273,22 +295,34 @@ except Exception:
       archive_path="${temp_cli_dir}/${target_filename}"
 
       t install_runner.downloading_cli "${runner_name}"
-      if command -v wget >/dev/null 2>&1; then
-        wget --show-progress -O "${archive_path}" "${download_url}"
+      # Background download + file size polling: "[PROGRESS] <pct>" (0-50 % of this runner's bar;
+      # extraction takes 50-100 %). Expected size comes from the GitHub API asset "size".
+      if command -v curl >/dev/null 2>&1; then
+        curl -Lfs -o "${archive_path}" "${download_url}" &
       else
-        curl -Lf -# -o "${archive_path}" "${download_url}"
+        wget -q -O "${archive_path}" "${download_url}" &
       fi
+      _lpm_dl_pid=$!
+      while kill -0 "${_lpm_dl_pid}" 2>/dev/null; do
+        if [[ "${asset_size:-0}" =~ ^[0-9]+$ ]] && (( asset_size > 0 )); then
+          _lpm_cur=$(stat -c%s "${archive_path}" 2>/dev/null || echo 0)
+          _lpm_pct=$(( _lpm_cur * 50 / asset_size ))
+          (( _lpm_pct > 50 )) && _lpm_pct=50
+          printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+        fi
+        sleep 0.3
+      done
+      wait "${_lpm_dl_pid}" || rm -f "${archive_path}"
 
       if [[ ! -f "${archive_path}" ]] || [[ ! -s "${archive_path}" ]]; then
         zgu_cli_error "$(t install_runner.download_failed_cli "${runner_name}")"
         rm -rf "${temp_cli_dir}"
+        install_failures=$((install_failures + 1))
         continue
       fi
 
-      # Avertissement non bloquant : GitHub ne fournit pas toujours un digest pour chaque
-      # asset. Sans lui, aucune vérification d'intégrité n'est possible (zgu_sha256_matches
-      # retourne alors "succès" par convention) -- on le signale explicitement plutôt que
-      # de laisser ce cas totalement silencieux.
+      # Non-blocking warning: GitHub does not always provide a digest per asset. Without it no integrity
+      # check is possible (zgu_sha256_matches then returns success by convention).
       if [[ -z "${expected_digest}" ]]; then
         zgu_cli_error "$(t install_runner.checksum_missing_cli "${runner_name}")"
       fi
@@ -296,33 +330,47 @@ except Exception:
       if ! zgu_sha256_matches "${archive_path}" "${expected_digest}"; then
         zgu_cli_error "$(t install_runner.checksum_invalid_cli "${runner_name}")"
         rm -rf "${temp_cli_dir}"
+        install_failures=$((install_failures + 1))
         continue
       fi
     fi
 
-    t install_runner.extracting_cli "${runner_name}"
+    # "[n/total] ..." is parsed by the GUI (CommandPage.run_command), same convention as
+    # zgp-game-installer.sh/zgp-game-uninstaller.sh. Remote runner: already emitted before the download.
+    [[ "${src}" = "local" ]] && t install_runner.progress_cli "${runner_idx}" "${runner_total_count}" "${runner_name}"
     archive_size=$(stat -c%s "${archive_path}" 2>/dev/null || stat -f%z "${archive_path}" 2>/dev/null)
-    # bsdtar (et non tar -I zstd) : voir le commentaire sur la vérification des dépendances
-    # plus haut dans ce fichier pour le détail des protections SECURE_NODOTDOT/SECURE_SYMLINKS.
-    # umask 022 le temps de l'extraction : même garde-fou que zgp-game-installer.sh contre
-    # un .zgr forgé plantant un fichier trop permissif (777) ou illisible (000).
+    # bsdtar rather than tar -I zstd: see the dependency check above.
+    # umask 022 during extraction: guards against a forged .zgr planting overly permissive (777) or
+    # unreadable (000) files, as in zgp-game-installer.sh.
+    inprogress_dir="${lutris_runner_dir}/${runner_name}"
     _lpm_old_umask=$(umask)
     umask 022
-    pv -s "${archive_size:-0}" "${archive_path}" | bsdtar -xf - -C "${lutris_runner_dir}"
+    # "pv -n" + process substitution on stderr: same mechanism as in zgp-game-installer.sh.
+    pv -n -s "${archive_size:-0}" "${archive_path}" 2> >(while IFS= read -r _lpm_pct; do
+      # Remote: extraction takes the 2nd half of the bar (50-100 %).
+      [[ "${src}" = "distant" ]] && _lpm_pct=$(( 50 + ${_lpm_pct:-0} / 2 ))
+      printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+    done) | bsdtar -xf - -C "${lutris_runner_dir}"
     tar_exit="${PIPESTATUS[1]}"
     umask "${_lpm_old_umask}"
 
-    [[ "${src}" = "distant" ]] && rm -rf "${temp_cli_dir}"
+    [[ "${src}" = "distant" ]] && rm -rf "${temp_cli_dir}" && temp_cli_dir=""
 
-    # Vérification de l'intégrité de l'extraction : si tar a échoué (archive corrompue,
-    # tronquée ou invalide), on nettoie ce qui a pu être extrait et on passe au runner suivant
+    # Check extraction integrity: if tar failed (corrupt/truncated/invalid archive), clean up what was
+    # extracted and move on to the next runner
     if [[ "${tar_exit}" -ne 0 ]]; then
       zgu_cli_error "$(t install_runner.corrupt_archive_cli "${runner_name}" "${tar_exit}")"
       rm -rf "${lutris_runner_dir:?}/${runner_name}"
+      inprogress_dir=""
+      install_failures=$((install_failures + 1))
       continue
     fi
+    inprogress_dir=""
+    printf '[INSTALLED] %s\n' "${runner_name}"
 
     zgu_cli_ok "$(t install_runner.install_success_cli "${runner_name}")"
   done
 
+  # Non-zero exit if at least one runner failed: the GUI only shows "installed" on exit code 0.
+  [[ "${install_failures}" -gt 0 ]] && exit 1
   exit 0
