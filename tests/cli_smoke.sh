@@ -165,6 +165,16 @@ expect "GAMEID: YAML still valid" python3 -c 'import sys,yaml; d=yaml.safe_load(
 
 rm -rf "${HOME}/.local/share/lutris/runners/wine/ProtonTest" "${HOME}/gameid-desk"
 
+# --- Runner download helper returns ONLY the file path (a message on stdout would corrupt it)
+expect "download_cli: stdout is only the path" bash -c '
+  exec 3>/dev/null
+  t() { echo "Downloading $1..."; }
+  declare -A release_asset_size
+  curl() { while [ "$1" != "-o" ]; do shift; done; echo data > "$2"; }
+  eval "$(sed -n "/^download_cli()/,/^}/p" "$1/lib/zgc-dependency-checker.sh")"
+  out=$(download_cli http://x/y runnertest)
+  [ -f "$out" ] && rm -f "$out"' _ "${repo}"
+
 # --- Pack safety: links pointing outside the game folder or to themselves are never copied
 mkdir -p "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z"
 echo secret > "${HOME}/outside-secret/private.txt"
