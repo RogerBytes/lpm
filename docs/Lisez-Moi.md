@@ -6,6 +6,8 @@ Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
   <img src="../assets/icons/lpm.svg" width="128" height="128" alt="Icône Ludis Prefix Manager">
 </p>
 
+https://github.com/user-attachments/assets/35262a68-6b85-45be-83ba-041dfde6490a
+
 <p align="center">
   <a href="https://github.com/RogerBytes/lpm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RogerBytes/lpm"></a>
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green">
