@@ -352,7 +352,8 @@ download_cli() {
   # under our own permissions before anything is downloaded into it.
   dest=$(mktemp "/tmp/${runner_name}-XXXXXX.zgr")
 
-  t check.download_cli_start "${runner_name}"
+  # >&3: this function runs inside $(...) whose stdout is the returned path; a message on stdout would corrupt it.
+  t check.download_cli_start "${runner_name}" >&3
   # Background download + file size polling: "[PROGRESS] <pct>" (0-50 % of this runner's bar;
   # extraction takes 50-100 %). Expected size: "size" field of the asset (GitHub API). Same
   # mechanism as zgr-runner-installer.sh.
