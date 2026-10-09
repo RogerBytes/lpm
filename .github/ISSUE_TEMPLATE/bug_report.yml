@@ -50,6 +50,15 @@ body:
     validations:
       required: true
   - type: textarea
+    id: lutris-log
+    attributes:
+      label: Lutris log (if a game fails to start)
+      description: |
+        Last lines of Lutris' own log, run in a terminal:
+        Flatpak: `tail -n 80 ~/.var/app/net.lutris.Lutris/cache/lutris/lutris.log`
+        Native: `tail -n 80 ~/.cache/lutris/lutris.log`
+      render: text
+  - type: textarea
     id: extra
     attributes:
       label: Anything else
