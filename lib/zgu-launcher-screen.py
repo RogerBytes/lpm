@@ -109,6 +109,18 @@ HELP_GAP = 6
 HELP_PERIOD_S = 4.75
 HELP_FADE_S = 0.35
 help_start = [None]
+help_sequence = []  # indices of the help lines in display order, extended as time goes on
+
+
+def extend_help_sequence(sequence, count, upto):
+    """Extend `sequence` (in place) until it has more than `upto` entries. It is built in
+    shuffled rounds where every line appears once, and a round never starts with the line
+    that ended the previous one, so the same line is never shown twice in a row."""
+    while len(sequence) <= upto:
+        round_ = random.sample(range(count), count)
+        if sequence and count > 1 and round_[0] == sequence[-1]:
+            round_[0], round_[1] = round_[1], round_[0]
+        sequence.extend(round_)
 HELP_RESERVED_HEIGHT = MARGIN_BOTTOM + HELP_LINE_HEIGHT + 10
 # Room left on the right for "Loading" + spinner (help text must never reach it).
 HELP_RIGHT_RESERVED = 260
@@ -707,6 +719,14 @@ class ScreenWindow(Gtk.Window):
             return False
         return True
 
+    @staticmethod
+    def _help_text_baseline(cr, cy):
+        """Baseline that vertically centers CAPITAL letters on `cy` for the current font size.
+        Using the cap height (not the height of each string) keeps every text of the help line
+        on the same axis as the buttons, whatever letters it contains (descenders, accents)."""
+        ref = cr.text_extents("H")
+        return cy - ref.y_bearing - ref.height / 2
+
     def _help_pill_width(self, cr, kind, label):
         if kind == "dpad":
             return 2 * HELP_PILL_HEIGHT + 4
@@ -763,7 +783,7 @@ class ScreenWindow(Gtk.Window):
         cr.stroke()
         cr.set_font_size(HELP_PILL_FONT_SIZE)
         ext = cr.text_extents(label)
-        cr.move_to(x + (w - ext.width) / 2 - ext.x_bearing, cy - ext.y_bearing - ext.height / 2)
+        cr.move_to(x + (w - ext.width) / 2 - ext.x_bearing, self._help_text_baseline(cr, cy))
         cr.show_text(label)
         return w
 
@@ -782,7 +802,7 @@ class ScreenWindow(Gtk.Window):
         for kind, label in items:
             if kind == "plus":
                 cr.set_font_size(HELP_FONT_SIZE)
-                total += cr.text_extents("+").x_advance + 2 * HELP_GAP
+                total += cr.text_extents("+").x_advance + HELP_GAP
             else:
                 total += self._help_pill_width(cr, kind, label) + HELP_GAP
         cr.set_font_size(HELP_FONT_SIZE)
@@ -800,34 +820,36 @@ class ScreenWindow(Gtk.Window):
             if text:
                 lines.append(self._help_line_items(hotkey, kind, text))
         if HELP_QUIT_TEXT:
-            lines.append(self._help_line_items(["L1", "L2", "R1", "R2", "R3", "L3"], False, HELP_QUIT_TEXT))
+            quit_items, quit_text = self._help_line_items(hotkey, False, HELP_QUIT_TEXT)
+            lines.append((quit_items + [("plus", "+"), ("L3", "L3")], quit_text))
         available = width - HELP_MARGIN_LEFT - HELP_RIGHT_RESERVED
         widest = max(self._help_line_width(cr, items, text) for items, text in lines)
         scale = min(1.0, available / widest) if widest > 0 else 1.0
 
-        # Alpha of each line (alternation + cross-fade) from the time elapsed since the help
-        # first appeared; a single available line is always opaque.
+        # Alpha of each line (one at a time, cross-fade) from the time elapsed since the help
+        # first appeared; a single available line is always opaque. The order is random (see
+        # extend_help_sequence), restarted each time the help reappears.
         now = time.monotonic()
         if help_start[0] is None:
-            # First line shown is picked at random: shift the origin by that many whole
-            # periods, then lines cycle in order.
-            help_start[0] = now - random.randrange(len(lines)) * HELP_PERIOD_S
+            help_start[0] = now
+            help_sequence.clear()
         elapsed = now - help_start[0]
-        cycle = len(lines) * HELP_PERIOD_S
+        slot = int(elapsed // HELP_PERIOD_S)
+        u = elapsed - slot * HELP_PERIOD_S
+        extend_help_sequence(help_sequence, len(lines), slot)
+        current = help_sequence[slot]
 
         def line_alpha(k):
-            # One line at a time: fade in, full, fade out to black (nothing written), only
-            # then the next line appears.
+            # Fade in, full, fade out to black (nothing written), only then the next line.
             if len(lines) == 1:
                 return 1.0
-            u = (elapsed - k * HELP_PERIOD_S) % cycle
+            if k != current:
+                return 0.0
             if u < HELP_FADE_S:
                 return u / HELP_FADE_S
             if u < HELP_PERIOD_S - HELP_FADE_S:
                 return 1.0
-            if u < HELP_PERIOD_S:
-                return (HELP_PERIOD_S - u) / HELP_FADE_S
-            return 0.0
+            return (HELP_PERIOD_S - u) / HELP_FADE_S
 
         for k, (items, text) in enumerate(lines):
             alpha = line_alpha(k)
@@ -843,15 +865,14 @@ class ScreenWindow(Gtk.Window):
                 if kind == "plus":
                     cr.set_font_size(HELP_FONT_SIZE)
                     ext = cr.text_extents("+")
-                    cr.move_to(x + HELP_GAP, cy + ext.height / 2)
+                    cr.move_to(x, cy - ext.y_bearing - ext.height / 2)  # center of the "+" glyph itself
                     cr.show_text("+")
-                    x += ext.x_advance + 2 * HELP_GAP
+                    x += ext.x_advance + HELP_GAP
                 else:
                     x += self._help_draw_item(cr, kind, label, x, cy) + HELP_GAP
             cr.set_source_rgba(0.91, 0.91, 0.91, 0.75)
             cr.set_font_size(HELP_FONT_SIZE)
-            ext = cr.text_extents(text)
-            cr.move_to(x + 8, cy + ext.height / 2)
+            cr.move_to(x + 8, self._help_text_baseline(cr, cy))
             cr.show_text(text)
             cr.pop_group_to_source()
             cr.paint_with_alpha(alpha)
@@ -1084,7 +1105,7 @@ def main():
 
     geoms = get_monitors()
     if not geoms:
-        sys.stderr.write("zgu-launcher-screen: aucun écran détecté\n")
+        sys.stderr.write("zgu-launcher-screen: no screen detected\n")
         sys.exit(1)
 
     style_provider = Gtk.CssProvider()

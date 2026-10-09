@@ -306,7 +306,7 @@ lpm_cancel_cleanup() {
       rm -f "${cancel_desktop_dir}/${game_real_name} $(t install_game.bonus_folder_suffix)"
     fi
     update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
-    zgu_log "install" "INFO" "slug=${inprogress_slug} raison=annule_nettoye"
+    zgu_log "install" "INFO" "slug=${inprogress_slug} reason=cancelled_cleaned_up"
   fi
   rm -f "${install_success_file}"
   echo "[CANCELLED]"
@@ -352,7 +352,7 @@ for name in "${games_to_install[@]}"; do
   if [[ "${tar_exit}" -ne 0 ]]; then
     err_msg="$(t install_game.corrupt_archive "${name}" "${tar_exit}")"
     echo "${err_msg}" >&2
-    zgu_log "install" "ERREUR" "fichier=${name} raison=archive_corrompue code=${tar_exit}"
+    zgu_log "install" "ERROR" "file=${name} reason=corrupt_archive code=${tar_exit}"
     rm -rf "${temp_extract_dir}"
     continue
   fi
@@ -363,7 +363,7 @@ for name in "${games_to_install[@]}"; do
   slug=$(basename "$(find "${temp_extract_dir}" -mindepth 1 -maxdepth 1 | head -n 1)")
   if [[ -z "${slug}" ]] || [[ ! -d "${temp_extract_dir}/${slug}" ]]; then
     zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
-    zgu_log "install" "ERREUR" "fichier=${name} raison=slug_introuvable"
+    zgu_log "install" "ERROR" "file=${name} reason=slug_not_found"
     rm -rf "${temp_extract_dir}"
     continue
   fi
@@ -374,7 +374,7 @@ for name in "${games_to_install[@]}"; do
   # real path must also be a direct child of $temp_extract_dir.
   if [[ -L "${temp_extract_dir}/${slug}" ]]; then
     zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
-    zgu_log "install" "ERREUR" "fichier=${name} raison=slug_lien_symbolique"
+    zgu_log "install" "ERROR" "file=${name} reason=slug_symlink"
     rm -rf "${temp_extract_dir}"
     continue
   fi
@@ -383,7 +383,7 @@ for name in "${games_to_install[@]}"; do
   case "${slug}" in
     */*|.|..)
       zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
-      zgu_log "install" "ERREUR" "fichier=${name} raison=slug_traversee_chemin"
+      zgu_log "install" "ERROR" "file=${name} reason=slug_path_traversal"
       rm -rf "${temp_extract_dir}"
       continue
       ;;
@@ -398,7 +398,7 @@ for name in "${games_to_install[@]}"; do
   case "${slug}" in
     *[$'\n\r\t']*)
       zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
-      zgu_log "install" "ERREUR" "fichier=${name} raison=slug_caractere_controle"
+      zgu_log "install" "ERROR" "file=${name} reason=slug_control_character"
       rm -rf "${temp_extract_dir}"
       continue
       ;;
@@ -407,7 +407,7 @@ for name in "${games_to_install[@]}"; do
   real_temp_dir=$(realpath -e "${temp_extract_dir}" 2>/dev/null)
   if [[ -z "${real_slug_dir}" ]] || [[ -z "${real_temp_dir}" ]] || [[ "${real_slug_dir%/*}" != "${real_temp_dir}" ]]; then
     zgu_cli_error "$(t install_game.slug_detect_failed "${name}")"
-    zgu_log "install" "ERREUR" "fichier=${name} raison=slug_chemin_reel_invalide"
+    zgu_log "install" "ERROR" "file=${name} reason=slug_invalid_real_path"
     rm -rf "${temp_extract_dir}"
     continue
   fi
@@ -418,7 +418,7 @@ for name in "${games_to_install[@]}"; do
   if [[ -d "${prefix_dir}" ]]; then
     err_msg="$(t install_game.already_installed "${slug}")"
     echo "${err_msg}" >&2
-    zgu_log "install" "ERREUR" "fichier=${name} slug=${slug} raison=deja_installe"
+    zgu_log "install" "ERROR" "file=${name} slug=${slug} reason=already_installed"
     rm -rf "${temp_extract_dir}"
     continue
   fi
@@ -427,7 +427,7 @@ for name in "${games_to_install[@]}"; do
   if ! mv "${temp_extract_dir}/${slug}" "${games_dir}/"; then
     err_msg="$(t install_game.move_failed "${name}")"
     echo "${err_msg}" >&2
-    zgu_log "install" "ERREUR" "fichier=${name} slug=${slug} raison=deplacement_echoue"
+    zgu_log "install" "ERROR" "file=${name} slug=${slug} reason=move_failed"
     rm -rf "${temp_extract_dir}"
     continue
   fi
@@ -729,7 +729,7 @@ except Exception:
       : > "${prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
     fi
 
-    zgu_log "install" "OK" "slug=${slug} nom=${game_real_name}"
+    zgu_log "install" "OK" "slug=${slug} name=${game_real_name}"
     # The slug (not just "1"): reused after the loop for the best-effort Lutris native media
     # update, see "install_success_file".
     echo "${slug}" >> "${install_success_file}"

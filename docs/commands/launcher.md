@@ -64,7 +64,7 @@ A per-game failure is reported and the other games continue; the final status is
 
 ## Gamepad shortcuts while the game runs
 
-When the LPM Launcher is enabled, a small watcher runs for the whole play session (`lib/zgu-gamepad-alttab-watcher.py`). It reads the pad through SDL2 without grabbing it, so the game and tools like AntiMicroX keep working. It works on X11 (`xdotool`) and on Wayland (`ydotool`, which needs its `ydotoold` service).
+When the LPM Launcher is enabled, a small watcher runs for the whole play session (`lib/zgu-gamepad-alttab-watcher.py`). It reads the pad through SDL2 without grabbing it, so the game and tools like AntiMicroX keep working. It stops by itself a few seconds after the game ends. It works on X11 (`xdotool`) and on Wayland (`ydotool`, which needs its `ydotoold` service).
 
 Hold the hotkey combo **L1 + L2 + R1 + R2 + R3** (all pulled or pressed together), then:
 

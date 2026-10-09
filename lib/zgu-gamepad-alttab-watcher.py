@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # --- lpm launcher: "switch window" (Alt+Tab) gamepad combo, via SDL2 ---
 #
-# Usage: zgu-gamepad-alttab-watcher.py <x11|wayland>
+# Usage: zgu-gamepad-alttab-watcher.py <x11|wayland> [<prefix_folder>]
 #
 # Sibling of zgu-gamepad-exit-watcher.py (same principles: SDL2, no grab(), non-exclusive
 # reading compatible with AntiMicro; see that file), with a different lifetime and gesture:
 #
 #   - NOT single-shot: it stays active for the WHOLE game session and can trigger any
-#     number of times.
+#     number of times. With <prefix_folder> it stops by itself once the game is over (no
+#     wineserver of the prefix any more, see zgu-prefix-watch.py).
 #   - The gesture is a HOLD: while L1+L2+R1+R2+R3 click stays pressed, D-pad Left/Right
 #     cycles windows (Shift+Tab / Tab), like holding Alt on a keyboard and pressing Tab
 #     repeatedly. Releasing the combo releases Alt and confirms the selection.
@@ -38,15 +39,25 @@ import ctypes
 import ctypes.util
 
 if len(sys.argv) < 2 or sys.argv[1] not in ("x11", "wayland"):
-    sys.stderr.write("Usage: zgu-gamepad-alttab-watcher.py <x11|wayland>\n")
+    sys.stderr.write("Usage: zgu-gamepad-alttab-watcher.py <x11|wayland> [<prefix_folder>]\n")
     sys.exit(1)
 
 SESSION_KIND = sys.argv[1]
+PREFIX_DIR = sys.argv[2] if len(sys.argv) > 2 else ""
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 GAMECONTROLLERDB_PATH = os.path.join(SCRIPT_DIR, "data", "gamecontrollerdb.txt")
 
 running = True
+
+
+def _load_prefix_watch():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "zgu_prefix_watch", os.path.join(SCRIPT_DIR, "zgu-prefix-watch.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def handle_signal(_signum, _frame):
@@ -76,8 +87,8 @@ def _load_sdl2():
 sdl = _load_sdl2()
 if sdl is None:
     sys.stderr.write(
-        "zgu-gamepad-alttab-watcher: libSDL2 introuvable "
-        "(paquet manquant : libsdl2-2.0-0 / sdl2 / SDL2)\n"
+        "zgu-gamepad-alttab-watcher: libSDL2 not found "
+        "(missing package: libsdl2-2.0-0 / sdl2 / SDL2)\n"
     )
     sys.exit(1)
 
@@ -112,7 +123,7 @@ if _add_mappings_from_file is not None:
 
 if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
     sys.stderr.write(
-        "zgu-gamepad-alttab-watcher: SDL_Init a échoué (%s)\n"
+        "zgu-gamepad-alttab-watcher: SDL_Init failed (%s)\n"
         % sdl.SDL_GetError().decode("utf-8", "replace")
     )
     sys.exit(1)
@@ -347,8 +358,12 @@ def main():
     prev_one_shot = {}  # button -> was pressed on the previous tick (see ONE_SHOT_ACTIONS)
     antimicro_paused_pids = []  # see _pause_antimicro()/_resume_antimicro() above
 
+    game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
+
     try:
         while running:
+            if game_watch.game_ended():
+                break
             sdl.SDL_GameControllerUpdate()
 
             loops_since_rescan += 1

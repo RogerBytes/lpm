@@ -126,7 +126,7 @@ and a non-interactive install that keeps the safe defaults (hooks disabled, bad 
 Other points:
 
 - Because of the router, `lpm install game.zgp -y` does **not** work (`-y` is taken as a file name: "File not found: -y"). The same holds for `--allow-scripts` and `--ignore-hash`. `-s`, `--shortcut=`, `--desktop-dir=` and `-n` may be placed anywhere.
-- The exit status is 0 only if every archive was installed (or you cancelled). For details, run `lpm list` afterwards, or parse the log (`~/.local/share/lpm/lpm.log`, tab-separated: timestamp, command, status `OK`/`ERREUR`/`INFO`, detail).
+- The exit status is 0 only if every archive was installed (or you cancelled). For details, run `lpm list` afterwards, or parse the log (`~/.local/share/lpm/lpm.log`, tab-separated: timestamp, command, status `OK`/`ERROR`/`WARN`/`INFO`, detail).
 - Messages follow the locale (`LC_ALL`, then `LC_MESSAGES`, then `LANG`). Use `LC_ALL=C` to get the English strings quoted here.
 - Error messages are also appended to the log.
 

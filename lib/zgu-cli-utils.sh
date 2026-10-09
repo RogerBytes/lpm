@@ -29,7 +29,7 @@ zgu_cli_ok() {
 # zgu_cli_error <text>: prints <text> in red on stderr (all CLI error messages, already redirected to
 # stderr throughout the project -- this existing signal allows coloring errors mechanically).
 #
-# ALSO logs every call to lpm.log (STATUS=ERREUR), before printing the message -- this covers all
+# ALSO logs every call to lpm.log (STATUS=ERROR), before printing the message -- this covers all
 # pre-check errors (zenity/python3/pyyaml/zstd missing, Lutris database not found, invalid argument...),
 # not only errors inside a processing loop (explicit "zgu_log" calls). "command" is deduced from the
 # calling script (BASH_SOURCE[1], one level above this function) rather than requiring an extra
@@ -37,7 +37,7 @@ zgu_cli_ok() {
 zgu_cli_error() {
   local caller
   caller=$(basename -- "${BASH_SOURCE[1]:-inconnu}" .sh)
-  zgu_log "${caller}" "ERREUR" "$1"
+  zgu_log "${caller}" "ERROR" "$1"
   if [[ -t 2 ]]; then
     printf '\033[31m%s\033[0m\n' "$1" >&2
   else

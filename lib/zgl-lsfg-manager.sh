@@ -375,7 +375,7 @@ zgp_lsfg_apply_one() {
 
   if [[ ! -f "${yml_file}" ]]; then
     zgp_lsfg_report_error_early "$(t lsfg.yml_missing "${slug}")"
-    zgu_log "lsfg" "ERREUR" "slug=${slug} raison=yaml_introuvable"
+    zgu_log "lsfg" "ERROR" "slug=${slug} reason=yaml_not_found"
     return 1
   fi
 
@@ -383,7 +383,7 @@ zgp_lsfg_apply_one() {
     mkdir -p "${prefix_dir}/lsfg-vk"
     if ! cp -f -- "${lsfg_dll_master}" "${prefix_dir}/lsfg-vk/lsfg-vk.dll"; then
       zgp_lsfg_report_error_early "$(t lsfg.dll_copy_failed_for "${slug}")"
-      zgu_log "lsfg" "ERREUR" "slug=${slug} raison=copie_dll_echouee"
+      zgu_log "lsfg" "ERROR" "slug=${slug} reason=dll_copy_failed"
       return 1
     fi
   fi
@@ -446,7 +446,7 @@ fi
   local py_status=$?
   if [[ "${py_status}" -ne 0 ]]; then
     zgp_lsfg_report_error_early "$(t lsfg.yaml_patch_failed "${slug}")"
-    zgu_log "lsfg" "ERREUR" "slug=${slug} raison=patch_yaml_echoue"
+    zgu_log "lsfg" "ERROR" "slug=${slug} reason=yaml_patch_failed"
     return 1
   fi
 

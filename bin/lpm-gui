@@ -25,7 +25,7 @@ if [[ ! -f "${gui_dir}/lpm_gtk.py" ]]; then
   if declare -F t >/dev/null 2>&1; then
     echo "$(t launcher.gui_not_found "${gui_dir}")" >&2
   else
-    echo "Erreur critique : l'interface graphique est introuvable à : ${gui_dir}" >&2
+    echo "Critical error: the GUI was not found at: ${gui_dir}" >&2
   fi
   exit 1
 fi

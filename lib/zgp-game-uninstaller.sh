@@ -235,7 +235,7 @@ for game_slug in "${games_to_delete[@]}"; do
   case "${game_slug}" in
     */*|.|..|*[$'\n\r\t']*)
       zgu_cli_error "$(t uninstall_game.unsafe_prefix_skip "${game_name}" "${game_slug}")"
-      zgu_log "uninstall" "ERREUR" "slug=${game_slug} nom=${game_name} raison=slug_non_sur"
+      zgu_log "uninstall" "ERROR" "slug=${game_slug} name=${game_name} reason=slug_unsafe"
       continue
       ;;
   esac
@@ -250,7 +250,7 @@ for game_slug in "${games_to_delete[@]}"; do
   # A. Delete the physical prefix on disk
   if ! safe_delete_prefix_dir "${prefix_dir}"; then
     zgu_cli_error "$(t uninstall_game.unsafe_prefix_skip "${game_name}" "${prefix_dir}")"
-    zgu_log "uninstall" "ERREUR" "slug=${game_slug} nom=${game_name} raison=prefixe_dangereux dir=${prefix_dir}"
+    zgu_log "uninstall" "ERROR" "slug=${game_slug} name=${game_name} reason=dangerous_prefix dir=${prefix_dir}"
   fi
 
   # B. Delete the Lutris YML config
@@ -286,7 +286,7 @@ for game_slug in "${games_to_delete[@]}"; do
   fi
   rm -f "${HOME}/.local/share/applications/net.lutris.${game_slug}.desktop"
 
-  zgu_log "uninstall" "OK" "slug=${game_slug} nom=${game_name}"
+  zgu_log "uninstall" "OK" "slug=${game_slug} name=${game_name}"
   printf '[REMOVED] %s\n' "${game_slug}"
 done
 

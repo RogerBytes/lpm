@@ -34,11 +34,9 @@
 # Independent of X11/Wayland and focus, can never touch anything outside that prefix, does
 # nothing if no wineserver of that prefix exists, and never uses "kill -9".
 #
-# Lifetime: the script stops by itself once it has sent SIGTERM once. The orchestrator
-# cannot reliably tell when a game ends normally (zgl-launcher-orchestrator.sh hands over
-# to Lutris via "exec" and loses track of the game process), so if the combo is never used
-# the watcher keeps running after the game exits. This is harmless: reading is passive with
-# near-zero CPU cost, and with no process of the prefix the combo does nothing.
+# Lifetime: the script stops by itself once it has sent SIGTERM once, or once the game is over
+# (no wineserver of the prefix any more, see zgu-prefix-watch.py). The orchestrator hands over
+# to Lutris via "exec" and cannot tell when the game ends, so the watcher checks by itself.
 #
 # SYSTEM DEPENDENCY: the libSDL2 shared library ("libsdl2-2.0-0" on Debian/Ubuntu, "sdl2"
 # on Arch, "SDL2" on Fedora). No extra Python package (pysdl2): the script calls libSDL2
@@ -52,7 +50,7 @@ import ctypes
 import ctypes.util
 
 if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]:
-    sys.stderr.write("Usage: zgu-gamepad-exit-watcher.py <x11|wayland> <dossier_du_prefixe>\n")
+    sys.stderr.write("Usage: zgu-gamepad-exit-watcher.py <x11|wayland> <prefix_folder>\n")
     sys.exit(1)
 
 SESSION_KIND = sys.argv[1]
@@ -62,6 +60,15 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 GAMECONTROLLERDB_PATH = os.path.join(SCRIPT_DIR, "data", "gamecontrollerdb.txt")
 
 running = True
+
+
+def _load_prefix_watch():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "zgu_prefix_watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), "zgu-prefix-watch.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def handle_signal(_signum, _frame):
@@ -91,8 +98,8 @@ def _load_sdl2():
 sdl = _load_sdl2()
 if sdl is None:
     sys.stderr.write(
-        "zgu-gamepad-exit-watcher: libSDL2 introuvable "
-        "(paquet manquant : libsdl2-2.0-0 / sdl2 / SDL2)\n"
+        "zgu-gamepad-exit-watcher: libSDL2 not found "
+        "(missing package: libsdl2-2.0-0 / sdl2 / SDL2)\n"
     )
     sys.exit(1)
 
@@ -135,7 +142,7 @@ if _add_mappings_from_file is not None:
 
 if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
     sys.stderr.write(
-        "zgu-gamepad-exit-watcher: SDL_Init a échoué (%s)\n"
+        "zgu-gamepad-exit-watcher: SDL_Init failed (%s)\n"
         % sdl.SDL_GetError().decode("utf-8", "replace")
     )
     sys.exit(1)
@@ -147,8 +154,8 @@ if _add_mappings_from_file is not None and os.path.isfile(GAMECONTROLLERDB_PATH)
     _add_mappings_from_file(GAMECONTROLLERDB_PATH.encode("utf-8"))
 elif _add_mappings_from_file is None:
     sys.stderr.write(
-        "zgu-gamepad-exit-watcher: SDL_GameControllerAddMappingsFromFile indisponible dans "
-        "cette libSDL2 -- base bundlée ignorée, repli sur la base interne de la lib installée.\n"
+        "zgu-gamepad-exit-watcher: SDL_GameControllerAddMappingsFromFile unavailable in "
+        "this libSDL2 -- bundled database ignored, falling back to the installed library's built-in one.\n"
     )
 
 
@@ -260,9 +267,12 @@ def main():
     # gamepads, not a per-GUID match); enough since lpm assumes one player/one gamepad.
     pads = find_controllers()
     loops_since_rescan = 0
+    game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
 
     try:
         while running:
+            if game_watch.game_ended():
+                return
             sdl.SDL_GameControllerUpdate()
 
             loops_since_rescan += 1

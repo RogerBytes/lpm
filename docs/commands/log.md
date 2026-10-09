@@ -23,7 +23,7 @@ Each line has four columns separated by a **tab**:
 |---|---|
 | 1 | Timestamp, ISO 8601 with numeric time zone (`2026-10-09T04:36:00+0000`). |
 | 2 | Origin: a command name (`install`, `pack`, `icon`, ...) or the name of the script that reported an error (`zgr-runner-installer`, `zgc-self-update`, ...). |
-| 3 | Status: `OK`, `ERREUR` (an error; the word is French in all languages) or `INFO`. |
+| 3 | Status: `OK`, `ERROR`, `WARN` or `INFO` (always in English, whatever the language of the interface). |
 | 4 | Free-text detail, often `key=value` pairs. Tabs and newlines in values are replaced by spaces. |
 
 When the file exceeds 10 000 lines, the next write renames it to `lpm.log.1` (replacing the previous backup) and starts a new empty `lpm.log`. `lpm log` only reads the current `lpm.log`, never `lpm.log.1`.
@@ -62,8 +62,8 @@ Warning about global options: the router in `bin/lpm` consumes `-y`, `--allow-sc
 ## Output
 
 ```
-2026-10-09T04:36:00+0000	zgr-runner-lister	ERREUR	Error: Lutris is not installed on this system.
-2026-10-09T04:36:01+0000	zgc-self-update	ERREUR	Unable to reach GitHub to check for updates.
+2026-10-09T04:36:00+0000	zgr-runner-lister	ERROR	Error: Lutris is not installed on this system.
+2026-10-09T04:36:01+0000	zgc-self-update	ERROR	Unable to reach GitHub to check for updates.
 ```
 
 (Columns are tab-separated.) Output is plain text with no colour.
@@ -77,7 +77,7 @@ Warning about global options: the router in `bin/lpm` consumes `-y`, `--allow-sc
 
 ## Scripting notes
 
-- **Parsing**: split on tabs, for example `lpm log --all | awk -F'\t' '$3 == "ERREUR" { print $1, $4 }'`. The status value is `ERREUR` (not `ERROR`) whatever the language of the interface. Messages in column 4 are written in the interface language that was active when the line was written.
+- **Parsing**: split on tabs, for example `lpm log --all | awk -F'\t' '$3 == "ERROR" { print $1, $4 }'`. The status values are always the English words `OK`, `ERROR`, `WARN` and `INFO`. Messages in column 4 are written in the interface language that was active when the line was written.
 - **No match, empty log and "not found" are all exit 0**, and their message goes to standard output. Test the output, or filter with a pattern you know exists.
 - **`--clear` is always interactive** and cannot be forced with `-y` (the router drops a leading `-y`, and the script has no such option). In a script, answer through standard input: `echo y | lpm log --clear`. Closed or empty input means *no*.
 - Errors raised by `lpm log` itself (bad option, bad `-n`) are also appended to the log.
@@ -90,7 +90,7 @@ Warning about global options: the router in `bin/lpm` consumes `-y`, `--allow-sc
 lpm log
 lpm log -n 200
 lpm log --all
-lpm log --grep ERREUR -n 20
+lpm log --grep ERROR -n 20
 lpm log --grep zgr-runner-installer
 echo y | lpm log --clear
 ```

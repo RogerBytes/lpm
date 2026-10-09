@@ -45,7 +45,7 @@ bail() {
   local msg="$1"
   # No graphical notification here: this case is abnormal but already fully logged, and this
   # script must NEVER block the game launch (see file header).
-  zgu_log "launcher-runtime" "ERREUR" "gamedir=${gamedir} raison=${msg}"
+  zgu_log "launcher-runtime" "ERROR" "gamedir=${gamedir} reason=${msg}"
   exit 0
 }
 
@@ -207,7 +207,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
     if [[ "${chosen_idx}" -eq -1 ]]; then
       # Picker cancelled on the orchestrator side, or label not found (YAML modified in between):
       # same fallback as below (see write_noop_bat above).
-      zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
+      zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} reason=picker_cancelled"
       write_noop_bat
       exit 0
     fi
@@ -248,7 +248,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
       # Picker cancelled (window closed without choice, "Cancel" button): writes a .bat that does
       # nothing instead of relaunching the last chosen episode (see write_noop_bat above). Lutris
       # will still run this .bat (unavoidable here), but it does nothing.
-      zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} raison=picker_annule"
+      zgu_log "launcher-runtime" "INFO" "gamedir=${gamedir} reason=picker_cancelled"
       write_noop_bat
       exit 0
     fi
@@ -285,6 +285,6 @@ mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
   fi
 } > "${bat_path}" 2>/dev/null || bail "ecriture_bat_echouee"
 
-zgu_log "launcher-runtime" "OK" "gamedir=${gamedir} entree=${entry_labels[${chosen_idx}]}"
+zgu_log "launcher-runtime" "OK" "gamedir=${gamedir} entry=${entry_labels[${chosen_idx}]}"
 
 exit 0

@@ -53,7 +53,7 @@ report() {
 
 say_err() {
   # Single point for all errors of this script: one "zgu_log" here is enough.
-  zgu_log "zgc-dependency-checker" "ERREUR" "$1"
+  zgu_log "zgc-dependency-checker" "ERROR" "$1"
   report error "$1"
   echo "$1" >&2
 }

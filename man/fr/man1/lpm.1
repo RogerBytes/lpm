@@ -116,7 +116,7 @@ Affiche cette page (ou un résumé intégré si elle n'est pas installée).
 .PP
 Les options globales doivent être placées juste après le nom de la commande, avant ses autres arguments (par exemple \fBlpm install \-y jeu.zgp\fR).
 .SH JOURNAL
-Les erreurs affichées par les commandes, ainsi que certains succès, sont enregistrés dans \fI~/.local/share/lpm/lpm.log\fR (toujours sous le répertoire personnel), une ligne par événement avec quatre colonnes séparées par des tabulations : horodatage, origine, statut (OK, ERREUR ou INFO), détail. Au-delà de 10000 lignes, le fichier est renommé \fIlpm.log.1\fR et un nouveau journal est démarré. Voir \fBlog\fR ci-dessus.
+Les erreurs affichées par les commandes, ainsi que certains succès, sont enregistrés dans \fI~/.local/share/lpm/lpm.log\fR (toujours sous le répertoire personnel), une ligne par événement avec quatre colonnes séparées par des tabulations : horodatage, origine, statut (OK, ERROR, WARN ou INFO), détail. Au-delà de 10000 lignes, le fichier est renommé \fIlpm.log.1\fR et un nouveau journal est démarré. Voir \fBlog\fR ci-dessus.
 .SH FICHIERS
 .TP
 .I ~/.local/share/lpm/lpm.log

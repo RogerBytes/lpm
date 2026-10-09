@@ -418,7 +418,7 @@ zgp_icon_process_one() {
   search_results=$(zgp_sgdb_search "${g_name}")
   if [[ -z "${search_results}" ]]; then
     zgp_icon_report_skip "$(t icon.not_found_on_sgdb "${g_name}")"
-    zgu_log "icon" "ERREUR" "slug=${slug} raison=jeu_introuvable_sgdb"
+    zgu_log "icon" "ERROR" "slug=${slug} reason=game_not_found_sgdb"
     return 1
   fi
 
@@ -474,7 +474,7 @@ zgp_icon_process_one() {
   icons_urls=$(zgp_sgdb_icons "${chosen_game_id}" "${chosen_game_name}")
   if [[ -z "${icons_urls}" ]]; then
     zgp_icon_report_skip "$(t icon.no_icon_available "${g_name}")"
-    zgu_log "icon" "ERREUR" "slug=${slug} raison=aucune_icone_disponible"
+    zgu_log "icon" "ERROR" "slug=${slug} reason=no_icon_available"
     return 1
   fi
 
@@ -496,7 +496,7 @@ zgp_icon_process_one() {
 
   if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
     zgp_icon_report_skip "$(t icon.download_failed "${g_name}")"
-    zgu_log "icon" "ERREUR" "slug=${slug} raison=telechargement_echoue"
+    zgu_log "icon" "ERROR" "slug=${slug} reason=download_failed"
     rm -f "${raw_file}"
     return 1
   fi
@@ -510,7 +510,7 @@ zgp_icon_process_one() {
     [[ -z "${biggest}" ]] && biggest=0
     if ! "${convert_bin[@]}" "${raw_file}[${biggest}]" "${prefix_dir}/icon/icon.png" 2>/dev/null; then
       zgp_icon_report_skip "$(t icon.convert_failed "${g_name}")"
-      zgu_log "icon" "ERREUR" "slug=${slug} raison=conversion_ico_echouee"
+      zgu_log "icon" "ERROR" "slug=${slug} reason=ico_conversion_failed"
       rm -f "${raw_file}"
       return 1
     fi
@@ -535,7 +535,7 @@ zgp_icon_process_one() {
     zgu_write_game_shortcut "${g_name}" "${slug}" "${prefix_dir}" "${g_id}" "${version}" "${has_menu}" "${has_desktop}" "${g_exe}" "${g_configpath}" "${lutris_config_dir}" "${runner_dir}"
   fi
 
-  zgu_log "icon" "OK" "slug=${slug} nom=${g_name}"
+  zgu_log "icon" "OK" "slug=${slug} name=${g_name}"
   t icon.done_cli "${g_name}"
   return 0
 }

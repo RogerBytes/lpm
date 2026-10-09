@@ -4,7 +4,7 @@
 #
 # Append-only text file, one line per event, tab-separated columns:
 # TIMESTAMP <TAB> COMMAND <TAB> STATUS <TAB> DETAIL
-#   - STATUS is OK / ERREUR / INFO
+#   - STATUS is OK / ERROR / WARN / INFO
 #   - DETAIL is a free string "key=value key2=value2 ..."
 #
 # Purpose: debugging a failed install/isolate/pack/uninstall after the fact (see lpm log,

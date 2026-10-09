@@ -58,7 +58,7 @@ _lpm_load_lang_file() {
 
 # 1. Mandatory English base
 if ! _lpm_load_lang_file "${LANG_DIR}/en.lang"; then
-  echo "Erreur critique : fichier de langue de base introuvable : ${LANG_DIR}/en.lang" >&2
+  echo "Critical error: base language file not found: ${LANG_DIR}/en.lang" >&2
   exit 1
 fi
 

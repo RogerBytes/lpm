@@ -85,7 +85,7 @@ def expect(label, got, want):
     global ok
     if got != want:
         ok = False
-        print("ECHEC %s:\n   obtenu : %s\n   attendu: %s" % (label, got, want))
+        print("FAILED %s:\n   got     : %s\n   expected: %s" % (label, got, want))
     else:
         print("OK: " + label)
 
@@ -109,5 +109,84 @@ expect("Wayland", wl, [
     "ydotool key 42:1 15:1 15:0 42:0",
     "ydotool key 56:0",
 ])
+
+
+# --- End-of-game detection (lib/zgu-prefix-watch.py) -------------------------------------
+import subprocess
+import tempfile
+import time
+
+spec = importlib.util.spec_from_file_location("pw", os.path.join(ROOT, "lib", "zgu-prefix-watch.py"))
+pw = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(pw)
+
+
+def watch_scenario(alive_by_time, times):
+    """alive_by_time(t) -> is the game alive at time t; returns game_ended() for each t."""
+    now = {"t": 0.0}
+    w = pw.GameEndWatch("/tmp", alive=lambda _p: alive_by_time(now["t"]), clock=lambda: now["t"])
+    out = []
+    for t in times:
+        now["t"] = t
+        out.append(w.game_ended())
+    return out
+
+
+times = list(range(0, 16))
+expect("game end: never seen -> never stops", watch_scenario(lambda t: False, times), [False] * 16)
+expect("game end: seen then gone -> stops after the grace period",
+       watch_scenario(lambda t: t < 5, times),
+       [False] * 8 + [True] * 8)   # last seen at t=4, gone for 4 s at t=8
+expect("game end: short gap (< delay) -> no stop",
+       watch_scenario(lambda t: not (6 <= t < 8), times), [False] * 16)
+expect("game end: no prefix folder -> never stops",
+       [pw.GameEndWatch("").game_ended()], [False])
+
+# Real /proc detection: a process named "wineserver" whose environment holds WINEPREFIX.
+with tempfile.TemporaryDirectory() as tmp:
+    prefix = os.path.join(tmp, "game", "pfx")
+    os.makedirs(prefix)
+    fake = os.path.join(tmp, "wineserver")
+    os.symlink("/bin/sleep", fake)
+    proc = subprocess.Popen([fake, "30"], env={"WINEPREFIX": prefix})
+    try:
+        for _ in range(100):  # wait for the process to have exec'd (its name appears in /proc)
+            if pw.prefix_alive(os.path.join(tmp, "game")):
+                break
+            time.sleep(0.05)
+        expect("/proc detection: prefix wineserver alive", pw.prefix_alive(os.path.join(tmp, "game")), True)
+        expect("/proc detection: other folder", pw.prefix_alive(os.path.join(tmp, "other")), False)
+    finally:
+        proc.kill()
+        proc.wait()
+    expect("/proc detection: after stop", pw.prefix_alive(os.path.join(tmp, "game")), False)
+
+
+# --- Random order of the help lines (lib/zgu-launcher-screen.py) ---------------------------
+import ast
+import random
+
+tree = ast.parse(open(os.path.join(ROOT, "lib", "zgu-launcher-screen.py")).read())
+func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "extend_help_sequence")
+namespace = {"random": random}
+exec(compile(ast.Module([func], []), "extend_help_sequence", "exec"), namespace)
+extend = namespace["extend_help_sequence"]
+
+good = True
+for count in (2, 3, 5):
+    for _ in range(300):
+        seq = []
+        extend(seq, count, 200)
+        if any(a == b for a, b in zip(seq, seq[1:])):
+            good = False
+        for i in range(0, len(seq) - count, count):
+            if sorted(seq[i:i + count]) != list(range(count)):
+                good = False
+expect("random order: never the same line twice in a row, every round complete", good, True)
+varied = {tuple(s) for s in ([x for x in (lambda q: (extend(q, 5, 4), q)[1])([])][:5] for _ in range(50))}
+expect("random order: the order changes between draws", len(varied) > 1, True)
+seq1 = []
+extend(seq1, 1, 5)
+expect("random order: single line", seq1[:6], [0] * 6)
 
 sys.exit(0 if ok else 1)

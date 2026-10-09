@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 0. Version ---
-readonly LPM_VERSION="v0.9.3"
+readonly LPM_VERSION="v0.9.4"
 
 # --- 1. Locate the libs (dev vs system install) ---
 # Two possible system install locations depending on how the binary was installed
@@ -19,7 +19,7 @@ if [[ ! -d "${LIB_DIR}" ]]; then
     # Deliberately not localized: the language loader lives in lib/ itself, so it
     # cannot be loaded when that folder is missing. A message on stderr is enough
     # (lpm cannot start without lib/, so lpm-gui cannot either).
-    echo "Erreur critique : Le dossier des bibliothèques (lib) est introuvable à : ${LIB_DIR}"
+    echo "Critical error: the libraries folder (lib) was not found at: ${LIB_DIR}"
     exit 1
 fi
 

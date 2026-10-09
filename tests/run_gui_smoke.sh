@@ -24,10 +24,10 @@ log="${work}/smoke.log"
 status=0
 xvfb-run -a dbus-run-session -- "${py}" "${work}/repo/tests/gui_smoke.py" >"${log}" 2>&1 || status=$?
 grep -vE 'DRI3|dbus-daemon|^$' "${log}" || true
-if [ "${status}" -ne 0 ]; then echo "ECHEC: le script de test s'est terminé avec le code ${status}" >&2; fi
+if [ "${status}" -ne 0 ]; then echo "FAILED: the test script exited with code ${status}" >&2; fi
 # A traceback or critical GTK warning is a failure even if the script did not crash.
 if grep -qE 'Traceback|-CRITICAL' "${log}"; then
-  echo "ECHEC: traceback ou avertissement critique dans la sortie" >&2
+  echo "FAILED: traceback or critical warning in the output" >&2
   exit 1
 fi
 exit "${status}"

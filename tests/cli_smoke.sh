@@ -47,123 +47,123 @@ check() {
     pass=$((pass + 1))
   else
     fail=$((fail + 1))
-    echo "ECHEC: ${name} (attendu rc=${want_rc} /${want_re}/, obtenu rc=${rc})" >&2
+    echo "FAILED: ${name} (expected rc=${want_rc} /${want_re}/, got rc=${rc})" >&2
     sed 's/^/    | /' <<<"${out}" | head -8 >&2
   fi
 }
 # expect "name" <shell test command>
 expect() {
   local name="$1"; shift
-  if "$@"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "ECHEC: ${name}" >&2; fi
+  if "$@"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAILED: ${name}" >&2; fi
 }
 
 # --- General
 check "version" 0 '^lpm v[0-9]' --version
-check "commande inconnue" 1 'Unknown command' bogus
-check "sans argument: aide, code 0" 0 'lpm vsync' 
+check "unknown command" 1 'Unknown command' bogus
+check "no argument: help, exit code 0" 0 'lpm vsync' 
 check "list" 0 'mario +Mario' list
 check "list (zelda)" 0 'zelda +Zelda' list
 check "list-runner" 0 'GE-Test' list-runner
 check "list-isolable" 0 'No isolable|Nothing' list-isolable
-check "isolate sans store partagé" 0 'Nothing to isolate' isolate
+check "isolate without shared store" 0 'Nothing to isolate' isolate
 check "sgdb-key get" 0 '"key"' sgdb-key get
 check "lsfg status" 0 '"installed"' lsfg status
-check "self-update: argument invalide" 1 'Invalid argument' self-update bogus
-check "check: rapport structuré" 0 '\[REPORT\] ok\|' check
+check "self-update: invalid argument" 1 'Invalid argument' self-update bogus
+check "check: structured report" 0 '\[REPORT\] ok\|' check
 check "info" 0 'Slug +: mario' info mario
-check "info: slug inconnu" 1 'no installed game' info nosuch
-check "info: sans slug" 1 'provide a slug' info
+check "info: unknown slug" 1 'no installed game' info nosuch
+check "info: no slug" 1 'provide a slug' info
 
 # --- Missing target: clear error and exit code 1, never a false success
 for cmd in install pack pack-runner uninstall uninstall-runner install-runner shortcut; do
-  check "${cmd}: cible manquante" 1 'nothing to do' "${cmd}"
+  check "${cmd}: missing target" 1 'nothing to do' "${cmd}"
 done
-check "uninstall -y sans cible" 1 'nothing to do' uninstall -y
-check "install: fichier introuvable" 1 'not found' install -y /nonexistent.zgp
-check "uninstall: slug inconnu" 1 'not found' uninstall -y nosuch
-check "uninstall-runner: inconnu" 1 'could not be found' uninstall-runner -y nosuch
+check "uninstall -y without target" 1 'nothing to do' uninstall -y
+check "install: file not found" 1 'not found' install -y /nonexistent.zgp
+check "uninstall: unknown slug" 1 'not found' uninstall -y nosuch
+check "uninstall-runner: unknown" 1 'could not be found' uninstall-runner -y nosuch
 
 # --- Launcher and tools (Lutris YAML editing)
 check "launcher on" 0 'enabled' launcher mario on
-expect "launcher on: fichier créé" test -f "${HOME}/Games/mario/lpm-launcher.yml"
+expect "launcher on: file created" test -f "${HOME}/Games/mario/lpm-launcher.yml"
 check "launcher off" 0 'disabled' launcher mario off
 check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
-check "tools env set vide" 0 '' tools mario env set FOO ""
-expect "YAML toujours valide" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
+check "tools env set empty" 0 '' tools mario env set FOO ""
+expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
 
 # --- Change a game's runner ("runner" tool): tested on zelda
 mkdir -p "${HOME}/.local/share/lutris/runners/wine/GE-Other/files/bin"
 printf '#!/bin/sh\nexit 0\n' > "${HOME}/.local/share/lutris/runners/wine/GE-Other/files/bin/wine"
 chmod +x "${HOME}/.local/share/lutris/runners/wine/GE-Other/files/bin/wine"
-printf 'game:\n  exe: /y.exe\n# lpm:hook-disabled garde-moi\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/zelda-1.yml"
-check "runner: changement" 0 "changed to 'GE-Other'" tools zelda runner GE-Other
-expect "runner: info affiche le nouveau runner" bash -c 'bash "$1" info zelda </dev/null | grep -q "GE-Other"' _ "${R}"
-expect "runner: commentaire YAML conservé" grep -q 'lpm:hook-disabled' "${HOME}/.config/lutris/games/zelda-1.yml"
-check "runner: non installé" 1 'is not installed' tools zelda runner NoSuchRunner
-check "runner: sans nom" 1 'name of an installed runner' tools zelda runner
-check "runner: nom avec /" 1 'name of an installed runner' tools zelda runner ../x
-check "runner: slug inconnu" 1 'no installed game' tools nosuch runner GE-Other
+printf 'game:\n  exe: /y.exe\n# lpm:hook-disabled keep-me\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/zelda-1.yml"
+check "runner: change" 0 "changed to 'GE-Other'" tools zelda runner GE-Other
+expect "runner: info shows the new runner" bash -c 'bash "$1" info zelda </dev/null | grep -q "GE-Other"' _ "${R}"
+expect "runner: YAML comment preserved" grep -q 'lpm:hook-disabled' "${HOME}/.config/lutris/games/zelda-1.yml"
+check "runner: not installed" 1 'is not installed' tools zelda runner NoSuchRunner
+check "runner: no name" 1 'name of an installed runner' tools zelda runner
+check "runner: name with /" 1 'name of an installed runner' tools zelda runner ../x
+check "runner: unknown slug" 1 'no installed game' tools nosuch runner GE-Other
 mkdir -p "${HOME}/.local/share/lutris/runners/wine/GE-Temp/bin"
 printf '#!/bin/sh\nexit 0\n' > "${HOME}/.local/share/lutris/runners/wine/GE-Temp/bin/wine"; chmod +x "${HOME}/.local/share/lutris/runners/wine/GE-Temp/bin/wine"
-check "runner: vers un runner temporaire" 0 "changed to 'GE-Temp'" tools zelda runner GE-Temp
+check "runner: to a temporary runner" 0 "changed to 'GE-Temp'" tools zelda runner GE-Temp
 rm -rf "${HOME}/.local/share/lutris/runners/wine/GE-Temp"
-check "runner: les autres outils refusent un runner disparu" 1 'no longer installed' tools zelda folder
-check "runner: mais le changement de runner marche quand même" 0 "changed to 'GE-Test'" tools zelda runner GE-Test
-check "runner: les outils refonctionnent ensuite" 0 'saved' tools zelda env set RUNNER_OK 1
+check "runner: other tools reject a vanished runner" 1 'no longer installed' tools zelda folder
+check "runner: but changing runner still works" 0 "changed to 'GE-Test'" tools zelda runner GE-Test
+check "runner: tools work again afterwards" 0 'saved' tools zelda env set RUNNER_OK 1
 rm -rf "${HOME}/.local/share/lutris/runners/wine/GE-Other"
 
 # --- VSync (per-game environment variables): tested on zelda, a YAML comment must survive
 zelda_yml="${HOME}/.config/lutris/games/zelda-1.yml"
-printf 'game:\n  exe: /y.exe\n# lpm:hook-disabled garde-moi\nwine:\n  version: GE-Test\n' > "${zelda_yml}"
+printf 'game:\n  exe: /y.exe\n# lpm:hook-disabled keep-me\nwine:\n  version: GE-Test\n' > "${zelda_yml}"
 vsync_out() { bash "${R}" vsync "$@" </dev/null 2>&1; }
-check "vsync status: aucun jeu" 0 '' vsync status
-expect "vsync status: liste vide" bash -c '[[ -z "$(bash "$1" vsync status </dev/null 2>&1)" ]]' _ "${R}"
-check "vsync: état initial" 0 'd3d9=off' vsync zelda
-check "vsync: état explicite" 0 'gl-mesa=off' vsync zelda status
+check "vsync status: no game" 0 '' vsync status
+expect "vsync status: empty list" bash -c '[[ -z "$(bash "$1" vsync status </dev/null 2>&1)" ]]' _ "${R}"
+check "vsync: initial state" 0 'd3d9=off' vsync zelda
+check "vsync: explicit state" 0 'gl-mesa=off' vsync zelda status
 check "vsync on d3d9" 0 'enabled' vsync zelda on d3d9
-expect "vsync: d3d9 actif, d3d11 inactif" bash -c 'o="$(bash "$1" vsync zelda </dev/null)"; grep -qx "d3d9=on" <<<"$o" && grep -qx "d3d11=off" <<<"$o"' _ "${R}"
-check "vsync status: liste zelda" 0 '^zelda$' vsync status
-expect "vsync status: pas mario" bash -c '! bash "$1" vsync status </dev/null | grep -q mario' _ "${R}"
-check "tools env: DXVK_CONFIG existant" 0 '' tools zelda env set DXVK_CONFIG "dxgi.hideAmdGpu = True"
-check "vsync on (tout)" 0 'enabled' vsync zelda on
-expect "vsync: les 5 actifs" bash -c '[[ "$(bash "$1" vsync zelda </dev/null | grep -c "=on")" -eq 5 ]]' _ "${R}"
-expect "vsync: DXVK_CONFIG fusionné, option existante conservée" bash -c 'o="$(bash "$1" tools zelda env list </dev/null)"; grep -q "^DXVK_CONFIG=.*hideAmdGpu = True" <<<"$o" && grep -q "^DXVK_CONFIG=.*dxgi.syncInterval = 0" <<<"$o" && grep -q "^DXVK_CONFIG=.*d3d9.presentInterval = 0" <<<"$o"' _ "${R}"
-expect "vsync: autres variables posées" bash -c 'o="$(bash "$1" tools zelda env list </dev/null)"; grep -qx "VKD3D_SWAPCHAIN_PRESENT_MODE=IMMEDIATE" <<<"$o" && grep -qx "__GL_SYNC_TO_VBLANK=0" <<<"$o" && grep -qx "vblank_mode=0" <<<"$o"' _ "${R}"
+expect "vsync: d3d9 on, d3d11 off" bash -c 'o="$(bash "$1" vsync zelda </dev/null)"; grep -qx "d3d9=on" <<<"$o" && grep -qx "d3d11=off" <<<"$o"' _ "${R}"
+check "vsync status: lists zelda" 0 '^zelda$' vsync status
+expect "vsync status: not mario" bash -c '! bash "$1" vsync status </dev/null | grep -q mario' _ "${R}"
+check "tools env: existing DXVK_CONFIG" 0 '' tools zelda env set DXVK_CONFIG "dxgi.hideAmdGpu = True"
+check "vsync on (all)" 0 'enabled' vsync zelda on
+expect "vsync: all 5 on" bash -c '[[ "$(bash "$1" vsync zelda </dev/null | grep -c "=on")" -eq 5 ]]' _ "${R}"
+expect "vsync: DXVK_CONFIG merged, existing option preserved" bash -c 'o="$(bash "$1" tools zelda env list </dev/null)"; grep -q "^DXVK_CONFIG=.*hideAmdGpu = True" <<<"$o" && grep -q "^DXVK_CONFIG=.*dxgi.syncInterval = 0" <<<"$o" && grep -q "^DXVK_CONFIG=.*d3d9.presentInterval = 0" <<<"$o"' _ "${R}"
+expect "vsync: other variables set" bash -c 'o="$(bash "$1" tools zelda env list </dev/null)"; grep -qx "VKD3D_SWAPCHAIN_PRESENT_MODE=IMMEDIATE" <<<"$o" && grep -qx "__GL_SYNC_TO_VBLANK=0" <<<"$o" && grep -qx "vblank_mode=0" <<<"$o"' _ "${R}"
 check "vsync on: idempotent" 0 'enabled' vsync zelda on
-expect "vsync on x2: DXVK_CONFIG sans doublon" bash -c '[[ "$(bash "$1" tools zelda env list </dev/null | grep "^DXVK_CONFIG=" | grep -o "dxgi.syncInterval" | wc -l)" -eq 1 ]]' _ "${R}"
+expect "vsync on x2: DXVK_CONFIG without duplicate" bash -c '[[ "$(bash "$1" tools zelda env list </dev/null | grep "^DXVK_CONFIG=" | grep -o "dxgi.syncInterval" | wc -l)" -eq 1 ]]' _ "${R}"
 check "vsync off d3d9" 0 'removed' vsync zelda off d3d9
-expect "vsync off d3d9: d3d11 reste actif" bash -c 'o="$(bash "$1" vsync zelda </dev/null)"; grep -qx "d3d9=off" <<<"$o" && grep -qx "d3d11=on" <<<"$o"' _ "${R}"
-check "tools env: valeur personnalisée d3d12" 0 '' tools zelda env set VKD3D_SWAPCHAIN_PRESENT_MODE MAILBOX
-check "vsync off (tout)" 0 'removed' vsync zelda off
-expect "vsync off: plus aucun réglage actif" bash -c '! bash "$1" vsync zelda </dev/null | grep -q "=on"' _ "${R}"
-expect "vsync off: DXVK_CONFIG garde l'option non VSync" bash -c 'bash "$1" tools zelda env list </dev/null | grep -qx "DXVK_CONFIG=dxgi.hideAmdGpu = True"' _ "${R}"
-expect "vsync off: valeur personnalisée jamais touchée" bash -c 'bash "$1" tools zelda env list </dev/null | grep -qx "VKD3D_SWAPCHAIN_PRESENT_MODE=MAILBOX"' _ "${R}"
-check "tools env: retire DXVK_CONFIG" 0 '' tools zelda env unset DXVK_CONFIG
-check "vsync on d3d11 seul" 0 'enabled' vsync zelda on d3d11
-check "vsync off d3d11: DXVK_CONFIG supprimée si vide" 0 'removed' vsync zelda off d3d11
-expect "vsync: DXVK_CONFIG absente après retrait" bash -c '! bash "$1" tools zelda env list </dev/null | grep -q "^DXVK_CONFIG="' _ "${R}"
-expect "vsync: commentaire YAML conservé" grep -q 'lpm:hook-disabled garde-moi' "${zelda_yml}"
-expect "vsync: YAML toujours valide" python3 -c "import yaml; yaml.safe_load(open('${zelda_yml}'))"
-check "vsync: réglage inconnu" 1 "unknown setting 'bogus'" vsync zelda on bogus
-check "vsync: action inconnue" 1 "unknown action" vsync zelda toggle
-check "vsync: status avec réglage" 1 'Usage' vsync zelda status d3d9
-check "vsync: slug inconnu" 1 'no installed game' vsync nosuch on
-check "vsync: sans argument" 1 'Usage' vsync
+expect "vsync off d3d9: d3d11 stays on" bash -c 'o="$(bash "$1" vsync zelda </dev/null)"; grep -qx "d3d9=off" <<<"$o" && grep -qx "d3d11=on" <<<"$o"' _ "${R}"
+check "tools env: custom d3d12 value" 0 '' tools zelda env set VKD3D_SWAPCHAIN_PRESENT_MODE MAILBOX
+check "vsync off (all)" 0 'removed' vsync zelda off
+expect "vsync off: no setting left on" bash -c '! bash "$1" vsync zelda </dev/null | grep -q "=on"' _ "${R}"
+expect "vsync off: DXVK_CONFIG keeps the non-VSync option" bash -c 'bash "$1" tools zelda env list </dev/null | grep -qx "DXVK_CONFIG=dxgi.hideAmdGpu = True"' _ "${R}"
+expect "vsync off: custom value never touched" bash -c 'bash "$1" tools zelda env list </dev/null | grep -qx "VKD3D_SWAPCHAIN_PRESENT_MODE=MAILBOX"' _ "${R}"
+check "tools env: remove DXVK_CONFIG" 0 '' tools zelda env unset DXVK_CONFIG
+check "vsync on d3d11 only" 0 'enabled' vsync zelda on d3d11
+check "vsync off d3d11: DXVK_CONFIG removed if empty" 0 'removed' vsync zelda off d3d11
+expect "vsync: DXVK_CONFIG absent after removal" bash -c '! bash "$1" tools zelda env list </dev/null | grep -q "^DXVK_CONFIG="' _ "${R}"
+expect "vsync: YAML comment preserved" grep -q 'lpm:hook-disabled keep-me' "${zelda_yml}"
+expect "vsync: YAML still valid" python3 -c "import yaml; yaml.safe_load(open('${zelda_yml}'))"
+check "vsync: unknown setting" 1 "unknown setting 'bogus'" vsync zelda on bogus
+check "vsync: unknown action" 1 "unknown action" vsync zelda toggle
+check "vsync: status with setting" 1 'Usage' vsync zelda status d3d9
+check "vsync: unknown slug" 1 'no installed game' vsync nosuch on
+check "vsync: no argument" 1 'Usage' vsync
 
 # --- Shortcut
 check "shortcut" 0 'Shortcut created' shortcut mario
-expect "shortcut: .desktop créé" test -f "${HOME}/.local/share/applications/net.lutris.mario.desktop"
-check "shortcut: slug inconnu" 1 'not found' shortcut nosuch
+expect "shortcut: .desktop created" test -f "${HOME}/.local/share/applications/net.lutris.mario.desktop"
+check "shortcut: unknown slug" 1 'not found' shortcut nosuch
 
 # --- Full round trip: pack, uninstall, reinstall
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
-expect "pack: .zgp créé" test -s "${HOME}/Mario.zgp"
+expect "pack: .zgp created" test -s "${HOME}/Mario.zgp"
 check "uninstall" 0 '\[REMOVED\] mario' uninstall -y mario
-expect "uninstall: retiré de la liste" bash -c "! bash '${R}' list </dev/null | grep -q '^mario '"
-expect "uninstall: dossier supprimé" test ! -e "${HOME}/Games/mario"
+expect "uninstall: removed from the list" bash -c "! bash '${R}' list </dev/null | grep -q '^mario '"
+expect "uninstall: folder deleted" test ! -e "${HOME}/Games/mario"
 check "install" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario.zgp"
-check "list après réinstallation" 0 'mario +Mario' list
+check "list after reinstall" 0 'mario +Mario' list
 
 # --- Completion: every documented command is offered (except advanced commands
 #     intentionally absent from "lpm --help"), and options with values complete
@@ -171,49 +171,49 @@ hidden=" archives options lsfg-dll sgdb-images sgdb-key "
 for page in "${repo}"/docs/commands/*.md; do
   cmd="$(basename "${page}" .md)"
   [[ "${hidden}" == *" ${cmd} "* ]] && continue
-  expect "complétion bash: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/lpm.bash"
-  expect "complétion zsh: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/_lpm"
+  expect "completion bash: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/lpm.bash"
+  expect "completion zsh: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/_lpm"
 done
 printf '#!/bin/sh\nexec bash %s "$@"\n' "${R}" > "${HOME}/bin/lpm"; chmod +x "${HOME}/bin/lpm"
 # shellcheck disable=SC1091
 source "${repo}/completions/lpm.bash" 2>/dev/null
 comp() { COMP_WORDS=("$@"); COMP_CWORD=$((${#COMP_WORDS[@]} - 1)); COMPREPLY=(); _lpm 2>/dev/null; echo "${COMPREPLY[*]}"; }
-expect "complétion: -a propose win32/win64" bash -c '[[ "$1" == *win64* ]]' _ "$(comp lpm create-prefix -a "")"
-expect "complétion: -s propose les modes" bash -c '[[ "$1" == *desktop* ]]' _ "$(comp lpm shortcut -s "")"
-expect "complétion: --url pour icon" bash -c '[[ "$1" == *--url* ]]' _ "$(comp lpm icon "--u")"
-expect "complétion: slugs installés" bash -c '[[ "$1" == *mario* ]]' _ "$(comp lpm uninstall "")"
-expect "complétion: tools propose l'outil runner" bash -c '[[ "$1" == *runner* ]]' _ "$(comp lpm tools mario "")"
-expect "complétion: tools runner propose les runners installés" bash -c '[[ "$1" == *GE-Test* ]]' _ "$(comp lpm tools mario runner "")"
-expect "complétion: vsync propose status et les slugs" bash -c '[[ "$1" == *status* && "$1" == *mario* ]]' _ "$(comp lpm vsync "")"
-expect "complétion: vsync <slug> propose on/off" bash -c '[[ "$1" == *on* && "$1" == *off* ]]' _ "$(comp lpm vsync mario "")"
-expect "complétion: vsync on propose les réglages" bash -c '[[ "$1" == *d3d9* && "$1" == *gl-mesa* ]]' _ "$(comp lpm vsync mario on "")"
+expect "completion: -a offers win32/win64" bash -c '[[ "$1" == *win64* ]]' _ "$(comp lpm create-prefix -a "")"
+expect "completion: -s offers the modes" bash -c '[[ "$1" == *desktop* ]]' _ "$(comp lpm shortcut -s "")"
+expect "completion: --url for icon" bash -c '[[ "$1" == *--url* ]]' _ "$(comp lpm icon "--u")"
+expect "completion: installed slugs" bash -c '[[ "$1" == *mario* ]]' _ "$(comp lpm uninstall "")"
+expect "completion: tools offers the runner tool" bash -c '[[ "$1" == *runner* ]]' _ "$(comp lpm tools mario "")"
+expect "completion: tools runner offers installed runners" bash -c '[[ "$1" == *GE-Test* ]]' _ "$(comp lpm tools mario runner "")"
+expect "completion: vsync offers status and slugs" bash -c '[[ "$1" == *status* && "$1" == *mario* ]]' _ "$(comp lpm vsync "")"
+expect "completion: vsync <slug> offers on/off" bash -c '[[ "$1" == *on* && "$1" == *off* ]]' _ "$(comp lpm vsync mario "")"
+expect "completion: vsync on offers the settings" bash -c '[[ "$1" == *d3d9* && "$1" == *gl-mesa* ]]' _ "$(comp lpm vsync mario on "")"
 
 # --- Gamepad shortcuts (Alt+Tab / F4 / Alt+Enter / F11 watcher), without a real gamepad
 if python3 -c "import ctypes; ctypes.CDLL('libSDL2-2.0.so.0')" 2>/dev/null; then
-  expect "manette: touches pendant le combo (X11 et Wayland)" python3 "${repo}/tests/gamepad_smoke.py"
+  expect "gamepad: keys during the combo (X11 and Wayland)" python3 "${repo}/tests/gamepad_smoke.py"
 else
-  echo "(libSDL2 absente : test manette ignoré)"
+  echo "(libSDL2 missing: gamepad test skipped)"
 fi
 
 # --- install.sh refuses to overwrite another program named "lpm" (tested only as root,
 #     and only the refusal: it stops before copying anything, so nothing is touched)
 if [[ "$(id -u)" -eq 0 ]]; then
   foreign_bin="${work}/foreign-bin"; mkdir -p "${foreign_bin}"
-  printf '\177ELF autre-programme' > "${foreign_bin}/lpm"
+  printf '\177ELF other-program' > "${foreign_bin}/lpm"
   out="$(LPM_INSTALL_BIN_DIR="${foreign_bin}" bash "${repo}/install.sh" 2>&1)"; rc=$?
-  expect "install.sh: refuse un autre « lpm »" bash -c '[[ "$1" -eq 1 && "$2" == *"pas Ludis Prefix Manager"* && "$2" == *"Rien n'"'"'a été installé"* ]]' _ "${rc}" "${out}"
-  expect "install.sh: l'autre « lpm » est intact" grep -q 'autre-programme' "${foreign_bin}/lpm"
+  expect "install.sh: refuses another program named lpm" bash -c '[[ "$1" -eq 1 && "$2" == *"is not Ludis Prefix Manager"* && "$2" == *"Nothing was installed"* ]]' _ "${rc}" "${out}"
+  expect "install.sh: the other \"lpm\" is intact" grep -q 'other-program' "${foreign_bin}/lpm"
 else
-  echo "(pas root : test du refus d'install.sh ignoré)"
+  echo "(not root: install.sh refusal test skipped)"
 fi
 
 # --- The log records errors
-check "log" 0 'ERREUR|ERROR' log
+check "log" 0 'ERROR' log
 
 # --- Uninstalling a game and a runner
 check "uninstall zelda" 0 '\[REMOVED\] zelda' uninstall -y zelda
 check "uninstall-runner" 0 '\[REMOVED\] GE-Test' uninstall-runner -y GE-Test
-check "list-runner vide" 0 'No runner' list-runner
+check "list-runner empty" 0 'No runner' list-runner
 
-echo "CLI: ${pass} ok, ${fail} échec(s)"
+echo "CLI: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

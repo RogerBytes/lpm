@@ -247,7 +247,7 @@ zgp_launcher_apply_on() {
 
   if [[ ! -f "${yml_file}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.yml_missing "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=yaml_introuvable"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_not_found"
     return 1
   fi
 
@@ -284,7 +284,7 @@ print(version)
 
   if [[ -z "${current_data}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.no_current_exe "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=pas_exe_actuel"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=no_current_exe"
     return 1
   fi
 
@@ -312,7 +312,7 @@ print(version)
 
   if [[ -z "${win_exe}" ]] || [[ -z "${win_workdir}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.winepath_failed "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=winepath_echoue"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=winepath_failed"
     return 1
   fi
 
@@ -344,7 +344,7 @@ print(version)
     # cannot apply. Uses "current_workdir" (resolved above: explicit config working_dir, else
     # dirname(exe)), and logs it.
     bat_dir="${current_workdir}"
-    zgu_log "launcher" "AVERT" "slug=${slug} raison=exe_hors_convention_games bat_dir=${bat_dir}"
+    zgu_log "launcher" "WARN" "slug=${slug} reason=exe_outside_games_convention bat_dir=${bat_dir}"
   fi
 
   bat_path_linux="${bat_dir}/lpm-launch.bat"
@@ -390,7 +390,7 @@ with open(os.environ["YML_PATH"], "w") as f:
 ' 2>/dev/null
     if [[ $? -ne 0 ]]; then
       zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
-      zgu_log "launcher" "ERREUR" "slug=${slug} raison=ecriture_yaml_echouee"
+      zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_write_failed"
       return 1
     fi
 
@@ -398,7 +398,7 @@ with open(os.environ["YML_PATH"], "w") as f:
       echo "# $(t launcher.example_entry_comment)"
       echo "#  - label: \"$(t launcher.example_entry_label)\""
       echo "#    workdir: \"C:\\\\Games\\\\...\""
-      echo "#    exe: \"C:\\\\Games\\\\...\\\\jeu.exe\""
+      echo "#    exe: \"C:\\\\Games\\\\...\\\\game.exe\""
     } >> "${game_dir}/lpm-launcher.yml"
   fi
 
@@ -442,8 +442,8 @@ if [[ -z "\${runtime_script}" ]]; then
   log_dir="\${HOME}/.local/share/lpm"
   mkdir -p "\${log_dir}" 2>/dev/null
   printf '%s\t%s\t%s\t%s\n' \
-    "\$(date +%FT%T%z 2>/dev/null)" "launcher-runtime" "ERREUR" \
-    "gamedir=${game_dir} raison=runtime_introuvable_bac_a_sable script_dir=${script_dir}" \
+    "\$(date +%FT%T%z 2>/dev/null)" "launcher-runtime" "ERROR" \
+    "gamedir=${game_dir} reason=runtime_not_found_in_sandbox script_dir=${script_dir}" \
     >> "\${log_dir}/lpm.log" 2>/dev/null
   # No GUI notification here: the failure is already logged above, and this relay must never
   # block the game from starting over a problem it cannot reliably display (zenity itself may
@@ -499,7 +499,7 @@ with open(yml_path, "w") as f:
 fi
   if [[ $? -ne 0 ]]; then
     zgp_launcher_report_error_early "$(t launcher.yaml_patch_failed "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=patch_lutris_yaml_echoue"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=lutris_yaml_patch_failed"
     return 1
   fi
 
@@ -559,7 +559,7 @@ fi
           local ok_msg
           ok_msg="$(t launcher.flatpak_permission_applied_ok)"
           echo "${ok_msg}" >&2
-          zgu_log "launcher" "OK" "slug=${slug} action=flatpak_override_applique cible=${override_target}"
+          zgu_log "launcher" "OK" "slug=${slug} action=flatpak_override_applied target=${override_target}"
         else
           local fail_msg
           if [[ "${fp_needs_hostos}" = true ]]; then
@@ -568,7 +568,7 @@ fi
             fail_msg="$(t launcher.flatpak_permission_applied_fail "${script_dir}")"
           fi
           echo "${fail_msg}" >&2
-          zgu_log "launcher" "ERREUR" "slug=${slug} raison=flatpak_override_echoue cible=${override_target}"
+          zgu_log "launcher" "ERROR" "slug=${slug} reason=flatpak_override_failed target=${override_target}"
         fi
       else
         local flatpak_hint
@@ -593,7 +593,7 @@ zgp_launcher_apply_off() {
 
   if [[ ! -f "${launcher_yml}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.launcher_yml_missing "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=lpm_launcher_yml_introuvable"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=lpm_launcher_yml_not_found"
     return 1
   fi
 
@@ -607,7 +607,7 @@ print(data.get("original_exe") or "")
 
   if [[ -z "${original_exe}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.no_original_exe "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=original_exe_absent"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=original_exe_missing"
     return 1
   fi
 
@@ -653,7 +653,7 @@ with open(yml_path, "w") as f:
 fi
   if [[ $? -ne 0 ]]; then
     zgp_launcher_report_error_early "$(t launcher.yaml_patch_failed "${slug}")"
-    zgu_log "launcher" "ERREUR" "slug=${slug} raison=patch_lutris_yaml_echoue"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=lutris_yaml_patch_failed"
     return 1
   fi
 

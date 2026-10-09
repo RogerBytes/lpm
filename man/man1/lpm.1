@@ -116,7 +116,7 @@ Shows this page (or a built-in summary if it is not installed).
 .PP
 Global options must be placed right after the command name, before its other arguments (for example \fBlpm install \-y game.zgp\fR).
 .SH LOG
-Errors printed by commands, and some successes, are recorded in \fI~/.local/share/lpm/lpm.log\fR (always under the home directory), one line per event with four tab-separated columns: timestamp, origin, status (OK, ERREUR or INFO), detail. Past 10000 lines the file is renamed \fIlpm.log.1\fR and a fresh log is started. See \fBlog\fR above.
+Errors printed by commands, and some successes, are recorded in \fI~/.local/share/lpm/lpm.log\fR (always under the home directory), one line per event with four tab-separated columns: timestamp, origin, status (OK, ERROR, WARN or INFO), detail. Past 10000 lines the file is renamed \fIlpm.log.1\fR and a fresh log is started. See \fBlog\fR above.
 .SH FILES
 .TP
 .I ~/.local/share/lpm/lpm.log

@@ -422,18 +422,18 @@ zgp_logo_process_one() {
 
   if [[ -z "${chosen_url}" ]]; then
     zgp_logo_report_skip "$(t logo.no_logo_available "${g_name}")"
-    zgu_log "logo" "ERREUR" "slug=${slug} raison=aucun_logo_disponible"
+    zgu_log "logo" "ERROR" "slug=${slug} reason=no_logo_available"
     return 1
   fi
   fi
 
   if ! zgp_logo_save_from_url "${slug}" "${game_dir}" "${chosen_url}"; then
     zgp_logo_report_skip "$(t logo.download_failed "${g_name}")"
-    zgu_log "logo" "ERREUR" "slug=${slug} raison=telechargement_ou_conversion_echoue"
+    zgu_log "logo" "ERROR" "slug=${slug} reason=download_or_conversion_failed"
     return 1
   fi
 
-  zgu_log "logo" "OK" "slug=${slug} nom=${g_name}"
+  zgu_log "logo" "OK" "slug=${slug} name=${g_name}"
   t logo.done_cli "${g_name}"
   return 0
 }

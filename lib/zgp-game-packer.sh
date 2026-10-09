@@ -254,7 +254,7 @@ lpm_cancel_cleanup() {
   [[ -n "${inprogress_archive}" ]] && rm -f -- "${inprogress_archive}" \
     "${OUTPUT_DIR}/hash/$(basename -- "${inprogress_archive}").sha256"
   [[ -n "${inprogress_yml}" ]] && rm -f -- "${inprogress_yml}"
-  zgu_log "pack" "INFO" "archive=${inprogress_archive} raison=annule_nettoye"
+  zgu_log "pack" "INFO" "archive=${inprogress_archive} reason=cancelled_cleaned_up"
   echo "[CANCELLED]"
   t pack_game.cancelled_run_cli
   exit 130
@@ -472,7 +472,7 @@ except Exception as e:
 
   if [[ "${tar_exit}" -ne 0 ]] || [[ ! -s "${archive_path}" ]]; then
     zgu_cli_error "$(t pack_game.compression_failed_cli "${ARCHIVE_NAME}")"
-    zgu_log "pack" "ERREUR" "slug=${game_slug} nom=${game_real_name} raison=compression_echouee code=${tar_exit}"
+    zgu_log "pack" "ERROR" "slug=${game_slug} name=${game_real_name} reason=compression_failed code=${tar_exit}"
     rm -f "${archive_path}"
     [[ -n "${inprogress_yml}" ]] && rm -f -- "${inprogress_yml}"
     exit 1
@@ -486,7 +486,7 @@ except Exception as e:
     zgu_write_hash_sidecar "${archive_path}" "${OUTPUT_DIR}"
   fi
 
-  zgu_log "pack" "OK" "slug=${game_slug} nom=${game_real_name} archive=${archive_path}"
+  zgu_log "pack" "OK" "slug=${game_slug} name=${game_real_name} archive=${archive_path}"
   # Line read by the GUI (see CommandPage.run_command): this archive is done, offered for
   # deletion if the batch is cancelled afterwards.
   printf '[EXPORTED] %s\n' "${archive_path}"

@@ -22,13 +22,13 @@ HOST_UID="$(id -u)"
 HOST_GID="$(id -g)"
 
 VERSION="$(grep -oP 'LPM_VERSION="v\K[^"]+' "${PROJECT_ROOT}/bin/lpm")"
-echo "Version détectée : ${VERSION}"
+echo "Detected version: ${VERSION}"
 
 build_deb() {
   echo "=== Build .deb (Debian 13) ==="
-  echo "--- Préparation de l'image (téléchargement + outils, peut prendre plusieurs minutes la 1ère fois) ---"
+  echo "--- Preparing the image (download + tools, may take several minutes the first time) ---"
   docker build -t lpm-builder-debian -f "${SCRIPT_DIR}/docker/Dockerfile.debian" "${SCRIPT_DIR}/docker"
-  echo "--- Construction du paquet ---"
+  echo "--- Building the package ---"
   docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
     -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-debian \
     bash -c '
@@ -48,9 +48,9 @@ build_deb() {
 
 build_rpm() {
   echo "=== Build .rpm (Fedora) ==="
-  echo "--- Préparation de l'image (téléchargement + outils, peut prendre plusieurs minutes la 1ère fois) ---"
+  echo "--- Preparing the image (download + tools, may take several minutes the first time) ---"
   docker build -t lpm-builder-fedora -f "${SCRIPT_DIR}/docker/Dockerfile.fedora" "${SCRIPT_DIR}/docker"
-  echo "--- Construction du paquet ---"
+  echo "--- Building the package ---"
   docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
     -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-fedora \
     bash -c '
@@ -69,9 +69,9 @@ build_rpm() {
 
 build_arch() {
   echo "=== Build paquet Arch (PKGBUILD) ==="
-  echo "--- Préparation de l'image (téléchargement + outils, peut prendre plusieurs minutes la 1ère fois) ---"
+  echo "--- Preparing the image (download + tools, may take several minutes the first time) ---"
   docker build -t lpm-builder-arch -f "${SCRIPT_DIR}/docker/Dockerfile.arch" "${SCRIPT_DIR}/docker"
-  echo "--- Construction du paquet ---"
+  echo "--- Building the package ---"
   # makepkg refuses to run as root (Arch requirement), but then nothing could install missing
   # dependencies with pacman. So run as root by default (installing dependencies read straight
   # from the PKGBUILD, the single source of truth), then switch to the unprivileged "builder"
@@ -106,6 +106,6 @@ case "${1:-all}" in
 esac
 
 echo "========================================"
-echo " Paquets disponibles dans : ${DIST_DIR}"
+echo " Packages available in: ${DIST_DIR}"
 ls -la "${DIST_DIR}"
 echo "========================================"

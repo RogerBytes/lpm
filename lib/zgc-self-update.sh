@@ -27,7 +27,7 @@ source "${script_dir}/zgu-github-release-utils.sh"
 exec 3>&1
 
 say_err() {
-  zgu_log "zgc-self-update" "ERREUR" "$1"
+  zgu_log "zgc-self-update" "ERROR" "$1"
   echo "$1" >&2
 }
 
@@ -212,6 +212,6 @@ if [[ "${install_rc}" -ne 0 ]]; then
   exit 1
 fi
 
-zgu_log "zgc-self-update" "OK" "ancienne=${current_version} nouvelle=${latest_version} methode=${method}"
+zgu_log "zgc-self-update" "OK" "old=${current_version} new=${latest_version} method=${method}"
 printf '[UPDATED] %s\n' "${latest_version}"
 exit 0

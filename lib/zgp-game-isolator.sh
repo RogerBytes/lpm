@@ -396,7 +396,7 @@ zgp_isolate_one() {
   real_giga_dir=$(realpath -e "${giga_dir}" 2>/dev/null)
   if [[ -z "${real_giga_dir}" ]] || [[ "${real_giga_dir}" != "${real_games_dir}/"* ]]; then
     zgp_isolate_report_error "$(t isolate.game_paths_not_found "${game_name}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} raison=giga_prefixe_invalide"
+    zgu_log "isolate" "ERROR" "slug=${slug} reason=invalid_giga_prefix"
     return 1
   fi
   giga_dir="${real_giga_dir}"
@@ -405,7 +405,7 @@ zgp_isolate_one() {
   store=$(zgu_detect_isolation_store "${lutris_db}" "${giga_dir}")
   if [[ -z "${store}" ]]; then
     zgp_isolate_report_error "$(t isolate.store_unknown "${game_name}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} raison=store_inconnu"
+    zgu_log "isolate" "ERROR" "slug=${slug} reason=unknown_store"
     return 1
   fi
 
@@ -423,7 +423,7 @@ zgp_isolate_one() {
   # injected directly.
   if [[ -z "${old_id}" ]] || [[ ! "${old_id}" =~ ^[0-9]+$ ]]; then
     zgp_isolate_report_error "$(t isolate.game_paths_not_found "${game_name}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} raison=id_base_invalide"
+    zgu_log "isolate" "ERROR" "slug=${slug} reason=invalid_db_id"
     return 1
   fi
 
@@ -436,7 +436,7 @@ zgp_isolate_one() {
   # lutris_config_dir.
   if [[ -z "${old_configpath}" ]] || [[ "${old_configpath}" == *"/"* ]]; then
     zgp_isolate_report_error "$(t isolate.configpath_invalid "${game_name}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} raison=configpath_invalide"
+    zgu_log "isolate" "ERROR" "slug=${slug} reason=invalid_configpath"
     return 1
   fi
 
@@ -468,7 +468,7 @@ except Exception:
 
   if [[ ${#game_rel_paths[@]} -eq 0 ]]; then
     zgp_isolate_report_error "$(t isolate.game_paths_not_found "${game_name}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=chemins_jeu_introuvables"
+    zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=game_paths_not_found"
     return 1
   fi
 
@@ -490,13 +490,13 @@ except Exception:
   local new_prefix_dir="${games_dir}/${new_slug}"
   if [[ -e "${new_prefix_dir}" ]]; then
     zgp_isolate_report_error "$(t isolate.already_exists "${game_name}" "${new_prefix_dir}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=prefixe_cible_deja_existant"
+    zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=target_prefix_already_exists"
     return 1
   fi
 
   mkdir -p "${new_prefix_dir}" || {
     zgp_isolate_report_error "$(t isolate.mkdir_failed "${game_name}" "${new_prefix_dir}")"
-    zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=mkdir_echoue"
+    zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=mkdir_failed"
     return 1
   }
 
@@ -511,7 +511,7 @@ except Exception:
       t isolate.copying_base_cli "${game_name}"
       zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${entry_rel}" || {
         zgp_isolate_report_error "$(t isolate.copy_failed "${game_name}")"
-        zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=copie_echouee"
+        zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=copy_failed"
         rm -rf "${new_prefix_dir}"
         return 1
       }
@@ -523,7 +523,7 @@ except Exception:
       t isolate.copying_base_cli "${game_name}"
       zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${socle_rel}" || {
         zgp_isolate_report_error "$(t isolate.copy_failed "${game_name}")"
-        zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=copie_echouee"
+        zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=copy_failed"
         rm -rf "${new_prefix_dir}"
         return 1
       }
@@ -535,7 +535,7 @@ except Exception:
     t isolate.copying_game_cli "${game_name}"
     zgp_copy_rel_cli "${giga_dir}" "${new_prefix_dir}" "${rp}" || {
       zgp_isolate_report_error "$(t isolate.copy_failed "${game_name}")"
-      zgu_log "isolate" "ERREUR" "slug=${slug} store=${store} raison=copie_echouee"
+      zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=copy_failed"
       rm -rf "${new_prefix_dir}"
       return 1
     }
@@ -660,7 +660,7 @@ EOF
 
   rm -f "${lutris_config_dir}/${old_configpath}.yml" 2>/dev/null
 
-  zgu_log "isolate" "OK" "slug=${slug} nouveau_slug=${new_slug} store=${store} nom=${game_name}"
+  zgu_log "isolate" "OK" "slug=${slug} new_slug=${new_slug} store=${store} name=${game_name}"
   zgu_cli_ok "$(t isolate.done_cli "${game_name}")"
   return 0
 }

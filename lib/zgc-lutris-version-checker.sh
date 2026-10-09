@@ -26,7 +26,7 @@ say() {
 }
 
 say_err() {
-  zgu_log "zgc-lutris-version-checker" "ERREUR" "$1"
+  zgu_log "zgc-lutris-version-checker" "ERROR" "$1"
   echo "$1" >&2
 }
 

@@ -46,7 +46,7 @@ app.register(None)
 app.activate()
 pump(0.5)
 win = app.props.active_window
-assert win is not None, "aucune fenêtre créée"
+assert win is not None, "no window created"
 
 page_ids = list(lpm_gtk.MainWindow.BUILDER_NAMES)
 ok = []
@@ -62,12 +62,12 @@ try:
     win._on_back_to_categories()
     pump(0.3)
 except Exception:
-    errors.append("retour menu:\n" + traceback.format_exc())
+    errors.append("back to menu:\n" + traceback.format_exc())
 
 import sgdb  # noqa: E402
 
-for label, make in (("fenêtre titres SGDB", lambda: sgdb.SgdbTitleResolverWindow(win, [("mario", "Mario")])),
-                    ("fenêtre images SGDB", lambda: sgdb.SgdbPickerWindow(win, []))):
+for label, make in (("SGDB titles window", lambda: sgdb.SgdbTitleResolverWindow(win, [("mario", "Mario")])),
+                    ("SGDB images window", lambda: sgdb.SgdbPickerWindow(win, []))):
     try:
         w = make()
         w.present()
@@ -83,7 +83,7 @@ import widgets_select  # noqa: E402
 
 try:
     fs = widgets_select.FileMultiSelect("Test")
-    assert fs.get_title() == "Test" or fs.get_title(), "titre vide"
+    assert fs.get_title() == "Test" or fs.get_title(), "empty title"
     fs.set_paths(["/a/x.zgp", "/a/y.zgp", "/a/z.zgp"], checked_paths=["/a/y.zgp"])
     assert fs.selected_paths() == ["/a/y.zgp"], fs.selected_paths()
     assert not fs.select_all_check.get_active()
@@ -98,24 +98,24 @@ try:
     rr.select_all_check.set_active(True)
     got = rr.selected_names()
     assert got == ["GE-1", "GE-3"], got
-    print("selecteurs fichiers/distants: OK", got)
+    print("file/remote selectors: OK", got)
 except Exception:
-    errors.append("selecteurs:\n" + traceback.format_exc())
+    errors.append("selectors:\n" + traceback.format_exc())
 
 import util  # noqa: E402
 import widgets_rows  # noqa: E402
 
 try:
     calls = []
-    widgets_rows.ask_keep_or_delete(win, "Titre", "a\\nb", lambda: calls.append("del"))
+    widgets_rows.ask_keep_or_delete(win, "Title", "a\\nb", lambda: calls.append("del"))
     pump(0.2)
     assert util.json_result(types.SimpleNamespace(returncode=0, stdout='{"a": 1}')) == {"a": 1}
     assert util.json_result(types.SimpleNamespace(returncode=1, stdout='{"a": 1}')) == {}
-    assert util.json_result(types.SimpleNamespace(returncode=0, stdout="pas du json")) == {}
-    assert widgets_rows.sibling_files(["/inexistant/x.zgp"], ".zgp") == ["/inexistant/x.zgp"]
-    print("dialogue + utilitaires: OK")
+    assert util.json_result(types.SimpleNamespace(returncode=0, stdout="not json")) == {}
+    assert widgets_rows.sibling_files(["/nonexistent/x.zgp"], ".zgp") == ["/nonexistent/x.zgp"]
+    print("dialog + utilities: OK")
 except Exception:
-    errors.append("utilitaires:\n" + traceback.format_exc())
+    errors.append("utilities:\n" + traceback.format_exc())
 
 # --- VSync page: pick a game, tick a box (immediate write), "Check all / uncheck all"
 from gi.repository import Gtk  # noqa: E402
@@ -135,32 +135,32 @@ try:
     vpage = win._built_pages["vsync"]
     vchecks = [w for w in walk(vpage) if type(w) is Gtk.CheckButton]
     assert len(vchecks) == 5, len(vchecks)
-    assert not any(c.get_sensitive() for c in vchecks), "cases actives sans jeu choisi"
+    assert not any(c.get_sensitive() for c in vchecks), "checkboxes enabled without a chosen game"
     vgame = next(w for w in walk(vpage) if isinstance(w, widgets_select.SingleGameSelect))
     mario_row = vgame._rows[vgame._slugs.index("mario")]
     vgame._listbox.select_row(mario_row)
     pump(1.5)
-    assert all(c.get_sensitive() for c in vchecks), "cases bloquées après choix du jeu"
-    assert not any(c.get_active() for c in vchecks), "cases cochées par défaut"
+    assert all(c.get_sensitive() for c in vchecks), "checkboxes locked after choosing the game"
+    assert not any(c.get_active() for c in vchecks), "checkboxes checked by default"
     ymlf = os.path.join(os.environ["HOME"], ".config/lutris/games/mario-1.yml")
     vchecks[0].set_active(True)
     pump(1.5)
-    assert "presentInterval" in open(ymlf).read(), "la case n'a rien écrit dans le YAML"
+    assert "presentInterval" in open(ymlf).read(), "the checkbox wrote nothing to the YAML"
     assert vchecks[0].get_active() and all(c.get_sensitive() for c in vchecks)
     vall = next(w for w in walk(vpage) if isinstance(w, Gtk.Button) and w.get_label() == i18n.t("gui.vsync.check_all"))
     vall.emit("clicked")
     pump(1.5)
     assert all(c.get_active() for c in vchecks), [c.get_active() for c in vchecks]
     assert vall.get_label() == i18n.t("gui.vsync.uncheck_all"), vall.get_label()
-    assert "mario" in vgame._highlighted_slugs, "jeu non mis en gras"
+    assert "mario" in vgame._highlighted_slugs, "game not highlighted in bold"
     vall.emit("clicked")
     pump(1.5)
     assert not any(c.get_active() for c in vchecks)
     assert "presentInterval" not in open(ymlf).read() and "vblank_mode" not in open(ymlf).read()
     assert "mario" not in vgame._highlighted_slugs
-    print("page VSync: OK")
+    print("VSync page: OK")
 except Exception:
-    errors.append("page VSync:\n" + traceback.format_exc())
+    errors.append("VSync page:\n" + traceback.format_exc())
 
 # --- Tools page: "Change runner" tool (no runner applied without an explicit choice)
 try:
@@ -175,11 +175,11 @@ try:
     runner_idx = ttool.get_model().get_n_items() - 1
     ttool.set_selected(runner_idx)
     pump(0.5)
-    assert trunner.get_visible(), "sélecteur de runner masqué"
-    assert trunner.explicit_runner() is None, "runner appliqué sans choix explicite"
+    assert trunner.get_visible(), "runner selector hidden"
+    assert trunner.explicit_runner() is None, "runner applied without explicit choice"
     tpage.run_button.emit("clicked")
     pump(0.5)
-    assert "GE-Other" not in open(os.path.join(os.environ["HOME"], ".config/lutris/games/mario-1.yml")).read(), "écrit sans choix"
+    assert "GE-Other" not in open(os.path.join(os.environ["HOME"], ".config/lutris/games/mario-1.yml")).read(), "written without a choice"
     trunner.set_selected(trunner._runners.index("GE-Other") + 1)
     pump(0.2)
     assert trunner.explicit_runner() == "GE-Other", trunner.explicit_runner()
@@ -187,14 +187,14 @@ try:
     pump(2.0)
     ymlt = os.path.join(os.environ["HOME"], ".config/lutris/games/mario-1.yml")
     assert "GE-Other" in open(ymlt).read(), open(ymlt).read()
-    print("outil runner: OK")
+    print("runner tool: OK")
 except Exception:
-    errors.append("outil runner:\n" + traceback.format_exc())
+    errors.append("runner tool:\n" + traceback.format_exc())
 
-print("pages construites: %d/%d" % (len(ok), len(page_ids)))
+print("pages built: %d/%d" % (len(ok), len(page_ids)))
 print("pages: " + ", ".join(ok))
 if errors:
-    print("ERREURS (%d):" % len(errors))
+    print("ERRORS (%d):" % len(errors))
     for e in errors:
         print(e)
     sys.exit(1)

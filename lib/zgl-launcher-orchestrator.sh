@@ -55,13 +55,13 @@ launch_lutris() {
   fi
   # "exec" never returns on success: reaching here means exec failed (lutris/flatpak not
   # found); last resort, log and exit with an error.
-  zgu_log "launcher-orchestrator" "ERREUR" "game_id=${game_id} raison=exec_lutris_echoue"
+  zgu_log "launcher-orchestrator" "ERROR" "game_id=${game_id} reason=lutris_exec_failed"
   exit 1
 }
 
 # --- Missing arguments: never block a launch for that, fall back to a direct launch ---
 if [[ -z "${game_id}" ]] || [[ -z "${version}" ]]; then
-  zgu_log "launcher-orchestrator" "AVERT" "raison=arguments_manquants argv=$*"
+  zgu_log "launcher-orchestrator" "WARN" "reason=missing_arguments argv=$*"
   launch_lutris
 fi
 
@@ -93,7 +93,7 @@ fi
 # --- Database not found: silent direct launch (just a log); a game launch must never fail
 # for that. ---
 if [[ ! -f "${lutris_db}" ]]; then
-  zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=db_introuvable db=${lutris_db}"
+  zgu_log "launcher-orchestrator" "WARN" "game_id=${game_id} reason=db_not_found db=${lutris_db}"
   launch_lutris
 fi
 
@@ -103,21 +103,21 @@ fi
 # project; filtered here to a pure integer as a precaution. ---
 game_id="${game_id//[^0-9]/}"
 if [[ -z "${game_id}" ]]; then
-  zgu_log "launcher-orchestrator" "AVERT" "raison=game_id_invalide"
+  zgu_log "launcher-orchestrator" "WARN" "reason=invalid_game_id"
   launch_lutris
 fi
 
 row=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || directory || char(31) || name || char(31) || COALESCE(configpath,'') FROM games WHERE id = ${game_id} AND runner = 'wine' LIMIT 1;" 2>/dev/null)
 
 if [[ -z "${row}" ]]; then
-  zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=jeu_introuvable_en_base"
+  zgu_log "launcher-orchestrator" "WARN" "game_id=${game_id} reason=game_not_in_db"
   launch_lutris
 fi
 
 IFS=$'\x1f' read -r slug game_dir game_name configpath <<< "${row}"
 
 if [[ -z "${slug}" ]]; then
-  zgu_log "launcher-orchestrator" "AVERT" "game_id=${game_id} raison=slug_vide_en_base"
+  zgu_log "launcher-orchestrator" "WARN" "game_id=${game_id} reason=empty_slug_in_db"
   launch_lutris
 fi
 
@@ -287,7 +287,7 @@ disown "${blackscreen_pid}" 2>/dev/null
 
 sleep 0.3  # let the background render before Lutris (or the picker) does anything
 
-zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=fond_lance ctrl=${control_file}"
+zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=background_started ctrl=${control_file}"
 
 # --- LPM Launcher (multi-entry picker): resolved HERE, on the host, NOT by
 # zgl-launcher-runtime.sh (started later by Lutris), which for Flatpak Lutris runs inside its
@@ -341,7 +341,7 @@ if [[ "${will_show_picker}" = true ]]; then
         break
       fi
       if [[ -n "${blackscreen_pid}" ]] && ! kill -0 "${blackscreen_pid}" 2>/dev/null; then
-        zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=fenetre_fermee_pendant_picker"
+        zgu_log "launcher-orchestrator" "WARN" "slug=${slug} reason=window_closed_during_picker"
         break
       fi
       sleep 0.1
@@ -353,7 +353,7 @@ if [[ "${will_show_picker}" = true ]]; then
       # zgu-launcher-screen.py) OR error/window gone: the flow is stopped ENTIRELY, the game is NOT
       # launched ("cancel" must mean cancel).
       rm -f "${launcher_choice_file}" 2>/dev/null
-      zgu_log "launcher-orchestrator" "INFO" "slug=${slug} raison=picker_annule action=arret_complet"
+      zgu_log "launcher-orchestrator" "INFO" "slug=${slug} reason=picker_cancelled action=full_stop"
       echo "STOP" > "${control_file}" 2>/dev/null
       sleep 0.3
       [[ -n "${blackscreen_pid}" ]] && kill "${blackscreen_pid}" 2>/dev/null
@@ -378,7 +378,7 @@ if [[ "${will_show_picker}" = true ]]; then
       printf '%s\n' "${title_text}"
       printf '%s\n' "${selection//[$'\n\r']/}"
     } > "${control_file}" 2>/dev/null
-    zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choix entree=${selection}"
+    zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choice entry=${selection}"
 fi
 
 # --- Universal game window detection (WIN_CreateWindowEx via WINEDEBUG) ---------
@@ -512,7 +512,7 @@ print("OK")
 fi
 
 if [[ "${use_winetrace}" = false ]]; then
-  zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=winetrace_indisponible_repli_xdotool"
+  zgu_log "launcher-orchestrator" "WARN" "slug=${slug} reason=winetrace_unavailable_fallback_xdotool"
 fi
 
 # --- Detached watcher: game window detection + minimum display time, then full cleanup.
@@ -597,7 +597,7 @@ POST_WINDOW_GRACE_MS=1000
     # xdotool missing on an X11 session: degrades to the Wayland fixed wait, but LOGGED (same
     # symptoms as Wayland: always exactly 12s, even for a game starting in 2s). "lpm check" also
     # recommends installing xdotool on an X11 session; see zgc-dependency-checker.sh.
-    zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=xdotool_absent_degradation_attente_fixe"
+    zgu_log "launcher-orchestrator" "WARN" "slug=${slug} reason=xdotool_missing_fixed_wait_fallback"
     sleep 12
   else
     # Wayland: xdotool cannot list/detect windows of other applications, so a reasonable fixed
@@ -629,7 +629,7 @@ POST_WINDOW_GRACE_MS=1000
   # "loading"/spinner indicator is hidden at the same time. ---
   if { [[ "${use_winetrace}" = true ]] || { [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; }; } \
       && [[ -z "${window_detected}" ]]; then
-    zgu_log "launcher-orchestrator" "AVERT" "slug=${slug} raison=aucune_fenetre_detectee_apres_delai delai_s=${max_wait_s}"
+    zgu_log "launcher-orchestrator" "WARN" "slug=${slug} reason=no_window_detected_after_delay delay_s=${max_wait_s}"
     {
       printf '%s\n' "${bg_state}"
       printf '%s\n' "IND_HIDE"
@@ -662,10 +662,10 @@ if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   disown $! 2>/dev/null
 
   # --- Gamepad "switch window" combo (Alt+Tab); see zgu-gamepad-alttab-watcher.py. Unlike the
-  # quit combo above, this one runs during the WHOLE game session (not one-shot); same "pkill"
-  # before restart to avoid an orphan instance from a previous session.
+  # quit combo above, this one runs during the WHOLE game session (not one-shot) and stops by
+  # itself when the game ends; same "pkill" before restart in case an instance is left over.
   pkill -f "zgu-gamepad-alttab-watcher.py" 2>/dev/null
-  python3 "${script_dir}/zgu-gamepad-alttab-watcher.py" "${session_kind}" >/dev/null 2>&1 &
+  python3 "${script_dir}/zgu-gamepad-alttab-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &
   disown $! 2>/dev/null
 fi
 

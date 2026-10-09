@@ -154,7 +154,7 @@ zgp_sync_media_process_one() {
   [[ -s "${icon_path}" ]] && has_icon=true
 
   if [[ "${has_banner}" = true ]] && [[ "${has_cover}" = true ]] && [[ "${has_icon}" = true ]]; then
-    zgu_log "sync-media" "OK" "slug=${slug} raison=deja_complet"
+    zgu_log "sync-media" "OK" "slug=${slug} reason=already_complete"
     return 0
   fi
 
@@ -168,12 +168,12 @@ zgp_sync_media_process_one() {
   if [[ $? -ne 0 ]]; then
     rm -f "${tmp_response}"
     zgu_cli_error "$(t sync_media.api_unreachable "${slug}")"
-    zgu_log "sync-media" "ERREUR" "slug=${slug} raison=api_inaccessible"
+    zgu_log "sync-media" "ERROR" "slug=${slug} reason=api_unreachable"
     return 1
   fi
   if [[ "${http_code}" != "200" ]]; then
     rm -f "${tmp_response}"
-    zgu_log "sync-media" "OK" "slug=${slug} raison=jeu_introuvable_sur_lutris_net"
+    zgu_log "sync-media" "OK" "slug=${slug} reason=game_not_found_on_lutris_net"
     t sync_media.nothing_found_cli "${slug}"
     return 0
   fi
@@ -246,7 +246,7 @@ print(data.get("coverart") or "")
     zgu_log "sync-media" "OK" "slug=${slug}"
     t sync_media.done_cli "${slug}"
   else
-    zgu_log "sync-media" "OK" "slug=${slug} raison=aucun_media_disponible"
+    zgu_log "sync-media" "OK" "slug=${slug} reason=no_media_available"
     t sync_media.nothing_found_cli "${slug}"
   fi
   return 0

@@ -65,7 +65,7 @@ When the executable (or other value) is empty the word `unknown` is printed. Err
 - No prompt, except the one-time Flatpak/native question when Lutris is installed both ways and nothing is saved (stderr; empty stdin selects Flatpak; avoid with `LPM_LUTRIS_VERSION=flatpak|native`).
 - The format is fixed-width `Label<spaces>: value`, one field per line, always in the order above. Parse by splitting each line on the first `" : "`; the value is the remainder (it can contain spaces or `:`). For example: `lpm info mygame | sed -n 's/^Wineprefix *: //p'`.
 - **The labels and the words `unknown` / the isolation text are translated** according to the locale (`LC_ALL`, then `LC_MESSAGES`, then `LANG`). In scripts, force English with `LC_ALL=C lpm info <slug>`.
-- Use the exit status to test existence: `lpm info "$slug" >/dev/null 2>&1`. Note that a failure also writes an `ERREUR` line to the lpm log.
+- Use the exit status to test existence: `lpm info "$slug" >/dev/null 2>&1`. Note that a failure also writes an `ERROR` line to the lpm log.
 
 ## Examples
 

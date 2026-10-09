@@ -2,7 +2,7 @@
 
 # Ensure the script runs with root privileges (sudo)
 if [[ "${EUID}" -ne 0 ]]; then
-  echo "Erreur : Veuillez exécuter ce script de désinstallation avec les privilèges administrateur (sudo ./uninstall.sh)."
+  echo "Error: please run this uninstall script with administrator privileges (sudo ./uninstall.sh)."
   exit 1
 fi
 
@@ -20,43 +20,43 @@ ICON_APP_FILE="${ICON_THEME_DIR}/scalable/apps/lpm.svg"
 ICON_ZGP_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgp-game.svg"
 ICON_ZGR_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgr-runner.svg"
 
-echo "=== Désinstallation de lpm ==="
+echo "=== Uninstalling lpm ==="
 
 # 1. Remove the main binary -- only if it is our script (LPM_VERSION= line); another
 # program named "lpm" installed at the same place must never be removed.
 if [[ -f "${INSTALL_BIN_DIR}/lpm" ]] && ! grep -aq 'LPM_VERSION=' "${INSTALL_BIN_DIR}/lpm" 2>/dev/null; then
-  echo "[Info] ${INSTALL_BIN_DIR}/lpm n'est pas Ludis Prefix Manager (un autre programme nommé « lpm » ?) : il est conservé."
+  echo "[Info] ${INSTALL_BIN_DIR}/lpm is not Ludis Prefix Manager (another program named \"lpm\"?): it is kept."
 elif [[ -f "${INSTALL_BIN_DIR}/lpm" ]]; then
   rm -f "${INSTALL_BIN_DIR}/lpm"
-  echo "[OK] Binaire lpm supprimé de ${INSTALL_BIN_DIR}"
+  echo "[OK] lpm binary removed from ${INSTALL_BIN_DIR}"
 else
-  echo "[Info] Le binaire lpm n'était pas présent dans ${INSTALL_BIN_DIR}"
+  echo "[Info] The lpm binary was not present in ${INSTALL_BIN_DIR}"
 fi
 
 # 2. Remove the library directory
 if [[ -d "${INSTALL_LIB_DIR}" ]]; then
   rm -rf "${INSTALL_LIB_DIR}"
-  echo "[OK] Dossier des bibliothèques supprimé de ${INSTALL_LIB_DIR}"
+  echo "[OK] Libraries folder removed from ${INSTALL_LIB_DIR}"
 else
-  echo "[Info] Le dossier des bibliothèques n'existait pas à ${INSTALL_LIB_DIR}"
+  echo "[Info] The libraries folder did not exist at ${INSTALL_LIB_DIR}"
 fi
 
 # 3. Remove the MIME types (.zgp and .zgr) and update the database
 if [[ -f "${MIME_FILE}" ]]; then
   rm -f "${MIME_FILE}"
   update-mime-database /usr/share/mime 2>/dev/null || true
-  echo "[OK] Types MIME (.zgp et .zgr) supprimés du système."
+  echo "[OK] MIME types (.zgp and .zgr) removed from the system."
 else
-  echo "[Info] Aucun type MIME associé trouvé."
+  echo "[Info] No associated MIME type found."
 fi
 
 # 4. Remove the launcher from the Applications menu
 if [[ -f "${DESKTOP_FILE}" ]]; then
   rm -f "${DESKTOP_FILE}"
   update-desktop-database "${APP_DESKTOP_DIR}" 2>/dev/null || true
-  echo "[OK] Lanceur du menu des applications supprimé."
+  echo "[OK] Application menu launcher removed."
 else
-  echo "[Info] Aucun lanceur trouvé dans ${APP_DESKTOP_DIR}"
+  echo "[Info] No launcher found in ${APP_DESKTOP_DIR}"
 fi
 
 # 5. Remove lpm icons (hicolor theme)
@@ -75,37 +75,37 @@ if [[ "${ICONS_REMOVED}" = true ]]; then
     # our removed icons is worse than a direct directory scan.
     rm -f "${ICON_THEME_DIR}/icon-theme.cache"
   fi
-  echo "[OK] Icônes lpm supprimées de ${ICON_THEME_DIR}"
+  echo "[OK] lpm icons removed from ${ICON_THEME_DIR}"
 else
-  echo "[Info] Aucune icône lpm trouvée dans ${ICON_THEME_DIR}"
+  echo "[Info] No lpm icon found in ${ICON_THEME_DIR}"
 fi
 
 # 6. Remove zsh completion
 if [[ -f "${ZSH_COMPLETION_FILE}" ]]; then
   rm -f "${ZSH_COMPLETION_FILE}"
-  echo "[OK] Complétion zsh supprimée de ${ZSH_COMPLETION_FILE}"
+  echo "[OK] zsh completion removed from ${ZSH_COMPLETION_FILE}"
 else
-  echo "[Info] Aucune complétion zsh trouvée à ${ZSH_COMPLETION_FILE}"
+  echo "[Info] No zsh completion found at ${ZSH_COMPLETION_FILE}"
 fi
 
 # 7. Remove bash completion
 if [[ -f "${BASH_COMPLETION_FILE}" ]]; then
   rm -f "${BASH_COMPLETION_FILE}"
-  echo "[OK] Complétion bash supprimée de ${BASH_COMPLETION_FILE}"
+  echo "[OK] bash completion removed from ${BASH_COMPLETION_FILE}"
 else
-  echo "[Info] Aucune complétion bash trouvée à ${BASH_COMPLETION_FILE}"
+  echo "[Info] No bash completion found at ${BASH_COMPLETION_FILE}"
 fi
 
 # 8. Remove the man page
 if [[ -f "${MAN_FILE}" ]]; then
   rm -f "${MAN_FILE}"
   mandb 2>/dev/null || true
-  echo "[OK] Page man supprimée de ${MAN_FILE}"
+  echo "[OK] Man page removed from ${MAN_FILE}"
 else
-  echo "[Info] Aucune page man trouvée à ${MAN_FILE}"
+  echo "[Info] No man page found at ${MAN_FILE}"
 fi
 
 echo "========================================"
-echo " Désinstallation terminée avec succès !"
-echo " lpm a été complètement retiré de votre système."
+echo " Uninstall completed successfully!"
+echo " lpm has been completely removed from your system."
 echo "========================================"

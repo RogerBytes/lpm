@@ -309,7 +309,7 @@ zgp_splash_process_one() {
   search_results=$(zgp_sgdb_search "${g_name}")
   if [[ -z "${search_results}" ]]; then
     zgp_splash_report_skip "$(t splash.not_found_on_sgdb "${g_name}")"
-    zgu_log "splash" "ERREUR" "slug=${slug} raison=jeu_introuvable_sgdb"
+    zgu_log "splash" "ERROR" "slug=${slug} reason=game_not_found_sgdb"
     return 1
   fi
 
@@ -355,7 +355,7 @@ zgp_splash_process_one() {
   banners_urls=$(zgp_sgdb_heroes "${chosen_game_id}")
   if [[ -z "${banners_urls}" ]]; then
     zgp_splash_report_skip "$(t splash.no_banner_available "${g_name}")"
-    zgu_log "splash" "ERREUR" "slug=${slug} raison=aucune_banniere_disponible"
+    zgu_log "splash" "ERROR" "slug=${slug} reason=no_banner_available"
     return 1
   fi
 
@@ -374,20 +374,20 @@ zgp_splash_process_one() {
 
   if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
     zgp_splash_report_skip "$(t splash.download_failed "${g_name}")"
-    zgu_log "splash" "ERREUR" "slug=${slug} raison=telechargement_echoue"
+    zgu_log "splash" "ERROR" "slug=${slug} reason=download_failed"
     rm -f "${raw_file}"
     return 1
   fi
 
   if ! "${convert_bin[@]}" "${raw_file}" "${game_dir}/splash/splash.png" 2>/dev/null; then
     zgp_splash_report_skip "$(t splash.convert_failed "${g_name}")"
-    zgu_log "splash" "ERREUR" "slug=${slug} raison=conversion_echouee"
+    zgu_log "splash" "ERROR" "slug=${slug} reason=conversion_failed"
     rm -f "${raw_file}"
     return 1
   fi
   rm -f "${raw_file}"
 
-  zgu_log "splash" "OK" "slug=${slug} nom=${g_name}"
+  zgu_log "splash" "OK" "slug=${slug} name=${g_name}"
   t splash.done_cli "${g_name}"
   return 0
 }
