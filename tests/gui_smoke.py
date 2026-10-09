@@ -93,6 +93,10 @@ try:
     assert fs.selected_paths() == []
     rr = widgets_select.RemoteRunnerMultiSelect()
     pump(0.2)
+    # The widget starts a real network request when created; with network access its answer
+    # lands in the list. Invalidate it (late answers are dropped) and start from an empty list.
+    rr._gen += 1
+    rr._clear()
     res = types.SimpleNamespace(returncode=0, stdout="GE-1\nGE-2" + i18n.t("list_remote.already_installed_suffix") + "\nGE-3\n")
     rr._apply_result(rr._gen, res)
     rr.select_all_check.set_active(True)
