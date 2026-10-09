@@ -10,11 +10,11 @@ from util import _run_on_main
 
 
 # ---------------------------------------------------------------------------------------
-# --- lpm update check (home page banner, see page_home) ---
+# --- lpm update check (home page update button, see page_home) ---
 # "lpm self-update check" (lib/zgc-self-update.sh) contacts GitHub; its result is cached for
 # 24 h to avoid hitting the API (60 requests/hour/IP without an account) on every launch. The
 # cache keeps the LATEST published version (not a yes/no): the comparison with the installed
-# version is redone on each launch, otherwise the banner would survive the update itself.
+# version is redone on each launch, otherwise the button would survive the update itself.
 _UPDATE_CACHE_FILE = os.path.join(os.path.expanduser("~"), ".cache", "lpm", "update-check.json")
 
 

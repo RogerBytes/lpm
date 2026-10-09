@@ -58,11 +58,16 @@ class HomePages:
         version_button.add_css_class("dim-label")
         extra_box.append(version_button)
 
-        # Update banner: hidden until a newer version is known (background check, cached
-        # 24 h, silent when offline). Adw.Banner is the libadwaita component for this kind
-        # of notice (full width, at the top).
-        banner = Adw.Banner()
-        banner.set_revealed(False)
+        # Update button under the version number: hidden until a newer version is known
+        # (background check, cached 24 h, silent when offline). Accent-colored so it stands out
+        # without taking over the page like a full-width banner would.
+        update_button = Gtk.Button()
+        update_button.add_css_class("suggested-action")
+        update_button.add_css_class("pill")
+        update_button.set_halign(Gtk.Align.CENTER)
+        update_button.set_margin_top(8)
+        update_button.set_visible(False)
+        extra_box.append(update_button)
 
         installed_version = backend.get_lpm_version()
         update_state = {"info": None}
@@ -71,24 +76,21 @@ class HomePages:
             if not info or _version_key(info["latest"]) <= _version_key(installed_version):
                 return
             update_state["info"] = info
-            banner.set_title(t("gui.update.available", "v" + info["latest"]))
-            banner.set_button_label(
+            update_button.set_label(t("gui.update.available", "v" + info["latest"]))
+            update_button.set_tooltip_text(
                 t("gui.update.button_release" if info["method"] == "manual" else "gui.update.button_install")
             )
-            banner.set_revealed(True)
+            update_button.set_visible(True)
 
-        banner.connect("button-clicked", lambda *_: self._start_self_update(update_state["info"]))
+        update_button.connect("clicked", lambda *_: self._start_self_update(update_state["info"]))
         _check_update_async(on_update_info)
 
         status_page.set_child(extra_box)
         status_page.set_vexpand(True)
-        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        page.append(banner)
-        page.append(status_page)
-        return page
+        return status_page
 
     def _start_self_update(self, info):
-        """Update banner button: manual/unknown install -> opens the release page; package
+        """Update button on the home page: manual/unknown install -> opens the release page; package
         install -> confirmation, then "lpm self-update install" (download, SHA-256
         verification, install via pkexec) and restart."""
         if not info:

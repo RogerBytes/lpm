@@ -27,7 +27,7 @@ Layout (flat files in gui/, all imported from this directory):
   guilog.py, updatecheck.py, refresh.py, util.py, backend.py, i18n.py   shared services
 
 Requirements: Python 3.11+, PyGObject, GTK4 >= 4.10 (Gtk.FileDialog), Libadwaita >= 1.5
-(Adw.AlertDialog, Adw.Banner, NavigationSplitView).
+(Adw.AlertDialog, NavigationSplitView).
 """
 
 import os

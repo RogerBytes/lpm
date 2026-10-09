@@ -156,6 +156,30 @@ check "shortcut" 0 'Shortcut created' shortcut mario
 expect "shortcut: .desktop created" test -f "${HOME}/.local/share/applications/net.lutris.mario.desktop"
 check "shortcut: unknown slug" 1 'not found' shortcut nosuch
 
+# --- Proton GAMEID insertion keeps the game YAML valid, even with "env: {}" (inline empty mapping)
+mkdir -p "${HOME}/.local/share/lutris/runners/wine/ProtonTest" "${HOME}/gameid-desk"
+: > "${HOME}/.local/share/lutris/runners/wine/ProtonTest/toolmanifest.vdf"
+printf 'game:\n  exe: drive_c/x.bat\n  prefix: /p\nsystem:\n  env: {}\n  mangohud: false\nwine:\n  version: ProtonTest\n' > "${HOME}/.config/lutris/games/gameid-1.yml"
+expect "GAMEID: written" bash -c 'source "$1/lib/zgu-desktop-utils.sh"; zgu_write_game_shortcut "G" gameid "$2" 42 "" false true "$2/x.bat" gameid-1 "$2/.config/lutris/games" "$2/.local/share/lutris/runners/wine" "$2/gameid-desk" >/dev/null 2>&1; grep -q "GAMEID: umu-42" "$2/.config/lutris/games/gameid-1.yml"' _ "${repo}" "${HOME}"
+expect "GAMEID: YAML still valid" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert d["system"]["env"]["GAMEID"]=="umu-42" and d["system"]["mangohud"] is False' "${HOME}/.config/lutris/games/gameid-1.yml"
+
+rm -rf "${HOME}/.local/share/lutris/runners/wine/ProtonTest" "${HOME}/gameid-desk"
+
+# --- Pack safety: links pointing outside the game folder or to themselves are never copied
+mkdir -p "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z"
+echo secret > "${HOME}/outside-secret/private.txt"
+echo inner > "${HOME}/Games/zelda/drive_c/Games/Z/real.txt"
+ln -s "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z/to-outside"
+ln -s / "${HOME}/Games/zelda/drive_c/Games/Z/to-root"
+ln -s . "${HOME}/Games/zelda/drive_c/Games/Z/pfx"
+ln -s real.txt "${HOME}/Games/zelda/drive_c/Games/Z/inner-link"
+check "pack safety" 0 '\[EXPORTED\]' pack -3 zelda
+expect "pack safety: archive has no outside data" bash -c '! zstd -dc "$1" | tar -t | grep -q "private.txt"' _ "${HOME}/Zelda.zgp"
+expect "pack safety: inner link became a real file" bash -c 'zstd -dc "$1" | tar -t | grep -q "Z/inner-link$"' _ "${HOME}/Zelda.zgp"
+expect "pack safety: outside folder untouched" test -f "${HOME}/outside-secret/private.txt"
+expect "pack safety: no temporary copy left" bash -c '[ -z "$(find "$1" -name "*.zgp-tmp")" ]' _ "${HOME}/Games/zelda"
+rm -f "${HOME}/Zelda.zgp"
+
 # --- Full round trip: pack, uninstall, reinstall
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
 expect "pack: .zgp created" test -s "${HOME}/Mario.zgp"

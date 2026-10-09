@@ -254,6 +254,9 @@ lpm_cancel_cleanup() {
   [[ -n "${inprogress_archive}" ]] && rm -f -- "${inprogress_archive}" \
     "${OUTPUT_DIR}/hash/$(basename -- "${inprogress_archive}").sha256"
   [[ -n "${inprogress_yml}" ]] && rm -f -- "${inprogress_yml}"
+  # Half-made link copies left in the game folder by the cleanup step.
+  [[ -n "${WINEPREFIX_DIR:-}" && -d "${WINEPREFIX_DIR}/drive_c" ]] \
+    && find "${WINEPREFIX_DIR}/drive_c" -name '*.zgp-tmp' -exec rm -rf -- {} + 2>/dev/null
   zgu_log "pack" "INFO" "archive=${inprogress_archive} reason=cancelled_cleaned_up"
   echo "[CANCELLED]"
   t pack_game.cancelled_run_cli
@@ -335,26 +338,62 @@ for game_real_name in "${games_to_export[@]}"; do
   [[ -d "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp" ]] && rm -rf -- "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp/"*
   [[ -d "${WINEPREFIX_DIR}/drive_c" ]] && mkdir -p "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp"
 
+  # Leftovers of an interrupted export (lpm's own temporary copies) are never packed.
+  find "${WINEPREFIX_DIR}/drive_c" -name '*.zgp-tmp' -exec rm -rf -- {} + 2>/dev/null
+
   find "${WINEPREFIX_DIR}/drive_c" -type l ! -exec test -e {} \; -delete
-  # "{}" is passed as a positional argument rather than interpolated into the script text: a
-  # file name with special characters (`, $, quotes...) cannot be interpreted as bash code.
-  #
-  # Copy-then-replace (not delete-then-copy): "cp -L" resolves the link target itself,
-  # relative or absolute, whereas a manual "readlink" followed by "cp" fails silently for
-  # RELATIVE links (the target is relative to the link's folder, not the script's cwd), after
-  # the link was already removed, so the file would vanish from the .zgp. Copying to a temp
-  # file first leaves the original link intact if the copy fails.
-  find "${WINEPREFIX_DIR}/drive_c" -type l -exec bash -c '
-    for link; do
+
+  # Symlinks are replaced by real copies so the archive is self-contained. SAFETY RULES (a
+  # symlink can point anywhere: "/", the home folder, a Steam library, or an ancestor of
+  # itself such as "pfx -> ."):
+  #  - a link whose target is outside the game folder is DELETED, never copied;
+  #  - a link whose target is the folder holding it (or an ancestor) is DELETED (endless copy);
+  #  - the size of each copy is checked against the free disk space BEFORE copying; if it does
+  #    not fit, the export stops with an error and nothing more is written.
+  # Directories are copied with their inner links kept as links (cp -a), and the pass is
+  # repeated so those inner links are checked by the same rules; whatever is still a link after
+  # the last pass is deleted. Copy-then-replace keeps the original link if the copy fails.
+  prefix_real=$(realpath -- "${WINEPREFIX_DIR}")
+  disk_margin=$((1024 * 1024 * 1024))
+  for _lpm_pass in 1 2 3 4 5; do
+    mapfile -d '' -t _lpm_links < <(find "${WINEPREFIX_DIR}/drive_c" -type l -print0)
+    [[ "${#_lpm_links[@]}" -eq 0 ]] && break
+    for link in "${_lpm_links[@]}"; do
+      [[ -L "${link}" ]] || continue
+      target=$(realpath -e -- "${link}" 2>/dev/null) || { rm -f -- "${link}"; continue; }
+      link_dir=$(realpath -- "$(dirname -- "${link}")")
+      if [[ "${target}" != "${prefix_real}"/* ]] || [[ "${link_dir}/" == "${target}/"* ]]; then
+        rm -f -- "${link}"
+        continue
+      fi
+      if [[ -d "${target}" ]]; then
+        copy_size=$(du -sb -- "${target}" 2>/dev/null | cut -f1)
+      else
+        copy_size=$(stat -c %s -- "${target}" 2>/dev/null)
+      fi
+      free_bytes=$(df -B1 --output=avail -- "${WINEPREFIX_DIR}" 2>/dev/null | tail -n 1 | tr -d ' ')
+      if [[ -n "${copy_size}" && -n "${free_bytes}" ]] && (( copy_size + disk_margin > free_bytes )); then
+        zgu_cli_error "$(t pack_game.not_enough_space_cli "${game_real_name}")"
+        zgu_log "pack" "ERROR" "slug=${game_slug} name=${game_real_name} reason=not_enough_space link=${link} needed=${copy_size} free=${free_bytes}"
+        find "${WINEPREFIX_DIR}/drive_c" -name '*.zgp-tmp' -exec rm -rf -- {} + 2>/dev/null
+        exit 1
+      fi
       tmp="${link}.zgp-tmp"
-      if cp -rL -- "${link}" "${tmp}" 2>/dev/null; then
+      if [[ -d "${target}" ]]; then
+        cp -a -- "${target}" "${tmp}" 2>/dev/null
+      else
+        cp -L -- "${link}" "${tmp}" 2>/dev/null
+      fi
+      if [[ -e "${tmp}" ]]; then
         rm -f -- "${link}"
         mv -- "${tmp}" "${link}"
       else
-        rm -f -- "${tmp}"
+        rm -rf -- "${tmp}"
+        rm -f -- "${link}"
       fi
     done
-  ' _ {} +
+  done
+  find "${WINEPREFIX_DIR}/drive_c" -type l -delete
   find "${WINEPREFIX_DIR}/drive_c/windows/system32" -type f -name '*.orig' -delete
   find "${WINEPREFIX_DIR}/drive_c/windows/syswow64" -type f -name '*.orig' -delete
 

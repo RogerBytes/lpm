@@ -191,6 +191,25 @@ try:
 except Exception:
     errors.append("runner tool:\n" + traceback.format_exc())
 
+# --- Home page: update button (hidden unless a newer version is known) -------------------
+try:
+    import pages_home
+    import backend
+    installed = backend.get_lpm_version()
+    newer = "99.0.0"
+    for info, want_visible in ((None, False), ({"latest": "0.0.1", "url": "", "method": "deb"}, False),
+                               ({"latest": newer, "url": "", "method": "deb"}, True)):
+        pages_home._check_update_async = lambda cb, _info=info: cb(_info)
+        home = win.pages.page_home()
+        buttons = [w for w in walk(home) if isinstance(w, Gtk.Button) and "suggested-action" in w.get_css_classes()]
+        assert len(buttons) == 1, "update button missing"
+        assert buttons[0].get_visible() == want_visible, (info, buttons[0].get_visible())
+        if want_visible:
+            assert newer in buttons[0].get_label(), buttons[0].get_label()
+    print("update button: OK")
+except Exception:
+    errors.append("update button:\n" + traceback.format_exc())
+
 print("pages built: %d/%d" % (len(ok), len(page_ids)))
 print("pages: " + ", ".join(ok))
 if errors:

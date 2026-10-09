@@ -249,6 +249,19 @@ zgp_socle_paths() {
   esac
 }
 
+# Total size (bytes) of the given entries of src_root; missing entries count 0. Links are not
+# followed (du), so a link can never inflate the figure with data from outside the prefix.
+zgp_rel_size_bytes() {
+  local src_root="$1"; shift
+  local total=0 rel size
+  for rel in "$@"; do
+    [[ -e "${src_root}/${rel}" ]] || continue
+    size=$(du -sb -- "${src_root}/${rel}" 2>/dev/null | cut -f1)
+    total=$((total + ${size:-0}))
+  done
+  echo "${total}"
+}
+
 # Copies an entry (file or folder) from src_root/rel to dst_root/rel, preserving attributes (cp
 # -a) and creating parent folders as needed. Does nothing if the source is absent. Returns 1 if
 # the copy fails.
@@ -491,6 +504,19 @@ except Exception:
   if [[ -e "${new_prefix_dir}" ]]; then
     zgp_isolate_report_error "$(t isolate.already_exists "${game_name}" "${new_prefix_dir}")"
     zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=target_prefix_already_exists"
+    return 1
+  fi
+
+  # Not enough free space for the copy: refuse BEFORE writing anything (1 GiB safety margin).
+  local socle_list=() socle_entry need_bytes free_bytes
+  while IFS= read -r socle_entry; do
+    [[ -n "${socle_entry}" ]] && socle_list+=("${socle_entry}")
+  done < <(zgp_socle_paths "${store}")
+  need_bytes=$(zgp_rel_size_bytes "${giga_dir}" "${game_rel_paths[@]}" "${socle_list[@]}")
+  free_bytes=$(df -B1 --output=avail -- "${games_dir}" 2>/dev/null | tail -n 1 | tr -d ' ')
+  if [[ -n "${free_bytes}" ]] && (( need_bytes + 1073741824 > free_bytes )); then
+    zgp_isolate_report_error "$(t isolate.not_enough_space "${game_name}")"
+    zgu_log "isolate" "ERROR" "slug=${slug} store=${store} reason=not_enough_space needed=${need_bytes} free=${free_bytes}"
     return 1
   fi
 

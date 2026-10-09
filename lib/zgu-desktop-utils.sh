@@ -246,6 +246,14 @@ else:
         ]
     else:
         env_start, env_end = env_block
+        # "env: {}" (inline empty mapping, as written by a YAML dump) cannot take an indented
+        # child: it is turned into a block "env:" first. Any other inline value is left alone
+        # (nothing is written) rather than producing an invalid file.
+        env_inline = lines[env_start].split("env:", 1)[1].split("#", 1)[0].strip()
+        if env_inline == "{}":
+            lines[env_start] = lines[env_start].split("env:", 1)[0] + "env:"
+        elif env_inline != "":
+            sys.exit(0)
         env_child_indent = child_indent(env_start, env_end, indent_of(lines[env_start]))
         lines.insert(env_end, " " * env_child_indent + f"GAMEID: umu-{game_id}")
 
