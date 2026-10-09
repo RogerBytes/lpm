@@ -6,7 +6,7 @@ Back up, transfer and reinstall your Wine/Lutris games in one click.
   <img src="./assets/icons/lpm.svg" width="128" height="128" alt="Ludis Prefix Manager icon">
 </p>
 
-![LPM Demo](https://github.com/user-attachments/assets/35262a68-6b85-45be-83ba-041dfde6490a)
+https://github.com/user-attachments/assets/35262a68-6b85-45be-83ba-041dfde6490a
 
 <p align="center">
   <a href="https://github.com/RogerBytes/lpm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RogerBytes/lpm"></a>
