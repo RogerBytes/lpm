@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            sqlite3 python3-yaml zstd libarchive-tools pv desktop-file-utils \
+            xvfb dbus python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 libsdl2-2.0-0
+
+      - name: CLI tests
+        run: bash tests/cli_smoke.sh
+
+      - name: Gamepad tests
+        run: python3 tests/gamepad_smoke.py
+
+      - name: GUI tests
+        run: bash tests/run_gui_smoke.sh
