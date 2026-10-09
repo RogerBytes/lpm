@@ -16,6 +16,7 @@ Requires:       python3-evdev
 Requires:       SDL2
 Requires:       sqlite
 Requires:       zstd
+Requires:       pv
 Requires:       bsdtar
 Requires:       desktop-file-utils
 Requires:       shared-mime-info
