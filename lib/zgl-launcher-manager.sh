@@ -293,22 +293,43 @@ print(version)
 
   [[ -z "${current_prefix}" ]] && current_prefix="${game_dir}"
 
-  # winepath binary resolution: first next to the wine binary of the runner used by this game
-  # (same drive letter resolution as Lutris for that prefix), else a generic "winepath" from
-  # PATH.
-  local wine_bin winepath_bin=""
-  wine_bin=$(zgu_get_wine_binary "${lutris_runners_dir}" "${current_version}" 2>/dev/null)
-  if [[ -n "${wine_bin}" ]] && [[ -x "$(dirname "${wine_bin}")/winepath" ]]; then
-    winepath_bin="$(dirname "${wine_bin}")/winepath"
-  elif command -v winepath >/dev/null 2>&1; then
-    winepath_bin="winepath"
-  fi
+  # Linux -> Windows path conversion. A path inside "<prefix>/drive_c" is converted by plain
+  # text replacement ("<prefix>/drive_c/Games/x.exe" -> "C:\Games\x.exe"): no Wine process is
+  # started (winepath would start wineserver and could pop up a Wine window, e.g. "updating the
+  # prefix", just to write a YAML file). Same rule as zgl-launcher-entries.sh.
+  # "winepath" is only the fallback for a path outside drive_c (other drive letter): first the
+  # one next to the wine binary of the runner used by this game, else a generic one from PATH.
+  local drive_c_root="${current_prefix%/}/drive_c"
+  local winepath_bin="" winepath_resolved=0
+
+  zgp_launcher_to_windows_path() {
+    local linux_path="$1" rel
+    if [[ "${linux_path}" = "${drive_c_root}" ]]; then
+      printf 'C:\\\n'
+      return 0
+    fi
+    if [[ "${linux_path}" = "${drive_c_root}/"* ]]; then
+      rel="${linux_path#"${drive_c_root}"/}"
+      printf 'C:\\%s\n' "${rel//\//\\}"
+      return 0
+    fi
+    if [[ "${winepath_resolved}" -eq 0 ]]; then
+      winepath_resolved=1
+      local wine_bin
+      wine_bin=$(zgu_get_wine_binary "${lutris_runners_dir}" "${current_version}" 2>/dev/null)
+      if [[ -n "${wine_bin}" ]] && [[ -x "$(dirname "${wine_bin}")/winepath" ]]; then
+        winepath_bin="$(dirname "${wine_bin}")/winepath"
+      elif command -v winepath >/dev/null 2>&1; then
+        winepath_bin="winepath"
+      fi
+    fi
+    [[ -n "${winepath_bin}" ]] || return 1
+    WINEPREFIX="${current_prefix}" "${winepath_bin}" -w "${linux_path}" 2>/dev/null | tr -d '\r'
+  }
 
   local win_exe="" win_workdir=""
-  if [[ -n "${winepath_bin}" ]]; then
-    win_exe=$(WINEPREFIX="${current_prefix}" "${winepath_bin}" -w "${current_exe}" 2>/dev/null | tr -d '\r')
-    win_workdir=$(WINEPREFIX="${current_prefix}" "${winepath_bin}" -w "${current_workdir}" 2>/dev/null | tr -d '\r')
-  fi
+  win_exe=$(zgp_launcher_to_windows_path "${current_exe}")
+  win_workdir=$(zgp_launcher_to_windows_path "${current_workdir}")
 
   if [[ -z "${win_exe}" ]] || [[ -z "${win_workdir}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.winepath_failed "${slug}")"
@@ -400,6 +421,52 @@ with open(os.environ["YML_PATH"], "w") as f:
       echo "#    workdir: \"C:\\\\Games\\\\...\""
       echo "#    exe: \"C:\\\\Games\\\\...\\\\game.exe\""
     } >> "${game_dir}/lpm-launcher.yml"
+  else
+    # lpm-launcher.yml already exists (hand-written, restored from a .zgp, or left by an
+    # earlier "off"). Its entries are kept, but the two keys lpm itself relies on are brought
+    # up to date:
+    #  - "bat_path": where Lutris REALLY runs lpm-launch.bat (the one just written above). Both
+    #    keys hold absolute Linux paths, so they are also wrong after an import on another
+    #    machine. Without it, the runtime falls back to "<game>/lpm-launch.bat", rewrites THAT
+    #    file with the chosen entry, while Lutris keeps running the other one (always the
+    #    default entry: the picker seems to ignore the choice).
+    #  - "original_exe": the exe to restore on "off". Only set when game.exe does not already
+    #    point to an lpm-launch.bat (then the real original exe is unknown and an existing
+    #    value is never overwritten with the .bat).
+    # Comment lines at the end of the file are kept.
+    YML_PATH="${game_dir}/lpm-launcher.yml" ORIGINAL_EXE="${current_exe}" \
+      BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
+import os, yaml
+
+path = os.environ["YML_PATH"]
+with open(path, "r") as f:
+    text = f.read()
+data = yaml.safe_load(text)
+if not isinstance(data, dict):
+    raise SystemExit(1)
+
+changed = False
+if data.get("bat_path") != os.environ["BAT_PATH_LINUX"]:
+    data["bat_path"] = os.environ["BAT_PATH_LINUX"]
+    changed = True
+original = os.environ["ORIGINAL_EXE"]
+if os.path.basename(original) != "lpm-launch.bat" and data.get("original_exe") != original:
+    data["original_exe"] = original
+    changed = True
+
+if changed:
+    comments = [l for l in text.splitlines() if l.lstrip().startswith("#")]
+    out = yaml.dump(data, sort_keys=False, allow_unicode=True, width=1000000)
+    if comments:
+        out += "\n".join(comments) + "\n"
+    with open(path, "w") as f:
+        f.write(out)
+' 2>/dev/null
+    if [[ $? -ne 0 ]]; then
+      zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
+      zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_update_failed"
+      return 1
+    fi
   fi
 
   # --- scripts/ folder ---

@@ -119,6 +119,18 @@ done <<< "${parsed}"
 # location, at the root of $gamedir.
 bat_path="${bat_path_yaml:-${gamedir}/lpm-launch.bat}"
 
+# Every lpm-launch.bat to write. Normally only "bat_path". When the YAML has no "bat_path"
+# (hand-written file, or restored from a .zgp), the .bat Lutris really runs is unknown here, so
+# the ones that already exist in the game's prefix ("drive_c/Games/<folder>/lpm-launch.bat",
+# created by "lpm launcher ... on") are written too: otherwise the choice would go to a file
+# Lutris never runs and the first entry would always start.
+bat_targets=("${bat_path}")
+if [[ -z "${bat_path_yaml}" ]]; then
+  for found_bat in "${gamedir}"/drive_c/Games/*/lpm-launch.bat; do
+    [[ -f "${found_bat}" ]] && bat_targets+=("${found_bat}")
+  done
+fi
+
 # --- Orchestrator control file (may or may not be open; see file header). Same EXACT
 # derivation as lib/zgl-launcher-orchestrator.sh: sha256sum of gamedir, fixed path, no
 # mktemp, so both scripts find the same file without explicit coordination. ---
@@ -174,8 +186,11 @@ chosen_workdir="" chosen_exe=""
 # zgl-launcher-manager.sh), so launching something cannot be prevented; it can only do
 # nothing.
 write_noop_bat() {
-  mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
-  printf '@echo off\r\n' > "${bat_path}" 2>/dev/null
+  local target
+  for target in "${bat_targets[@]}"; do
+    mkdir -p "$(dirname "${target}")" 2>/dev/null
+    printf '@echo off\r\n' > "${target}" 2>/dev/null
+  done
 }
 
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
@@ -272,8 +287,7 @@ fi
 # call, to handle paths with spaces and return control to cmd properly). Written to
 # "${bat_path}" (resolved above from the YAML, with fallback); this path MUST be inside
 # the Wine prefix drive_c so Lutris/cmd.exe can run it (see zgl-launcher-manager.sh). ---
-mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
-{
+bat_content=$(
   printf '@echo off\r\n'
   printf 'cd /d "%s"\r\n' "${chosen_workdir}"
   if [[ -n "${chosen_args}" ]]; then
@@ -283,7 +297,13 @@ mkdir -p "$(dirname "${bat_path}")" 2>/dev/null
   else
     printf 'start "" "%s"\r\n' "${chosen_exe}"
   fi
-} > "${bat_path}" 2>/dev/null || bail "ecriture_bat_echouee"
+  printf x
+)
+bat_content="${bat_content%x}"
+for target in "${bat_targets[@]}"; do
+  mkdir -p "$(dirname "${target}")" 2>/dev/null
+  printf '%s' "${bat_content}" > "${target}" 2>/dev/null || bail "ecriture_bat_echouee"
+done
 
 zgu_log "launcher-runtime" "OK" "gamedir=${gamedir} entry=${entry_labels[${chosen_idx}]}"
 

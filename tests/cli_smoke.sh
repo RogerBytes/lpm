@@ -87,6 +87,46 @@ check "uninstall-runner: unknown" 1 'could not be found' uninstall-runner -y nos
 check "launcher on" 0 'enabled' launcher mario on
 expect "launcher on: file created" test -f "${HOME}/Games/mario/lpm-launcher.yml"
 check "launcher off" 0 'disabled' launcher mario off
+# Exe inside drive_c: the Windows paths are computed as text, Wine (winepath) is NOT started.
+mkdir -p "${HOME}/Games/mario/drive_c/Games/Mario/sub"
+printf 'game:\n  exe: %s/Games/mario/drive_c/Games/Mario/sub/m.exe\n  prefix: %s/Games/mario\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/mario-1.yml"
+rm -f "${HOME}/winepath-called"
+for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin"; do
+  mv "${dir}/winepath" "${dir}/winepath.real"
+  printf '#!/bin/sh\ntouch "%s/winepath-called"\nexit 1\n' "${HOME}" > "${dir}/winepath"; chmod +x "${dir}/winepath"
+done
+rm -f "${HOME}/Games/mario/lpm-launcher.yml"
+check "launcher on: exe in drive_c" 0 'enabled' launcher mario on
+expect "launcher on: winepath not called" test ! -e "${HOME}/winepath-called"
+expect "launcher on: Windows path computed" grep -qF 'C:\Games\Mario\sub\m.exe' "${HOME}/Games/mario/lpm-launcher.yml"
+expect "launcher on: bat has the path" grep -qF 'start "" "C:\Games\Mario\sub\m.exe"' "${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat"
+for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin"; do
+  mv -f "${dir}/winepath.real" "${dir}/winepath"
+done
+check "launcher off (2)" 0 'disabled' launcher mario off
+# Existing lpm-launcher.yml WITHOUT bat_path/original_exe (hand-written or restored from a .zgp):
+# "on" keeps the entries and comments, and adds the two keys (otherwise the runtime writes a
+# lpm-launch.bat that Lutris never runs and the picker choice is ignored).
+printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\one.exe\n- label: Two\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\two.exe\n# my comment\n' > "${HOME}/Games/mario/lpm-launcher.yml"
+check "launcher on: existing yml without bat_path" 0 'enabled' launcher mario on
+expect "existing yml: bat_path added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if d.get('bat_path')=='${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat' else 1)"
+expect "existing yml: original_exe added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+expect "existing yml: entries kept" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if [e['label'] for e in d['entries']]==['One','Two'] else 1)"
+expect "existing yml: comment kept" grep -q '# my comment' "${HOME}/Games/mario/lpm-launcher.yml"
+check "launcher on again: refused" 1 'already enabled' launcher mario on
+expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+check "launcher off (3)" 0 'disabled' launcher mario off
+# Runtime with a YAML WITHOUT bat_path (picker choice already made): the choice must reach the
+# lpm-launch.bat of drive_c that Lutris runs, not only a file at the root of the game folder.
+rt_game="${HOME}/Games/rtgame"
+mkdir -p "${rt_game}/drive_c/Games/Rt"
+printf '@echo off\r\nstart "" "C:\\Games\\Rt\\first.exe"\r\n' > "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
+printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Rt\n  exe: C:\\Games\\Rt\\first.exe\n- label: Two\n  workdir: C:\\Games\\Rt\n  exe: C:\\Games\\Rt\\second.exe\n' > "${rt_game}/lpm-launcher.yml"
+printf 'Two' > "${rt_game}/.lpm-launcher-choice"
+expect "runtime without bat_path: runs" bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
+expect "runtime without bat_path: drive_c bat gets the choice" grep -q 'second.exe' "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
+printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
+rm -f "${HOME}/Games/mario/lpm-launcher.yml"
 check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
 check "tools env set empty" 0 '' tools mario env set FOO ""
