@@ -512,6 +512,12 @@ except Exception:
       rm -rf -- "${prefix_dir}/drive_c/users/steamuser/Local Settings"
     fi
 
+    # Safety net for archives packaged before this cleanup (see zgp-game-packer.sh): Proton's
+    # "version" file makes Proton skip the repair of its own files in the prefix, which the
+    # export removed (links to the runner, e.g. system32/umu.exe). Removed so that Proton
+    # rebuilds them at the first launch (slower, once). The game data is not touched.
+    [[ -f "${prefix_dir}/version" ]] && rm -f -- "${prefix_dir}/version"
+
     t install_game.registering_lutris
     safe_name="${game_real_name//\'/\'\'}"
     # slug and config_id derive from the folder name extracted from the .zgp, so they may be

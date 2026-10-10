@@ -40,7 +40,7 @@ Layout:
     zgp-game-config.yml        <- the game's Lutris configuration (added by pack)
 ```
 
-Before archiving, `pack` prepares the prefix (these changes are made on the installed game itself, not on a copy): broken and device symbolic links, `dosdevices`, `Local Settings`, temporary and package-cache files and `*.orig` files in `system32`/`syswow64` are removed, links inside `drive_c` are replaced by real copies, the user folder is renamed to `steamuser`, and user names in the registry files, `lutris.json` and `goglog.ini` are replaced by the placeholder `anonuser`.
+Before archiving, `pack` prepares the prefix (these changes are made on the installed game itself, not on a copy): broken and device symbolic links, `dosdevices`, `Local Settings`, Proton's `version` file, temporary and package-cache files and `*.orig` files in `system32`/`syswow64` are removed, links pointing outside the game folder are deleted (never copied), the other links inside `drive_c` are replaced by real copies, the user folder is renamed to `steamuser`, and user names in the registry files, `lutris.json` and `goglog.ini` are replaced by the placeholder `anonuser`.
 
 The embedded `zgp-game-config.yml` is the game's Lutris YAML, cleaned: the keys `script`, `version` and `slug` are removed, `system.env.GAMEID` is removed, the absolute prefix path is replaced by `$GAMEDIR`, any other `/home/<user>/` by `/home/anonuser/`, and `wine.version` is set to Lutris' default runner when the game had none. It carries the display name (`name:`), which the installer uses. If the game has no Lutris config file, the archive has no `zgp-game-config.yml` (the installer then reports an error but still registers the game).
 

@@ -334,6 +334,15 @@ for game_real_name in "${games_to_export[@]}"; do
   [[ -e "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings" || -L "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings" ]] \
     && rm -rf -- "${WINEPREFIX_DIR}/drive_c/users/steamuser/Local Settings"
 
+  # Proton's "version" file (prefix root) tells Proton the prefix is already up to date, so it
+  # skips repairing it. The link cleanup below deletes the links Proton made to the runner
+  # (their target is outside the game folder), e.g. drive_c/windows/system32/umu.exe, so a
+  # prefix keeping its "version" file stays broken: the game exits after a few seconds with
+  # 'wine: failed to open "c:\windows\system32\umu.exe"'. Without the file, Proton rebuilds
+  # its own files at the next launch (as when the runner is changed) and leaves the game data
+  # alone. Removed at pack time (archive AND installed game) and again at install time.
+  [[ -f "${WINEPREFIX_DIR}/version" ]] && rm -f -- "${WINEPREFIX_DIR}/version"
+
   [[ -d "${WINEPREFIX_DIR}/drive_c/ProgramData/Package Cache/" ]] && rm -rf -- "${WINEPREFIX_DIR}/drive_c/ProgramData/Package Cache/"*
   [[ -d "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp" ]] && rm -rf -- "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp/"*
   [[ -d "${WINEPREFIX_DIR}/drive_c" ]] && mkdir -p "${WINEPREFIX_DIR}/drive_c/users/steamuser/Temp"

@@ -183,7 +183,11 @@ ln -s "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z/to-outside"
 ln -s / "${HOME}/Games/zelda/drive_c/Games/Z/to-root"
 ln -s . "${HOME}/Games/zelda/drive_c/Games/Z/pfx"
 ln -s real.txt "${HOME}/Games/zelda/drive_c/Games/Z/inner-link"
+echo "GE-Proton-test" > "${HOME}/Games/zelda/version"
 check "pack safety" 0 '\[EXPORTED\]' pack -3 zelda
+# Proton's "version" file would make Proton skip repairing the prefix whose runner links were removed
+expect "pack: Proton version file not archived" bash -c '! zstd -dc "$1" | tar -t | grep -Eq "^(\./)?[^/]+/version$"' _ "${HOME}/Zelda.zgp"
+expect "pack: Proton version file removed from the installed game" test ! -e "${HOME}/Games/zelda/version"
 expect "pack safety: archive has no outside data" bash -c '! zstd -dc "$1" | tar -t | grep -q "private.txt"' _ "${HOME}/Zelda.zgp"
 expect "pack safety: inner link became a real file" bash -c 'zstd -dc "$1" | tar -t | grep -q "Z/inner-link$"' _ "${HOME}/Zelda.zgp"
 expect "pack safety: outside folder untouched" test -f "${HOME}/outside-secret/private.txt"
@@ -198,6 +202,16 @@ expect "uninstall: removed from the list" bash -c "! bash '${R}' list </dev/null
 expect "uninstall: folder deleted" test ! -e "${HOME}/Games/mario"
 check "install" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario.zgp"
 check "list after reinstall" 0 'mario +Mario' list
+
+# --- Install removes Proton's "version" file from archives made before the export did it
+mkdir -p "${HOME}/old-archive"
+zstd -dc "${HOME}/Mario.zgp" | tar -x -C "${HOME}/old-archive"
+echo "GE-Proton-test" > "${HOME}/old-archive/mario/version"
+tar -C "${HOME}/old-archive" -cf - mario | zstd -q > "${HOME}/Mario-old.zgp"
+check "uninstall before old archive" 0 '\[REMOVED\] mario' uninstall -y mario
+check "install old archive" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario-old.zgp"
+expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/version"
+rm -rf "${HOME}/old-archive" "${HOME}/Mario-old.zgp"
 
 # --- Completion: every documented command is offered (except advanced commands
 #     intentionally absent from "lpm --help"), and options with values complete
