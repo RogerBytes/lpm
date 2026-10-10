@@ -838,15 +838,9 @@ launcher.setup_done=LPM Launcher activé pour "%s".\nÉditez ce fichier pour ajo
 launcher.setup_done_title=LPM Launcher activé
 launcher.open_folder_button=Ouvrir le dossier
 launcher.close_button=Fermer
-launcher.flatpak_permission_hint=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher (le jeu se lance normalement, mais sans l'écran de chargement). Si ça arrive, exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_question=Lutris est installé en Flatpak : son bac à sable peut ne pas voir les fichiers de lpm, ce qui ferait échouer silencieusement le LPM Launcher. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_applied_ok=Permission Flatpak appliquée avec succès.
-launcher.flatpak_permission_applied_fail=Échec de l'application automatique de la permission Flatpak. Applique-la toi-même :\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_hint_hostos=Lutris est installé en Flatpak, et lpm est installé sous %s (dans /usr) : Flatpak refuse de partager un chemin précis situé sous /usr, même via "override" -- seule la permission large "host-os" fonctionne dans ce cas. Si le LPM Launcher échoue silencieusement (le picker de choix ne s'affiche jamais), exécute ceci une fois dans un terminal :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
-launcher.flatpak_permission_question_hostos=Lutris est installé en Flatpak, et lpm est installé sous %s (dans /usr) : Flatpak refuse de partager un chemin précis situé sous /usr, même via "override" -- seule la permission large "host-os" fonctionne dans ce cas. Appliquer la correction maintenant ?\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
-launcher.flatpak_permission_applied_fail_hostos=Échec de l'application automatique de la permission Flatpak. Applique-la toi-même :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.launcher_yml_missing=Erreur : lpm-launcher.yml introuvable pour "%s" -- impossible de restaurer l'exécutable d'origine.
 launcher.no_original_exe=Erreur : aucun exécutable d'origine sauvegardé pour "%s".
+launcher.original_exe_fallback=%s : aucun exécutable d'origine n'était sauvegardé ; restauré depuis la première entrée du menu : %s
 launcher.teardown_done=LPM Launcher désactivé pour "%s". L'exécutable d'origine a été restauré -- vérifiez-le dans les réglages du jeu dans Lutris.
 launcher.done_one_on_cli=%s : activé. Éditez %s pour ajouter ou modifier des entrées.
 launcher.done_one_off_cli=%s : désactivé.

@@ -838,15 +838,9 @@ launcher.setup_done=LPM Launcher enabled for "%s".\nEdit this file to add or cha
 launcher.setup_done_title=LPM Launcher enabled
 launcher.open_folder_button=Open folder
 launcher.close_button=Close
-launcher.flatpak_permission_hint=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start (game launches normally, without the loading screen). If that happens, run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_question=Lutris is installed via Flatpak: its sandbox may not be able to see lpm's own files, which would make the LPM Launcher silently fail to start. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_applied_ok=Flatpak permission applied successfully.
-launcher.flatpak_permission_applied_fail=Automatic Flatpak permission fix failed. Apply it yourself:\nflatpak override --user net.lutris.Lutris --filesystem=%s:ro
-launcher.flatpak_permission_hint_hostos=Lutris is installed via Flatpak, and lpm is installed under %s (inside /usr): Flatpak always refuses to share a specific path located under /usr, even via "override" -- only the broad "host-os" permission works in this case. If the LPM Launcher silently fails to start (the picker never appears), run this once in a terminal:\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
-launcher.flatpak_permission_question_hostos=Lutris is installed via Flatpak, and lpm is installed under %s (inside /usr): Flatpak always refuses to share a specific path located under /usr, even via "override" -- only the broad "host-os" permission works in this case. Apply the fix now?\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
-launcher.flatpak_permission_applied_fail_hostos=Automatic Flatpak permission fix failed. Apply it yourself:\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.launcher_yml_missing=Error: lpm-launcher.yml not found for "%s" -- cannot restore the original executable.
 launcher.no_original_exe=Error: no original executable saved for "%s".
+launcher.original_exe_fallback=%s: no original executable was saved; restored from the first menu entry: %s
 launcher.teardown_done=LPM Launcher disabled for "%s". The original executable has been restored -- please double-check it in Lutris's game settings.
 launcher.done_one_on_cli=%s: enabled. Edit %s to add or change entries.
 launcher.done_one_off_cli=%s: disabled.

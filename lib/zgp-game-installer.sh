@@ -691,31 +691,15 @@ EOF
 
     zgu_write_game_shortcut "${game_real_name}" "${slug}" "${prefix_dir}" "${game_id}" "${version}" "${create_menu}" "${create_desktop}" "${executable_path}" "${config_id}" "${lutris_config_dir}" "${runner_dir}" "${desktop_dir_override}"
 
-    # --- Reconnect the LPM Launcher if this game already had it: "scripts/lpm-launcher.sh"
-    # and "lpm-launcher.yml" live inside the game folder so they survive reinstallation, but
-    # "system.prelaunch_command" lives in the LUTRIS config, rewritten here from the bundled
-    # YAML, which never contains it (it is added separately by "lpm launcher ... on").
-    # Without this block the picker would stay unreachable after a reinstall (see
-    # zgp_launcher_is_active in zgl-launcher-manager.sh). Adds the key ONLY if entirely
-    # absent, never overwriting a hook already present and confirmed (keep_hooks). Must run
-    # HERE: after zgu_write_game_shortcut (same reason as zgu_apply_hook_policy below) and
-    # before zgu_apply_hook_policy, so its "lpm's own relay" exemption applies on the first
-    # pass. ---
-    if [[ -f "${prefix_dir}/scripts/lpm-launcher.sh" ]] && [[ -f "${yml_config_file}" ]]; then
-      YML_PATH="${yml_config_file}" RELAY_PATH="${prefix_dir}/scripts/lpm-launcher.sh" python3 -c '
-import os, yaml
-try:
-    with open(os.environ["YML_PATH"], "r") as f:
-        data = yaml.safe_load(f) or {}
-    system = data.setdefault("system", {})
-    if "prelaunch_command" not in system:
-        system["prelaunch_command"] = os.environ["RELAY_PATH"]
-        system["prelaunch_wait"] = True
-        with open(os.environ["YML_PATH"], "w") as f:
-            yaml.dump(data, f, sort_keys=False)
-except Exception:
-    pass
-' 2>/dev/null
+    # --- LPM Launcher of a package made by lpm <= 0.9.5 (old format: relay
+    # "scripts/lpm-launcher.sh" run by a Lutris prelaunch command): converted to the current
+    # format, where the orchestrator writes lpm-launch.bat itself before launching. Removes the
+    # relay and any prelaunch command pointing to it, aligns "bat_path" of lpm-launcher.yml on
+    # the game.exe of the config. Nothing to reconnect any more. Must run AFTER
+    # zgu_write_game_shortcut and BEFORE zgu_apply_hook_policy. DO NOT REMOVE: old packages can
+    # be installed years from now (see lib/zgl-launcher-legacy.sh). ---
+    if [[ -n "${yml_config_file}" ]] && [[ -f "${yml_config_file}" ]]; then
+      bash "${script_dir}/zgl-launcher-legacy.sh" "${yml_config_file}" "${prefix_dir}" >/dev/null 2>&1
     fi
 
     # Neutralize (never delete) unauthorized hooks; see the YAML handling comment above and

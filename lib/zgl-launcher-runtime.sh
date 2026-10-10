@@ -2,8 +2,11 @@
 
 # --- lpm launcher: runs at every game launch, via system.prelaunch_command ---
 #
-# Called ONLY by the small relay script $GAMEDIR/scripts/lpm-launcher.sh (see
-# lib/zgl-launcher-manager.sh, "lpm launcher ... on"), never directly by the user.
+# Called by the orchestrator (lib/zgl-launcher-orchestrator.sh, entry point of every lpm
+# shortcut), on the host, BEFORE Lutris starts; never directly by the user. (Games in the old
+# format, lpm <= 0.9.5, still have a relay $GAMEDIR/scripts/lpm-launcher.sh that calls it from
+# Lutris' prelaunch command until the orchestrator has converted them, see
+# lib/zgl-launcher-legacy.sh.)
 #
 # Usage: zgl-launcher-runtime.sh <gamedir>
 #

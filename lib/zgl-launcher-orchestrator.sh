@@ -22,10 +22,13 @@
 #     presence of "${game_dir}/.lpm-no-loadingscreen" ("Loading screen" checkbox unchecked
 #     when creating/regenerating the shortcut, see zgp-game-shortcutter.sh /
 #     zgp-game-installer.sh). Then: direct launch, zero overhead.
-#   - The multi-entry picker (several executables per game) is handled by
-#     zgl-launcher-runtime.sh, triggered by Lutris via system.prelaunch_command. THIS script
-#     does not check whether that feature is active; the two are independent. The picker
-#     reuses the background already opened by THIS script (fixed-path control file below).
+#   - The multi-entry picker (several executables per game) is shown HERE, embedded in the
+#     loading screen; then THIS script runs zgl-launcher-runtime.sh (on the host, before
+#     Lutris) which writes lpm-launch.bat with the chosen entry. There is no Lutris
+#     prelaunch command any more. Games made by lpm <= 0.9.5 (relay + prelaunch command) are
+#     converted here at their first launch, see zgl-launcher-legacy.sh (DO NOT REMOVE that
+#     conversion: old packages can be installed years later). The picker reuses the
+#     background already opened by THIS script (fixed-path control file below).
 #   - Once the background is up, this script "exec"s the normal Lutris command (the same as
 #     the one used in Exec= before the orchestrator): the bash process is replaced by lutris
 #     (same PID), so no wrapper stays in the process tree and window/dock tracking
@@ -144,9 +147,28 @@ fi
 ctrl_key=$(printf '%s' "${game_dir}" | sha256sum | cut -c1-24)
 control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
-# --- Loading screen disabled for this game, or folder not found: direct launch, nothing else
-# (so no LPM Launcher picker either; see zgl-launcher-runtime.sh for its fallback here). ---
+# --- Is the LPM Launcher enabled for this game? Yes when the Lutris YAML runs lpm-launch.bat
+# (game.exe) and lpm-launcher.yml exists. The old format (relay as Lutris prelaunch command,
+# lpm <= 0.9.5) is converted here, at the first launch through an lpm shortcut:
+# zgl-launcher-legacy.sh. If it cannot be (relay still referenced afterwards), the old
+# mechanism keeps working untouched: "legacy_relay_present". ---
+lutris_game_yml=""
+[[ -n "${configpath}" ]] && lutris_game_yml="${lutris_config_dir}/${configpath}.yml"
+launcher_active=false
+legacy_relay_present=false
+if [[ -d "${game_dir}" ]] && [[ -f "${game_dir}/lpm-launcher.yml" ]] \
+    && [[ -n "${lutris_game_yml}" ]] && [[ -f "${lutris_game_yml}" ]] \
+    && grep -Eq "^[[:space:]]*exe:.*lpm-launch\.bat['\"]?[[:space:]]*$" "${lutris_game_yml}" 2>/dev/null; then
+  launcher_active=true
+  bash "${script_dir}/zgl-launcher-legacy.sh" "${lutris_game_yml}" "${game_dir}" >/dev/null 2>&1 || legacy_relay_present=true
+fi
+
+# --- Loading screen disabled for this game, or folder not found: no loading screen, but the
+# LPM Launcher still works (its own picker window, then lpm-launch.bat), then direct launch. ---
 if [[ ! -d "${game_dir}" ]] || [[ -f "${game_dir}/.lpm-no-loadingscreen" ]]; then
+  if [[ "${launcher_active}" = true ]] && [[ "${legacy_relay_present}" = false ]]; then
+    bash "${script_dir}/zgl-launcher-runtime.sh" "${game_dir}"
+  fi
   launch_lutris
 fi
 
@@ -178,7 +200,7 @@ picker_title="" picker_prompt=""
 entry_labels=()
 will_show_picker=false
 
-if [[ -f "${launcher_yml}" ]] && [[ "${has_display}" = true ]] \
+if [[ "${launcher_active}" = true ]] && [[ "${has_display}" = true ]] \
     && command -v python3 >/dev/null 2>&1; then
   parsed=$(YML_PATH="${launcher_yml}" python3 -c '
 import os, sys, yaml
@@ -293,9 +315,8 @@ zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=background_started ctr
 # zgl-launcher-runtime.sh (started later by Lutris), which for Flatpak Lutris runs inside its
 # sandbox, where neither gamepad nor mouse reliably reached Zenity. The choice is made HERE and
 # passed to zgl-launcher-runtime.sh via a fixed-path file derived from game_dir, like the
-# control file. The runtime script then only reads it and writes lpm-launch.bat (its own
-# picker remains a fallback if THIS script did not run: lpm shortcut bypassed, game launched
-# another way).
+# control file. The runtime script then only reads it and writes lpm-launch.bat (run by THIS
+# script, see below; its own picker is used only when the loading screen is disabled).
 #
 # YAML already read above (entry_labels/picker_title/picker_prompt/will_show_picker), before
 # the first background display; see that block for why.
@@ -383,6 +404,13 @@ if [[ "${will_show_picker}" = true ]]; then
       printf '%s\n' "${chosen_label_line}"
     } > "${control_file}" 2>/dev/null
     zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choice entry=${selection}"
+fi
+
+# --- lpm-launch.bat: written NOW, on the host, with the entry just chosen (or the only entry),
+# before Lutris starts. Unless the old relay is still active (legacy_relay_present): then it
+# writes the .bat itself from the choice file, as before. ---
+if [[ "${launcher_active}" = true ]] && [[ "${legacy_relay_present}" = false ]]; then
+  bash "${script_dir}/zgl-launcher-runtime.sh" "${game_dir}"
 fi
 
 # --- Universal game window detection (WIN_CreateWindowEx via WINEDEBUG) ---------

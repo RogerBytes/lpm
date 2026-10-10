@@ -117,11 +117,13 @@ check "launcher on again: refused" 1 'already enabled' launcher mario on
 expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
 mkdir -p "${HOME}/Games/mario/splash"
 echo img > "${HOME}/Games/mario/splash/splash.png"
+mkdir -p "${HOME}/Games/mario/scripts"
 echo trace > "${HOME}/Games/mario/scripts/lpm-winetrace.sh"
 echo data > "${HOME}/Games/mario/drive_c/Games/Mario/game-data.txt"
-expect "launcher on: relay and bat exist before off" bash -c '[[ -f "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/lpm-launcher.yml" ]]' _ "${HOME}/Games/mario"
+expect "launcher on: bat and yml exist, NO relay" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/lpm-launcher.yml" ]]' _ "${HOME}/Games/mario"
+expect "launcher on: Lutris config has game.exe on the bat and NO prelaunch command" bash -c 'grep -q "lpm-launch.bat" "$1" && ! grep -q "prelaunch" "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
 check "launcher off (3)" 0 'disabled' launcher mario off
-expect "launcher off: yml, relay and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/lpm-launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
+expect "launcher off: yml and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/lpm-launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
 expect "launcher off: splash, loading-screen script and game files kept" bash -c '[[ -f "$1/splash/splash.png" && -f "$1/scripts/lpm-winetrace.sh" && -f "$1/drive_c/Games/Mario/game-data.txt" ]]' _ "${HOME}/Games/mario"
 expect "launcher off: Lutris exe restored" grep -q 'm.exe' "${HOME}/.config/lutris/games/mario-1.yml"
 check "launcher on after off: fresh yml" 0 'enabled' launcher mario on
@@ -159,6 +161,38 @@ check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
 check "tools env set empty" 0 '' tools mario env set FOO ""
 expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
+
+# --- Legacy launcher (format of lpm <= 0.9.5: relay + Lutris prelaunch command). Packages made then
+# can be installed or launched years later: the orchestrator must convert them. DO NOT delete this
+# test together with lib/zgl-launcher-legacy.sh.
+lg="${HOME}/Games/mario"
+mkdir -p "${lg}/scripts" "${lg}/drive_c/Games/Mario"
+printf '#!/bin/sh\n' > "${lg}/scripts/lpm-launcher.sh"
+echo trace > "${lg}/scripts/lpm-winetrace.sh"
+lg_bat="${lg}/drive_c/Games/Mario/lpm-launch.bat"
+printf '@echo off\r\nstart "" "C:\\Games\\Mario\\old.exe"\r\n' > "${lg_bat}"
+printf 'game:\n  exe: %s\n  prefix: %s\nsystem:\n  prelaunch_command: %s/scripts/lpm-launcher.sh\n  prelaunch_wait: true\n# prelaunch_command: %s/scripts/lpm-launcher.sh  # lpm:hook-disabled\nwine:\n  version: GE-Test\n' "${lg_bat}" "${lg}" "${lg}" "${lg}" > "${HOME}/.config/lutris/games/mario-1.yml"
+printf 'title: T\nprompt: P\nentries:\n- label: Only\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\new.exe\n' > "${lg}/lpm-launcher.yml"
+touch "${lg}/.lpm-no-loadingscreen"
+expect "legacy launcher: shortcut launch (orchestrator) converts the game" env DISPLAY=:99 bash "${repo}/lib/zgl-launcher-orchestrator.sh" 1 package
+expect "legacy launcher: prelaunch command and its commented copy removed" bash -c '! grep -q "lpm-launcher.sh" "$1" && ! grep -q "^ *prelaunch_wait" "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
+expect "legacy launcher: relay deleted, loading-screen script kept" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && -f "$1/scripts/lpm-winetrace.sh" ]]' _ "${lg}"
+expect "legacy launcher: bat written by the orchestrator with the entry" grep -q 'new.exe' "${lg_bat}"
+expect "legacy launcher: bat_path aligned on game.exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${lg}/lpm-launcher.yml')); sys.exit(0 if d.get('bat_path')=='${lg_bat}' else 1)"
+expect "legacy launcher: Lutris YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
+# A prelaunch command of the user is never touched
+printf 'game:\n  exe: %s\nsystem:\n  prelaunch_command: /home/me/mine.sh\n  prelaunch_wait: true\n' "${lg_bat}" > "${HOME}/.config/lutris/games/mario-1.yml"
+expect "legacy launcher: a user's own prelaunch command is left alone" bash -c 'bash "$1" "$2" "$3"; grep -q "mine.sh" "$2" && grep -q prelaunch_wait "$2"' _ "${repo}/lib/zgl-launcher-legacy.sh" "${HOME}/.config/lutris/games/mario-1.yml" "${lg}"
+rm -f "${lg}/.lpm-no-loadingscreen" "${lg}/lpm-launcher.yml" "${lg_bat}" "${lg}/scripts/lpm-winetrace.sh"
+printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
+
+# --- "off" without original_exe (hand-written file): fallback on the first entry
+mkdir -p "${lg}/drive_c/Games/Mario"
+printf 'title: T\nprompt: P\nentries:\n- label: Only\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\first.exe\n' > "${lg}/lpm-launcher.yml"
+printf 'game:\n  exe: %s/drive_c/Games/Mario/lpm-launch.bat\n  prefix: %s\nwine:\n  version: GE-Test\n' "${lg}" "${lg}" > "${HOME}/.config/lutris/games/mario-1.yml"
+check "launcher off without original_exe: fallback on the first entry" 0 'disabled' launcher mario off
+expect "launcher off fallback: game.exe restored to the first entry" grep -q "drive_c/Games/Mario/first.exe" "${HOME}/.config/lutris/games/mario-1.yml"
+printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
 
 # --- Change a game's runner ("runner" tool): tested on zelda
 mkdir -p "${HOME}/.local/share/lutris/runners/wine/GE-Other/files/bin"
@@ -324,10 +358,14 @@ check "list after reinstall" 0 'mario +Mario' list
 mkdir -p "${HOME}/old-archive"
 zstd -dc "${HOME}/Mario.zgp" | tar -x -C "${HOME}/old-archive"
 echo "GE-Proton-test" > "${HOME}/old-archive/mario/version"
+# ... and with the relay of the old LPM Launcher format (lpm <= 0.9.5)
+mkdir -p "${HOME}/old-archive/mario/scripts"
+printf '#!/bin/sh\n' > "${HOME}/old-archive/mario/scripts/lpm-launcher.sh"
 tar -C "${HOME}/old-archive" -cf - mario | zstd -q > "${HOME}/Mario-old.zgp"
 check "uninstall before old archive" 0 '\[REMOVED\] mario' uninstall -y mario
 check "install old archive" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario-old.zgp"
 expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/version"
+expect "install: relay of the old LPM Launcher format removed (legacy)" test ! -e "${HOME}/Games/mario/scripts/lpm-launcher.sh"
 rm -rf "${HOME}/old-archive" "${HOME}/Mario-old.zgp"
 
 # --- Completion: every documented command is offered (except advanced commands
