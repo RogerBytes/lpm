@@ -21,9 +21,10 @@
 #      (see lib/zgl-launcher-orchestrator.sh); an existing splash.png is never touched.
 #      Sets system.prelaunch_command and points game.exe to lpm-launch.bat.
 #   4. Disable: restores the original exe from "original_exe", removes
-#      system.prelaunch_command (only if it references our relay script), and shows an alert
-#      asking to check the executable in Lutris. NEVER deletes lpm-launcher.yml/scripts//
-#      splash/ (non-destructive, can be re-enabled).
+#      system.prelaunch_command (only if it references our relay script), then DELETES the
+#      files the launcher added: lpm-launcher.yml (so the entries are gone too),
+#      scripts/lpm-launcher.sh, every lpm-launch.bat. Never touches splash/, the other files
+#      of scripts/ (loading screen), nor any game/Windows file.
 #   5. Wine/Proton games only (runner='wine'), shared prefixes included (non-destructive,
 #      same principle as "lpm tools"/"lpm lsfg").
 #   6. "--if-needed" (optional, before or after the slugs): a game already in the requested
@@ -384,10 +385,10 @@ print(version)
   } > "${bat_path_linux}" 2>/dev/null
 
   # --- Write lpm-launcher.yml (auto-filled entry + commented example) --
-  # ONLY if it does not exist yet. "off" never deletes this file (see item 4 of the file
-  # header) so it survives an off/on cycle; overwriting it on "on" would lose manual
-  # customization on every re-enable, including a repair re-enable after a reinstall that
-  # dropped system.prelaunch_command (see zgp_launcher_is_active above). ---
+  # ONLY if it does not exist yet. "off" deletes it (item 4 of the file header), so a file
+  # that exists here comes from a hand edit or a restored .zgp; overwriting it on "on" would
+  # lose that customization, including on a repair re-enable after a reinstall that dropped
+  # system.prelaunch_command (see zgp_launcher_is_active above). ---
   if [[ ! -f "${game_dir}/lpm-launcher.yml" ]]; then
     local default_label
     default_label="$(t launcher.default_entry_label)"
@@ -723,6 +724,31 @@ fi
     zgu_log "launcher" "ERROR" "slug=${slug} reason=lutris_yaml_patch_failed"
     return 1
   fi
+
+  # --- Removal of the files the LPM Launcher itself added (only AFTER the Lutris config was
+  # restored above). Exactly these, by name, nothing else:
+  #   <game dir>/lpm-launcher.yml, <game dir>/scripts/lpm-launcher.sh,
+  #   every "lpm-launch.bat" (the one named by "bat_path", the one at the root of the game
+  #   folder, and the ones in <game dir>/drive_c/Games/*/), and the temporary
+  #   .lpm-launcher-choice.
+  # Never touched: the game files, anything else inside the prefix (Windows files), splash/
+  # and the other files of scripts/ (loading screen: lpm-winetrace*), which are not the
+  # launcher's. "scripts/" is removed only if it ends up empty (rmdir). ---
+  local bat_in_yml bat_file
+  bat_in_yml=$(YML_PATH="${launcher_yml}" python3 -c '
+import os, yaml
+with open(os.environ["YML_PATH"], "r") as f:
+    data = yaml.safe_load(f) or {}
+print(data.get("bat_path") or "")
+' 2>/dev/null)
+
+  for bat_file in "${bat_in_yml}" "${game_dir}/lpm-launch.bat" "${game_dir}"/drive_c/Games/*/lpm-launch.bat; do
+    [[ -n "${bat_file}" ]] || continue
+    [[ "$(basename "${bat_file}")" = "lpm-launch.bat" ]] || continue
+    [[ -f "${bat_file}" ]] && rm -f -- "${bat_file}"
+  done
+  rm -f -- "${game_dir}/scripts/lpm-launcher.sh" "${game_dir}/.lpm-launcher-choice" "${launcher_yml}"
+  rmdir "${game_dir}/scripts" 2>/dev/null
 
   zgu_log "launcher" "OK" "slug=${slug} action=off"
   return 0

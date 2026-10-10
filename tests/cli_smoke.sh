@@ -115,7 +115,18 @@ expect "existing yml: entries kept" python3 -c "import sys,yaml; d=yaml.safe_loa
 expect "existing yml: comment kept" grep -q '# my comment' "${HOME}/Games/mario/lpm-launcher.yml"
 check "launcher on again: refused" 1 'already enabled' launcher mario on
 expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+mkdir -p "${HOME}/Games/mario/splash"
+echo img > "${HOME}/Games/mario/splash/splash.png"
+echo trace > "${HOME}/Games/mario/scripts/lpm-winetrace.sh"
+echo data > "${HOME}/Games/mario/drive_c/Games/Mario/game-data.txt"
+expect "launcher on: relay and bat exist before off" bash -c '[[ -f "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/lpm-launcher.yml" ]]' _ "${HOME}/Games/mario"
 check "launcher off (3)" 0 'disabled' launcher mario off
+expect "launcher off: yml, relay and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/lpm-launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
+expect "launcher off: splash, loading-screen script and game files kept" bash -c '[[ -f "$1/splash/splash.png" && -f "$1/scripts/lpm-winetrace.sh" && -f "$1/drive_c/Games/Mario/game-data.txt" ]]' _ "${HOME}/Games/mario"
+expect "launcher off: Lutris exe restored" grep -q 'm.exe' "${HOME}/.config/lutris/games/mario-1.yml"
+check "launcher on after off: fresh yml" 0 'enabled' launcher mario on
+expect "launcher on after off: only the default entry (old entries gone)" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if len(d['entries'])==1 else 1)"
+check "launcher off (4)" 0 'disabled' launcher mario off
 # Runtime with a YAML WITHOUT bat_path (picker choice already made): the choice must reach the
 # lpm-launch.bat of drive_c that Lutris runs, not only a file at the root of the game folder.
 rt_game="${HOME}/Games/rtgame"
