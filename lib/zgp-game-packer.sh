@@ -458,6 +458,21 @@ try:
             if isinstance(env_cfg, dict):
                 env_cfg.pop("GAMEID", None)
 
+            # lpm adds its own window-detection relay in front of "prefix_command"
+            # ("<game>/scripts/lpm-winetrace.sh <game>/scripts/lpm-winetrace.log [user command]",
+            # see zgl-launcher-orchestrator.sh) and rewrites it at EVERY launch. It is not
+            # exported: at install it would be neutralized like a third-party launch hook.
+            # Only the part written by the user, if any, stays.
+            prefix_cmd = system_cfg.get("prefix_command")
+            if isinstance(prefix_cmd, str):
+                relay = re.match(r"^\s*.*?/scripts/lpm-winetrace\.sh\s+.*?/scripts/lpm-winetrace\.log(?:\s+(.*))?\s*$", prefix_cmd, re.S)
+                if relay:
+                    user_part = (relay.group(1) or "").strip()
+                    if user_part:
+                        system_cfg["prefix_command"] = user_part
+                    else:
+                        system_cfg.pop("prefix_command", None)
+
         def clean_paths(obj):
             if isinstance(obj, dict):
                 return {k: clean_paths(v) for k, v in obj.items()}

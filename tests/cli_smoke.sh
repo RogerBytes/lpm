@@ -235,8 +235,16 @@ expect "pack safety: outside folder untouched" test -f "${HOME}/outside-secret/p
 expect "pack safety: no temporary copy left" bash -c '[ -z "$(find "$1" -name "*.zgp-tmp")" ]' _ "${HOME}/Games/zelda"
 rm -f "${HOME}/Zelda.zgp"
 
+# --- Pack: lpm's own window-detection relay is not exported, a command of the user stays
+printf 'game:\n  exe: /y.exe\nsystem:\n  prefix_command: %s/Games/zelda/scripts/lpm-winetrace.sh %s/Games/zelda/scripts/lpm-winetrace.log gamemoderun\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/zelda-1.yml"
+check "pack: relay + user command" 0 '\[EXPORTED\]' pack -3 zelda
+expect "pack: relay removed, user command kept" bash -c 'zstd -dc "$1" | tar -xO "$(zstd -dc "$1" | tar -t | grep -m1 "zgp-game-config.yml$")" | python3 -c "import sys,yaml; d=yaml.safe_load(sys.stdin); assert d[\"system\"][\"prefix_command\"]==\"gamemoderun\", d"' _ "${HOME}/Zelda.zgp"
+rm -f "${HOME}/Zelda.zgp"
+printf 'game:\n  exe: /x.exe\nsystem:\n  prefix_command: %s/Games/mario/scripts/lpm-winetrace.sh %s/Games/mario/scripts/lpm-winetrace.log\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/mario-1.yml"
+
 # --- Full round trip: pack, uninstall, reinstall
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
+expect "pack: relay only -> no prefix_command exported" bash -c '! zstd -dc "$1" | tar -xO "$(zstd -dc "$1" | tar -t | grep -m1 "zgp-game-config.yml$")" | grep -q prefix_command' _ "${HOME}/Mario.zgp"
 expect "pack: .zgp created" test -s "${HOME}/Mario.zgp"
 check "uninstall" 0 '\[REMOVED\] mario' uninstall -y mario
 expect "uninstall: removed from the list" bash -c "! bash '${R}' list </dev/null | grep -q '^mario '"
