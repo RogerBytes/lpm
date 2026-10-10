@@ -520,6 +520,46 @@ fi
 # the watcher keeps running in the background. ---
 MIN_DISPLAY_MS=1000
 
+# Decides whether ONE line of the Wine window trace ("WIN_CreateWindowEx ...") is the creation
+# of the GAME window (return 0) or of an internal/technical one (return 1). Kept as a function
+# so tests/cli_smoke.sh can replay real traces through it.
+#
+# 1. Wine's own windows are ignored by class name, whatever their size or style: recent Wine
+#    creates its taskbar "Shell_TrayWnd" at startup with a title-bar style and a real size
+#    (166x52 seen with GE-Proton), which was taken for the game window, so the loading screen
+#    closed several seconds before the game (Bloodborne).
+# 2. Size criterion: width and height above WIN_SIZE_THRESHOLD.
+# 3. Title-bar criterion (e.g. Kirby Soft And Wet 106x132, Bloodborne "SDL_app" 7x33): some
+#    games create their real window very small and resize it later without creating a new one.
+#    An application window has a title bar (WS_CAPTION bits, 0x00C00000, in "style="), unlike
+#    Wine/SDL technical windows (style 0 or popup only): accepted from WIN_CAPTION_MIN_SIZE
+#    (1, i.e. any non-empty window) regardless of its size.
+# The "x" between two numbers immediately followed by "parent=" is the only place of the format
+# with this pattern (confirmed on real captures), so no false positive from a hexadecimal field
+# (ex=, style=, inst=...).
+WIN_SIZE_THRESHOLD=200
+WIN_CAPTION_MIN_SIZE=1
+WIN_CAPTION_STYLE_MASK=$(( 0x00C00000 ))
+WIN_IGNORED_CLASSES=(Shell_TrayWnd IPTip_Main_Window WineAppBar SDLHelperWindowInputMsgWindow XaliaOverlayBox)
+zgl_trace_line_is_game_window() {
+  local line="$1" ignored_class win_w win_h
+  for ignored_class in "${WIN_IGNORED_CLASSES[@]}"; do
+    [[ "${line}" == *"->L\"${ignored_class}\""* ]] && return 1
+  done
+  [[ "${line}" =~ ([0-9]+)x([0-9]+)[[:space:]]+parent= ]] || return 1
+  win_w="${BASH_REMATCH[1]}"
+  win_h="${BASH_REMATCH[2]}"
+  if [[ "${win_w}" -gt "${WIN_SIZE_THRESHOLD}" ]] && [[ "${win_h}" -gt "${WIN_SIZE_THRESHOLD}" ]]; then
+    return 0
+  fi
+  if [[ "${win_w}" -ge "${WIN_CAPTION_MIN_SIZE}" ]] && [[ "${win_h}" -ge "${WIN_CAPTION_MIN_SIZE}" ]] \
+     && [[ "${line}" =~ style=([0-9A-Fa-f]{1,8})[[:space:]] ]] \
+     && [[ $(( 0x${BASH_REMATCH[1]} & WIN_CAPTION_STYLE_MASK )) -eq "${WIN_CAPTION_STYLE_MASK}" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # Safety margin AFTER the game window detection (or after the fixed wait on Wayland): the
 # new window may not be fully initialized (e.g. a frame generation tool like LSFG can cause a
 # small hitch right after it appears). Without it the background vanished exactly then.
@@ -543,37 +583,13 @@ POST_WINDOW_GRACE_MS=1000
   if [[ "${use_winetrace}" = true ]]; then
     # Universal detection (X11/Wayland alike, any runner): re-reads the trace file (already
     # filtered live by the lpm-winetrace.sh relay, so every line contains "WIN_CreateWindowEx")
-    # looking for a size (width x height) above WIN_SIZE_THRESHOLD. A literal "x" between two
-    # numbers immediately followed by "parent=" is the only place of the format with this pattern
-    # (confirmed on a real capture), so no false positive from a hexadecimal field (ex=, style=,
-    # inst=...). Internal Wine/SDL/GLFW windows always have a null or tiny size, which the
-    # threshold discards.
-    #
-    # Second criterion (e.g. Kirby Soft And Wet, GameMaker): some games create their real window
-    # very small (here 106x132) and resize it later without creating a new one, so the threshold
-    # never saw it. An application window has a title bar (WS_CAPTION bits, 0x00C00000, in
-    # "style="), unlike Wine/SDL technical windows (style 0 or popup only): it is accepted from
-    # WIN_CAPTION_MIN_SIZE x WIN_CAPTION_MIN_SIZE regardless of its size. The size-only criterion
-    # is unchanged for all other cases.
-    WIN_SIZE_THRESHOLD=200
-    WIN_CAPTION_MIN_SIZE=32
-    WIN_CAPTION_STYLE_MASK=$(( 0x00C00000 ))
+    # looking for the creation of the game window (rules in zgl_trace_line_is_game_window above).
     while [[ "${waited}" -lt "${max_wait_s}" ]]; do
       if [[ -s "${trace_file}" ]]; then
         while IFS= read -r trace_line; do
-          if [[ "${trace_line}" =~ ([0-9]+)x([0-9]+)[[:space:]]+parent= ]]; then
-            win_w="${BASH_REMATCH[1]}"
-            win_h="${BASH_REMATCH[2]}"
-            if [[ "${win_w}" -gt "${WIN_SIZE_THRESHOLD}" ]] && [[ "${win_h}" -gt "${WIN_SIZE_THRESHOLD}" ]]; then
-              window_detected="1"
-              break
-            fi
-            if [[ "${win_w}" -ge "${WIN_CAPTION_MIN_SIZE}" ]] && [[ "${win_h}" -ge "${WIN_CAPTION_MIN_SIZE}" ]] \
-               && [[ "${trace_line}" =~ style=([0-9A-Fa-f]{1,8})[[:space:]] ]] \
-               && [[ $(( 0x${BASH_REMATCH[1]} & WIN_CAPTION_STYLE_MASK )) -eq "${WIN_CAPTION_STYLE_MASK}" ]]; then
-              window_detected="1"
-              break
-            fi
+          if zgl_trace_line_is_game_window "${trace_line}"; then
+            window_detected="1"
+            break
           fi
         done < "${trace_file}"
       fi
