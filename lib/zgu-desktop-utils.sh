@@ -381,8 +381,37 @@ def is_target_key(key):
 # is_target_key(), not in the regex itself.
 active_re = re.compile(r'^(?P<indent>\s*)(?P<key>[A-Za-z0-9_]+):(?P<rest>.*)$')
 disabled_re = re.compile(
-    r'^(?P<indent>\s*)#\s*(?P<key>[A-Za-z0-9_]+):(?P<rest>.*?)\s*#\s*' + re.escape(MARKER) + r'.*$'
+    r'^(?P<indent>\s*)#\s*(?P<key>[A-Za-z0-9_]+):(?P<rest>.*?)\s*(?P<tail>#\s*' + re.escape(MARKER) + r'.*)$'
 )
+# A line that starts a key ("name: ...", "name:") or a list item: never a continuation line.
+key_like_re = re.compile(r'^\s*(-\s|[^\s:#][^:]*:(\s|$))')
+
+
+def indent_of(text):
+    return len(text) - len(text.lstrip(" "))
+
+
+def continuation_lines(all_lines, start, base_indent, orphans_only):
+    """A long value (path, command...) is often written by YAML tools on SEVERAL lines, the
+    following ones being more indented than the key. Commenting only the first line leaves the
+    others alone and the file invalid (Lutris: "game has no executable"). Returns (parts, next
+    index): the stripped text of those lines. With orphans_only (lines left by an older lpm after
+    a disabled hook), a line that looks like a key or a list item is never taken."""
+    parts = []
+    index = start
+    while index < len(all_lines):
+        text = all_lines[index].rstrip("\n")
+        if not text.strip() or text.lstrip().startswith("#") or indent_of(text) <= base_indent:
+            break
+        if orphans_only and key_like_re.match(text):
+            break
+        parts.append(text.strip())
+        index += 1
+    return parts, index
+
+
+def joined(rest, parts):
+    return " " + " ".join([piece for piece in [rest.strip()] + parts if piece])
 
 try:
     with open(yml_path, "r", encoding="utf-8") as f:
@@ -410,21 +439,40 @@ effective_allow = allow_hooks or is_lpm_relay
 
 changed = False
 out = []
-for line in lines:
+i = 0
+while i < len(lines):
+    line = lines[i]
     stripped = line.rstrip("\n")
     if effective_allow:
         m = disabled_re.match(stripped)
         if m and is_target_key(m.group("key")):
-            out.append(f"{m.group('indent')}{m.group('key')}:{m.group('rest')}\n")
+            # Lines an older lpm left behind after the commented first line are taken back too
+            parts, next_i = continuation_lines(lines, i + 1, len(m.group("indent")), True)
+            out.append(f"{m.group('indent')}{m.group('key')}:{joined(m.group('rest'), parts)}\n")
             changed = True
+            i = next_i
             continue
     else:
         m = active_re.match(stripped)
         if m and is_target_key(m.group("key")):
-            out.append(f"{m.group('indent')}# {m.group('key')}:{m.group('rest')}  # {MARKER} ({disabled_comment})\n")
+            # The whole value goes into the comment, whatever the number of lines
+            parts, next_i = continuation_lines(lines, i + 1, len(m.group("indent")), False)
+            out.append(f"{m.group('indent')}# {m.group('key')}:{joined(m.group('rest'), parts)}  # {MARKER} ({disabled_comment})\n")
             changed = True
+            i = next_i
             continue
+        m = disabled_re.match(stripped)
+        if m and is_target_key(m.group("key")):
+            # Repair of a file written by an older lpm: hook already commented, its next lines left
+            # active (invalid YAML)
+            parts, next_i = continuation_lines(lines, i + 1, len(m.group("indent")), True)
+            if parts:
+                out.append(f"{m.group('indent')}# {m.group('key')}:{joined(m.group('rest'), parts)}  {m.group('tail')}\n")
+                changed = True
+                i = next_i
+                continue
     out.append(line)
+    i += 1
 
 if changed:
     with open(yml_path, "w", encoding="utf-8") as f:

@@ -165,6 +165,27 @@ expect "GAMEID: YAML still valid" python3 -c 'import sys,yaml; d=yaml.safe_load(
 
 rm -rf "${HOME}/.local/share/lutris/runners/wine/ProtonTest" "${HOME}/gameid-desk"
 
+# --- Launch-hook policy keeps the YAML valid when a hook value spans several lines (YAML tools
+#     wrap long values) -- an orphan line made Lutris report "game has no executable"
+hook_yml="${HOME}/hook-policy.yml"
+hook_run() { bash -c 'source "$1/lib/zgu-desktop-utils.sh"; t() { echo "disabled by lpm"; }; zgu_apply_hook_policy "$2" "$3" broad' _ "${repo}" "${hook_yml}" "$1"; }
+printf 'game:\n  exe: /y.exe\nsystem:\n  env:\n    GAMEID: umu-3\n  prefix_command: /a/scripts/lpm-winetrace.sh\n    /a/scripts/lpm-winetrace.log\nwine:\n  version: X\n' > "${hook_yml}"
+hook_run false
+expect "hook policy: wrapped value disabled, YAML valid, hook gone" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert "prefix_command" not in d["system"] and d["system"]["env"]["GAMEID"]=="umu-3" and d["wine"]["version"]=="X"' "${hook_yml}"
+cp "${hook_yml}" "${hook_yml}.once"; hook_run false
+expect "hook policy: disabling twice changes nothing" cmp -s "${hook_yml}" "${hook_yml}.once"
+hook_run true
+expect "hook policy: restore gives back the whole value" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert d["system"]["prefix_command"]=="/a/scripts/lpm-winetrace.sh /a/scripts/lpm-winetrace.log"' "${hook_yml}"
+# File left broken by an older lpm: first line commented, second line orphan
+printf 'game:\n  exe: /y.exe\nsystem:\n  env:\n    GAMEID: umu-3\n  # prefix_command: /a/x.sh  # lpm:hook-disabled (old)\n    /a/x.log\nwine:\n  version: X\n' > "${hook_yml}"
+hook_run false
+expect "hook policy: file broken by an older lpm is repaired" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert "prefix_command" not in d["system"] and d["wine"]["version"]=="X"' "${hook_yml}"
+# A sibling key after a disabled hook is never swallowed
+printf 'system:\n  env:\n    GAMEID: umu-3\n  # prefix_command: /a/x.sh  # lpm:hook-disabled (old)\n    FOO: bar\n' > "${hook_yml}"
+hook_run false
+expect "hook policy: sibling key after a disabled hook kept" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert d["system"]["env"]["FOO"]=="bar"' "${hook_yml}"
+rm -f "${hook_yml}" "${hook_yml}.once"
+
 # --- Runner download helper returns ONLY the file path (a message on stdout would corrupt it)
 expect "download_cli: stdout is only the path" bash -c '
   exec 3>/dev/null
