@@ -18,9 +18,9 @@
 # lpm .desktop shortcuts; normally it is already running when this script starts. This
 # script only finds the already-open control file (fixed path derived from "gamedir",
 # identical to the orchestrator's computation) to write IND_HIDE/IND_SHOW around the picker;
-# it never creates nor closes it. With several entries, it also replaces the displayed title
-# (line 3 of the control file, set to the game name by the orchestrator) with the chosen
-# entry label. If the control file does not exist (game not started via the lpm shortcut, or
+# it never creates nor closes it. With several entries, it also writes the chosen entry label
+# on line 4 of the control file (subtitle under the game name, which stays; no subtitle if the
+# label is exactly the game name). If the control file does not exist (game not started via the lpm shortcut, or
 # loading screen disabled with ".lpm-no-loadingscreen"), the picker still works, without a
 # background.
 #
@@ -138,7 +138,7 @@ ctrl_key=$(printf '%s' "${gamedir}" | sha256sum | cut -c1-24)
 control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
 # Re-reads lines 1 (background) and 3 (title) as-is from the control file; used by
-# set_indicator/set_title below to modify ONLY their own line. The orchestrator alone writes
+# set_indicator/set_entry_label below to modify ONLY their own line. The orchestrator alone writes
 # line 1, this script lines 2 and 3, but all three must survive each rewrite (which replaces
 # the whole file).
 read_ctrl_lines() {
@@ -146,6 +146,7 @@ read_ctrl_lines() {
   mapfile -t mapfile_lines < "${control_file}" 2>/dev/null
   ctrl_bg_line="${mapfile_lines[0]:-NONE}"
   ctrl_title_line="${mapfile_lines[2]:-}"
+  ctrl_label_line="${mapfile_lines[3]:-}"
   [[ -z "${ctrl_bg_line}" ]] && ctrl_bg_line="NONE"
 }
 
@@ -153,26 +154,32 @@ set_indicator() {
   # Best-effort: the control file may not exist (game not started via the lpm shortcut, or
   # loading screen disabled); then do nothing, the picker still shows without a background.
   [[ -f "${control_file}" ]] || return 0
-  local ctrl_bg_line ctrl_title_line
+  local ctrl_bg_line ctrl_title_line ctrl_label_line
   read_ctrl_lines
   {
     printf '%s\n' "${ctrl_bg_line}"
     printf '%s\n' "$1"
     printf '%s\n' "${ctrl_title_line}"
+    printf '%s\n' "${ctrl_label_line}"
   } > "${control_file}" 2>/dev/null
 }
 
-set_title() {
-  # Same principle: replaces only line 3 (title), preserving background and indicator state.
+set_entry_label() {
+  # Line 4 (label of the chosen entry, drawn as a subtitle under the title); the title (line 3)
+  # is NEVER changed. Empty when the label is exactly the game name (strict comparison): no
+  # subtitle then. Background, indicator and title are preserved.
   [[ -f "${control_file}" ]] || return 0
-  local ctrl_bg_line ctrl_title_line ctrl_indicator_line
+  local ctrl_bg_line ctrl_title_line ctrl_label_line ctrl_indicator_line label
   read_ctrl_lines
   ctrl_indicator_line=$(sed -n '2p' "${control_file}" 2>/dev/null)
   [[ -z "${ctrl_indicator_line}" ]] && ctrl_indicator_line="IND_SHOW"
+  label="${1//[$'\n\r']/}"
+  [[ "${label}" = "${ctrl_title_line}" ]] && label=""
   {
     printf '%s\n' "${ctrl_bg_line}"
     printf '%s\n' "${ctrl_indicator_line}"
-    printf '%s\n' "$1"
+    printf '%s\n' "${ctrl_title_line}"
+    printf '%s\n' "${label}"
   } > "${control_file}" 2>/dev/null
 }
 
@@ -276,11 +283,11 @@ chosen_workdir="${entry_workdirs[${chosen_idx}]}"
 chosen_exe="${entry_exes[${chosen_idx}]}"
 chosen_args="${entry_args[${chosen_idx}]:-}"
 
-# Title shown on the loading screen (see zgu-launcher-screen.py): replaced by the chosen
-# entry label ONLY if the game has several active LPM Launcher entries; a "normal" game
-# (single entry, no picker) keeps the game name set by the orchestrator.
+# Subtitle of the loading screen (see zgu-launcher-screen.py): the chosen entry label, ONLY if
+# the game has several active LPM Launcher entries and the label differs from the game name;
+# a "normal" game (single entry, no picker) shows the game name alone.
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
-  set_title "${entry_labels[${chosen_idx}]}"
+  set_entry_label "${entry_labels[${chosen_idx}]}"
 fi
 
 # --- 3. Write lpm-launch.bat (emptied then rewritten; "start" with an empty title, no direct

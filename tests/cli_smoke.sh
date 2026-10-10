@@ -136,6 +136,23 @@ printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Rt\n 
 printf 'Two' > "${rt_game}/.lpm-launcher-choice"
 expect "runtime without bat_path: runs" bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "runtime without bat_path: drive_c bat gets the choice" grep -q 'second.exe' "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
+# Loading-screen subtitle: the title (line 3) never changes; line 4 = chosen label, empty if the
+# label is exactly the game name.
+rt_key=$(printf '%s' "${rt_game}" | sha256sum | cut -c1-24)
+rt_ctrl="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${rt_key}"
+printf 'NONE\nIND_SHOW\nRt Game\n\n' > "${rt_ctrl}"
+printf 'Two' > "${rt_game}/.lpm-launcher-choice"
+bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
+expect "subtitle: title kept, label on line 4" bash -c '[[ "$(sed -n 3p "$1")" = "Rt Game" && "$(sed -n 4p "$1")" = "Two" ]]' _ "${rt_ctrl}"
+printf 'NONE\nIND_SHOW\nOne\n\n' > "${rt_ctrl}"
+printf 'One' > "${rt_game}/.lpm-launcher-choice"
+bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
+expect "subtitle: label equal to the game name -> no subtitle" bash -c '[[ "$(sed -n 3p "$1")" = "One" && -z "$(sed -n 4p "$1")" ]]' _ "${rt_ctrl}"
+printf 'NONE\nIND_SHOW\nOne Two\n\n' > "${rt_ctrl}"
+printf 'One' > "${rt_game}/.lpm-launcher-choice"
+bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
+expect "subtitle: similar but different name -> subtitle kept" bash -c '[[ "$(sed -n 4p "$1")" = "One" ]]' _ "${rt_ctrl}"
+rm -f "${rt_ctrl}"
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
 rm -f "${HOME}/Games/mario/lpm-launcher.yml"
 check "tools env set" 0 '' tools mario env set FOO bar

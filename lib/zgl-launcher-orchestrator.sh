@@ -371,12 +371,16 @@ if [[ "${will_show_picker}" = true ]]; then
     [[ -f "${splash_image}" ]] && post_choice_bg="${splash_image}"
 
     # Title UNCHANGED (still the game name, see zgu-launcher-screen.py): the chosen label is
-    # added on its own line, never in its place.
+    # added on its own line, never in its place. EXCEPT when the label is exactly the game name
+    # (strict comparison): then no subtitle, the screen looks like one of a game without
+    # LPM Launcher.
+    chosen_label_line="${selection//[$'\n\r']/}"
+    [[ "${chosen_label_line}" = "${title_text}" ]] && chosen_label_line=""
     {
       printf '%s\n' "${post_choice_bg}"
       printf '%s\n' "IND_SHOW"
       printf '%s\n' "${title_text}"
-      printf '%s\n' "${selection//[$'\n\r']/}"
+      printf '%s\n' "${chosen_label_line}"
     } > "${control_file}" 2>/dev/null
     zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=picker_choice entry=${selection}"
 fi

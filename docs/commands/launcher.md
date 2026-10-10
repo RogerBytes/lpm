@@ -12,7 +12,7 @@ lpm launcher status
 
 ## Description
 
-With the LPM Launcher enabled, Lutris runs a small relay script just before starting the game. The relay reads the game's `lpm-launcher.yml` at every launch: with a single entry the game starts directly; with several entries (episodes, DLC, bonus content...) a picker lets the player choose which executable to run. The entries are therefore never fixed at activation time; edit `lpm-launcher.yml` by hand or with `lpm launcher-entries`.
+With the LPM Launcher enabled, Lutris runs a small relay script just before starting the game. The relay reads the game's `lpm-launcher.yml` at every launch: with a single entry the game starts directly; with several entries (episodes, DLC, bonus content...) a picker lets the player choose which executable to run. On the loading screen, the label of the chosen entry is shown as a subtitle under the game name, except when it is exactly the game name (strict comparison): then there is no subtitle. The entries are therefore never fixed at activation time; edit `lpm-launcher.yml` by hand or with `lpm launcher-entries`.
 
 Enabling is independent of lpm's loading screen (`lpm shortcut -n`, `lpm splash`, `lpm logo`): those work with or without the launcher.
 
