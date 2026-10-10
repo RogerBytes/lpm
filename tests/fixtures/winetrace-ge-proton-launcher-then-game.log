@@ -1,0 +1,68 @@
+00dc:trace:win:WIN_CreateWindowEx (null) #8001->L"#32769" ex=00000000 style=86000000 0,0 0x0 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=000000000031F070
+00dc:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=86000000 0,0 100x100 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:NtUserSetWindowPos hwnd 0x10020, after (nil), -1920,0 (6400x1440), flags 00000040
+00dc:trace:win:set_window_pos 	status flags = 0040
+00e0:trace:win:WIN_CreateWindowEx (null) L"__wine_clipboard_manager"->L"__wine_clipboard_manager" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:WIN_CreateWindowEx L"WineAppBar" L"WineAppBar"->L"WineAppBar" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00e4:trace:win:WIN_CreateWindowEx (null) L"__wine_display_settings_restorer"->L"__wine_display_settings_restorer" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:WIN_CreateWindowEx L"" L"Shell_TrayWnd"->L"Shell_TrayWnd" ex=08000000 style=00c80000 -2147483648,-2147483648 166x52 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:show_window hwnd=0x30030, cmd=0, was_visible 0
+00dc:trace:win:WIN_CreateWindowEx (null) L"WineDdeEventClass"->L"WineDdeEventClass" ex=00000000 style=80000000 0,0 0x0 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:WIN_CreateWindowEx (null) L"WineDdeServerName"->L"WineDdeServerName" ex=00000000 style=80000000 0,0 0x0 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:WIN_CreateWindowEx (null) L"WineDdeServerName"->L"WineDdeServerName" ex=00000000 style=80000000 0,0 0x0 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:WIN_CreateWindowEx (null) L"WineDdeServerName"->L"WineDdeServerName" ex=00000000 style=80000000 0,0 0x0 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+00dc:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+00dc:trace:win:NtUserSetWindowPos hwnd 0x10020, after 0x1, 0,0 (0x0), flags 00000013
+00dc:trace:win:set_window_pos 	status flags = 1803
+0128:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+0024:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+013c:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+011c:trace:win:WIN_CreateWindowEx L"Input" L"IPTip_Main_Window"->L"IPTip_Main_Window" ex=00000000 style=00cf0000 4,4 0x0 parent=0000000000000000 menu=0000000000000000 inst=00006FFFFD9E0000 params=0000000000000000
+0124:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+0124:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+0124:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+0124:trace:win:WIN_CreateWindowEx L"SDLHelperWindowInputMsgWindow" L"SDLHelperWindowInputCatcher"->L"SDLHelperWindowInputCatcher" ex=00000000 style=00000000 -2147483648,-2147483648 -2147483648x-2147483648 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000400000 params=0000000000000000
+0124:trace:win:WIN_CreateWindowEx (null) L"SDL_HIDAPI_DEVICE_DETECTION"->L"SDL_HIDAPI_DEVICE_DETECTION" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+015c:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+0160:trace:win:WIN_CreateWindowEx (null) L"__wine_xinput_devnotify"->L"__wine_xinput_devnotify" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+0124:trace:win:WIN_CreateWindowEx L"" L"SDL_app"->L"SDL_app" ex=00000000 style=06ca0000 1276,690 7x33 parent=0000000000000000 menu=0000000000000000 inst=0000000000400000 params=0000000000000000
+0124:trace:win:NtUserSetWindowPos hwnd 0x1007e, after (nil), 1276,690 (7x33), flags 00000314
+0124:trace:win:set_window_pos 	status flags = 1006
+0124:trace:win:NtUserSetWindowPos hwnd 0x1007e, after 0xfffffffffffffffe, 1276,690 (7x33), flags 00000213
+0124:trace:win:set_window_pos 	status flags = 1807
+0124:trace:win:NtUserSetWindowPos hwnd 0x1007e, after (nil), 0,0 (0x0), flags 00000237
+0124:trace:win:set_window_pos 	status flags = 1827
+0124:trace:win:WIN_CreateWindowEx L"Overlay Box" #c044->L"XaliaOverlayBox" ex=08080020 style=80000000 0,0 5x5 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000056
+0124:trace:win:NtUserSetWindowPos hwnd 0x20088, after 0xffffffffffffffff, 0,0 (0x0), flags 00000013
+0124:trace:win:set_window_pos 	status flags = 1803
+0124:trace:win:NtUserSetWindowPos hwnd 0x20088, after (nil), 0,0 (0x0), flags 00000097
+0124:trace:win:set_window_pos 	status flags = 1807
+0124:trace:win:WIN_CreateWindowEx L"Overlay Box" #c044->L"XaliaOverlayBox" ex=08080020 style=80000000 0,0 5x5 parent=0000000000000000 menu=0000000000000000 inst=0000000000000000 params=0000000000000076
+0124:trace:win:NtUserSetWindowPos hwnd 0x1008c, after 0xffffffffffffffff, 0,0 (0x0), flags 00000013
+0124:trace:win:set_window_pos 	status flags = 1803
+0124:trace:win:NtUserSetWindowPos hwnd 0x1008c, after (nil), 0,0 (0x0), flags 00000097
+0124:trace:win:set_window_pos 	status flags = 1807
+0124:trace:win:NtUserSetWindowPos hwnd 0x1008c, after (nil), 0,0 (0x0), flags 00000097
+0124:trace:win:set_window_pos 	status flags = 1807
+01bc:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+01c4:trace:win:WIN_CreateWindowEx (null) L"OleMainThreadWndClass"->L"OleMainThreadWndClass" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFFE5C0000 params=0000000000000000
+01c4:trace:win:WIN_CreateWindowEx L"SDLHelperWindowInputMsgWindow" L"SDLHelperWindowInputCatcher"->L"SDLHelperWindowInputCatcher" ex=00000000 style=00000000 -2147483648,-2147483648 -2147483648x-2147483648 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=00006FFFF7E10000 params=0000000000000000
+01c4:trace:win:WIN_CreateWindowEx (null) L"SDL_HIDAPI_DEVICE_DETECTION"->L"SDL_HIDAPI_DEVICE_DETECTION" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+01d8:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+01dc:trace:win:WIN_CreateWindowEx (null) L"__wine_xinput_devnotify"->L"__wine_xinput_devnotify" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+01c4:trace:win:WIN_CreateWindowEx L"" L"SDL_app"->L"SDL_app" ex=00000000 style=06cf0000 316,150 1928x1114 parent=0000000000000000 menu=0000000000000000 inst=00006FFFF7E10000 params=0000000000000000
+01c4:trace:win:NtUserSetWindowPos hwnd 0x100aa, after 0xfffffffffffffffe, 316,150 (1928x1114), flags 00000213
+01c4:trace:win:set_window_pos 	status flags = 1807
+01c4:trace:win:NtUserSetWindowPos hwnd 0x100aa, after (nil), 0,0 (0x0), flags 00000237
+01c4:trace:win:set_window_pos 	status flags = 1827
+01c4:trace:win:show_window hwnd=0x100aa, cmd=5, was_visible 0
+01c4:trace:win:NtUserSetWindowPos hwnd 0x100aa, after 0xfffffffffffffffe, 0,0 (2560x1440), flags 00000110
+01c4:trace:win:set_window_pos 	status flags = 0004
+01c4:trace:win:NtUserSetWindowPos hwnd 0x100aa, after (nil), 0,0 (0x0), flags 00000043
+01e4:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+01c4:trace:win:WIN_CreateWindowEx (null) L"Wine IME"->L"Wine IME" ex=00000080 style=80000000 0,0 1x1 parent=00000000000100B0 menu=0000000000000000 inst=00006FFFFF2E0000 params=0000000000000000
+01c4:trace:win:NtUserSetWindowPos hwnd 0x200b4, after 0x1, 0,0 (0x0), flags 00000013
+01c4:trace:win:set_window_pos 	status flags = 1803
+01c4:trace:win:set_window_pos 	status flags = 1843
+01ec:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000
+01f0:trace:win:WIN_CreateWindowEx (null) L"Message"->L"Message" ex=00000000 style=00000000 0,0 0x0 parent=FFFFFFFFFFFFFFFD menu=0000000000000000 inst=0000000000000000 params=0000000000000000

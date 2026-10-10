@@ -529,16 +529,19 @@ MIN_DISPLAY_MS=1000
 #    (166x52 seen with GE-Proton), which was taken for the game window, so the loading screen
 #    closed several seconds before the game (Bloodborne).
 # 2. Size criterion: width and height above WIN_SIZE_THRESHOLD.
-# 3. Title-bar criterion (e.g. Kirby Soft And Wet 106x132, Bloodborne "SDL_app" 7x33): some
-#    games create their real window very small and resize it later without creating a new one.
-#    An application window has a title bar (WS_CAPTION bits, 0x00C00000, in "style="), unlike
-#    Wine/SDL technical windows (style 0 or popup only): accepted from WIN_CAPTION_MIN_SIZE
-#    (1, i.e. any non-empty window) regardless of its size.
+# 3. Title-bar criterion (e.g. Kirby Soft And Wet 106x132): some games create their real window
+#    very small and resize it later without creating a new one. An application window has a
+#    title bar (WS_CAPTION bits, 0x00C00000, in "style="), unlike Wine/SDL technical windows
+#    (style 0 or popup only): accepted from WIN_CAPTION_MIN_SIZE x WIN_CAPTION_MIN_SIZE
+#    regardless of its size. The minimum must stay at 32: Bloodborne first runs a launcher
+#    process whose hidden SDL helper window ("SDL_app", 7x33, title bar, never shown) comes
+#    BEFORE the real game window (1928x1114, size criterion), so a smaller minimum closes the
+#    loading screen too early.
 # The "x" between two numbers immediately followed by "parent=" is the only place of the format
 # with this pattern (confirmed on real captures), so no false positive from a hexadecimal field
 # (ex=, style=, inst=...).
 WIN_SIZE_THRESHOLD=200
-WIN_CAPTION_MIN_SIZE=1
+WIN_CAPTION_MIN_SIZE=32
 WIN_CAPTION_STYLE_MASK=$(( 0x00C00000 ))
 WIN_IGNORED_CLASSES=(Shell_TrayWnd IPTip_Main_Window WineAppBar SDLHelperWindowInputMsgWindow XaliaOverlayBox)
 zgl_trace_line_is_game_window() {

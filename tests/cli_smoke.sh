@@ -177,18 +177,19 @@ expect "download_cli: stdout is only the path" bash -c '
 
 # --- Game window detection (loading screen): rules of zgl_trace_line_is_game_window
 load_detection='eval "$(sed -n "/^WIN_SIZE_THRESHOLD=/,/^}/p" "$1/lib/zgl-launcher-orchestrator.sh")"'
-# Real trace (GE-Proton, Bloodborne): the first accepted window is the game ("SDL_app", created
-# 7x33), not the Wine taskbar "Shell_TrayWnd" (166x52 with a title bar) that came first
-expect "window detection: real trace -> the game window, not the Wine taskbar" bash -c "${load_detection}"'
+# Real trace (GE-Proton, Bloodborne): the Wine taskbar "Shell_TrayWnd" (166x52, title bar) and a
+# hidden launcher helper window "SDL_app" (7x33, title bar) come first; the first accepted line
+# must be the real game window ("SDL_app" 1928x1114, from the second process)
+expect "window detection: real trace -> the real game window, not the taskbar or the helper" bash -c "${load_detection}"'
   while IFS= read -r l; do
-    if zgl_trace_line_is_game_window "$l"; then [[ "$l" == *"SDL_app"* ]]; exit; fi
-  done < "$1/tests/fixtures/winetrace-ge-proton-sdl-small-window.log"
+    if zgl_trace_line_is_game_window "$l"; then [[ "$l" == *"1928x1114"* ]]; exit; fi
+  done < "$1/tests/fixtures/winetrace-ge-proton-launcher-then-game.log"
   exit 1' _ "${repo}"
 # Synthetic lines (same format as the traces)
 trace_line() { printf '0100:trace:win:WIN_CreateWindowEx L"" L"%s"->L"%s" ex=00000000 style=%s 0,0 %s parent=0000000000000000 menu=0 inst=0 params=0\n' "$1" "$1" "$2" "$3"; }
 expect "window detection: big window accepted" bash -c "${load_detection}"'; zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Game 90000000 1280x720)"
 expect "window detection: small window with a title bar accepted (Kirby 106x132)" bash -c "${load_detection}"'; zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line GameMaker06 06ca0000 106x132)"
-expect "window detection: tiny window with a title bar accepted (7x33)" bash -c "${load_detection}"'; zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line SDL_app 06ca0000 7x33)"
+expect "window detection: tiny helper window with a title bar ignored (7x33)" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line SDL_app 06ca0000 7x33)"
 expect "window detection: empty window with a title bar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Whatever 00cf0000 0x0)"
 expect "window detection: small window without a title bar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Whatever 80000000 100x100)"
 expect "window detection: Wine taskbar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 166x52)"
