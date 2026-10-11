@@ -1,6 +1,6 @@
 # lpm tools
 
-Runs a Wine maintenance tool (winetricks, regedit, winecfg, console, any .exe, folder, favorite folder, environment variables) or changes the runner of one installed game inside the prefix of one installed game.
+Runs a Wine maintenance tool (winetricks, regedit, winecfg, console, any .exe, folder, favorite folder, environment variables), changes the runner or switches the MangoHud FPS overlay of one installed game inside the prefix of one installed game.
 
 ## Synopsis
 
@@ -17,6 +17,7 @@ lpm tools <slug> env set <KEY> <VALUE>
 lpm tools <slug> env unset <KEY>
 lpm tools <slug> env apply <file>
 lpm tools <slug> runner <runner-name>
+lpm tools <slug> mangohud [on|off|status]
 ```
 
 ## Description
@@ -28,7 +29,7 @@ Both the slug and the tool are mandatory: there is no interactive menu (although
 ## Arguments
 
 - `<slug>` : Lutris slug of an installed Wine game (only its last path component is used).
-- `<tool>` : one of `winetricks`, `regedit`, `winecfg`, `console`, `exe`, `folder`, `favorite`, `env`, `runner`.
+- `<tool>` : one of `winetricks`, `regedit`, `winecfg`, `console`, `exe`, `folder`, `favorite`, `env`, `runner`, `mangohud`.
 - Further arguments depend on the tool (below).
 
 ## Options
@@ -63,6 +64,7 @@ Tools:
   - `env apply <file>` : **replaces the whole `system.env`** by the variables of the file: one `KEY=VALUE` per line (split at the first `=`, key trimmed, value kept as is), blank lines ignored, no comment syntax. Variables not in the file are removed.
   - The result is re-parsed before writing; on any mismatch nothing is changed. The file is replaced atomically with the original permissions.
 - `runner <name>` : changes the runner of the game, i.e. sets `wine.version` in its Lutris YAML (comments are preserved, the file is replaced atomically). `<name>` must be the name of an installed runner as printed by `lpm list-runner`; a name containing `/` or starting with `.` is refused. **This tool is handled right after step 3 (slug lookup), before steps 4 to 6**: it works even when the runner currently configured for the game is no longer installed (the usual reason to change it), and it needs neither the prefix nor the old runner. Only the YAML is changed; the prefix is not touched. Close Lutris first, or it may overwrite the change.
+- `mangohud [on|off|status]` : MangoHud (FPS overlay) for this game, i.e. the Lutris option `system.mangohud` of its YAML (comments preserved). `on` sets it to `true`, `off` removes the key (Lutris default: off), `status` (the default) prints `on` or `off`. Like `runner`, handled before the prefix and runner checks: only the YAML is changed. lpm does not install MangoHud: if it cannot be found (native Lutris: no `mangohud` in `PATH`; Flatpak Lutris: no `org.freedesktop.Platform.VulkanLayer.MangoHud`), `on` still saves the setting and prints a warning on stderr saying it has no effect until MangoHud is installed. Close Lutris first, or it may overwrite the change.
 
 ## Output
 
@@ -78,11 +80,11 @@ Runner of 'Foo Game' changed to 'GE-Proton10-1'.
 Errors (stderr):
 
 ```
-Usage: lpm tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner> [path|action|runner] [key|file] [value]
+Usage: lpm tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud> [path|action|runner] [key|file] [value]
 Error: no installed game with slug '<slug>'.
 Error: the prefix folder for '<name>' could not be found.
 Error: the Wine runner '<version>' configured for this game is no longer installed (lpm install-runner to reinstall it).
-Error: unknown tool '<tool>' (expected: winetricks, regedit, winecfg, console, exe, folder, favorite, env or runner).
+Error: unknown tool '<tool>' (expected: winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner or mangohud).
 Error: winetricks could not be found, neither bundled by Lutris nor installed on the system.
 Already running for '<name>'.
 Error: file not found: <path>

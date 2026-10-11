@@ -285,7 +285,7 @@ class MediaPages:
         # in the dropdown, in the same order -- the two lists are decoupled (as for
         # "flatpak"/"native"/"reset" in page_lutris_version), so translating the display never
         # touches the arguments sent to bin/lpm.
-        tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner"]
+        tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud"]
         tool_labels = [
             t("gui.tools.tool_winetricks"),
             t("gui.tools.tool_regedit"),
@@ -296,6 +296,7 @@ class MediaPages:
             t("gui.tools.tool_favorite"),
             t("gui.tools.tool_env"),
             t("gui.tools.tool_runner"),
+            t("gui.tools.tool_mangohud"),
         ]
         tool_row = Adw.ComboRow(title=t("gui.tools.tool_title"))
         tool_row.set_model(Gtk.StringList.new(tool_labels))
@@ -355,6 +356,40 @@ class MediaPages:
         runner_row = RunnerCombo(title=t("gui.tools.runner_title"), placeholder=t("gui.tools.runner_placeholder"))
         page.add_row(runner_row)
 
+        # MangoHud switch -- visible only for the "mangohud" tool. One game at a time: the
+        # position is read from the chosen game's Lutris config ("tools <slug> mangohud status"),
+        # never carried over from another game; "Run" applies it ("mangohud on" / "mangohud off").
+        mangohud_row = Adw.SwitchRow(title=t("gui.tools.mangohud_switch_title"))
+        mangohud_row.set_sensitive(False)
+        page.add_row(mangohud_row)
+        mangohud_state = {"slug": None, "token": 0}
+
+        def _load_mangohud():
+            slug = game_row.selected_slug()
+            mangohud_state["token"] += 1
+            token = mangohud_state["token"]
+            mangohud_state["slug"] = None
+            mangohud_row.set_sensitive(False)
+            mangohud_row.set_active(False)
+            if not slug or tool_row.get_selected() != tools.index("mangohud"):
+                return
+
+            def done(result):
+                def apply():
+                    # Stale response (another game / tool chosen in the meantime): ignored.
+                    if token != mangohud_state["token"]:
+                        return
+                    if result.returncode != 0:
+                        page.toast(t("gui.common.command_failed", result.returncode))
+                        return
+                    mangohud_row.set_active(result.stdout.strip() == "on")
+                    mangohud_state["slug"] = slug
+                    mangohud_row.set_sensitive(True)
+
+                _run_on_main(apply)
+
+            backend.run_lpm_async(["tools", slug, "mangohud", "status"], on_done=done)
+
         # Environment variables editor -- visible only for the "env" tool. One game at a
         # time: the content is re-read from the chosen game's Lutris config ("tools <slug> env
         # list"), never mixed between games.
@@ -408,7 +443,9 @@ class MediaPages:
             favorite_path_row.set_visible(idx == 6)
             env_box.set_visible(idx == tools.index("env"))
             runner_row.set_visible(idx == tools.index("runner"))
+            mangohud_row.set_visible(idx == tools.index("mangohud"))
             _load_env()
+            _load_mangohud()
 
         tool_row.connect("notify::selected", _update_path_rows_visibility)
         game_row.connect_changed(_update_path_rows_visibility)
@@ -461,6 +498,14 @@ class MediaPages:
                     return
                 args.append(new_runner)
                 page.run_command(args, t("gui.tools.runner_done"))
+                return
+            elif tool == "mangohud":
+                # Not read yet (or read failed): never write a state that was not loaded.
+                if mangohud_state["slug"] != slug:
+                    page.toast(t("gui.common.command_failed", "?"))
+                    return
+                args.append("on" if mangohud_row.get_active() else "off")
+                page.run_command(args, t("gui.tools.mangohud_done"))
                 return
             elif tool == "env":
                 # Not read yet (or read failed): never overwrite the config with an empty

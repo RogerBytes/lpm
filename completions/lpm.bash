@@ -160,7 +160,7 @@ _lpm() {
           COMPREPLY=($(compgen -W "$(_lpm_installed_slugs)" -- "${cur}"))
           ;;
         3)
-          COMPREPLY=($(compgen -W "winetricks regedit winecfg console exe folder favorite env runner" -- "${cur}"))
+          COMPREPLY=($(compgen -W "winetricks regedit winecfg console exe folder favorite env runner mangohud" -- "${cur}"))
           ;;
         4)
           if [[ "${prev}" != -* ]]; then
@@ -168,6 +168,7 @@ _lpm() {
               exe) COMPREPLY=($(compgen -f -X '!*.exe' -- "${cur}")) ;;
               favorite) COMPREPLY=($(compgen -d -- "${cur}")) ;;
               env) COMPREPLY=($(compgen -W "list set unset apply" -- "${cur}")) ;;
+              mangohud) COMPREPLY=($(compgen -W "on off status" -- "${cur}")) ;;
               runner) COMPREPLY=($(compgen -W "$(_lpm_installed_runners)" -- "${cur}")) ;;
             esac
           fi

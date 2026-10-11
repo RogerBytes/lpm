@@ -160,6 +160,17 @@ rm -f "${HOME}/Games/mario/lpm-launcher.yml"
 check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
 check "tools env set empty" 0 '' tools mario env set FOO ""
+# MangoHud: Lutris option system.mangohud (on = true, off = key removed, status prints on/off)
+check "tools mangohud status (default off)" 0 '^off$' tools mario mangohud status
+check "tools mangohud on" 0 'MangoHud enabled' tools mario mangohud on
+check "tools mangohud status (on)" 0 '^on$' tools mario mangohud
+expect "tools mangohud: Lutris YAML has system.mangohud true and stays valid" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml')); sys.exit(0 if d['system']['mangohud'] is True and d['game']['exe']=='/x.exe' else 1)"
+check "tools mangohud warns when MangoHud is not installed" 0 'has no effect|no effect' tools mario mangohud on
+check "tools mangohud off" 0 'MangoHud disabled' tools mario mangohud off
+check "tools mangohud status (off again)" 0 '^off$' tools mario mangohud status
+expect "tools mangohud off: key removed" bash -c '! grep -q mangohud "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
+check "tools mangohud off when already off" 0 'MangoHud disabled' tools mario mangohud off
+check "tools mangohud: invalid action" 1 'unknown MangoHud action' tools mario mangohud maybe
 expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
 
 # --- Legacy launcher (format of lpm <= 0.9.5: relay + Lutris prelaunch command). Packages made then

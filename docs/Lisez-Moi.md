@@ -6,8 +6,6 @@ Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
   <img src="../assets/icons/lpm.svg" width="128" height="128" alt="Icône Ludis Prefix Manager">
 </p>
 
-https://github.com/user-attachments/assets/35262a68-6b85-45be-83ba-041dfde6490a
-
 <p align="center">
   <a href="https://github.com/RogerBytes/lpm/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/RogerBytes/lpm"></a>
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green">
@@ -152,7 +150,7 @@ Même principe pour un runner : `lpm pack-runner <nom>` puis `lpm install-runner
 - [`lpm splash`](commands/splash.md) — Récupère la bannière de l'écran de chargement depuis SteamGridDB.
 - [`lpm logo`](commands/logo.md) — Récupère le logo transparent d'un jeu.
 - [`lpm sync-media`](commands/sync-media.md) — Télécharge les médias propres à Lutris pour les jeux qui n'en ont pas.
-- [`lpm tools`](commands/tools.md) — Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner).
+- [`lpm tools`](commands/tools.md) — Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud).
 - [`lpm vsync`](commands/vsync.md) — Force la désactivation du VSync d'un jeu via des variables d'environnement (Direct3D 9/11/12, OpenGL).
 - [`lpm lsfg`](commands/lsfg.md) — Active/désactive la génération de frames lsfg-vk.
 - [`lpm launcher`](commands/launcher.md) — Active/désactive le LPM Launcher (écran de chargement et sélecteur d'exécutable).

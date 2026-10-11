@@ -130,7 +130,7 @@ _lpm_tools_arg3() {
   _alternative \
     'files:executable:_files -g "*.exe"' \
     'dirs:folder:_files -/' \
-    'actions:env action:(list set unset apply)' \
+    'actions:env or mangohud action:(list set unset apply on off status)' \
     'runners:runner:_lpm_installed_runners'
 }
 
@@ -263,7 +263,7 @@ _lpm() {
       # above.
       _arguments \
         '1:installed game:_lpm_installed_slugs' \
-        '2:tool:(winetricks regedit winecfg console exe folder favorite env runner)' \
+        '2:tool:(winetricks regedit winecfg console exe folder favorite env runner mangohud)' \
         '3:executable, folder, env action or runner:_lpm_tools_arg3' \
         '*:env argument:'
       ;;

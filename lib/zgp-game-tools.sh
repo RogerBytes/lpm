@@ -33,8 +33,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # --- Arguments ---
 # $1 = target slug (required)
 # $2 = target tool (required):
-#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner
-# $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), or runner name (only for $2=runner); also required for those tools
+#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud
+# $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), runner name (only for $2=runner), or on|off|status (only for $2=mangohud, default status); also required for those tools
 cli_slug="${1:-}"
 cli_tool="${2:-}"
 cli_exe_path="${3:-}"
@@ -168,6 +168,76 @@ run_runner() {
 
 if [[ "${cli_tool}" = "runner" ]]; then
   run_runner "${cli_exe_path}"
+  exit $?
+fi
+
+# --- "mangohud" tool: handled HERE too (only the game's Lutris YAML is read/written, neither the
+# prefix nor the runner is needed). Lutris option "system.mangohud" ("Enable MangoHud", FPS overlay):
+# "on" sets it to true, "off" REMOVES the key (Lutris default = off), "status" (default action)
+# prints "on" or "off" on stdout. MangoHud itself is not installed by lpm: when it cannot be found
+# for this Lutris, "on" still writes the setting but says it will have no effect until it is
+# installed (native: "mangohud" in PATH; Flatpak: the MangoHud Vulkan layer extension). ---
+run_mangohud() {
+  local action="${1:-status}" yml_file="${lutris_config_dir}/${target_configpath}.yml" state
+  case "${action}" in
+    on|off|status) ;;
+    *)
+      zgu_cli_error "$(t game_tools.mangohud_invalid_action_cli "${action}")"
+      return 1
+      ;;
+  esac
+  if [[ -z "${target_configpath}" ]] || [[ ! -f "${yml_file}" ]]; then
+    zgu_cli_error "$(t game_tools.env_config_missing_cli "${target_name}")"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
+    zgu_cli_error "$(t game_tools.env_yaml_missing_cli)"
+    return 1
+  fi
+
+  if [[ "${action}" = "status" ]]; then
+    state=$(YML_PATH="${yml_file}" python3 -c '
+import os, yaml
+try:
+    with open(os.environ["YML_PATH"], "r") as f:
+        data = yaml.safe_load(f) or {}
+    system = data.get("system")
+    print("on" if isinstance(system, dict) and system.get("mangohud") is True else "off")
+except Exception:
+    print("off")
+' 2>/dev/null)
+    echo "${state:-off}"
+    return 0
+  fi
+
+  if [[ "${action}" = "on" ]]; then
+    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set system mangohud true --bool >/dev/null 2>&1; then
+      zgu_cli_error "$(t game_tools.mangohud_write_failed_cli "${target_name}")"
+      return 1
+    fi
+    zgu_cli_ok "$(t game_tools.mangohud_on_cli "${target_name}")"
+    if [[ "${lutris_version}" = "flatpak" ]]; then
+      if ! flatpak list --runtime --columns=application 2>/dev/null | grep -qi 'MangoHud'; then
+        echo "$(t game_tools.mangohud_missing_flatpak_cli)" >&2
+      fi
+    elif ! command -v mangohud >/dev/null 2>&1; then
+      echo "$(t game_tools.mangohud_missing_native_cli)" >&2
+    fi
+    return 0
+  fi
+
+  # off: removing a key that is already absent is not an error
+  if grep -Eq '^[[:space:]]+mangohud:' "${yml_file}" 2>/dev/null; then
+    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" unset system mangohud >/dev/null 2>&1; then
+      zgu_cli_error "$(t game_tools.mangohud_write_failed_cli "${target_name}")"
+      return 1
+    fi
+  fi
+  zgu_cli_ok "$(t game_tools.mangohud_off_cli "${target_name}")"
+}
+
+if [[ "${cli_tool}" = "mangohud" ]]; then
+  run_mangohud "${cli_exe_path}"
   exit $?
 fi
 
