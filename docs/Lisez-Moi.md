@@ -150,7 +150,7 @@ Même principe pour un runner : `lpm pack-runner <nom>` puis `lpm install-runner
 - [`lpm splash`](commands/splash.md) — Récupère la bannière de l'écran de chargement depuis SteamGridDB.
 - [`lpm logo`](commands/logo.md) — Récupère le logo transparent d'un jeu.
 - [`lpm sync-media`](commands/sync-media.md) — Télécharge les médias propres à Lutris pour les jeux qui n'en ont pas.
-- [`lpm tools`](commands/tools.md) — Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud).
+- [`lpm tools`](commands/tools.md) — Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, gamepad).
 - [`lpm vsync`](commands/vsync.md) — Force la désactivation du VSync d'un jeu via des variables d'environnement (Direct3D 9/11/12, OpenGL).
 - [`lpm lsfg`](commands/lsfg.md) — Active/désactive la génération de frames lsfg-vk.
 - [`lpm launcher`](commands/launcher.md) — Active/désactive le LPM Launcher (écran de chargement et sélecteur d'exécutable).

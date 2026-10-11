@@ -285,7 +285,7 @@ class MediaPages:
         # in the dropdown, in the same order -- the two lists are decoupled (as for
         # "flatpak"/"native"/"reset" in page_lutris_version), so translating the display never
         # touches the arguments sent to bin/lpm.
-        tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud"]
+        tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud", "gamepad"]
         tool_labels = [
             t("gui.tools.tool_winetricks"),
             t("gui.tools.tool_regedit"),
@@ -297,6 +297,7 @@ class MediaPages:
             t("gui.tools.tool_env"),
             t("gui.tools.tool_runner"),
             t("gui.tools.tool_mangohud"),
+            t("gui.tools.tool_gamepad"),
         ]
         tool_row = Adw.ComboRow(title=t("gui.tools.tool_title"))
         tool_row.set_model(Gtk.StringList.new(tool_labels))
@@ -390,6 +391,69 @@ class MediaPages:
 
             backend.run_lpm_async(["tools", slug, "mangohud", "status"], on_done=done)
 
+        # Gamepad profile (AntiMicroX) -- visible only for the "gamepad" tool. Same pattern as
+        # MangoHud: the position ("on", "off" or "other" = a profile of the user's own) is read
+        # per game ("tools <slug> gamepad status"); "Run" applies it. A separate row opens the
+        # profile in AntiMicroX ("tools <slug> gamepad edit"), nothing is watched.
+        gamepad_row = Adw.SwitchRow(title=t("gui.tools.gamepad_switch_title"))
+        gamepad_row.set_sensitive(False)
+        page.add_row(gamepad_row)
+        gamepad_edit_row = Adw.ActionRow(title=t("gui.tools.gamepad_edit_title"))
+        gamepad_edit_button = Gtk.Button(label=t("gui.tools.gamepad_edit_button"), valign=Gtk.Align.CENTER)
+        gamepad_edit_row.add_suffix(gamepad_edit_button)
+        page.add_row(gamepad_edit_row)
+        gamepad_state = {"slug": None, "token": 0}
+
+        def _load_gamepad():
+            slug = game_row.selected_slug()
+            gamepad_state["token"] += 1
+            token = gamepad_state["token"]
+            gamepad_state["slug"] = None
+            gamepad_row.set_sensitive(False)
+            gamepad_row.set_active(False)
+            gamepad_edit_button.set_sensitive(False)
+            if not slug or tool_row.get_selected() != tools.index("gamepad"):
+                return
+
+            def done(result):
+                def apply():
+                    # Stale response (another game / tool chosen in the meantime): ignored.
+                    if token != gamepad_state["token"]:
+                        return
+                    if result.returncode != 0:
+                        page.toast(t("gui.common.command_failed", result.returncode))
+                        return
+                    state = result.stdout.strip()
+                    if state == "other":
+                        page.toast(t("gui.tools.gamepad_other"))
+                        return
+                    gamepad_row.set_active(state == "on")
+                    gamepad_state["slug"] = slug
+                    gamepad_row.set_sensitive(True)
+                    gamepad_edit_button.set_sensitive(state == "on")
+
+                _run_on_main(apply)
+
+            backend.run_lpm_async(["tools", slug, "gamepad", "status"], on_done=done)
+
+        def _on_gamepad_edit(_btn):
+            slug = gamepad_state["slug"]
+            if not slug:
+                return
+
+            def done(result):
+                def apply():
+                    if result.returncode != 0:
+                        page.toast(t("gui.common.command_failed", result.returncode))
+                    else:
+                        page.toast(t("gui.tools.gamepad_edit_started"))
+
+                _run_on_main(apply)
+
+            backend.run_lpm_async(["tools", slug, "gamepad", "edit"], on_done=done)
+
+        gamepad_edit_button.connect("clicked", _on_gamepad_edit)
+
         # Environment variables editor -- visible only for the "env" tool. One game at a
         # time: the content is re-read from the chosen game's Lutris config ("tools <slug> env
         # list"), never mixed between games.
@@ -444,8 +508,11 @@ class MediaPages:
             env_box.set_visible(idx == tools.index("env"))
             runner_row.set_visible(idx == tools.index("runner"))
             mangohud_row.set_visible(idx == tools.index("mangohud"))
+            gamepad_row.set_visible(idx == tools.index("gamepad"))
+            gamepad_edit_row.set_visible(idx == tools.index("gamepad"))
             _load_env()
             _load_mangohud()
+            _load_gamepad()
 
         tool_row.connect("notify::selected", _update_path_rows_visibility)
         game_row.connect_changed(_update_path_rows_visibility)
@@ -506,6 +573,13 @@ class MediaPages:
                     return
                 args.append("on" if mangohud_row.get_active() else "off")
                 page.run_command(args, t("gui.tools.mangohud_done"))
+                return
+            elif tool == "gamepad":
+                if gamepad_state["slug"] != slug:
+                    page.toast(t("gui.common.command_failed", "?"))
+                    return
+                args.append("on" if gamepad_row.get_active() else "off")
+                page.run_command(args, t("gui.tools.gamepad_done"))
                 return
             elif tool == "env":
                 # Not read yet (or read failed): never overwrite the config with an empty

@@ -171,6 +171,29 @@ check "tools mangohud status (off again)" 0 '^off$' tools mario mangohud status
 expect "tools mangohud off: key removed" bash -c '! grep -q mangohud "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
 check "tools mangohud off when already off" 0 'MangoHud disabled' tools mario mangohud off
 check "tools mangohud: invalid action" 1 'unknown MangoHud action' tools mario mangohud maybe
+
+# Gamepad: Lutris option system.antimicro_config -> profile in <prefix>/lpm_gamepad/
+gp_yml="${HOME}/.config/lutris/games/mario-1.yml"
+gp_prof="${HOME}/Games/mario/lpm_gamepad/lpm-gamepad.gamecontroller.amgp"
+check "tools gamepad status (default off)" 0 '^off$' tools mario gamepad
+check "tools gamepad on" 0 'Gamepad profile enabled' tools mario gamepad on
+expect "tools gamepad on: profile created" test -f "${gp_prof}"
+expect "tools gamepad on: option points to it, YAML valid" python3 -c "import sys,yaml; d=yaml.safe_load(open('${gp_yml}')); sys.exit(0 if d['system']['antimicro_config']=='${gp_prof}' and d['game']['exe']=='/x.exe' else 1)"
+check "tools gamepad status (on)" 0 '^on$' tools mario gamepad status
+printf 'MY SETTINGS' > "${gp_prof}"
+check "tools gamepad on again" 0 'enabled' tools mario gamepad on
+expect "tools gamepad: existing profile never overwritten" grep -q 'MY SETTINGS' "${gp_prof}"
+check "tools gamepad off" 0 'disabled' tools mario gamepad off
+expect "tools gamepad off: option removed, profile kept" bash -c '! grep -q antimicro_config "$1" && grep -q "MY SETTINGS" "$2"' _ "${gp_yml}" "${gp_prof}"
+check "tools gamepad edit without AntiMicroX" 1 'does not seem to be installed' tools mario gamepad edit
+printf 'game:\n  exe: /x.exe\nsystem:\n  antimicro_config: /home/me/mine.amgp\nwine:\n  version: GE-Test\n' > "${gp_yml}"
+check "tools gamepad status (user's own profile)" 0 '^other$' tools mario gamepad status
+check "tools gamepad on refuses to replace the user's profile" 1 'another AntiMicroX profile' tools mario gamepad on
+check "tools gamepad off leaves the user's profile" 1 'another AntiMicroX profile' tools mario gamepad off
+expect "tools gamepad: user's profile still referenced" grep -q 'mine.amgp' "${gp_yml}"
+check "tools gamepad: invalid action" 1 'unknown gamepad action' tools mario gamepad maybe
+printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${gp_yml}"
+rm -rf "${HOME}/Games/mario/lpm_gamepad"
 expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
 
 # --- Legacy launcher (format of lpm <= 0.9.5: relay + Lutris prelaunch command). Packages made then

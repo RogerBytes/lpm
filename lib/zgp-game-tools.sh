@@ -33,8 +33,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # --- Arguments ---
 # $1 = target slug (required)
 # $2 = target tool (required):
-#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud
-# $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), runner name (only for $2=runner), or on|off|status (only for $2=mangohud, default status); also required for those tools
+#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud | gamepad
+# $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), runner name (only for $2=runner), or on|off|status (only for $2=mangohud or gamepad (gamepad also has edit), default status); also required for those tools
 cli_slug="${1:-}"
 cli_tool="${2:-}"
 cli_exe_path="${3:-}"
@@ -245,6 +245,139 @@ prefix_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
 if [[ -z "${prefix_dir}" ]]; then
   zgu_cli_error "$(t game_tools.prefix_not_found_cli "${target_name}")"
   exit 1
+fi
+
+# --- Gamepad: AntiMicroX profile for a game ---
+# Lutris itself launches AntiMicroX with a profile for the game when its YAML has
+# "system.antimicro_config: <profile file>". lpm creates a blank profile in
+# <prefix>/lpm_gamepad/ (never overwritten once it exists, so the user's settings are safe),
+# points that option to it, and can open it in AntiMicroX for editing (nothing is watched).
+# An antimicro_config that points elsewhere belongs to the user and is never replaced.
+# Actions: on | off | edit | status (default status; status prints on, off or other).
+run_gamepad() {
+  local action="${1:-status}" yml_file="${lutris_config_dir}/${target_configpath}.yml"
+  local profile_dir="${prefix_dir}/lpm_gamepad"
+  local profile_file="${profile_dir}/lpm-gamepad.gamecontroller.amgp"
+  local current
+  case "${action}" in
+    on|off|edit|status) ;;
+    *)
+      zgu_cli_error "$(t game_tools.gamepad_invalid_action_cli "${action}")"
+      return 1
+      ;;
+  esac
+  if [[ -z "${target_configpath}" ]] || [[ ! -f "${yml_file}" ]]; then
+    zgu_cli_error "$(t game_tools.env_config_missing_cli "${target_name}")"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
+    zgu_cli_error "$(t game_tools.env_yaml_missing_cli)"
+    return 1
+  fi
+
+  current=$(YML_PATH="${yml_file}" python3 -c '
+import os, yaml
+try:
+    with open(os.environ["YML_PATH"], "r") as f:
+        data = yaml.safe_load(f) or {}
+    system = data.get("system")
+    print(str(system.get("antimicro_config") or "") if isinstance(system, dict) else "")
+except Exception:
+    print("")
+' 2>/dev/null)
+
+  case "${action}" in
+    status)
+      if [[ -z "${current}" ]]; then
+        echo "off"
+      elif [[ "${current}" = "${profile_file}" ]]; then
+        echo "on"
+      else
+        echo "other"
+      fi
+      return 0
+      ;;
+    edit)
+      if [[ ! -f "${profile_file}" ]]; then
+        zgu_cli_error "$(t game_tools.gamepad_missing_profile_cli "${target_name}")"
+        return 1
+      fi
+      if command -v antimicrox >/dev/null 2>&1; then
+        setsid antimicrox --profile "${profile_file}" >/dev/null 2>&1 &
+      elif command -v antimicro >/dev/null 2>&1; then
+        setsid antimicro --profile "${profile_file}" >/dev/null 2>&1 &
+      elif command -v flatpak >/dev/null 2>&1 && flatpak info io.github.antimicrox.antimicrox >/dev/null 2>&1; then
+        setsid flatpak run io.github.antimicrox.antimicrox --profile "${profile_file}" >/dev/null 2>&1 &
+      else
+        zgu_cli_error "$(t game_tools.gamepad_missing_cli)"
+        return 1
+      fi
+      zgu_cli_ok "$(t game_tools.gamepad_edit_cli "${profile_file}")"
+      return 0
+      ;;
+    off)
+      if [[ -n "${current}" ]] && [[ "${current}" != "${profile_file}" ]]; then
+        zgu_cli_error "$(t game_tools.gamepad_other_cli "${target_name}" "${current}")"
+        return 1
+      fi
+      if [[ -n "${current}" ]]; then
+        if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" unset system antimicro_config >/dev/null 2>&1; then
+          zgu_cli_error "$(t game_tools.gamepad_write_failed_cli "${target_name}")"
+          return 1
+        fi
+      fi
+      zgu_cli_ok "$(t game_tools.gamepad_off_cli "${target_name}")"
+      return 0
+      ;;
+  esac
+
+  # on
+  if [[ -n "${current}" ]] && [[ "${current}" != "${profile_file}" ]]; then
+    zgu_cli_error "$(t game_tools.gamepad_other_cli "${target_name}" "${current}")"
+    return 1
+  fi
+  if [[ ! -f "${profile_file}" ]]; then
+    mkdir -p "${profile_dir}" 2>/dev/null
+    if ! cat > "${profile_file}" 2>/dev/null <<'AMGP'
+<?xml version="1.0" encoding="UTF-8"?>
+<gamecontroller configversion="19" appversion="3.6.1">
+    <stickAxisAssociation index="1" xAxis="1" yAxis="2"/>
+    <stickAxisAssociation index="2" xAxis="3" yAxis="4"/>
+    <vdpadButtonAssociations index="1">
+        <vdpadButtonAssociation axis="0" button="12" direction="1"/>
+        <vdpadButtonAssociation axis="0" button="13" direction="4"/>
+        <vdpadButtonAssociation axis="0" button="14" direction="8"/>
+        <vdpadButtonAssociation axis="0" button="15" direction="2"/>
+    </vdpadButtonAssociations>
+    <names>
+        <controlstickname index="1">Stick 1</controlstickname>
+        <controlstickname index="2">Stick 2</controlstickname>
+    </names>
+    <sets/>
+</gamecontroller>
+AMGP
+    then
+      zgu_cli_error "$(t game_tools.gamepad_create_failed_cli "${profile_file}")"
+      return 1
+    fi
+  fi
+  if [[ "${current}" != "${profile_file}" ]]; then
+    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set system antimicro_config "${profile_file}" >/dev/null 2>&1; then
+      zgu_cli_error "$(t game_tools.gamepad_write_failed_cli "${target_name}")"
+      return 1
+    fi
+  fi
+  zgu_cli_ok "$(t game_tools.gamepad_on_cli "${target_name}" "${profile_file}")"
+  if ! command -v antimicrox >/dev/null 2>&1 && ! command -v antimicro >/dev/null 2>&1 \
+     && ! { command -v flatpak >/dev/null 2>&1 && flatpak info io.github.antimicrox.antimicrox >/dev/null 2>&1; }; then
+    echo "$(t game_tools.gamepad_missing_warn_cli)" >&2
+  fi
+  return 0
+}
+
+if [[ "${cli_tool}" = "gamepad" ]]; then
+  run_gamepad "${cli_exe_path}"
+  exit $?
 fi
 
 # --- 2. Read the game Wine config (runner version, system_winetricks, overrides) ---

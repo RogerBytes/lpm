@@ -18,6 +18,7 @@ lpm tools <slug> env unset <KEY>
 lpm tools <slug> env apply <file>
 lpm tools <slug> runner <runner-name>
 lpm tools <slug> mangohud [on|off|status]
+lpm tools <slug> gamepad [on|off|edit|status]
 ```
 
 ## Description
@@ -29,7 +30,7 @@ Both the slug and the tool are mandatory: there is no interactive menu (although
 ## Arguments
 
 - `<slug>` : Lutris slug of an installed Wine game (only its last path component is used).
-- `<tool>` : one of `winetricks`, `regedit`, `winecfg`, `console`, `exe`, `folder`, `favorite`, `env`, `runner`, `mangohud`.
+- `<tool>` : one of `winetricks`, `regedit`, `winecfg`, `console`, `exe`, `folder`, `favorite`, `env`, `runner`, `mangohud`, `gamepad`.
 - Further arguments depend on the tool (below).
 
 ## Options
@@ -65,6 +66,7 @@ Tools:
   - The result is re-parsed before writing; on any mismatch nothing is changed. The file is replaced atomically with the original permissions.
 - `runner <name>` : changes the runner of the game, i.e. sets `wine.version` in its Lutris YAML (comments are preserved, the file is replaced atomically). `<name>` must be the name of an installed runner as printed by `lpm list-runner`; a name containing `/` or starting with `.` is refused. **This tool is handled right after step 3 (slug lookup), before steps 4 to 6**: it works even when the runner currently configured for the game is no longer installed (the usual reason to change it), and it needs neither the prefix nor the old runner. Only the YAML is changed; the prefix is not touched. Close Lutris first, or it may overwrite the change.
 - `mangohud [on|off|status]` : MangoHud (FPS overlay) for this game, i.e. the Lutris option `system.mangohud` of its YAML (comments preserved). `on` sets it to `true`, `off` removes the key (Lutris default: off), `status` (the default) prints `on` or `off`. Like `runner`, handled before the prefix and runner checks: only the YAML is changed. lpm does not install MangoHud: if it cannot be found (native Lutris: no `mangohud` in `PATH`; Flatpak Lutris: no `org.freedesktop.Platform.VulkanLayer.MangoHud`), `on` still saves the setting and prints a warning on stderr saying it has no effect until MangoHud is installed. Close Lutris first, or it may overwrite the change.
+- `gamepad [on|off|edit|status]` : AntiMicroX profile for this game, i.e. the Lutris option `system.antimicro_config` of its YAML (Lutris then starts AntiMicroX with that profile when the game runs). `on` creates a blank profile `<prefix>/lpm_gamepad/lpm-gamepad.gamecontroller.amgp` only if it does not exist yet (an existing profile is never overwritten) and points the option to it. `off` removes the option only if it points to that profile; the profile file is kept. `edit` opens that profile in AntiMicroX (native `antimicrox`/`antimicro`, or the Flatpak `io.github.antimicrox.antimicrox`) and returns at once, nothing is watched. `status` (the default) prints `on`, `off`, or `other` when `antimicro_config` points to a profile that is not lpm's: that one is never replaced or removed, `on` and `off` then fail with an error and leave it alone. Handled before the prefix and runner checks like `mangohud`, except that the prefix folder must be found. lpm does not install AntiMicroX; if it cannot be found, `on` warns on stderr but still saves.
 
 ## Output
 
@@ -80,11 +82,11 @@ Runner of 'Foo Game' changed to 'GE-Proton10-1'.
 Errors (stderr):
 
 ```
-Usage: lpm tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud> [path|action|runner] [key|file] [value]
+Usage: lpm tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud|gamepad> [path|action|runner] [key|file] [value]
 Error: no installed game with slug '<slug>'.
 Error: the prefix folder for '<name>' could not be found.
 Error: the Wine runner '<version>' configured for this game is no longer installed (lpm install-runner to reinstall it).
-Error: unknown tool '<tool>' (expected: winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner or mangohud).
+Error: unknown tool '<tool>' (expected: winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud or gamepad).
 Error: winetricks could not be found, neither bundled by Lutris nor installed on the system.
 Already running for '<name>'.
 Error: file not found: <path>
