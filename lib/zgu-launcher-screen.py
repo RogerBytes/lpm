@@ -134,7 +134,12 @@ TOP_TITLE_FONT_SIZE = 84
 TOP_TITLE_BOTTOM_PADDING = 48
 
 LABEL_ZONE_HEIGHT = 90
-LABEL_ZONE_TOP_PADDING = 16
+LABEL_ZONE_TOP_PADDING = 8
+# When the label of the chosen entry is shown (loading screen after the picker), the logo and
+# the label go down together by this amount (their mutual distance is unchanged).
+LABEL_SHIFT_DOWN = 30
+# The logo goes down this much MORE than the label, to bring them closer (gap about halved).
+LOGO_EXTRA_DOWN = 24
 
 CURSOR_IDLE_S = 1.0
 
@@ -898,7 +903,7 @@ class ScreenWindow(Gtk.Window):
         extents = cr.text_extents(entry_label_text[0])
 
         label_x = (width - extents.width) / 2
-        label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + extents.height
+        label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + extents.height
 
         cr.set_source_rgba(1, 1, 1, 1)
         cr.move_to(label_x, label_baseline_y)
@@ -909,7 +914,8 @@ class ScreenWindow(Gtk.Window):
         img_w = self.logo_surface.get_width()
         scale = self.logo_draw_w / img_w
         cr.save()
-        cr.translate(self.logo_draw_x, self.logo_draw_y)
+        shift = (LABEL_SHIFT_DOWN + LOGO_EXTRA_DOWN) if entry_label_text[0] else 0
+        cr.translate(self.logo_draw_x, self.logo_draw_y + shift)
         cr.scale(scale, scale)
         cr.set_source_surface(self.logo_surface, 0, 0)
         cr.paint()
