@@ -18,7 +18,7 @@ from commandpage import CommandPage
 from sgdb import SgdbPickerWindow, SgdbTitleResolverWindow
 from util import _run_on_main, json_result
 from widgets_rows import LauncherEntryRow, _wrapping_text_factory, add_shortcut_rows, pick_file, pick_folder
-from widgets_select import GameMultiSelect, RunnerCombo, SingleGameSelect
+from widgets_select import GameMultiSelect, RunnerCombo, SingleChoiceSelect, SingleGameSelect
 
 
 class MediaPages:
@@ -299,11 +299,9 @@ class MediaPages:
             t("gui.tools.tool_mangohud"),
             t("gui.tools.tool_gamepad"),
         ]
-        tool_row = Adw.ComboRow(title=t("gui.tools.tool_title"))
-        tool_row.set_model(Gtk.StringList.new(tool_labels))
-        # Avoids "..." truncation of labels too long for the dropdown width (same fix as
-        # RunnerCombo, see _wrapping_text_factory).
-        tool_row.set_factory(_wrapping_text_factory())
+        # Same list style as the game selector (scrolls inside the page): a classic dropdown
+        # hid the last tools when the window was not tall enough.
+        tool_row = SingleChoiceSelect(t("gui.tools.tool_title"), tool_labels)
         page.add_row(tool_row)
 
         # Executable path -- visible only for the "exe" tool (winetricks/registry

@@ -6,7 +6,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, GLib, GObject, Gtk  # noqa: E402
 
 import backend
 from i18n import t
@@ -490,3 +490,55 @@ class RunnerCombo(Adw.ComboRow):
         if self._default_runner_missing and not self._user_touched:
             return None
         return self._runners[idx]
+
+
+class SingleChoiceSelect(Adw.ExpanderRow):
+    """Selector for ONE entry of a FIXED list of labels (e.g. the Wine tools), in the same
+    style as SingleGameSelect (Adw.ExpanderRow + bounded scrollable list, no checkbox). The
+    classic Adw.ComboRow dropdown hides the last entries of a long list when the window is
+    not tall enough; this list always scrolls inside the page.
+
+    Same small API as Adw.ComboRow for what the pages use: get_selected(), set_selected(i),
+    and the "notify::selected" signal. One entry is always selected (index 0 at first)."""
+
+    selected = GObject.Property(type=int, default=0)
+
+    def __init__(self, title: str, labels: list[str]):
+        self._base_title = title
+        super().__init__(title=title)
+        self._labels = list(labels)
+        self._rows: list[Adw.ActionRow] = []
+        self._index = 0
+        self._listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
+        for label in self._labels:
+            row = Adw.ActionRow(title=_escape_markup(label))
+            row.set_activatable(True)
+            self._listbox.append(row)
+            self._rows.append(row)
+        self._listbox.connect("row-selected", self._on_row_selected)
+        self.add_row(_wrap_scrollable_list(self._listbox))
+        if self._rows:
+            self._listbox.select_row(self._rows[0])
+        self._update_title()
+
+    def _on_row_selected(self, _listbox, row):
+        if row is None:
+            return  # one entry always stays selected
+        self._index = self._rows.index(row)
+        self._update_title()
+        self.set_expanded(False)
+        self.props.selected = self._index  # emits "notify::selected" only if the value changed
+
+    def _update_title(self):
+        if self._rows:
+            self.set_title(_escape_markup(t("gui.game_combo.selected_title", self._base_title, self._labels[self._index])))
+
+    def get_selected(self) -> int:
+        return self._index
+
+    def set_selected(self, index: int):
+        if 0 <= index < len(self._rows):
+            self._listbox.select_row(self._rows[index])
+
+    def n_items(self) -> int:
+        return len(self._labels)

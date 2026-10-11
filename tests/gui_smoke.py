@@ -173,10 +173,10 @@ try:
     tpage = win._built_pages["tools"]
     tgame = next(w for w in walk(tpage) if isinstance(w, widgets_select.SingleGameSelect))
     trunner = next(w for w in walk(tpage) if isinstance(w, widgets_select.RunnerCombo))
-    ttool = next(w for w in walk(tpage) if type(w).__name__ == "ComboRow" and w.get_title() == i18n.t("gui.tools.tool_title"))
+    ttool = next(w for w in walk(tpage) if type(w).__name__ == "SingleChoiceSelect")
     tgame._listbox.select_row(tgame._rows[tgame._slugs.index("mario")])
     pump(0.8)
-    runner_idx = ttool.get_model().get_n_items() - 3
+    runner_idx = ttool.n_items() - 3
     ttool.set_selected(runner_idx)
     pump(0.5)
     assert trunner.get_visible(), "runner selector hidden"
