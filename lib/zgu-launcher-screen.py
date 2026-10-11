@@ -135,7 +135,7 @@ TOP_TITLE_BOTTOM_PADDING = 48
 
 LABEL_ZONE_HEIGHT = 90
 LABEL_ZONE_TOP_PADDING = 8
-# When the label of the chosen entry is shown (loading screen after the picker), the logo and
+# On a launcher with a picker (NO_LABEL off), the logo is low from the start (picker AND loading screen, no jump), the logo and
 # the label go down together by this amount (their mutual distance is unchanged).
 LABEL_SHIFT_DOWN = 48
 # The logo goes down this much MORE than the label, to bring them closer (gap about halved).
@@ -149,7 +149,10 @@ BANNER_EXTRA_LIFT_NO_LABEL = 15
 
 # Vertical offset of the picker from the exact screen center: a bit more room above,
 # where the logo/title are shown.
-PICKER_VERTICAL_OFFSET = 50
+# (the card is centered below this margin: raising the margin by N moves the card down by N/2)
+PICKER_VERTICAL_OFFSET = 142
+# Height of the card itself (PICKER_BOX_HEIGHT stays the reference of the logo/label zones).
+PICKER_CARD_HEIGHT = 660
 
 # Size AND color of the list labels use direct Pango markup (span size=..., foreground=...),
 # never CSS: a user gtk.css (USER priority) can override an application CSS "font-size" but
@@ -508,7 +511,7 @@ class ScreenWindow(Gtk.Window):
         card.set_halign(Gtk.Align.CENTER)
         card.set_valign(Gtk.Align.CENTER)
         card.set_margin_top(PICKER_VERTICAL_OFFSET)
-        card.set_size_request(PICKER_BOX_WIDTH, PICKER_BOX_HEIGHT)
+        card.set_size_request(PICKER_BOX_WIDTH, PICKER_CARD_HEIGHT)
 
         self.picker_title_label = Gtk.Label(xalign=0, visible=False)
         self.picker_title_label.add_css_class("lpm-picker-title")
@@ -914,7 +917,7 @@ class ScreenWindow(Gtk.Window):
         img_w = self.logo_surface.get_width()
         scale = self.logo_draw_w / img_w
         cr.save()
-        shift = (LABEL_SHIFT_DOWN + LOGO_EXTRA_DOWN) if entry_label_text[0] else 0
+        shift = 0 if NO_LABEL else (LABEL_SHIFT_DOWN + LOGO_EXTRA_DOWN)
         cr.translate(self.logo_draw_x, self.logo_draw_y + shift)
         cr.scale(scale, scale)
         cr.set_source_surface(self.logo_surface, 0, 0)
