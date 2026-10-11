@@ -137,7 +137,7 @@ LABEL_ZONE_HEIGHT = 90
 LABEL_ZONE_TOP_PADDING = 8
 # When the label of the chosen entry is shown (loading screen after the picker), the logo and
 # the label go down together by this amount (their mutual distance is unchanged).
-LABEL_SHIFT_DOWN = 30
+LABEL_SHIFT_DOWN = 48
 # The logo goes down this much MORE than the label, to bring them closer (gap about halved).
 LOGO_EXTRA_DOWN = 24
 
