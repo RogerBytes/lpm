@@ -400,7 +400,7 @@ class MediaPages:
         gamepad_edit_button = Gtk.Button(label=t("gui.tools.gamepad_edit_button"), valign=Gtk.Align.CENTER)
         gamepad_edit_row.add_suffix(gamepad_edit_button)
         page.add_row(gamepad_edit_row)
-        gamepad_state = {"slug": None, "token": 0}
+        gamepad_state = {"slug": None, "token": 0, "updating": False}
 
         def _load_gamepad():
             slug = game_row.selected_slug()
@@ -408,7 +408,9 @@ class MediaPages:
             token = gamepad_state["token"]
             gamepad_state["slug"] = None
             gamepad_row.set_sensitive(False)
+            gamepad_state["updating"] = True
             gamepad_row.set_active(False)
+            gamepad_state["updating"] = False
             gamepad_edit_button.set_sensitive(False)
             if not slug or tool_row.get_selected() != tools.index("gamepad"):
                 return
@@ -425,7 +427,9 @@ class MediaPages:
                     if state == "other":
                         page.toast(t("gui.tools.gamepad_other"))
                         return
+                    gamepad_state["updating"] = True
                     gamepad_row.set_active(state == "on")
+                    gamepad_state["updating"] = False
                     gamepad_state["slug"] = slug
                     gamepad_row.set_sensitive(True)
                     gamepad_edit_button.set_sensitive(state == "on")
@@ -451,6 +455,36 @@ class MediaPages:
             backend.run_lpm_async(["tools", slug, "gamepad", "edit"], on_done=done)
 
         gamepad_edit_button.connect("clicked", _on_gamepad_edit)
+
+        # No "Run" button for this tool: ticking / unticking the switch applies at once
+        # ("tools <slug> gamepad on|off"); on failure the switch goes back to its old position.
+        def _on_gamepad_toggled(row, _pspec):
+            slug = gamepad_state["slug"]
+            if gamepad_state["updating"] or not slug:
+                return
+            want = row.get_active()
+            token = gamepad_state["token"]
+            row.set_sensitive(False)
+
+            def done(result):
+                def apply():
+                    if token != gamepad_state["token"]:
+                        return  # another game / tool chosen in the meantime
+                    if result.returncode != 0:
+                        page.toast(t("gui.common.command_failed", result.returncode))
+                        gamepad_state["updating"] = True
+                        row.set_active(not want)
+                        gamepad_state["updating"] = False
+                    else:
+                        page.toast(t("gui.tools.gamepad_done"))
+                        gamepad_edit_button.set_sensitive(want)
+                    row.set_sensitive(True)
+
+                _run_on_main(apply)
+
+            backend.run_lpm_async(["tools", slug, "gamepad", "on" if want else "off"], on_done=done)
+
+        gamepad_row.connect("notify::active", _on_gamepad_toggled)
 
         # Environment variables editor -- visible only for the "env" tool. One game at a
         # time: the content is re-read from the chosen game's Lutris config ("tools <slug> env
@@ -508,6 +542,7 @@ class MediaPages:
             mangohud_row.set_visible(idx == tools.index("mangohud"))
             gamepad_row.set_visible(idx == tools.index("gamepad"))
             gamepad_edit_row.set_visible(idx == tools.index("gamepad"))
+            page.run_button.set_visible(idx != tools.index("gamepad"))
             _load_env()
             _load_mangohud()
             _load_gamepad()
@@ -571,13 +606,6 @@ class MediaPages:
                     return
                 args.append("on" if mangohud_row.get_active() else "off")
                 page.run_command(args, t("gui.tools.mangohud_done"))
-                return
-            elif tool == "gamepad":
-                if gamepad_state["slug"] != slug:
-                    page.toast(t("gui.common.command_failed", "?"))
-                    return
-                args.append("on" if gamepad_row.get_active() else "off")
-                page.run_command(args, t("gui.tools.gamepad_done"))
                 return
             elif tool == "env":
                 # Not read yet (or read failed): never overwrite the config with an empty
