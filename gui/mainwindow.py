@@ -6,7 +6,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gdk, Gtk, Pango  # noqa: E402
 
 from i18n import t
 from pages import CommandPages
@@ -98,7 +98,15 @@ class MainWindow(Adw.ApplicationWindow):
     }
 
     def __init__(self, app: Adw.Application):
-        super().__init__(application=app, title="lpm", default_width=980, default_height=680)
+        # Taller than before so that long dropdowns (the Wine tools list has 11 entries) fit
+        # without hiding their last items; never more than 90% of the first monitor.
+        window_height = 820
+        try:
+            monitor = Gdk.Display.get_default().get_monitors().get_item(0)
+            window_height = min(window_height, int(monitor.get_geometry().height * 0.9))
+        except Exception:
+            pass
+        super().__init__(application=app, title="lpm", default_width=980, default_height=window_height)
 
         self.pages = CommandPages(self)
         self._built_pages: dict[str, Gtk.Widget] = {}
