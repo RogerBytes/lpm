@@ -90,7 +90,7 @@ Messages follow the system language (`LC_ALL`, `LC_MESSAGES`, `LANG`); use `LC_A
 - Per-game settings of the loading screen, three small visible files at the prefix root, created at the first launch from an lpm shortcut and never overwritten (edit them by hand; they survive later launches):
   - `lpm-extra-loading-ms` : extra milliseconds the loading screen stays after the game window appears (default `0`).
   - `lpm-max-wait-s` : maximum seconds lpm waits for the game window before giving up (default `60`; whole seconds between 5 and 3600, anything else means 60). Raise it for a game whose window takes minutes to appear (heavy mods); the log line `no_window_detected_after_delay` in `lpm log` shows that the limit was reached.
-  - `lpm-loading-message.txt` : a text of your own shown at the bottom center of the loading screen (wrapped on up to 4 lines, 600 characters at most), for example to explain a long loading. Empty by default (nothing shown); not translated; hidden while the picker is on screen.
+  - `lpm-loading-message.txt` : messages of your own shown at the bottom center of the loading screen, for example to explain a long loading. One line of the file = one message; one message is shown at a time (a long one is wrapped on up to 4 lines, 1200 characters at most in the whole file); with several, they alternate in file order with the same fades and black gap as the gamepad tips, each displayed 6 seconds. Empty by default (nothing shown); not translated; hidden while the picker is on screen.
 
 ## Examples
 

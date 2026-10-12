@@ -97,10 +97,16 @@ HELP_QUIT_TEXT = os.environ.get("LPM_HELP_QUIT", "").strip()
 HELP_F4_TEXT = os.environ.get("LPM_HELP_F4", "").strip()
 HELP_ALTENTER_TEXT = os.environ.get("LPM_HELP_ALTENTER", "").strip()
 HELP_F11_TEXT = os.environ.get("LPM_HELP_F11", "").strip()
-# --- Per-game message at the bottom center (text of <game dir>/lpm-loading-message.txt, passed
-# by the orchestrator in LPM_LOADING_MESSAGE): explains a long loading (mods, shaders...). Not
-# translated: it is the user's own text. Hidden while the picker is on screen. ---
-LOADING_MESSAGE = " ".join(os.environ.get("LPM_LOADING_MESSAGE", "").split())
+# --- Per-game messages at the bottom center (text of <game dir>/lpm-loading-message.txt, passed
+# by the orchestrator in LPM_LOADING_MESSAGE): explain a long loading (mods, shaders...). One
+# line of the file = one message; ONE message at a time (a long one is wrapped on up to
+# LOADING_MESSAGE_MAX_LINES lines); several messages alternate in file order with the same
+# fades and black gap as the gamepad tips, each shown a bit longer (LOADING_MESSAGE_PERIOD_S).
+# Not translated: it is the user's own text. Hidden while the picker is on screen. ---
+LOADING_MESSAGES = [" ".join(l.split()) for l in os.environ.get("LPM_LOADING_MESSAGE", "").split("\n")]
+LOADING_MESSAGES = [m for m in LOADING_MESSAGES if m]
+LOADING_MESSAGE_PERIOD_S = 6.0
+message_start = [None]
 LOADING_MESSAGE_FONT_SIZE = 18
 LOADING_MESSAGE_LINE_HEIGHT = 26
 LOADING_MESSAGE_MAX_LINES = 4
@@ -689,8 +695,9 @@ class ScreenWindow(Gtk.Window):
         help_visible = self.gamepad_help_visible()
         if not help_visible:
             help_start[0] = None  # next appearance: restart from black (visible fade-in)
-        message_lines = self.loading_message_lines(cr, width)
-        message_reserved = (len(message_lines) * LOADING_MESSAGE_LINE_HEIGHT + 12) if message_lines else 0
+        messages = self.loading_messages_lines(cr, width)
+        # Room kept for the TALLEST message, so the banner never jumps from one message to the next.
+        message_reserved = (max(len(m) for m in messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if messages else 0
         banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0) - message_reserved
         if self.current_surface is not None and banner_zone_height > 0:
             cr.set_operator(cairo.OPERATOR_OVER)
@@ -720,8 +727,8 @@ class ScreenWindow(Gtk.Window):
         if help_visible:
             self.draw_gamepad_help(cr, indicator_bottom_y, width)
 
-        if message_lines:
-            self.draw_loading_message(cr, message_lines, width, height, help_visible)
+        if messages:
+            self.draw_loading_message(cr, messages, width, height, help_visible)
 
         if entry_label_text[0]:
             self.draw_entry_label(cr, width)
@@ -913,33 +920,55 @@ class ScreenWindow(Gtk.Window):
 
         draw_spinner(cr, spinner_cx, center_y, SPINNER_SIZE / 2 - 2, spinner_angle[0])
 
-    def loading_message_lines(self, cr, width):
-        """Lines of LOADING_MESSAGE wrapped to the available width (empty if there is no
-        message or if the picker is on screen). Needs the cairo font set by the caller."""
-        if not LOADING_MESSAGE or picker_request_pending or any(w.picker_visible for w in windows):
+    def loading_messages_lines(self, cr, width):
+        """Every message wrapped to the available width, as a list of lists of lines (empty if
+        there is no message or if the picker is on screen). Needs no font set by the caller."""
+        if not LOADING_MESSAGES or picker_request_pending or any(w.picker_visible for w in windows):
+            message_start[0] = None  # restart from black when the messages come back
             return []
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         cr.set_font_size(LOADING_MESSAGE_FONT_SIZE)
         max_w = min(width * LOADING_MESSAGE_MAX_WIDTH_FRACTION, 1100)
-        lines, current = [], ""
-        for word in LOADING_MESSAGE.split(" "):
-            candidate = (current + " " + word).strip()
-            if current and cr.text_extents(candidate).x_advance > max_w:
+        result = []
+        for message in LOADING_MESSAGES:
+            lines, current = [], ""
+            for word in message.split(" "):
+                candidate = (current + " " + word).strip()
+                if current and cr.text_extents(candidate).x_advance > max_w:
+                    lines.append(current)
+                    current = word
+                else:
+                    current = candidate
+            if current:
                 lines.append(current)
-                current = word
-            else:
-                current = candidate
-        if current:
-            lines.append(current)
-        if len(lines) > LOADING_MESSAGE_MAX_LINES:
-            lines = lines[:LOADING_MESSAGE_MAX_LINES]
-            lines[-1] = lines[-1].rstrip(" .,;:") + "\u2026"
-        return lines
+            if len(lines) > LOADING_MESSAGE_MAX_LINES:
+                lines = lines[:LOADING_MESSAGE_MAX_LINES]
+                lines[-1] = lines[-1].rstrip(" .,;:") + "\u2026"
+            result.append(lines)
+        return result
 
-    def draw_loading_message(self, cr, lines, width, height, help_visible):
+    def draw_loading_message(self, cr, messages, width, height, help_visible):
+        """Draws the CURRENT message: fade in, full, fade out to black, then the next one."""
+        now = time.monotonic()
+        if message_start[0] is None:
+            message_start[0] = now
+        elapsed = now - message_start[0]
+        slot = int(elapsed // LOADING_MESSAGE_PERIOD_S)
+        u = elapsed - slot * LOADING_MESSAGE_PERIOD_S
+        lines = messages[slot % len(messages)]
+        if len(messages) == 1:
+            alpha = 1.0
+        elif u < HELP_FADE_S:
+            alpha = u / HELP_FADE_S
+        elif u < LOADING_MESSAGE_PERIOD_S - HELP_FADE_S:
+            alpha = 1.0
+        else:
+            alpha = (LOADING_MESSAGE_PERIOD_S - u) / HELP_FADE_S
+        if alpha <= 0:
+            return
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         cr.set_font_size(LOADING_MESSAGE_FONT_SIZE)
-        cr.set_source_rgba(0.91, 0.91, 0.91, 0.95)
+        cr.set_source_rgba(0.91, 0.91, 0.91, 0.95 * alpha)
         bottom = height - MARGIN_BOTTOM - ((HELP_LINE_HEIGHT + 10) if help_visible else 0)
         first_baseline = bottom - (len(lines) - 1) * LOADING_MESSAGE_LINE_HEIGHT
         for i, line in enumerate(lines):

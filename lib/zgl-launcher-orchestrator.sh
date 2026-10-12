@@ -305,10 +305,11 @@ keep_focus_env=0
 [[ -f "${game_dir}/.lpm-keep-focus" ]] && keep_focus_env=1
 # Per-game message shown at the bottom center of the loading screen (explains a long loading).
 # VISIBLE file at the prefix root, created empty if missing, never overwritten; an empty file
-# shows nothing. Newlines become spaces (the screen wraps the text), 600 characters at most.
+# shows nothing. One line of the file = one message (the screen shows one at a time, wraps a long
+# one, and alternates when there are several); 1200 characters at most, CR and tabs become spaces.
 loading_message_file="${game_dir}/lpm-loading-message.txt"
 [[ -e "${loading_message_file}" ]] || : > "${loading_message_file}" 2>/dev/null
-loading_message=$(head -c 600 "${loading_message_file}" 2>/dev/null | tr '\r\n\t' '   ')
+loading_message=$(head -c 1200 "${loading_message_file}" 2>/dev/null | tr '\r\t' '  ')
 LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
