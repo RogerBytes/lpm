@@ -303,7 +303,13 @@ if [[ -f "${shortcut_file}" ]]; then
 fi
 keep_focus_env=0
 [[ -f "${game_dir}/.lpm-keep-focus" ]] && keep_focus_env=1
-LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
+# Per-game message shown at the bottom center of the loading screen (explains a long loading).
+# VISIBLE file at the prefix root, created empty if missing, never overwritten; an empty file
+# shows nothing. Newlines become spaces (the screen wraps the text), 600 characters at most.
+loading_message_file="${game_dir}/lpm-loading-message.txt"
+[[ -e "${loading_message_file}" ]] || : > "${loading_message_file}" 2>/dev/null
+loading_message=$(head -c 600 "${loading_message_file}" 2>/dev/null | tr '\r\n\t' '   ')
+LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
@@ -602,7 +608,16 @@ POST_WINDOW_GRACE_MS=1000
 
 (
   start_ms=$(date +%s%3N 2>/dev/null || echo 0)
-  max_wait_s=60
+  # Maximum wait for the game window: VISIBLE file at the prefix root, created with 60 if
+  # missing, never overwritten, so a user-edited value survives. For a game whose window takes
+  # minutes to appear (heavy mods...). Only whole seconds between 5 and 3600 are accepted.
+  max_wait_file="${game_dir}/lpm-max-wait-s"
+  [[ -f "${max_wait_file}" ]] || printf '60' > "${max_wait_file}" 2>/dev/null
+  max_wait_s=$(tr -cd '0-9' < "${max_wait_file}" 2>/dev/null)
+  [[ -n "${max_wait_s}" ]] && max_wait_s=$(( 10#${max_wait_s} ))  # "060" is not octal
+  if [[ -z "${max_wait_s}" ]] || [[ "${max_wait_s}" -lt 5 ]] || [[ "${max_wait_s}" -gt 3600 ]]; then
+    max_wait_s=60
+  fi
   waited=0
   window_detected=""
 

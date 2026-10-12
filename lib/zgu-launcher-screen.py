@@ -97,6 +97,14 @@ HELP_QUIT_TEXT = os.environ.get("LPM_HELP_QUIT", "").strip()
 HELP_F4_TEXT = os.environ.get("LPM_HELP_F4", "").strip()
 HELP_ALTENTER_TEXT = os.environ.get("LPM_HELP_ALTENTER", "").strip()
 HELP_F11_TEXT = os.environ.get("LPM_HELP_F11", "").strip()
+# --- Per-game message at the bottom center (text of <game dir>/lpm-loading-message.txt, passed
+# by the orchestrator in LPM_LOADING_MESSAGE): explains a long loading (mods, shaders...). Not
+# translated: it is the user's own text. Hidden while the picker is on screen. ---
+LOADING_MESSAGE = " ".join(os.environ.get("LPM_LOADING_MESSAGE", "").split())
+LOADING_MESSAGE_FONT_SIZE = 18
+LOADING_MESSAGE_LINE_HEIGHT = 26
+LOADING_MESSAGE_MAX_LINES = 4
+LOADING_MESSAGE_MAX_WIDTH_FRACTION = 0.6
 HELP_MARGIN_LEFT = 28
 HELP_LINE_HEIGHT = 34
 HELP_FONT_SIZE = 15
@@ -681,7 +689,9 @@ class ScreenWindow(Gtk.Window):
         help_visible = self.gamepad_help_visible()
         if not help_visible:
             help_start[0] = None  # next appearance: restart from black (visible fade-in)
-        banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0)
+        message_lines = self.loading_message_lines(cr, width)
+        message_reserved = (len(message_lines) * LOADING_MESSAGE_LINE_HEIGHT + 12) if message_lines else 0
+        banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0) - message_reserved
         if self.current_surface is not None and banner_zone_height > 0:
             cr.set_operator(cairo.OPERATOR_OVER)
             img_w = self.current_surface.get_width()
@@ -709,6 +719,9 @@ class ScreenWindow(Gtk.Window):
 
         if help_visible:
             self.draw_gamepad_help(cr, indicator_bottom_y, width)
+
+        if message_lines:
+            self.draw_loading_message(cr, message_lines, width, height, help_visible)
 
         if entry_label_text[0]:
             self.draw_entry_label(cr, width)
@@ -899,6 +912,40 @@ class ScreenWindow(Gtk.Window):
         cr.show_text(INDICATOR_TEXT)
 
         draw_spinner(cr, spinner_cx, center_y, SPINNER_SIZE / 2 - 2, spinner_angle[0])
+
+    def loading_message_lines(self, cr, width):
+        """Lines of LOADING_MESSAGE wrapped to the available width (empty if there is no
+        message or if the picker is on screen). Needs the cairo font set by the caller."""
+        if not LOADING_MESSAGE or picker_request_pending or any(w.picker_visible for w in windows):
+            return []
+        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(LOADING_MESSAGE_FONT_SIZE)
+        max_w = min(width * LOADING_MESSAGE_MAX_WIDTH_FRACTION, 1100)
+        lines, current = [], ""
+        for word in LOADING_MESSAGE.split(" "):
+            candidate = (current + " " + word).strip()
+            if current and cr.text_extents(candidate).x_advance > max_w:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        if len(lines) > LOADING_MESSAGE_MAX_LINES:
+            lines = lines[:LOADING_MESSAGE_MAX_LINES]
+            lines[-1] = lines[-1].rstrip(" .,;:") + "\u2026"
+        return lines
+
+    def draw_loading_message(self, cr, lines, width, height, help_visible):
+        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(LOADING_MESSAGE_FONT_SIZE)
+        cr.set_source_rgba(0.91, 0.91, 0.91, 0.95)
+        bottom = height - MARGIN_BOTTOM - ((HELP_LINE_HEIGHT + 10) if help_visible else 0)
+        first_baseline = bottom - (len(lines) - 1) * LOADING_MESSAGE_LINE_HEIGHT
+        for i, line in enumerate(lines):
+            ext = cr.text_extents(line)
+            cr.move_to((width - ext.x_advance) / 2, first_baseline + i * LOADING_MESSAGE_LINE_HEIGHT)
+            cr.show_text(line)
 
     def draw_entry_label(self, cr, width):
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
