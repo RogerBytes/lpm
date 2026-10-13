@@ -583,10 +583,33 @@ WIN_SIZE_THRESHOLD=200
 WIN_CAPTION_MIN_SIZE=32
 WIN_CAPTION_STYLE_MASK=$(( 0x00C00000 ))
 WIN_IGNORED_CLASSES=(Shell_TrayWnd IPTip_Main_Window WineAppBar SDLHelperWindowInputMsgWindow XaliaOverlayBox)
+
+# Per-game ignored windows: VISIBLE file (no leading dot) at the prefix root, created empty if
+# missing, never overwritten, so user-edited content survives (same convention as
+# lpm-max-wait-s / lpm-extra-loading-ms below). One word per line, matched case-sensitively
+# anywhere in the trace line (window title OR class), so a helper program started before the
+# game with a real window (e.g. "bbbridge", the Bloodborne online bridge, which ignores a
+# hidden start) is never taken for the game window. Empty lines and "#" comments are skipped.
+WIN_IGNORED_WORDS=()
+ignored_windows_file="${game_dir:+${game_dir}/lpm-ignore-windows.txt}"
+[[ -z "${ignored_windows_file}" ]] || [[ -e "${ignored_windows_file}" ]] || : > "${ignored_windows_file}" 2>/dev/null
+if [[ -n "${ignored_windows_file}" ]] && [[ -r "${ignored_windows_file}" ]]; then
+  while IFS= read -r ignored_word || [[ -n "${ignored_word}" ]]; do
+    ignored_word="${ignored_word//$'\r'/}"
+    ignored_word="${ignored_word#"${ignored_word%%[![:space:]]*}"}"
+    ignored_word="${ignored_word%"${ignored_word##*[![:space:]]}"}"
+    [[ -z "${ignored_word}" ]] || [[ "${ignored_word}" == \#* ]] && continue
+    WIN_IGNORED_WORDS+=("${ignored_word}")
+  done < "${ignored_windows_file}"
+fi
+
 zgl_trace_line_is_game_window() {
-  local line="$1" ignored_class win_w win_h
+  local line="$1" ignored_class ignored_word win_w win_h
   for ignored_class in "${WIN_IGNORED_CLASSES[@]}"; do
     [[ "${line}" == *"->L\"${ignored_class}\""* ]] && return 1
+  done
+  for ignored_word in "${WIN_IGNORED_WORDS[@]}"; do
+    [[ "${line}" == *"${ignored_word}"* ]] && return 1
   done
   [[ "${line}" =~ ([0-9]+)x([0-9]+)[[:space:]]+parent= ]] || return 1
   win_w="${BASH_REMATCH[1]}"
