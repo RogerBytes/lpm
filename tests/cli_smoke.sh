@@ -351,6 +351,7 @@ expect "window detection: empty window with a title bar ignored" bash -c "${load
 expect "window detection: small window without a title bar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Whatever 80000000 100x100)"
 expect "window detection: Wine taskbar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 166x52)"
 expect "window detection: Wine taskbar ignored even when big" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 1920x1080)"
+expect "window detection: per-game ignored word (lpm-ignore-windows.txt)" bash -c 'd=$(mktemp -d); printf "# helper\nbbbridge\n" > "${d}/lpm-ignore-windows.txt"; game_dir="${d}"; '"${load_detection}"'; rc=0; zgl_trace_line_is_game_window "$2" && rc=1; rm -rf "${d}"; exit "${rc}"' _ "${repo}" "$(trace_line bbbridge 16cf0000 1280x800)"
 
 # --- Pack safety: links pointing outside the game folder or to themselves are never copied
 mkdir -p "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z"
