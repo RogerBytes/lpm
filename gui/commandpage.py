@@ -117,10 +117,17 @@ class CommandPage(Gtk.Box):
     def toast(self, text: str):
         self.toast_overlay.add_toast(Adw.Toast(title=text, timeout=4))
 
-    def toast_failure(self, code):
+    def toast_failure(self, code, detail=""):
         """Failure message with a "View log" button that opens lpm-gui.log in the GUI
-        (the message mentions that file, which must be readable without leaving the app)."""
-        toast = Adw.Toast(title=t("gui.common.command_failed", code), timeout=10,
+        (the message mentions that file, which must be readable without leaving the app).
+        detail = last error line printed by the command (already translated), if any."""
+        if detail:
+            if len(detail) > 220:
+                detail = detail[:217] + "..."
+            title = t("gui.common.command_failed_detail", code, detail)
+        else:
+            title = t("gui.common.command_failed", code)
+        toast = Adw.Toast(title=title, timeout=15,
                           button_label=t("gui.common.view_log"))
         toast.connect("button-clicked", lambda *_: show_log_dialog(self.get_root()))
         self.toast_overlay.add_toast(toast)
@@ -287,7 +294,8 @@ class CommandPage(Gtk.Box):
                     # the user will likely want to retry with the same selection.
                     self.reset_selection()
                 else:
-                    self.toast_failure(result.returncode)
+                    err_lines = [ln.strip() for ln in result.stderr.splitlines() if ln.strip()]
+                    self.toast_failure(result.returncode, err_lines[-1] if err_lines else "")
 
             _run_on_main(finish)
 

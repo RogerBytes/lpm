@@ -30,6 +30,9 @@ _GUI_LOGGER = logging.getLogger("lpm.gui.commands")
 
 
 def _init_gui_logger():
+    # Without an explicit level the logger inherits the root one (WARNING), which silently
+    # drops every .info() call: lpm-gui.log stayed empty.
+    _GUI_LOGGER.setLevel(logging.INFO)
     if _GUI_LOGGER.handlers:
         return
     try:

@@ -957,6 +957,7 @@ menu.opt_logo=🔤 Fetch a game logo (SteamGridDB)
 gui.common.run=Run
 gui.common.done=Done.
 gui.common.command_failed=Failed (code %s) -- see ~/.local/share/lpm/lpm-gui.log
+gui.common.command_failed_detail=Failed (code %s): %s -- see ~/.local/share/lpm/lpm-gui.log
 gui.common.view_log=View log
 gui.common.cancel=Cancel
 gui.common.log_dialog_title=Command log

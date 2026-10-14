@@ -214,6 +214,25 @@ try:
 except Exception:
     errors.append("update button:\n" + traceback.format_exc())
 
+# --- Failure toast: shows the command's last error line; GUI log really written ---------
+try:
+    win.show_page("install")
+    pump(0.3)
+    ipage = win._built_pages["install"]
+    shown = []
+    ipage.toast_overlay.add_toast = lambda toast: shown.append(toast.get_title())
+    ipage.toast_failure(1, "Boom: disk full " + "x" * 400)
+    ipage.toast_failure(2)
+    assert "Boom: disk full" in shown[0] and shown[0].endswith("lpm-gui.log") and len(shown[0]) < 400, shown[0]
+    assert "(code 2)" in shown[1] or "code 2" in shown[1], shown[1]
+    import guilog
+    guilog._GUI_LOGGER.info("smoke probe")
+    gui_log = os.path.join(os.path.expanduser("~"), ".local", "share", "lpm", "lpm-gui.log")
+    assert os.path.getsize(gui_log) > 0, "lpm-gui.log stays empty"
+    print("failure toast + gui log: OK")
+except Exception:
+    errors.append("failure toast:\n" + traceback.format_exc())
+
 print("pages built: %d/%d" % (len(ok), len(page_ids)))
 print("pages: " + ", ".join(ok))
 if errors:
