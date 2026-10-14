@@ -44,3 +44,21 @@ zgu_cli_error() {
     printf '%s\n' "$1" >&2
   fi
 }
+
+# zgu_human_size <bytes>: prints a size with a binary unit (e.g. "12.3GiB"), or "<bytes> B" if numfmt
+# is unavailable.
+zgu_human_size() {
+  if command -v numfmt >/dev/null 2>&1; then
+    numfmt --to=iec-i --suffix=B --format="%.1f" -- "$1" 2>/dev/null && return 0
+  fi
+  printf '%s B\n' "$1"
+}
+
+# zgu_free_bytes <dir>: prints the free space (bytes) available to the current user on the file
+# system holding <dir>; prints nothing (return 1) if it cannot be determined.
+zgu_free_bytes() {
+  local free_kb
+  free_kb=$(df -Pk -- "$1" 2>/dev/null | awk 'NR==2 {print $4}')
+  [[ "${free_kb}" =~ ^[0-9]+$ ]] || return 1
+  echo $((free_kb * 1024))
+}

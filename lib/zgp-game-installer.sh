@@ -313,16 +313,44 @@ lpm_cancel_cleanup() {
   t install_game.cancelled_run_cli
   exit 130
 }
-trap lpm_cancel_cleanup TERM INT
+# HUP too: closing the terminal (or the GUI window running this script) must clean up the same
+# way as a cancellation. SIGKILL, a crash or a power loss cannot be trapped by any process.
+trap lpm_cancel_cleanup TERM INT HUP
+
+# Whatever the way the script ends (normal end, "exit" after an error...), never leave its
+# temporary extraction folder behind. Only the temp folder is removed here, never a finished
+# prefix (completed games are not touched, see lpm_cancel_cleanup for the in-progress one).
+lpm_exit_cleanup() {
+  if [[ -n "${temp_extract_dir}" ]] && [[ "${temp_extract_dir}" == "${games_dir}/.zgp-extract-"* ]]; then
+    rm -rf "${temp_extract_dir}"
+  fi
+}
+trap lpm_exit_cleanup EXIT
 
 # Process each selected game
 for name in "${games_to_install[@]}"; do
   install_idx=$((install_idx + 1))
   filepath="${filepath_by_name[${name}]}"
 
+  file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
+
+  # 0. Free space check BEFORE extracting anything (nothing is read from the archive for this):
+  # extracted data is never smaller than the archive, so a disk with less free space than the
+  # archive's size cannot possibly hold the game. This is a lower bound only -- a game that
+  # compresses well can still need more, which is reported by the "disk full" message below.
+  free_bytes=$(zgu_free_bytes "${games_dir}")
+  if [[ -n "${free_bytes}" ]] && [[ "${file_size:-0}" -gt "${free_bytes}" ]]; then
+    zgu_cli_error "$(t install_game.not_enough_space_precheck "${name}" "$(zgu_human_size "${file_size}")" "$(zgu_human_size "${free_bytes}")" "${games_dir}")"
+    zgu_log "install" "ERROR" "file=${name} reason=not_enough_space needed=${file_size} free=${free_bytes}"
+    continue
+  fi
+
   # 1. Extract into a temp folder directly inside $games_dir (guarantees an instant rename)
   temp_extract_dir=$(mktemp -d "${games_dir}/.zgp-extract-XXXXXX")
-  file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
+  # bsdtar's own error output, kept to tell a full disk from a corrupted archive (see 1bis).
+  # Lives outside $games_dir (which may be the full disk); if it cannot be created, bsdtar's
+  # errors are simply discarded.
+  extract_err_file=$(mktemp 2>/dev/null) || extract_err_file="/dev/null"
 
   # "[n/total] ..." is parsed by the GUI (CommandPage.run_command in gui/*.py) to show which
   # game out of how many in the progress text; same convention as zgp-game-uninstaller.sh.
@@ -341,7 +369,7 @@ for name in "${games_to_install[@]}"; do
   # in zgr-runner-installer.sh.
   pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _lpm_pct; do
     printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
-  done) | bsdtar -xf - -C "${temp_extract_dir}"
+  done) | bsdtar -xf - -C "${temp_extract_dir}" 2> "${extract_err_file}"
   # PIPESTATUS[1] = bsdtar's exit code (only "pv" and "bsdtar" are in the "|" pipe; the
   # process substitution on stderr is not).
   tar_exit="${PIPESTATUS[1]}"
@@ -350,12 +378,24 @@ for name in "${games_to_install[@]}"; do
   # 1bis. Verify the extraction: if tar failed (corrupt, truncated or invalid archive), abort
   # this game cleanly without touching Lutris or creating shortcuts
   if [[ "${tar_exit}" -ne 0 ]]; then
-    err_msg="$(t install_game.corrupt_archive "${name}" "${tar_exit}")"
+    # Full disk or corrupted archive? Decided BEFORE removing the temp folder (which would
+    # free the space again): bsdtar says "No space left on device", or less than 64 MiB is left.
+    extract_free=$(zgu_free_bytes "${games_dir}")
+    if grep -qiE "no space left|disk quota" "${extract_err_file}" 2>/dev/null \
+       || { [[ -n "${extract_free}" ]] && [[ "${extract_free}" -lt 67108864 ]]; }; then
+      err_msg="$(t install_game.disk_full "${name}" "${games_dir}")"
+      fail_reason="disk_full"
+    else
+      err_msg="$(t install_game.corrupt_archive "${name}" "${tar_exit}")"
+      fail_reason="corrupt_archive"
+    fi
     echo "${err_msg}" >&2
-    zgu_log "install" "ERROR" "file=${name} reason=corrupt_archive code=${tar_exit}"
+    zgu_log "install" "ERROR" "file=${name} reason=${fail_reason} code=${tar_exit} detail=$(head -n 1 "${extract_err_file}" 2>/dev/null)"
+    rm -f "${extract_err_file}"
     rm -rf "${temp_extract_dir}"
     continue
   fi
+  [[ "${extract_err_file}" = "/dev/null" ]] || rm -f "${extract_err_file}"
 
   # 2. Find the real slug from what was actually extracted
   # find + head rather than "ls -1 | head -n 1" (SC2012); the real protection against

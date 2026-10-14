@@ -403,6 +403,29 @@ expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/ver
 expect "install: relay of the old LPM Launcher format removed (legacy)" test ! -e "${HOME}/Games/mario/scripts/lpm-launcher.sh"
 rm -rf "${HOME}/old-archive" "${HOME}/Mario-old.zgp"
 
+# --- Install: disk space. A small .zgp is enough: the failures happen before/while extracting.
+mkdir -p "${HOME}/spacegame" && head -c 20000 /dev/urandom > "${HOME}/spacegame/data.bin"
+tar -C "${HOME}" -cf - spacegame | zstd -q > "${HOME}/Space.zgp"
+rm -rf "${HOME}/spacegame"
+shim="${work}/shim"; mkdir -p "${shim}"
+real_bsdtar="$(command -v bsdtar)"
+# (a) Not enough free space (fake df: 1 KiB free): refused BEFORE reading the archive at all.
+printf '#!/bin/sh\nprintf "Filesystem 1024-blocks Used Available Capacity Mounted\\nx 100 99 1 99%% /\\n"\n' > "${shim}/df"
+printf '#!/bin/sh\necho called >> "%s/bsdtar-calls"\nexec %s "$@"\n' "${shim}" "${real_bsdtar}" > "${shim}/bsdtar"
+chmod +x "${shim}/df" "${shim}/bsdtar"
+rm -f "${shim}/bsdtar-calls"
+PATH="${shim}:${PATH}" check "install: not enough free space is refused" 1 'not enough free disk space' install -y "${HOME}/Space.zgp"
+expect "install: nothing read or extracted when refused" bash -c '[ ! -e "$1/bsdtar-calls" ] && [ -z "$(ls -A "$2" | grep zgp-extract)" ]' _ "${shim}" "${HOME}/Games"
+rm -f "${shim}/df"
+# (b) Extraction fails with "No space left": reported as a full disk, not a corrupted archive.
+printf '#!/bin/sh\ncat >/dev/null\necho "x/y.bin: Write failed: No space left on device" >&2\nexit 1\n' > "${shim}/bsdtar"
+PATH="${shim}:${PATH}" check "install: full disk reported as such" 1 'disk is full' install -y "${HOME}/Space.zgp"
+# (c) Extraction fails for another reason: still reported as a corrupted archive.
+printf '#!/bin/sh\ncat >/dev/null\necho "Truncated input" >&2\nexit 1\n' > "${shim}/bsdtar"
+PATH="${shim}:${PATH}" check "install: other failure still reported as corrupted" 1 'corrupted or invalid' install -y "${HOME}/Space.zgp"
+expect "install: temp extraction folder removed after a failure" bash -c '[ -z "$(ls -A "$1" | grep zgp-extract)" ]' _ "${HOME}/Games"
+rm -rf "${shim}" "${HOME}/Space.zgp"
+
 # --- Completion: every documented command is offered (except advanced commands
 #     intentionally absent from "lpm --help"), and options with values complete
 hidden=" archives options lsfg-dll sgdb-images sgdb-key "
