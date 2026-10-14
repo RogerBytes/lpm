@@ -421,8 +421,9 @@ PATH="${shim}:${PATH}" check "install: not enough free space is refused" 1 'not 
 expect "install: nothing read or extracted when refused" bash -c '[ ! -e "$1/bsdtar-calls" ] && [ -z "$(ls -A "$2" | grep zgp-extract)" ]' _ "${shim}" "${HOME}/Games"
 rm -f "${shim}/df"
 # (b) Extraction fails with "No space left": reported as a full disk, not a corrupted archive.
-printf '#!/bin/sh\ncat >/dev/null\necho "x/y.bin: Write failed: No space left on device" >&2\nexit 1\n' > "${shim}/bsdtar"
+printf '#!/bin/sh\ncat >/dev/null\necho "$LC_MESSAGES" > "'"${shim}"'/lc-messages"\necho "x/y.bin: Write failed: No space left on device" >&2\nexit 1\n' > "${shim}/bsdtar"
 PATH="${shim}:${PATH}" check "install: full disk reported as such" 1 'disk is full' install -y "${HOME}/Space.zgp"
+expect "install: bsdtar messages forced to English" grep -qx C "${shim}/lc-messages"
 # (c) Extraction fails for another reason: still reported as a corrupted archive.
 printf '#!/bin/sh\ncat >/dev/null\necho "Truncated input" >&2\nexit 1\n' > "${shim}/bsdtar"
 PATH="${shim}:${PATH}" check "install: other failure still reported as corrupted" 1 'corrupted or invalid' install -y "${HOME}/Space.zgp"

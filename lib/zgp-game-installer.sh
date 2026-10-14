@@ -365,6 +365,15 @@ for name in "${games_to_install[@]}"; do
   # folder, or an unreadable (000) one to sabotage the install.
   _lpm_old_umask=$(umask)
   umask 022
+  # bsdtar's messages forced to English (LC_MESSAGES only: LC_CTYPE must stay as the user's, or
+  # non-ASCII file names would be mangled) so the "No space left" detection below does not depend
+  # on the user's language. An explicit LC_ALL would override LC_MESSAGES: its value is moved to
+  # LC_CTYPE for bsdtar.
+  if [[ -n "${LC_ALL:-}" ]]; then
+    bsdtar_env=(LC_ALL= "LC_CTYPE=${LC_ALL}" LC_MESSAGES=C)
+  else
+    bsdtar_env=(LC_MESSAGES=C)
+  fi
   # "pv -n" emits the extracted percentage as a number on STDERR, leaving stdout intact to
   # carry the archive data to bsdtar. pv's stderr is redirected (2>) to a process substitution
   # ">(...)" that rereads each percentage and reprints it as "[PROGRESS] <pct>" to fd 3 (see
@@ -372,7 +381,7 @@ for name in "${games_to_install[@]}"; do
   # in zgr-runner-installer.sh.
   pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _lpm_pct; do
     printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
-  done) | bsdtar -xf - -C "${temp_extract_dir}" --exclude .lpm-size 2> "${extract_err_file}"
+  done) | env "${bsdtar_env[@]}" bsdtar -xf - -C "${temp_extract_dir}" --exclude .lpm-size 2> "${extract_err_file}"
   # PIPESTATUS[1] = bsdtar's exit code (only "pv" and "bsdtar" are in the "|" pipe; the
   # process substitution on stderr is not).
   tar_exit="${PIPESTATUS[1]}"
