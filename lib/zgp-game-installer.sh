@@ -334,14 +334,17 @@ for name in "${games_to_install[@]}"; do
 
   file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
 
-  # 0. Free space check BEFORE extracting anything (nothing is read from the archive for this):
-  # extracted data is never smaller than the archive, so a disk with less free space than the
-  # archive's size cannot possibly hold the game. This is a lower bound only -- a game that
-  # compresses well can still need more, which is reported by the "disk full" message below.
+  # 0. Free space check BEFORE extracting anything. Archives made by recent versions start with
+  # a tiny ".lpm-size" file giving the exact extracted size (read without decompressing the
+  # archive, see zgu_archive_exact_size). Older archives have none: the archive's own size is
+  # used instead, a lower bound only (extracted data is never smaller than the archive) -- a game
+  # that compresses well can still need more, which the "disk full" message below reports.
+  needed_bytes=$(zgu_archive_exact_size "${filepath}") && size_source="exact" \
+    || { needed_bytes="${file_size:-0}"; size_source="estimate"; }
   free_bytes=$(zgu_free_bytes "${games_dir}")
-  if [[ -n "${free_bytes}" ]] && [[ "${file_size:-0}" -gt "${free_bytes}" ]]; then
-    zgu_cli_error "$(t install_game.not_enough_space_precheck "${name}" "$(zgu_human_size "${file_size}")" "$(zgu_human_size "${free_bytes}")" "${games_dir}")"
-    zgu_log "install" "ERROR" "file=${name} reason=not_enough_space needed=${file_size} free=${free_bytes}"
+  if [[ -n "${free_bytes}" ]] && [[ "${needed_bytes}" -gt "${free_bytes}" ]]; then
+    zgu_cli_error "$(t install_game.not_enough_space_precheck "${name}" "$(zgu_human_size "${needed_bytes}")" "$(zgu_human_size "${free_bytes}")" "${games_dir}")"
+    zgu_log "install" "ERROR" "file=${name} reason=not_enough_space needed=${needed_bytes} free=${free_bytes} size_source=${size_source}"
     continue
   fi
 
@@ -369,7 +372,7 @@ for name in "${games_to_install[@]}"; do
   # in zgr-runner-installer.sh.
   pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _lpm_pct; do
     printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
-  done) | bsdtar -xf - -C "${temp_extract_dir}" 2> "${extract_err_file}"
+  done) | bsdtar -xf - -C "${temp_extract_dir}" --exclude .lpm-size 2> "${extract_err_file}"
   # PIPESTATUS[1] = bsdtar's exit code (only "pv" and "bsdtar" are in the "|" pipe; the
   # process substitution on stderr is not).
   tar_exit="${PIPESTATUS[1]}"

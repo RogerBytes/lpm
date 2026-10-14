@@ -62,3 +62,19 @@ zgu_free_bytes() {
   [[ "${free_kb}" =~ ^[0-9]+$ ]] || return 1
   echo $((free_kb * 1024))
 }
+
+# zgu_archive_exact_size <archive.zgp>: prints the exact extracted size (bytes) recorded by
+# "lpm pack" in the small ".lpm-size" file placed FIRST in the archive; prints nothing (return 1)
+# for an archive without it (made by an older version) or if it cannot be read.
+# Only the very beginning of the archive is read, whatever its size: the first tar header is
+# checked through "zstd -dc | head -c" (stops at once, SIGPIPE) BEFORE asking bsdtar for the
+# member -- asking bsdtar for a member that does not exist makes it scan the WHOLE archive.
+zgu_archive_exact_size() {
+  command -v zstd >/dev/null 2>&1 || return 1
+  local first meta
+  first=$(zstd -dc -- "$1" 2>/dev/null | head -c 100 | tr -d '\0')
+  [[ "${first}" = ".lpm-size" ]] || return 1
+  meta=$(bsdtar -xOqf "$1" .lpm-size 2>/dev/null | head -c 64)
+  [[ "${meta}" =~ ^size=([0-9]+)$ ]] || return 1
+  echo "${BASH_REMATCH[1]}"
+}

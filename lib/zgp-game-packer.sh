@@ -267,6 +267,11 @@ trap lpm_cancel_cleanup TERM INT
 # Descriptor 3 = real script stdout (see zgp-game-installer.sh for details): needed to emit
 # "[PROGRESS] <pct>" from inside the tar | pv | zstd pipe.
 exec 3>&1
+# Tiny ".lpm-size" file (exact extracted size) placed FIRST in each archive, so the installer can
+# check the free space exactly by reading only the start of the archive. Temporary folder removed
+# on any exit (including cancellation, which ends with "exit 130").
+lpm_meta_dir=$(mktemp -d)
+trap 'rm -rf -- "${lpm_meta_dir}"' EXIT
 export_idx=0
 export_total_count="${#games_to_export[@]}"
 
@@ -517,11 +522,13 @@ except Exception as e:
   # Use pv for a clean text progress bar if available, otherwise a plain message.
   t pack_game.compressing_cli "${export_idx}" "${export_total_count}" "${game_real_name}" "${LEVEL}"
   inprogress_archive="${archive_path}"
+  source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
+  [[ -z "${source_size}" ]] && source_size=0
+  printf 'size=%s\n' "${source_size}" > "${lpm_meta_dir}/.lpm-size"
+  # Absolute path: the second -C below is relative to the previous one.
+  parent_abs=$(realpath -- "${PARENT_DIR}")
   if command -v pv >/dev/null 2>&1; then
-    source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
-    [[ -z "${source_size}" ]] && source_size=0
-
-    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
+    tar -cf - -C "${lpm_meta_dir}" .lpm-size -C "${parent_abs}" "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
       # tar adds its headers: the stream may exceed the folder size -> capped at 100.
       [[ "${_lpm_pct}" =~ ^[0-9]+$ ]] || continue
       (( _lpm_pct > 100 )) && _lpm_pct=100
@@ -529,7 +536,7 @@ except Exception as e:
     done) | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   else
-    tar -C "${PARENT_DIR}" -cf - "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
+    tar -cf - -C "${lpm_meta_dir}" .lpm-size -C "${parent_abs}" "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   fi
 

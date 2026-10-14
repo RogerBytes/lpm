@@ -383,10 +383,13 @@ printf 'game:\n  exe: /x.exe\nsystem:\n  prefix_command: %s/Games/mario/scripts/
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
 expect "pack: relay only -> no prefix_command exported" bash -c '! zstd -dc "$1" | tar -xO "$(zstd -dc "$1" | tar -t | grep -m1 "zgp-game-config.yml$")" | grep -q prefix_command' _ "${HOME}/Mario.zgp"
 expect "pack: .zgp created" test -s "${HOME}/Mario.zgp"
+expect "pack: .lpm-size is the first member of the archive" bash -c 'zstd -dc "$1" | head -c 100 | tr -d "\0" | grep -qx ".lpm-size"' _ "${HOME}/Mario.zgp"
+expect "pack: .lpm-size holds a size" bash -c 'bsdtar -xOqf "$1" .lpm-size | grep -Eq "^size=[1-9][0-9]*$"' _ "${HOME}/Mario.zgp"
 check "uninstall" 0 '\[REMOVED\] mario' uninstall -y mario
 expect "uninstall: removed from the list" bash -c "! bash '${R}' list </dev/null | grep -q '^mario '"
 expect "uninstall: folder deleted" test ! -e "${HOME}/Games/mario"
 check "install" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario.zgp"
+expect "install: .lpm-size is not extracted into the games folder" bash -c '[ ! -e "$1/.lpm-size" ] && [ ! -e "$1/mario/.lpm-size" ]' _ "${HOME}/Games"
 check "list after reinstall" 0 'mario +Mario' list
 
 # --- Install removes Proton's "version" file from archives made before the export did it
@@ -424,6 +427,22 @@ PATH="${shim}:${PATH}" check "install: full disk reported as such" 1 'disk is fu
 printf '#!/bin/sh\ncat >/dev/null\necho "Truncated input" >&2\nexit 1\n' > "${shim}/bsdtar"
 PATH="${shim}:${PATH}" check "install: other failure still reported as corrupted" 1 'corrupted or invalid' install -y "${HOME}/Space.zgp"
 expect "install: temp extraction folder removed after a failure" bash -c '[ -z "$(ls -A "$1" | grep zgp-extract)" ]' _ "${HOME}/Games"
+rm -f "${shim}/bsdtar"
+# (d) Exact size: a tiny archive (compresses to almost nothing) that declares 2 MiB once extracted.
+# 1000 KiB free: the archive's own size would pass, the exact size must be refused. An archive
+# without ".lpm-size" falls back to the archive's size.
+mkdir -p "${HOME}/exactgame" "${HOME}/exactmeta"
+head -c 2097152 /dev/zero > "${HOME}/exactgame/zeros.bin"
+printf 'size=2097152\n' > "${HOME}/exactmeta/.lpm-size"
+tar -cf - -C "${HOME}/exactmeta" .lpm-size -C "${HOME}" exactgame | zstd -q > "${HOME}/Exact.zgp"
+tar -cf - -C "${HOME}" exactgame | zstd -q > "${HOME}/ExactOld.zgp"
+printf '#!/bin/sh\nprintf "Filesystem 1024-blocks Used Available Capacity Mounted\\nx 100000 99000 1000 99%% /\\n"\n' > "${shim}/df"
+chmod +x "${shim}/df"
+PATH="${shim}:${PATH}" check "install: exact size refused (archive itself would fit)" 1 'at least 2\.0MiB' install -y "${HOME}/Exact.zgp"
+expect "exact size: read from a new archive" bash -c 'source "$1/lib/zgu-cli-utils.sh"; [ "$(zgu_archive_exact_size "$2")" = "2097152" ]' _ "${work}/repo" "${HOME}/Exact.zgp"
+expect "exact size: absent from an old archive" bash -c 'source "$1/lib/zgu-cli-utils.sh"; ! zgu_archive_exact_size "$2" >/dev/null' _ "${work}/repo" "${HOME}/ExactOld.zgp"
+rm -f "${shim}/df"
+rm -rf "${HOME}/exactgame" "${HOME}/exactmeta" "${HOME}/Exact.zgp" "${HOME}/ExactOld.zgp"
 rm -rf "${shim}" "${HOME}/Space.zgp"
 
 # --- Completion: every documented command is offered (except advanced commands
