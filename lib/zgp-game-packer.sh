@@ -238,6 +238,22 @@ for target_slug_raw in "${cli_games[@]}"; do
   slug_by_name["${game_real_name}"]="${target_slug}"
 done
 
+# --- Free space check on the WHOLE batch, before touching anything (the preparation of each
+# prefix below modifies the installed game). Worst case: the archives are as big as the games
+# themselves (incompressible data). A game that compresses well may need less, but there is no
+# way to know that before compressing, so this is the safety net: at least that much must be free.
+batch_total=0
+for chk_name in "${games_to_export[@]}"; do
+  chk_size=$(du -sb -- "${folder_by_name[${chk_name}]}" 2>/dev/null | cut -f1)
+  batch_total=$((batch_total + ${chk_size:-0}))
+done
+batch_free=$(zgu_free_bytes "${OUTPUT_DIR}")
+if [[ -n "${batch_free}" ]] && [[ "${batch_total}" -gt "${batch_free}" ]]; then
+  zgu_cli_error "$(t pack_game.not_enough_space_batch_cli "${#games_to_export[@]}" "$(zgu_human_size "${batch_total}")" "$(zgu_human_size "${batch_free}")" "${OUTPUT_DIR}")"
+  zgu_log "pack" "ERROR" "reason=not_enough_space_batch count=${#games_to_export[@]} needed=${batch_total} free=${batch_free}"
+  exit 1
+fi
+
 # --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
 # removes the HALF-WRITTEN .zgp of the current game (and its hash file) plus the temporary
 # "zgp-game-config.yml" copied into its prefix. Archives already completed in the batch are
@@ -541,8 +557,17 @@ except Exception as e:
   fi
 
   if [[ "${tar_exit}" -ne 0 ]] || [[ ! -s "${archive_path}" ]]; then
-    zgu_cli_error "$(t pack_game.compression_failed_cli "${ARCHIVE_NAME}")"
-    zgu_log "pack" "ERROR" "slug=${game_slug} name=${game_real_name} reason=compression_failed code=${tar_exit}"
+    # Full disk or another failure? Decided BEFORE the half-written archive is removed (which
+    # would free the space again).
+    pack_free=$(zgu_free_bytes "${OUTPUT_DIR}")
+    if [[ -n "${pack_free}" ]] && [[ "${pack_free}" -lt "${ZGU_DISK_FULL_MARGIN}" ]]; then
+      zgu_cli_error "$(t pack_game.disk_full_cli "${ARCHIVE_NAME}" "${OUTPUT_DIR}")"
+      pack_fail_reason="disk_full"
+    else
+      zgu_cli_error "$(t pack_game.compression_failed_cli "${ARCHIVE_NAME}")"
+      pack_fail_reason="compression_failed"
+    fi
+    zgu_log "pack" "ERROR" "slug=${game_slug} name=${game_real_name} reason=${pack_fail_reason} code=${tar_exit}"
     rm -f "${archive_path}"
     [[ -n "${inprogress_yml}" ]] && rm -f -- "${inprogress_yml}"
     exit 1

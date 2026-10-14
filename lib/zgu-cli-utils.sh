@@ -45,6 +45,12 @@ zgu_cli_error() {
   fi
 }
 
+# After a failed write, less than this much free space left on the disk means the disk is full
+# (and not, say, a corrupted archive). 1 GiB: a few MiB of slack is not enough, other programs
+# and the file system's own reserve keep eating into what is left.
+# shellcheck disable=SC2034 # used by zgp-game-installer.sh and zgp-game-packer.sh
+ZGU_DISK_FULL_MARGIN=$((1024 * 1024 * 1024))
+
 # zgu_human_size <bytes>: prints a size with a binary unit (e.g. "12.3GiB"), or "<bytes> B" if numfmt
 # is unavailable.
 zgu_human_size() {

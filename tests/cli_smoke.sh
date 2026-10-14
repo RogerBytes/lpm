@@ -379,6 +379,30 @@ expect "pack: relay removed, user command kept" bash -c 'zstd -dc "$1" | tar -xO
 rm -f "${HOME}/Zelda.zgp"
 printf 'game:\n  exe: /x.exe\nsystem:\n  prefix_command: %s/Games/mario/scripts/lpm-winetrace.sh %s/Games/mario/scripts/lpm-winetrace.log\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/mario-1.yml"
 
+# --- Pack: the free space for the WHOLE batch is checked before anything is touched
+pshim="${work}/pshim"; mkdir -p "${pshim}"
+# 0 KiB free: the fixture games are only a few bytes big.
+printf '#!/bin/sh\nprintf "Filesystem 1024-blocks Used Available Capacity Mounted\\nx 100 100 0 100%% /\\n"\n' > "${pshim}/df"
+chmod +x "${pshim}/df"
+PATH="${pshim}:${PATH}" check "pack: not enough space for the batch is refused" 1 'not enough free disk space to export 2 game' pack -3 mario zelda
+expect "pack: nothing created when the batch is refused" bash -c '[ ! -e "$1/Mario.zgp" ] && [ ! -e "$1/Zelda.zgp" ]' _ "${HOME}"
+# Compression failing: "disk full" only when the disk really is (almost) full afterwards.
+# Fake df: plenty of space for the first call (the batch check), none afterwards.
+mkdir -p "${pshim}"
+cat > "${pshim}/df" <<DFEOF
+#!/bin/sh
+n=\$(cat "${pshim}/df-calls" 2>/dev/null || echo 0); echo \$((n + 1)) > "${pshim}/df-calls"
+if [ "\$n" -eq 0 ]; then free=999999999; else free=0; fi
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted\nx 1 1 %s 1%% /\n' "\$free"
+DFEOF
+printf '#!/bin/sh\ncat >/dev/null\nexit 1\n' > "${pshim}/zstd"
+chmod +x "${pshim}/df" "${pshim}/zstd"
+PATH="${pshim}:${PATH}" check "pack: full disk during compression reported as such" 1 'disk is full while compressing' pack -3 zelda
+expect "pack: unfinished archive removed" test ! -e "${HOME}/Zelda.zgp"
+rm -f "${pshim}/df-calls" "${pshim}/df"
+PATH="${pshim}:${PATH}" check "pack: other compression failure still reported as such" 1 'compression of .Zelda. failed' pack -3 zelda
+rm -rf "${pshim}"
+
 # --- Full round trip: pack, uninstall, reinstall
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
 expect "pack: relay only -> no prefix_command exported" bash -c '! zstd -dc "$1" | tar -xO "$(zstd -dc "$1" | tar -t | grep -m1 "zgp-game-config.yml$")" | grep -q prefix_command' _ "${HOME}/Mario.zgp"
@@ -418,6 +442,8 @@ printf '#!/bin/sh\necho called >> "%s/bsdtar-calls"\nexec %s "$@"\n' "${shim}" "
 chmod +x "${shim}/df" "${shim}/bsdtar"
 rm -f "${shim}/bsdtar-calls"
 PATH="${shim}:${PATH}" check "install: not enough free space is refused" 1 'not enough free disk space' install -y "${HOME}/Space.zgp"
+cp "${HOME}/Space.zgp" "${HOME}/Space2.zgp"
+PATH="${shim}:${PATH}" check "install: a batch is refused as a whole, before extracting" 1 'these 2 games' install -y "${HOME}/Space.zgp" "${HOME}/Space2.zgp"
 expect "install: nothing read or extracted when refused" bash -c '[ ! -e "$1/bsdtar-calls" ] && [ -z "$(ls -A "$2" | grep zgp-extract)" ]' _ "${shim}" "${HOME}/Games"
 rm -f "${shim}/df"
 # (b) Extraction fails with "No space left": reported as a full disk, not a corrupted archive.
@@ -444,7 +470,7 @@ expect "exact size: read from a new archive" bash -c 'source "$1/lib/zgu-cli-uti
 expect "exact size: absent from an old archive" bash -c 'source "$1/lib/zgu-cli-utils.sh"; ! zgu_archive_exact_size "$2" >/dev/null' _ "${work}/repo" "${HOME}/ExactOld.zgp"
 rm -f "${shim}/df"
 rm -rf "${HOME}/exactgame" "${HOME}/exactmeta" "${HOME}/Exact.zgp" "${HOME}/ExactOld.zgp"
-rm -rf "${shim}" "${HOME}/Space.zgp"
+rm -rf "${shim}" "${HOME}/Space.zgp" "${HOME}/Space2.zgp"
 
 # --- Completion: every documented command is offered (except advanced commands
 #     intentionally absent from "lpm --help"), and options with values complete

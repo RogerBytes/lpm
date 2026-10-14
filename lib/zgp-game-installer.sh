@@ -265,6 +265,26 @@ if [[ ${#games_to_install[@]} -eq 0 ]]; then
   exit 0
 fi
 
+# --- Free space check on the WHOLE batch, before extracting anything ---
+# Sum of the exact sizes (or the archives' own sizes for older archives). A single game is
+# checked just before its extraction (below), a batch must not fail halfway because the first
+# games used up the space the last ones needed.
+if [[ ${#games_to_install[@]} -gt 1 ]]; then
+  batch_needed=0
+  for name in "${games_to_install[@]}"; do
+    filepath="${filepath_by_name[${name}]}"
+    batch_file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
+    batch_game_size=$(zgu_archive_exact_size "${filepath}") || batch_game_size="${batch_file_size:-0}"
+    batch_needed=$((batch_needed + batch_game_size))
+  done
+  batch_free=$(zgu_free_bytes "${games_dir}")
+  if [[ -n "${batch_free}" ]] && [[ "${batch_needed}" -gt "${batch_free}" ]]; then
+    zgu_cli_error "$(t install_game.not_enough_space_batch "${#games_to_install[@]}" "$(zgu_human_size "${batch_needed}")" "$(zgu_human_size "${batch_free}")" "${games_dir}")"
+    zgu_log "install" "ERROR" "reason=not_enough_space_batch count=${#games_to_install[@]} needed=${batch_needed} free=${batch_free}"
+    exit 1
+  fi
+fi
+
 # ---------------------------------------------------------------------------------------------
 
 install_idx=0
@@ -391,10 +411,10 @@ for name in "${games_to_install[@]}"; do
   # this game cleanly without touching Lutris or creating shortcuts
   if [[ "${tar_exit}" -ne 0 ]]; then
     # Full disk or corrupted archive? Decided BEFORE removing the temp folder (which would
-    # free the space again): bsdtar says "No space left on device", or less than 64 MiB is left.
+    # free the space again): bsdtar says "No space left on device", or less than ZGU_DISK_FULL_MARGIN (1 GiB) is left.
     extract_free=$(zgu_free_bytes "${games_dir}")
     if grep -qiE "no space left|disk quota" "${extract_err_file}" 2>/dev/null \
-       || { [[ -n "${extract_free}" ]] && [[ "${extract_free}" -lt 67108864 ]]; }; then
+       || { [[ -n "${extract_free}" ]] && [[ "${extract_free}" -lt "${ZGU_DISK_FULL_MARGIN}" ]]; }; then
       err_msg="$(t install_game.disk_full "${name}" "${games_dir}")"
       fail_reason="disk_full"
     else
