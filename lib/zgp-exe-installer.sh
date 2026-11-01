@@ -10,31 +10,27 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-prefix-common.sh
 source "${script_dir}/zgu-prefix-common.sh"
 
-# --- lpm exe-install: create a prefix (like "blank prefix"), then run a Windows
-# installer (.exe/.msi/.bat/.cmd) inside it, in the foreground and waiting for it to
-# close, like the Lutris "Install a Windows executable" wizard:
-#   - prefix initialisation identical to "blank prefix" (wineboot / umu-run
-#     createprefix, wait for the .reg files)
-#   - the file is run via "wine <file>" (regular runner) or "umu-run <file>" (Proton),
-#     without redirecting stdout/stderr. Wine natively maps .msi -> msiexec and
-#     .bat/.cmd -> cmd.exe, so the file is passed directly whatever its type.
-#   - non-zero exit code -> offer to delete everything (same as Lutris "Remove game
-#     files" on failure, see lutris/gui/installerwindow.py)
-#   - exit code 0 -> optional selection of the installed game's final .exe (file chooser
-#     opened in the prefix), then write the yml + pga.db
+# --- lpm exe-install: create a prefix (like "blank prefix"), then run a Windows installer
+# (.exe/.msi/.bat/.cmd) inside it, in the foreground, like the Lutris "Install a Windows
+# executable" wizard:
+#   - prefix initialisation identical to "blank prefix" (wineboot / umu-run createprefix, wait for
+#     the .reg files);
+#   - the file is run via "wine <file>" (regular runner) or "umu-run <file>" (Proton), without
+#     redirecting stdout/stderr (Wine maps .msi to msiexec and .bat/.cmd to cmd.exe itself);
+#   - non-zero exit code: offer to delete everything (as Lutris' "Remove game files");
+#   - exit code 0: optional choice of the game's final .exe (file chooser opened in the prefix),
+#     then write the yml + pga.db.
 #
-# $1 = mode (always "cli"; kept only so the positional layout matches the other lib/
-#      scripts, its value is not read here)
-# $2 = confirm_flag ("yes" if -y; applies only to the launch confirmation, never to the
-#      deletion prompt on failure, which is always asked)
+# $1 = mode (always "cli"; kept for consistency with the other lib/ scripts)
+# $2 = confirm_flag ("yes" if -y; only the launch confirmation, never the deletion prompt on
+#      failure, which is always asked)
 # $3 = CLI target ("path/to/setup.exe" or "path/to/setup.exe|Custom name")
-# $4+ = optional options after the CLI target (defaults apply when absent). They let an
-# automated caller (GTK4 UI, scripts...) supply these choices up front so that no
-# interactive prompt blocks execution:
+# $4+ = optional options after the target, so that an automated caller (GTK4 UI, scripts) can
+# supply the choices up front and no interactive prompt blocks:
 #   -r, --runner=<name>             runner to use (default: zgu_get_default_runner)
 #   -a, --arch=<win32|win64>        prefix architecture (default: win64)
-#   -f, --final-exe=<path|none>     installed game's final executable ("none" = none, and
-#                                    the question is never asked in CLI)
+#   -f, --final-exe=<path|none>     installed game's final executable ("none" = none; the question
+#                                    is never asked in CLI)
 shift || true
 confirm_flag="${1:-}"
 shift || true

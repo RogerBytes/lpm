@@ -128,60 +128,36 @@ zgu_shortcut_write_desktop() {
 
 # --- Shared utility: generates the .desktop shortcut(s) of an lpm game ---
 #
-# zgu_write_game_shortcut <nom_affiche> <slug> <prefix_dir> <game_id> <version> <create_menu> <create_desktop> [<executable_path>] [<configpath>] [<lutris_config_dir>] [<runner_dir>] [<desktop_dir_override>]
+# zgu_write_game_shortcut <display_name> <slug> <prefix_dir> <game_id> <version> <create_menu> <create_desktop> [<executable_path>] [<configpath>] [<lutris_config_dir>] [<runner_dir>] [<desktop_dir_override>]
 #
-# "desktop_dir_override" (12th argument, optional): lets the caller force a custom desktop path
-# (typically chosen in the GUI) instead of the folder auto-detected by zgu_get_desktop_dir().
+# "desktop_dir_override" (12th, optional): a custom desktop folder (typically chosen in the GUI)
+# instead of the one detected by zgu_get_desktop_dir().
 #
-# "create_menu" = false REMOVES the existing menu shortcut (if any): since creation is optional,
-# disabling it must remove what it created. Idempotent. Possible ONLY for the menu shortcut, whose
-# location is always the same ("${HOME}/.local/share/applications/net.lutris.<slug>.desktop"), never
-# for the "folder" shortcut (create_desktop): its location is user-customizable on each run and is
-# never remembered (no persistence, see DesktopPathRow in gui/*.py), so lpm cannot reliably know where
-# an earlier one was written and must not guess (risk of hitting the wrong file in a folder the user
-# manages). "create_desktop" = false therefore stays a plain "do nothing"; only game uninstallation
-# (zgp-game-uninstaller.sh) removes the "folder" shortcut, and only at the default location
-# (zgu_get_desktop_dir(), never a custom path).
+# "create_menu" = false REMOVES the existing menu shortcut (its location is always
+# "${HOME}/.local/share/applications/net.lutris.<slug>.desktop"). That is impossible for the
+# "folder" shortcut (create_desktop): its location is chosen at each run and never remembered, so
+# "create_desktop" = false does nothing; only game uninstallation removes it, at the default
+# location.
 #
-# Used by both zgp-game-installer.sh (right after installing a .zgp) and zgp-game-shortcutter.sh
-# (afterwards, on an installed game) -- one shared logic. Assumes "t" (zgl-lang-loader.sh) is
-# already loaded by the caller.
+# Used by zgp-game-installer.sh and zgp-game-shortcutter.sh. Assumes "t" (zgl-lang-loader.sh) is
+# already loaded.
 #
-# Icon resolution: looks for an image in <prefix_dir>/icon (placed by the user, or packaged in the
-# .zgp). Otherwise falls back to "lpm-game-generic", our own fallback icon
-# (assets/icons/lpm-game-generic.svg, installed in the hicolor theme by install.sh): a copy of the
-# generic system "applications-games" background with a gamepad glyph, deliberately DIFFERENT from
-# the "package" glyph (.zgp) and the "glass" glyph (.zgr, see install.sh) to avoid visual confusion
-# between a .zgp file, the lpm launcher itself and a game shortcut. It does not depend on the icon
-# theme installed on the user's machine ("Icon=lutris_${slug}" would be a made-up theme name that
-# matches nothing: Lutris downloads an icon under that name itself, lpm does not).
+# Icon: the first image of <prefix_dir>/lpm/images/icon, else "lpm-game-generic" (our own icon,
+# assets/icons/lpm-game-generic.svg, installed in hicolor by install.sh; different on purpose from
+# the .zgp and .zgr icons).
 #
-# StartupWMClass: without it, the running game window shows NOT the shortcut icon in the taskbar
-# but the one Wine announces for the window (icon embedded in the executable, or none). The panel
-# matches the window to the .desktop via the X11 WM_CLASS property, and Wine sets it to the bare
-# executable name (e.g. "Notepad.exe"), which matches nothing in a .desktop generated without this
-# field. Confirmed by a Wine developer message on wine-devel (April 2017) and by the freedesktop
-# Desktop Entry spec, which defines StartupWMClass for this case.
+# StartupWMClass: without it the taskbar shows the icon Wine announces for the window instead of
+# the shortcut icon, because the panel matches the window to the .desktop through WM_CLASS, which
+# Wine sets to the bare executable name.
 #
-# PROTON/UMU SPECIAL CASE (Proton runner, e.g. GE-Proton): the above only applies to classic wine.
-# Verified with xprop: a window launched via umu-run has WM_CLASS "steam_app_<id>", never the
-# executable name -- and <id> does NOT come from the raw GAMEID content but from a pattern in the
-# umu-run source (umu/umu_run.py): GAMEID is only recognized as "umu-<id>", in which case <id>
-# becomes STEAM_COMPAT_APP_ID/SteamAppId, hence WM_CLASS "steam_app_<id>". With no GAMEID at all,
-# umu-run falls back to a generic WM_CLASS ("steam_app_default" or "steam_app_0") IDENTICAL for all
-# Proton games on the machine -- so two different Proton games would be wrongly merged in the panel,
-# or the pinned shortcut would match none of them.
-#
-# GAMEID cannot be set from the .desktop itself: the shortcut only asks Lutris to launch the game
-# ("lutris:rungameid/<id>"), and Lutris then invokes umu-run, building the environment ONLY from its
-# own config (get_env(os_env=False) in wine.py), not from the .desktop environment. The only lever is
-# the game's Lutris config (system: env: GAMEID), hence the Python call below that adds
-# GAMEID="umu-<game_id>" (reusing the Lutris game id, unique per game) ONLY if the game uses a Proton
-# runner (toolmanifest.vdf in its build folder, the same check umu-run does to validate a
-# PROTONPATH) and ONLY if GAMEID is not already set by the user (never overwritten). A backup
-# (.lpm-bak) of the YAML is kept during the write, then removed once the write is confirmed.
-# If python3/PyYAML is missing, the game does not use Proton, or an incompatible custom GAMEID is
-# already present: silent fallback to the classic wine behavior (executable name) above.
+# Proton/umu: a window launched via umu-run has WM_CLASS "steam_app_<id>", where <id> comes only
+# from a GAMEID of the form "umu-<id>" (umu/umu_run.py). Without GAMEID, every Proton game gets the
+# same generic WM_CLASS and the panel merges them. GAMEID cannot be set from the .desktop (Lutris
+# builds the environment only from the game's config), so the Python call below adds
+# GAMEID="umu-<game_id>" to the game's Lutris config ONLY if the game uses Proton
+# (toolmanifest.vdf in its runner folder) and GAMEID is not already set. A backup (.lpm-bak) of
+# the YAML is kept during the write. If python3/PyYAML is missing, the game does not use Proton or
+# an incompatible GAMEID exists: silent fallback to the classic behavior.
 zgu_write_game_shortcut() {
   local game_real_name="$1" slug="$2" prefix_dir="$3" game_id="$4" version="$5"
   local create_menu="$6" create_desktop="$7" executable_path="${8:-}" configpath="${9:-}"
@@ -220,35 +196,24 @@ StartupWMClass=${wm_class}"
 #
 # zgu_apply_hook_policy <yml_path> <allow_hooks: true|false> [mode: fixed|broad]
 #
-# Lutris launch hooks (prelaunch_command, prelaunch_wait, postexit_command -- "system:" section of
-# the PER-GAME config YAML, see sysoptions.py in Lutris) run arbitrary code at game launch/exit.
-# The command itself is never deleted/overwritten -- only neutralized by commenting it out (with a
-# dedicated marker, "lpm:hook-disabled", allowing later restoration without touching a comment the
-# user wrote), and restorable (uncomment) when the switch goes back to "allowed". Secure by default:
-# "allow_hooks" = false neutralizes any active hook found.
+# Lutris launch hooks (prelaunch_command, prelaunch_wait, postexit_command) run arbitrary code at
+# game launch/exit. A hook is never deleted, only commented out with the marker
+# "lpm:hook-disabled" (so a comment of the user is never mistaken for it), and restored when the
+# switch goes back to "allowed". Secure by default: allow_hooks=false neutralizes any active hook.
 #
-# "mode" (default "fixed") chooses the set of targeted keys:
-#   - "fixed": only prelaunch_command/prelaunch_wait/postexit_command -- used by "lpm shortcut"
-#     (zgp-game-shortcutter.sh), on a locally installed game.
-#   - "broad": same heuristic as zgp-game-installer.sh -- any key ending in "_command"/"_script"/
-#     "_wait" or containing "exec", anywhere in the YAML (not only "system:"). Used at install, where
-#     the YAML embedded in a shared .zgp may be forged by an untrusted third party -- deliberately
-#     wider than a fixed list of known keys.
+# "mode" (default "fixed") chooses the targeted keys:
+#   - "fixed": only prelaunch_command/prelaunch_wait/postexit_command ("lpm shortcut").
+#   - "broad": any key ending in "_command"/"_script"/"_wait" or containing "exec", anywhere in
+#     the YAML, as in zgp-game-installer.sh: used at install, where the YAML of a shared .zgp may
+#     be forged.
 #
-# Acts only if the file exists AND contains a targeted key -- never creates a file or adds a missing
-# key. Idempotent both ways (an already neutralized/active line is never touched again).
+# Acts only if the file exists AND contains a targeted key (never creates a file or a key).
+# Idempotent both ways.
 #
-# Exception -- lpm's own relay: "prelaunch_command"/"prelaunch_wait" are NOT a potentially dangerous
-# third-party hook when they point to "${game_dir}/scripts/lpm-launcher.sh" -- that file is generated
-# ONLY by lpm itself ("lpm launcher ... on", see zgl-launcher-manager.sh), never by a shared .zgp.
-# Otherwise "lpm shortcut" (allow_hooks=false by default) would neutralize this hook on EVERY shortcut
-# regeneration, silently breaking the LPM Launcher. "allow_hooks" protection stays whole for any other
-# hook.
-#
-# The exception also applies in "broad" mode (install): zgp-game-installer.sh rewrites
-# "prelaunch_command"/"prelaunch_wait" with this same path JUST BEFORE calling this function, when
-# "scripts/lpm-launcher.sh" already exists in the game folder (LPM Launcher active before packaging);
-# without the exception this call would immediately undo that write on every reinstall.
+# Exception, the old LPM Launcher relay: a prelaunch_command/prelaunch_wait pointing to
+# "${game_dir}/scripts/lpm-launcher.sh" is lpm's own (generated only by lpm, never by a .zgp), so
+# it is left alone, in both modes; otherwise every shortcut regeneration would break games of
+# lpm 0.9.5 and earlier that still have it.
 zgu_apply_hook_policy() {
   local yml_path="$1"
   local allow_hooks="$2"

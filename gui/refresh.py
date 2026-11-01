@@ -32,21 +32,12 @@ def _refresh_runner_lists():
         widget.refresh()
 
 
-# --- Shared game/runner refresh (avoids N "bin/lpm list*" subprocesses) ---
-#
-# backend.run_lpm() must not be called from the GTK main thread (it would freeze the UI).
-# GameMultiSelect/SingleGameSelect/RunnerCombo (and page_uninstall_runner's hand-made
-# listbox) used to call backend.list_games()/list_runners() directly from refresh() on the
-# main thread, and MainWindow._on_back_to_categories() (the "back" button) calls them ALL at
-# once for every built page (see CommandPage.reset_selection): one subprocess PER visited
-# page, a 1-2 second freeze.
-#
-# _make_coalesced_refresher(fetch_fn) builds a shared "refresher": fetch_fn()
-# (backend.list_games or list_runners) runs in a background thread, NEVER on the main
-# thread. Several close requests (e.g. the N pages on "back") trigger a SINGLE subprocess;
-# requests arriving while one is in flight are queued and receive the same result. Each
-# registered callback is called on the main thread (GLib.idle_add), never from the
-# background thread.
+# --- Shared game/runner refresh ---
+# backend.run_lpm() must not run on the GTK main thread (it would freeze the UI), and the
+# "back" button refreshes every built page at once. _make_coalesced_refresher(fetch_fn)
+# therefore builds ONE shared refresher: fetch_fn() runs in a background thread, several close
+# requests trigger a single subprocess, requests arriving meanwhile get the same result, and
+# each callback is called on the main thread (GLib.idle_add).
 def _make_coalesced_refresher(fetch_fn):
     state = {"inflight": False, "waiters": []}
 

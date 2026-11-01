@@ -215,18 +215,14 @@ for pid in "${dl_pids[@]}"; do
   wait "${pid}" 2>/dev/null
 done
 
-# Preview box normalized PER TYPE: all displayed thumbnails must have EXACTLY the same
-# size. GTK alone is not enough (set_size_request in gui/*.py only sets a MINIMUM), so a
-# source icon larger than the wanted box still enlarges its natural size reported to GTK
-# and, since a FlowBox is homogeneous, the WHOLE row of thumbnails. The reliable way is to
-# resize pixel-exact here, BEFORE passing them to the GUI, with a ratio per image type:
-#   - icon  : square, cropped ("^" + "-extent"); the source is already ~square, so the
-#             overflow can be trimmed with no notable loss.
-#   - splash: wide (typical Hero ratio), cropped the same way; already panoramic.
-#   - logo  : wide, but WITHOUT "^" (contained in the frame, never cropped) then padded on a
-#             transparent canvas ("-background none ... -extent"): a very wide or narrow logo
-#             must never be cut, and the transparent padding is invisible since SteamGridDB
-#             logos are already cut out.
+# Preview box normalized PER TYPE: all thumbnails must have EXACTLY the same size. GTK's
+# set_size_request only sets a MINIMUM, so one large icon would enlarge the whole (homogeneous)
+# FlowBox row. Images are therefore resized pixel-exact here, before reaching the GUI:
+#   - icon:   square, cropped ("^" + "-extent");
+#   - splash: wide (Hero ratio), cropped the same way;
+#   - logo:   wide, WITHOUT "^" (contained, never cropped), padded on a transparent canvas
+#             ("-background none ... -extent"): a logo must never be cut, and SteamGridDB logos
+#             are already cut out so the padding is invisible.
 case "${type_arg}" in
   icon) thumb_box="112x112" thumb_crop=true ;;
   splash) thumb_box="186x60" thumb_crop=true ;;

@@ -142,24 +142,16 @@ zgp_sgdb_pick_game() {
 # Steam AppID of a game name (official Steam store search), empty if not found. Arg: name.
 zgp_sgdb_steam_appid() {
   local g_name="$1"
-  # Third source, distinct from the two SteamGridDB calls below: the real Steam "Client Icon"
-  # (hash "clienticon"/"icon" + Steam AppID), for games for which SteamGridDB hosts NO icon (0
-  # icons, whatever the style), e.g. Crossbar Cards. SteamGridDB shows a "View Original Steam
-  # Assets" button for these games, but builds that link from an internal API of the
-  # steamgriddb.com SITE ("/api/public/game/{id}"), undocumented and answering 403 to anything
-  # that is not a real browser, so unusable from a script. The same data (same
-  # "clienticon"/"icon" hashes) is available from two public APIs, no key and no anti-bot
-  # blocking, built for programmatic use:
-  #  1. store.steampowered.com/api/storesearch/ (official Steam API): game name -> AppID.
-  #  2. api.steamcmd.net/v1/info/{appid} (open source project "steamcmd/api",
-  #     https://github.com/steamcmd/api, public instance, nothing to host): AppID ->
-  #     "clienticon"/"icon" hash (JSON dump of app_info, exactly what the Steam client reads).
-  # The hashes are combined with the AppID as the SteamGridDB page does:
+  # Third source, besides the two SteamGridDB calls below: the real Steam "Client Icon" (hash
+  # "clienticon"/"icon" + Steam AppID), for games that have NO icon on SteamGridDB. SteamGridDB's
+  # own link to these assets uses an undocumented internal API that answers 403 outside a browser,
+  # so the same data is read from two public APIs without key or anti-bot:
+  #   1. store.steampowered.com/api/storesearch/ (official): game name -> AppID.
+  #   2. api.steamcmd.net/v1/info/{appid} (open source "steamcmd/api"): AppID -> "clienticon"/"icon".
+  # The hash is combined with the AppID like the SteamGridDB page does:
   # "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/<appid>/<hash>.<ext>".
-  # "clienticon" (a real .ico) is tried first, as the closest to what lpm already uses as
-  # shortcut icon. Best-effort at each step: a game not found in the Steam Store, or without
-  # "clienticon"/"icon" in app_info, leaves this source empty and only the two SteamGridDB
-  # calls remain; never a blocking failure.
+  # "clienticon" (a real .ico) is tried first. Best-effort at each step: if nothing is found this
+  # source stays empty and only the two SteamGridDB calls remain.
   local steam_appid=""
   if [[ -n "${g_name}" ]]; then
     local encoded_name

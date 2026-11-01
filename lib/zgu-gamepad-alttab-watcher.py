@@ -178,21 +178,13 @@ def send_f11():
     send_key_without_alt("F11", YDOTOOL_F11_WITHOUT_ALT)
 
 
-# --- Pausing AntiMicro(X) during the hold ----------------------------------------------
-#
-# AntiMicro reads the gamepad IN PARALLEL with this watcher (non-exclusive SDL2 reading).
-# If the user already mapped the D-pad Left/Right in AntiMicro (e.g. to arrow keys), each
-# press during the hold would trigger both Tab/Shift+Tab from this script AND the mapped
-# key: a duplicate.
-#
-# Fix: pause AntiMicro(X) with SIGSTOP (standard POSIX) for exactly the duration of the
-# hold, then resume it with SIGCONT on release. While paused it neither reads nor emits
-# anything. Nothing to configure in AntiMicro, and no effect if it is not running (empty
-# PID list).
-#
-# Looked up under both names: "antimicrox" (current fork) and "antimicro" (old name).
-# "pgrep" is not a new dependency ("pkill", from the same procps package, is already used
-# in zgl-launcher-orchestrator.sh and zgp-game-uninstaller.sh); if absent, silently skip.
+# --- Pausing AntiMicro(X) during the hold ---
+# AntiMicro reads the gamepad in parallel (non-exclusive SDL2). If D-pad Left/Right is mapped
+# there, each press during the hold would send both this script's Tab/Shift+Tab and the mapped key.
+# Fix: pause AntiMicro(X) with SIGSTOP for the duration of the hold, resume with SIGCONT on
+# release. No configuration needed, no effect if it is not running. Both names are searched
+# ("antimicrox" and the old "antimicro"); "pgrep" comes with procps like the "pkill" already used
+# elsewhere, and is silently skipped if absent.
 ANTIMICRO_PROCESS_NAMES = ("antimicrox", "antimicro")
 
 

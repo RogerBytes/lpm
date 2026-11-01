@@ -13,16 +13,17 @@ source "${script_dir}/zgu-prefix-common.sh"
 # --- lpm create-prefix: create one or more blank wineprefixes registered in Lutris, without the
 # install wizard (no script, no executable to run) ---
 #
-# Directly reproduces the internal mechanism Lutris uses to initialize a prefix (checked in its
-# source, lutris/runners/commands/wine.py::create_prefix):
-#   - Classic Wine runner: runs the chosen runner's "wineboot" with WINEARCH/WINEPREFIX/WINEDLLOVERRIDES, then waits for user.reg/userdef.reg/system.reg to appear (proof the prefix is initialized). Tested in real conditions (no $DISPLAY): takes ~13s.
-#   - Proton runner: Lutris does not run wineboot for Proton, it shells out to "umu-run createprefix" (variables WINEPREFIX/PROTONPATH/GAMEID). Tested with a real umu-run 1.4.4: "createprefix" is a supported keyword and umu-run validates PROTONPATH itself by looking for toolmanifest.vdf, the same signal used here to tell a classic Wine runner (bin/wine present) from Proton (toolmanifest.vdf present, no bin/ at the root).
+# Reproduces what Lutris does to initialize a prefix (lutris/runners/commands/wine.py::create_prefix):
+#   - classic Wine runner: the runner's "wineboot" with WINEARCH/WINEPREFIX/WINEDLLOVERRIDES, then
+#     wait for user.reg/userdef.reg/system.reg (proof the prefix is initialized, ~13 s);
+#   - Proton runner: "umu-run createprefix" (WINEPREFIX/PROTONPATH/GAMEID). umu-run validates
+#     PROTONPATH itself through toolmanifest.vdf, the same signal used here to tell Proton
+#     (toolmanifest.vdf, no bin/ at the root) from a classic runner (bin/wine).
 #
 # $1 = mode (always "cli"; kept for consistency with the other lib/ scripts)
 # $2 = confirm_flag ("yes" if -y)
-# Remaining arguments = CLI targets ("Display name" or "Display name|custom-slug"), plus
-# optionally -r|--runner <name> and -a|--arch <win32|win64> (same convention as
-# zgp-exe-installer.sh) to choose the runner/architecture explicitly; otherwise falls back to
+# Remaining arguments = CLI targets ("Display name" or "Display name|custom-slug"), plus optionally
+# -r|--runner <name> and -a|--arch <win32|win64> (as in zgp-exe-installer.sh); defaults:
 # zgu_get_default_runner / "win64".
 mode="${1:-}"
 shift || true

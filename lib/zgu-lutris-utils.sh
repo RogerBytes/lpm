@@ -243,24 +243,19 @@ zgu_is_store_launcher_name() {
 # (~/.config/lpm/): same persistence conventions across the project.
 ZGU_LUTRIS_VERSION_CONFIG="${HOME}/.config/lpm/lutris-version"
 
-# Resolves the version to use for THIS lpm run, in this order:
-#   1. Environment variable LPM_LUTRIS_VERSION ("flatpak" or "native") -- one-off override, never
-#      written to disk.
-#   2. Saved config file (ZGU_LUTRIS_VERSION_CONFIG), ONLY if it designates a version still installed
-#      -- otherwise it is deleted here (silently) so a "zombie" choice cannot resurface later if the
-#      other version is reinstalled in a different context.
-#   3. Only one version installed -> used directly, nothing displayed, nothing saved.
-#   4. Both installed, nothing saved -> warning + immediate interactive choice, then saved so it is
-#      not asked again while both remain installed. A cancelled choice (Zenity closed, or empty CLI
-#      answer other than the "2" shortcut) falls back to Flatpak for THIS run only, without saving,
-#      so it is asked again next time rather than freezing an unconfirmed choice.
+# Resolves the Lutris version to use for THIS lpm run, in this order:
+#   1. LPM_LUTRIS_VERSION ("flatpak" or "native"): one-off override, never written to disk.
+#   2. The saved choice (ZGU_LUTRIS_VERSION_CONFIG), ONLY if that version is still installed;
+#      otherwise it is silently deleted so a stale choice cannot come back later.
+#   3. Only one version installed: used directly, nothing displayed or saved.
+#   4. Both installed, nothing saved: warning + interactive choice, then saved. A cancelled choice
+#      (Zenity closed, empty CLI answer other than "2") means Flatpak for THIS run only, unsaved.
 #
-# $1 = display mode ("cli" or "gui", same convention as the callers).
-# $2 = path of the native package's pga.db (empty string if the caller does not have it).
-# $3 = native Wine runners folder, or empty string (see check_native_lutris_installed).
+# $1 = display mode ("cli" or "gui"). $2 = path of the native package's pga.db (empty if unknown).
+# $3 = native Wine runners folder, or empty (see check_native_lutris_installed).
 #
-# Writes "flatpak" or "native" on stdout. Returns 1 if neither is installed -- displaying the "Lutris
-# not found" error is not this function's job; each caller keeps its own message.
+# Writes "flatpak" or "native" on stdout. Returns 1 if neither is installed (the "Lutris not
+# found" message is each caller's job).
 zgu_resolve_lutris_version() {
   # $1 (display mode, "cli" for all callers) is no longer used; kept in first position so callers
   # need no change.
@@ -321,20 +316,12 @@ zgu_resolve_lutris_version() {
 }
 
 # zgu_get_wine_binary <runner_dir> <version>
-# Resolves the path of the wine binary for the given runner version. TWO possible folder layouts,
-# checked in the Lutris source (lutris/runners/wine.py: get_executable() calls
-# proton.get_proton_wine_path(version) for a Proton version, vs get_path_for_version() -- i.e.
-# "bin/wine" -- for a real Wine build; also confirmed by a Proton-GE maintainer on
-# github.com/lutris/lutris/issues/6673, describing the "files/bin/wine" layout of Proton runners):
-#   - A real Wine build (e.g. "lutris-ge-8.7-x86_64", "wine-11.14-amd64"):
-#     <runner_dir>/<version>/bin/wine
-#   - A Proton runner (e.g. "GE-Proton11-3", "proton-cachyos-..."), which carries a layout inherited
-#     from Steam Play (compatibilitytools.d):
-#     <runner_dir>/<version>/files/bin/wine
-# Rather than guess from the version NAME (fragile: nothing guarantees a Proton runner name contains
-# "proton", or the reverse), the disk is probed directly: both locations are tested in order and the
-# first really executable binary is used -- same result as Lutris without a naming convention.
-# Output: path on stdout, nothing if not found/not executable (return code 1).
+# Resolves the wine binary of a runner version. Two folder layouts exist (lutris/runners/wine.py):
+#   - a real Wine build (e.g. "wine-11.14-amd64"):  <runner_dir>/<version>/bin/wine
+#   - a Proton runner (e.g. "GE-Proton11-3"), Steam Play layout: <runner_dir>/<version>/files/bin/wine
+# The name is not a reliable hint (nothing guarantees a Proton runner's name contains "proton"), so
+# both locations are probed and the first executable one wins.
+# Output: path on stdout, nothing (return 1) if not found/not executable.
 zgu_get_wine_binary() {
   local runner_dir="$1" version="$2" candidate
   [[ -z "${version}" ]] && return 1

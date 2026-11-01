@@ -33,18 +33,12 @@ zgu_lsfg_vk_present() {
   return 1
 }
 
-# The VulkanLayer.lsfgvk layer is published ONLY for versions of "org.freedesktop.Platform"
-# (23.08/24.08/25.08). But Lutris (like many GNOME apps) runs on
-# "org.gnome.Platform/x86_64/<GNOME version, e.g. 49>", not directly on org.freedesktop.Platform --
-# and that GNOME runtime exposes NO "Runtime:" line in "flatpak info" to recover the underlying
-# freedesktop version (that field only exists for apps, not runtimes). There is no reliable,
-# documented GNOME-to-freedesktop mapping either (it changes every release cycle).
-#
-# Chosen solution: reuse the freedesktop version of a VulkanLayer extension ALREADY installed on the
-# machine (e.g. org.freedesktop.Platform.VulkanLayer.MangoHud, very common) -- the most reliable proof
-# that a freedesktop layer of that version already works with this GNOME/KDE runtime. Otherwise fall
-# back to the newest org.freedesktop.Platform actually installed (system or user): a base already
-# present on the machine, never a random version.
+# The VulkanLayer.lsfgvk layer exists ONLY for versions of "org.freedesktop.Platform"
+# (23.08/24.08/25.08), but Lutris runs on "org.gnome.Platform/<GNOME version>", whose
+# "flatpak info" has no "Runtime:" line, and there is no documented GNOME-to-freedesktop mapping.
+# So we reuse the freedesktop version of a VulkanLayer extension already installed (e.g.
+# org.freedesktop.Platform.VulkanLayer.MangoHud): proof that this version works with this runtime.
+# Otherwise we fall back to the newest org.freedesktop.Platform installed (system or user).
 zgu_lsfg_resolve_freedesktop_runtime_version() {
   local existing latest
   existing=$(flatpak list --runtime --columns=application,branch 2>/dev/null | awk -F'\t' '$1 ~ /^org\.freedesktop\.Platform\.VulkanLayer\./ {print $2; exit}')

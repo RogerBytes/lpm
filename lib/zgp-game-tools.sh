@@ -497,29 +497,14 @@ run_winecfg() {
 }
 
 run_console() {
-  # Lutris (lutris/runners/wine.py): its "Open Wine console" menu entry calls
-  # run_wineconsole(), which runs self._run_executable("wineconsole"), i.e.
-  # wineexec("wineconsole", wine_path=self.get_executable(), ...). The result is simply
-  # "<resolved wine binary> wineconsole": no cmd.exe argument, no search for a separate
-  # "wineconsole" file on disk.
-  #
-  # "wineconsole" is BUILT INTO Wine itself (like "wine notepad" or "wine cmd") and present in
-  # every Wine build, Proton included, even when no separate "bin/wineconsole" file exists
-  # (Proton runners do not have it). Lutris never looks for that file either; it always goes
-  # through the main wine binary.
-  #
-  # Running "wine cmd.exe" detached without wineconsole displays nothing: cmd.exe is a console
-  # app that tries to attach to an existing terminal, whereas "wine wineconsole" opens its OWN
-  # graphical console host built into Wine and needs no host terminal. "cmd" is passed
-  # explicitly (rather than relying on an undocumented default) to guarantee the expected
-  # shell (a real MS-DOS console).
-  #
-  # Start directory: Wine maps its Windows current directory to the UNIX current directory of
-  # the process at launch time, unrelated to WINEPREFIX. Without intervention, the script
-  # inherits lpm's own cwd (typically the filesystem root or wherever lpm was launched), so
-  # the console would open outside the prefix. We cd into "<prefix>/drive_c" (the prefix C:
-  # drive) first, falling back to the prefix root if "drive_c" does not exist
-  # (non-standard/corrupt prefix).
+  # Same as Lutris' "Open Wine console": "<resolved wine binary> wineconsole". "wineconsole" is
+  # built INTO Wine (Proton included), even without a separate "bin/wineconsole" file. Running
+  # "wine cmd.exe" detached shows nothing (cmd.exe tries to attach to an existing terminal),
+  # whereas "wine wineconsole" opens Wine's own graphical console host; "cmd" is passed
+  # explicitly rather than relying on an undocumented default.
+  # Start directory: Wine maps its Windows current directory to the process's UNIX one, so we cd
+  # into "<prefix>/drive_c" first (the prefix root if it is missing), otherwise the console would
+  # open wherever lpm was started.
   local console_start_dir="${prefix_dir}/drive_c"
   [[ -d "${console_start_dir}" ]] || console_start_dir="${prefix_dir}"
   (
@@ -554,19 +539,14 @@ run_folder() {
 
 # run_favorite <real_folder>
 #
-# Adds <real_folder> as the "Place0" shortcut in this game's native Windows Open/Save dialogs
-# (comdlg32, NOT the modern IFileOpenDialog windows). Checked in the Wine source
-# (dlls/comdlg32/filedlg.c, filedlg_collect_places_pidls()): registry
-# HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Comdlg32\Placesbar, values "Place0" to
-# "Place4" (5 slots max, places[5] array in the code), read FROM THE GAME'S PREFIX (per-prefix
-# registry, not system-wide). Only "Place0" is written, to keep the feature simple instead of
-# managing several slots; Place0 is always overwritten if the command is re-run for this game.
-#
-# A real Linux path cannot be written as-is to this key: Wine expects a Windows-side path
-# (resolved later via SHParseDisplayName), so it is converted first with "winepath -w", as
-# zgl-launcher-manager.sh already does for the LPM Launcher executable/working-directory paths
-# (same winepath choice: the runner CONFIGURED FOR THIS GAME first, falling back to a generic
-# winepath from PATH; this gives the same drive-letter resolution as "wine_bin" above).
+# Adds <real_folder> as "Place0" in the native Windows Open/Save dialogs of this game
+# (comdlg32, not the modern IFileOpenDialog): registry key
+# HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Comdlg32\Placesbar, values
+# "Place0" to "Place4" (Wine: dlls/comdlg32/filedlg.c), read FROM THE GAME'S PREFIX. Only Place0
+# is written, and it is overwritten when the command is re-run.
+# The Linux path is converted with "winepath -w" first (Wine expects a Windows path), using the
+# runner configured for this game, else the generic winepath from PATH, as in
+# zgl-launcher-manager.sh.
 run_favorite() {
   local target_dir="$1" winepath_bin="" win_path
 

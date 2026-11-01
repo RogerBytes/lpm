@@ -670,20 +670,14 @@ try:
 
         data = update_paths(data)
 
-        # .lpm-config.yml comes from the shared .zgp, possibly forged or hand-edited
-        # to add a hook. Lutris runs any command/script automatically at game launch or
-        # exit (prelaunch_script/postexit_script under "game",
-        # prelaunch_command/postexit_command under "system") without asking.
-        # Neutralization (if not authorized) is done on the bash side by
-        # zgu_apply_hook_policy (mode "broad"), by COMMENTING rather than deleting, so
-        # the command can be re-authorized later (page "Raccourci de lancement"). This
-        # block therefore writes the YAML as-is.
-        #
-        # IMPORTANT: zgu_apply_hook_policy must run AFTER zgu_write_game_shortcut (see
-        # below), not here: zgu_write_game_shortcut sometimes rewrites the whole YAML
-        # (Proton/GAMEID detection) through a standard parser that never sees commented
-        # lines, so neutralizing before would erase the comment, and the command with
-        # it.
+        # The YAML comes from a shared .zgp, possibly forged to add a hook: Lutris runs any
+        # command/script automatically at launch or exit (prelaunch_script/postexit_script under "game",
+        # prelaunch_command/postexit_command under "system"). Neutralization (if not authorized) is done on
+        # the bash side by zgu_apply_hook_policy (mode "broad"), by COMMENTING rather than deleting, so
+        # the command can be re-authorized later; this block writes the YAML as-is.
+        # IMPORTANT: zgu_apply_hook_policy must run AFTER zgu_write_game_shortcut (see below), which
+        # sometimes rewrites the whole YAML through a parser that drops comments: neutralizing before
+        # would erase the comment, and the command with it.
 
         if "game" not in data:
             data["game"] = {}

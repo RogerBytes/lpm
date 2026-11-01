@@ -14,18 +14,13 @@ from pages import CommandPages
 
 # ---------------------------------------------------------------------------------------
 class MainWindow(Adw.ApplicationWindow):
-    # --- Sidebar categories (drill-down navigation, a single level deep, per the GNOME HIG
-    #     navigation guideline): the root list shows only the 6 categories; clicking one
-    #     replaces the sidebar content with its items (see _render_sidebar_category). The
-    #     sidebar header is empty at the root; the category name + back button appear only
-    #     inside a category, in THAT header (not the content bar's).
-    #     Each category tuple is (id, label, icon, items) and each item is
-    #     (cmd_id, label, icon); cmd_id remains the key used by BUILDER_NAMES, show_page()
-    #     and open_install_for().
-    # Built by a classmethod rather than a class-level literal: labels go through t(), and a
-    # class-body value is evaluated ONCE at import, possibly before i18n._init() has detected
-    # the locale. _CATEGORIES_CACHE stores the result (the locale does not change during a
-    # session, as with the bash CLI).
+    # --- Sidebar categories (drill-down navigation, one level deep, per the GNOME HIG) ---
+    # The root list shows only the categories; clicking one replaces the sidebar content with its
+    # items (see _render_sidebar_category). Each category is (id, label, icon, items) and each item
+    # (cmd_id, label, icon); cmd_id is the key used by BUILDER_NAMES, show_page() and
+    # open_install_for().
+    # Built by a classmethod, not a class-level literal: labels go through t(), which must not be
+    # evaluated at import (the locale may not be detected yet). _CATEGORIES_CACHE stores the result.
     _CATEGORIES_CACHE: list | None = None
 
     @classmethod

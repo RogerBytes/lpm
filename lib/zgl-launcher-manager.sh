@@ -2,42 +2,30 @@
 
 # --- lpm launcher [slug...] [on|off] ---
 #
-# Enables/disables the "LPM Launcher" (black screen + splash + gamepad lock, with an
-# optional multi-executable picker) for one or more Lutris Wine/Proton games.
+# Enables/disables the "LPM Launcher" (black screen + splash + gamepad lock, with an optional
+# multi-executable picker) for one or more Lutris Wine/Proton games.
 #
-#   1. "on" asks NO single/multi choice: the number of entries actually used is re-read from
-#      the YAML at every game launch (see zgl-launcher-runtime.sh). "on" always writes the
-#      same thing: a first entry auto-filled from the game.exe/working_dir already set in
-#      Lutris, PLUS a second commented example entry in lpm/launcher.yml, to uncomment/adapt
-#      by hand if the game has several executables (episodes, DLC, campaigns...).
-#   2. "Already active" detection: a game has the launcher if its game.exe points to
-#      lpm-launch.bat, re-read from the YAML on each run (no separate tracking file).
-#   3. Enable: saves the original exe/working_dir ("original_exe" key of the new
-#      lpm/launcher.yml), converts native Linux paths to Windows paths (C:\...) via
-#      text replacement for drive_c paths (winepath only as a fallback outside drive_c; users
-#      type Windows paths for entries added by hand). NO relay and NO Lutris prelaunch command:
-#      the orchestrator writes lpm-launch.bat before launching (the old relay of lpm <= 0.9.5
-#      is removed, see zgl-launcher-legacy.sh). NO default splash image is copied: a missing
-#      $GAMEDIR/lpm/images/splash/splash.png means "plain black loading screen" for the orchestrator
-#      (see lib/zgl-launcher-orchestrator.sh); an existing splash.png is never touched.
-#      Points game.exe to lpm-launch.bat.
-#   4. Disable: restores the original exe from "original_exe" (fallback: the exe of the first
-#      entry), removes system.prelaunch_command (only if it references the old relay
-#      script), then DELETES the
-#      files the launcher added: lpm/launcher.yml (so the entries are gone too),
-#      scripts/lpm-launcher.sh, every lpm-launch.bat. Never touches splash/, the other files
-#      of scripts/ (loading screen), nor any game/Windows file.
-#   5. Wine/Proton games only (runner='wine'), shared prefixes included (non-destructive,
-#      same principle as "lpm tools"/"lpm lsfg").
-#   6. "--if-needed" (optional, before or after the slugs): a game already in the requested
-#      state is silently skipped instead of failing the whole command (default behaviour
-#      UNCHANGED without the flag; in CLI group selection, picking an already-active game is
-#      probably a mistake worth reporting). Added for "gui/*.py" (page_launcher), where the
-#      enabled/disabled state follows from the form content (entries -> active, none ->
-#      inactive), so "already in the requested state" is not an error there.
-#   7. "lpm launcher status" (no slug): lists, one per line, the slugs of Wine/Proton games
-#      that already have the LPM Launcher active (same detection as item 2,
-#      zgp_launcher_is_active, re-read on each call, nothing cached). Applies and modifies
+#   - "Active" means game.exe points to lpm-launch.bat, re-read from the YAML on each run (no
+#     state file).
+#   - "on" asks no single/multi choice: the number of entries is re-read from lpm/launcher.yml at
+#     every launch (zgl-launcher-runtime.sh). It writes a first entry filled from the game.exe /
+#     working_dir already set in Lutris, plus a commented example entry to adapt by hand for games
+#     with several executables. It saves "original_exe", converts Linux paths to Windows paths
+#     (C:\...) by text replacement for drive_c paths (winepath only outside drive_c), and points
+#     game.exe to lpm-launch.bat. No relay and no Lutris prelaunch command: the orchestrator writes
+#     lpm-launch.bat before launching (the relay of lpm <= 0.9.5 is removed, see
+#     zgl-launcher-legacy.sh). No default splash is copied: without lpm/images/splash/splash.png
+#     the loading screen is plain black.
+#   - "off" restores the original exe ("original_exe", else the first entry's exe), removes
+#     prelaunch_command only if it references the old relay, then deletes what the launcher added:
+#     lpm/launcher.yml (the entries go with it), scripts/lpm-launcher.sh (old format), every
+#     lpm-launch.bat. It never touches lpm/images, the other files of lpm/scripts or any game file.
+#   - Wine/Proton games only (runner='wine'), shared prefixes included (non-destructive).
+#   - "--if-needed" (before or after the slugs): a game already in the requested state is skipped
+#     instead of failing the command. Used by the GUI (page_launcher), where the state follows from
+#     the form content.
+#   - "lpm launcher status" (no slug): prints the slugs of games that have the launcher active (same
+#     detection, zgp_launcher_is_active); modifies nothing. Used by the GUI to highlight them.
 #      nothing. Added for "gui/*.py" (page_launcher) to highlight (bold) active games in the
 #      selection list.
 
@@ -248,20 +236,12 @@ zgp_launcher_resolve_windows_paths() {
 # Computes la_bat_dir / la_bat_path. Arg: slug.
 zgp_launcher_compute_bat_dir() {
   local slug="$1"
-  # FIXED location of lpm-launch.bat, INSIDE drive_c (never the root of $GAMEDIR). Lutris runs
-  # a ".bat" via "cmd /C <name>" with the .bat folder as process working directory; a folder
-  # outside drive_c (e.g. the prefix root) is only reachable from Wine if the prefix has a Z:
-  # drive (mapping of "/"), often missing in per-game isolated prefixes, and the game then
-  # does not start at all.
-  #
-  # Chosen root: the direct subfolder of "drive_c/Games/" containing the exe (at its root or in
-  # any of its subfolders, whatever the depth); NOT "working_dir" (may be unset, and not
-  # necessarily that root) nor "dirname(exe)" (may be arbitrarily deep). Example: exe in
-  #   drive_c/Games/Jeu/sous/sous/sous/sous/sous/exe
-  # with another folder "drive_c/Games/Truc" beside it: the ".bat" goes in
-  #   drive_c/Games/Jeu/lpm-launch.bat
-  # i.e. the first level under "Games/" leading to the exe, never deeper. "Games/" is the
-  # standard install folder used by Lutris/lpm installers.
+  # FIXED location of lpm-launch.bat, INSIDE drive_c (never the prefix root): Lutris runs a ".bat"
+  # with its folder as working directory, and a folder outside drive_c is reachable from Wine
+  # only through a Z: drive, often missing in per-game prefixes (the game would not start).
+  # Chosen root: the direct subfolder of "drive_c/Games/" that contains the exe at any depth, not
+  # "working_dir" (may be unset) nor "dirname(exe)" (may be very deep). Example: exe in
+  # drive_c/Games/Jeu/a/b/c/exe gives drive_c/Games/Jeu/lpm-launch.bat.
   local drive_c games_root
   drive_c="${la_prefix}/drive_c"
   games_root="${drive_c}/Games"
@@ -342,17 +322,13 @@ with open(os.environ["YML_PATH"], "w") as f:
 # launcher_yml. Returns 1 on failure.
 zgp_launcher_update_launcher_yml() {
   local slug="$1" launcher_yml_on="$2"
-  # lpm/launcher.yml already exists (hand-written, restored from a .zgp, or left by an
-  # earlier "off"). Its entries are kept, but the two keys lpm itself relies on are brought
-  # up to date:
-  #  - "bat_path": where Lutris REALLY runs lpm-launch.bat (the one just written above). Both
-  #    keys hold absolute Linux paths, so they are also wrong after an import on another
-  #    machine. Without it, the runtime falls back to "<game>/lpm-launch.bat", rewrites THAT
-  #    file with the chosen entry, while Lutris keeps running the other one (always the
-  #    default entry: the picker seems to ignore the choice).
-  #  - "original_exe": the exe to restore on "off". Only set when game.exe does not already
-  #    point to an lpm-launch.bat (then the real original exe is unknown and an existing
-  #    value is never overwritten with the .bat).
+  # lpm/launcher.yml already exists (hand-written, restored from a .zgp, or left by an earlier
+  # "off"): its entries are kept, but the two keys lpm relies on are updated (they hold absolute
+  # Linux paths, wrong after an import on another machine):
+  #  - "bat_path": where Lutris REALLY runs lpm-launch.bat. If stale, the runtime rewrites another
+  #    file than the one Lutris runs and the picker seems to ignore the choice.
+  #  - "original_exe": the exe to restore on "off". Only set when game.exe does not already point to
+  #    an lpm-launch.bat, and an existing value is never overwritten with the .bat.
   # Comment lines at the end of the file are kept.
   YML_PATH="${launcher_yml_on}" ORIGINAL_EXE="${la_exe}" \
     BAT_PATH_LINUX="${la_bat_path}" python3 -c '
