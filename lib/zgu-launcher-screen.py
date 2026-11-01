@@ -232,19 +232,42 @@ CSS = b"""
 .lpm-picker-button {
     font-size: 20px;
 }
-/* Always-visible scrollbar (no overlay): tells at once that the list scrolls. */
+/* Always-visible scrollbar (no overlay): tells at once that the list scrolls. Every
+   border/shadow/image of the theme is removed (a light line showed on its left side). */
 .lpm-picker-card scrollbar {
-    background-color: #262626;
-    border-radius: 6px;
+    background: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    padding: 0 2px;
+}
+.lpm-picker-card scrollbar trough {
+    background: none;
+    background-color: #2a2a2a;
+    border: none;
+    box-shadow: none;
+    border-radius: 5px;
+    min-width: 10px;
 }
 .lpm-picker-card scrollbar slider {
+    background: none;
     background-color: #9a9a9a;
+    border: none;
+    box-shadow: none;
     min-width: 10px;
     min-height: 48px;
     border-radius: 5px;
 }
 .lpm-picker-fade {
     background-image: linear-gradient(to top, #1a1a1a, rgba(26, 26, 26, 0));
+}
+.lpm-picker-button.lpm-pad-flat,
+.lpm-picker-button.lpm-pad-flat:hover {
+    background: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 .lpm-pad-icon {
     color: #ffffff;
@@ -463,6 +486,7 @@ class ScreenWindow(Gtk.Window):
         # "card" over the background, never a second window. ---
         self.picker_visible = False
         self.pad_mode = False
+        self.last_pointer_pos = None
         self.validate_label = self.cancel_label = ""
         self.pad_validate_label = self.pad_cancel_label = ""
         self.picker_entries = []  # [(row, label_text), ...]
@@ -599,6 +623,7 @@ class ScreenWindow(Gtk.Window):
         self.picker_fade.set_valign(Gtk.Align.END)
         self.picker_fade.set_halign(Gtk.Align.FILL)
         self.picker_fade.set_size_request(-1, PICKER_FADE_HEIGHT)
+        self.picker_fade.set_margin_end(18)
         self.picker_fade.set_can_target(False)
         self.picker_fade.set_visible(False)
         scroll_overlay.add_overlay(self.picker_fade)
@@ -672,6 +697,13 @@ class ScreenWindow(Gtk.Window):
         if on == self.pad_mode:
             return
         self.pad_mode = on
+        for button in (self.picker_validate_button, self.picker_cancel_button):
+            if on:
+                button.add_css_class("lpm-pad-flat")
+            else:
+                button.remove_css_class("lpm-pad-flat")
+            button.set_can_target(not on)
+            button.set_focusable(not on)
         self.picker_validate_icon.set_visible(on)
         self.picker_cancel_icon.set_visible(on)
         self.picker_validate_text.set_label(self.pad_validate_label if on else self.validate_label)
@@ -785,7 +817,13 @@ class ScreenWindow(Gtk.Window):
             return True
         return False
 
-    def on_motion(self, _ctrl, _x, _y):
+    def on_motion(self, _ctrl, x, y):
+        # GTK also emits "motion" when the content under a still pointer moves (list scrolled
+        # by the gamepad): only a real displacement of the pointer counts as mouse input.
+        last = self.last_pointer_pos
+        self.last_pointer_pos = (x, y)
+        if last is None or (abs(x - last[0]) < 2 and abs(y - last[1]) < 2):
+            return
         if self.picker_visible:
             self.set_pad_mode(False)
         self.last_motion_ts = time.monotonic()
