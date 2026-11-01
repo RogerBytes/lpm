@@ -829,7 +829,11 @@ class ScreenWindow(Gtk.Window):
             st["last"] = now
             adj.set_value(st["x"])
             if st["x"] <= 0.0:
-                st["phase"], st["t0"] = "wait_start", now
+                st["phase"], st["t0"] = "wait_home", now
+        elif st["phase"] == "wait_home":
+            # Same pause back at the start as at the far end.
+            if now - st["t0"] >= MARQUEE_END_PAUSE_S:
+                st["phase"], st["last"] = "run", now
         return True
 
     def hide_picker(self):
