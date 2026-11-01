@@ -38,6 +38,62 @@ check_native_lutris_installed() {
   return 1
 }
 
+# Sets ALL the paths of a Lutris install (arg: flatpak | native), so no command repeats this
+# list. Sets:
+#   lutris_version     flatpak | native
+#   version            flatpak | package (word written in the Exec= of shortcuts, kept as is)
+#   lutris_db          pga.db
+#   lutris_config_dir  games/*.yml
+#   lutris_system_file system.yml
+#   lutris_data_dir    Lutris data folder (banners/, coverart/, runners/, runtime/)
+#   runner_dir         runners/wine
+#   runtime_dir        runtime
+#   lutris_umu         runtime/umu/umu-run
+#   games_dir          game_path of system.yml, else ~/Games
+# Creates nothing. zgu_load_lutris_env (below) detects the install first.
+# shellcheck disable=SC2034  # the variables are read by the commands that call these functions
+zgu_set_lutris_paths() {
+  lutris_version="$1"
+  case "${lutris_version}" in
+    flatpak)
+      version="flatpak"
+      lutris_data_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris"
+      lutris_config_dir="${lutris_data_dir}/games"
+      lutris_system_file="${lutris_data_dir}/system.yml"
+      ;;
+    native)
+      version="package"
+      lutris_data_dir="${HOME}/.local/share/lutris"
+      lutris_config_dir="${HOME}/.config/lutris/games"
+      lutris_system_file="${HOME}/.config/lutris/system.yml"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  lutris_db="${lutris_data_dir}/pga.db"
+  runner_dir="${lutris_data_dir}/runners/wine"
+  runtime_dir="${lutris_data_dir}/runtime"
+  lutris_umu="${runtime_dir}/umu/umu-run"
+
+  games_dir="${HOME}/Games"
+  if [[ -f "${lutris_system_file}" ]]; then
+    local extracted_path
+    extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
+    [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
+  fi
+  return 0
+}
+
+# Same, but detects which Lutris is in use first (asks once if both are installed, see
+# zgu_resolve_lutris_version). Returns 1 if no Lutris is installed.
+zgu_load_lutris_env() {
+  local detected
+  detected=$(zgu_resolve_lutris_version "cli" "${HOME}/.local/share/lutris/pga.db" "${HOME}/.local/share/lutris/runners/wine")
+  [[ -n "${detected}" ]] || return 1
+  zgu_set_lutris_paths "${detected}"
+}
+
 # Returns (on stdout) the default Wine/Proton runner configured globally in Lutris (key "version:" of
 # runners/wine.yml, whether Flatpak or native package), or "proton-cachyos-x86_64" if no file is
 # found or readable.

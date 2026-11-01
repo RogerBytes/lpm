@@ -25,8 +25,6 @@ GENERATE_HASH=false
 [[ "${generate_hash_flag}" = "yes" ]] && GENERATE_HASH=true
 
 # Lutris runner paths
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 OUTPUT_DIR="${HOME}"
 
@@ -37,17 +35,12 @@ if ! command -v zstd >/dev/null 2>&1; then
 fi
 
 # 2. Flatpak vs native Lutris detection (from zgu-lutris-utils.sh; also handles both being installed)
-lutris_version=$(zgu_resolve_lutris_version "cli" "" "${lutris_package_runner_dir}")
-if [[ -z "${lutris_version}" ]]; then
+zgu_load_lutris_env || {
   # Explicit detection: a silent fallback to the default native path would give a misleading
   # "folder not found" error later instead of the real cause (Lutris not installed).
   zgu_cli_error "$(t pack_runner.lutris_missing_cli)"
   exit 1
-fi
-case "${lutris_version}" in
-  flatpak) runner_dir="${lutris_flatpak_runner_dir}" ;;
-  native) runner_dir="${lutris_package_runner_dir}" ;;
-esac
+}
 
 if [[ ! -d "${runner_dir}" ]]; then
   zgu_cli_error "$(t pack_runner.dir_missing_cli "${runner_dir}")"

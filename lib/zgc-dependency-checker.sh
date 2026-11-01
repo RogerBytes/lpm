@@ -13,22 +13,13 @@ source "${script_dir}/zgu-lutris-utils.sh"
 source "${script_dir}/zgu-lsfg-utils.sh"
 
 # --- Arguments passed by the lpm router ---
-# $1 = mode (always "cli"; kept for positional consistency with other lib/ scripts)
+# $1 = mode (always "cli"; ignored, kept for positional consistency with other lib/ scripts)
 # $2 = confirm_flag ("yes" if -y, same convention as zgc-wine-killer.sh): skips the only real
 # question of this script (install the lsfg-vk Flatpak runtime?) so automated callers (GUI,
 # scripts) are never blocked by an interactive prompt.
-mode="${1:-cli}"
 confirm_flag="${2:-}"
 
-# Lutris paths
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
-
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 # GITHUB_RELEASE_URL is defined in zgu-github-release-utils.sh; change the repo/release there.
 
@@ -117,23 +108,10 @@ report ok "$(t check.report_tools_ok)"
 step 2 "$(t check.step_lutris)"
 # 2. Flatpak vs native Lutris detection (from zgu-lutris-utils.sh; also handles both being installed,
 # see zgu_resolve_lutris_version)
-lutris_version=$(zgu_resolve_lutris_version "${mode}" "${lutris_package_db}" "${lutris_package_runner_dir}")
-if [[ -z "${lutris_version}" ]]; then
+zgu_load_lutris_env || {
   say_err "$(t check.lutris_missing)"
   exit 1
-fi
-case "${lutris_version}" in
-  flatpak)
-    lutris_db="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    runner_dir="${lutris_flatpak_runner_dir}"
-    ;;
-  native)
-    lutris_db="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    runner_dir="${lutris_package_runner_dir}"
-    ;;
-esac
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   say_err "$(t check.db_missing "${lutris_db}")"

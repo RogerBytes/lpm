@@ -50,110 +50,30 @@ fi
 # 1. Dependency check: sqlite3/python3/PyYAML always (the specific wine/wineboot or umu-run is
 # only checked when creating a prefix, once the runner is chosen: no need to require wine if
 # only Proton runners are used, and vice versa).
-for cmd in sqlite3 python3; do
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    t create_prefix.cmd_missing "${cmd}"
-    exit 1
-  fi
-done
-
-if ! python3 -c "import yaml" >/dev/null 2>&1; then
-  zgu_cli_error "$(t create_prefix.pyyaml_missing_cli)"
-  exit 1
-fi
+zgp_prefix_require_tools
 
 # 2. Close Lutris first to release the database (same as the installer and uninstaller: pga.db
 # is written directly).
-if flatpak list 2>/dev/null | grep -q lutris; then
-  flatpak kill net.lutris.Lutris 2>/dev/null
-fi
-pkill -9 -x lutris 2>/dev/null
-pkill -9 -f "/usr/bin/lutris" 2>/dev/null
+zgp_prefix_close_lutris
 
 # 3. Detect Flatpak vs native package
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
 
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 # Location of the umu-run bundled by Lutris itself (checked on a real Flatpak install:
 # data/lutris/runtime/umu/umu-run, a normal file on disk, not hidden in the Flatpak sandbox, so
 # callable directly without "flatpak run"). The native path follows the same principle as all
 # other Flatpak/native path pairs in this file.
-lutris_flatpak_umu="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runtime/umu/umu-run"
-lutris_package_umu="${HOME}/.local/share/lutris/runtime/umu/umu-run"
 
-games_dir="${HOME}/Games"
 
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "${lutris_package_runner_dir}")
-if [[ -z "${version}" ]]; then
-  t create_prefix.lutris_missing_cli
-  exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak)
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    lutris_db="${lutris_flatpak_db}"
-    lutris_system_file="${lutris_flatpak_system_file}"
-    runner_dir="${lutris_flatpak_runner_dir}"
-    lutris_umu="${lutris_flatpak_umu}"
-    ;;
-  package)
-    lutris_config_dir="${lutris_package_config_dir}"
-    lutris_db="${lutris_package_db}"
-    lutris_system_file="${lutris_package_system_file}"
-    runner_dir="${lutris_package_runner_dir}"
-    lutris_umu="${lutris_package_umu}"
-    ;;
-  *)
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
-
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
-fi
-
-mkdir -p "${lutris_config_dir}"
-mkdir -p "$(dirname "${lutris_db}")"
-mkdir -p "${games_dir}"
-
-if [[ ! -d "${runner_dir}" ]]; then
-  zgu_cli_error "$(t create_prefix.no_runners_found_cli "${runner_dir}")"
-  exit 1
-fi
+zgp_prefix_setup_lutris
 
 # 4. Runner and architecture choice
 #
 # The runner/architecture can only come from -r/--runner and -a/--arch (or Lutris default runner
 # / "win64" otherwise).
-runner_choice="${cli_runner:-$(zgu_get_default_runner)}"
-arch_choice="${cli_arch:-win64}"
-
-runner_type=$(zgp_detect_runner_type "${runner_dir}/${runner_choice}")
-if [[ "${runner_type}" = "unknown" ]]; then
-  zgu_cli_error "$(t create_prefix.unknown_runner_type_cli "${runner_choice}")"
-  exit 1
-fi
-
-umu_run_path=""
-if [[ "${runner_type}" = "proton" ]]; then
-  if ! umu_run_path=$(zgp_find_umu_run); then
-    zgu_cli_error "$(t create_prefix.umu_missing_cli)"
-    exit 1
-  fi
-fi
+zgp_prefix_choose_runner
 
 # 5. Display names input
 declare -a raw_names=()
@@ -171,12 +91,7 @@ fi
 # 6. Slug generation (deduplicated against pga.db and the current batch). A custom slug after
 # "|" is also passed through zgp_slugify, to guarantee its validity (forbidden characters,
 # spaces...) rather than trusting manual input as is.
-declare -A existing_slugs=()
-if [[ -f "${lutris_db}" ]]; then
-  while IFS= read -r s; do
-    [[ -n "${s}" ]] && existing_slugs["${s}"]=1
-  done < <(sqlite3 "${lutris_db}" "SELECT slug FROM games;" 2>/dev/null)
-fi
+zgp_prefix_load_existing_slugs
 
 declare -a batch_names=()
 declare -a batch_slugs=()
@@ -266,33 +181,11 @@ zgp_boot_prefix() {
 # Writes the Lutris yml and the DB row of a new prefix. Args: c_name c_slug prefix_dir.
 zgp_register_prefix() {
   local c_name="$1" c_slug="$2" prefix_dir="$3"
-  local config_id yml_config_file safe_name safe_slug safe_prefix_dir safe_config_id
+  local config_id yml_config_file
   config_id="${c_slug}-$(date +%s%N)"
   yml_config_file="${lutris_config_dir}/${config_id}.yml"
   zgp_write_config_yml "${yml_config_file}" "${prefix_dir}" "${c_slug}" "${c_name}" "${runner_choice}"
-
-  safe_name="${c_name//\'/\'\'}"
-  safe_slug="${c_slug//\'/\'\'}"
-  safe_prefix_dir="${prefix_dir//\'/\'\'}"
-  safe_config_id="${config_id//\'/\'\'}"
-
-  sqlite3 "${lutris_db}" "DELETE FROM games WHERE slug='${safe_slug}';"
-  sqlite3 "${lutris_db}" <<EOF
-INSERT INTO games (name, slug, installer_slug, parent_slug, runner, executable, directory, configpath, updated, installed, installed_at)
-VALUES (
-  '${safe_name}',
-  '${safe_slug}',
-  '${safe_slug}',
-  '',
-  'wine',
-  '',
-  '${safe_prefix_dir}',
-  '${safe_config_id}',
-  strftime('%s','now'),
-  1,
-  strftime('%s','now')
-);
-EOF
+  zgp_register_game_row "${c_name}" "${c_slug}" "" "${prefix_dir}" "${config_id}"
 }
 
 zgp_run_creation_batch() {

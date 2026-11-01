@@ -27,6 +27,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-games-cli.sh
+source "${script_dir}/zgu-games-cli.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
@@ -39,16 +41,9 @@ if [[ ${#cli_games[@]} -eq 0 ]]; then
 fi
 
 # Lutris path configuration
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
 
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
-games_dir="${HOME}/Games"
 
 # 1. Basic checks (sqlite3 required)
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -65,41 +60,10 @@ pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
 # 3. Flatpak vs native package detection (function from zgu-lutris-utils.sh; also handles
 # both being installed)
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t uninstall_game.lutris_missing)"
   exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak)
-    lutris_system_file="${lutris_flatpak_system_file}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    lutris_db="${lutris_flatpak_db}"
-    ;;
-  package)
-    lutris_system_file="${lutris_package_system_file}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    lutris_db="${lutris_package_db}"
-    ;;
-  *)
-    # Should never happen: $version is only set to "flatpak" or "package" above (else exit
-    # 1). Safeguard in case that invariant changes.
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
-
-# Custom Games path (if set in Lutris): a global preference stored in system.yml ("system:
-# game_path:"), not in runners/wine.yml (Wine-runner-only options). See the detailed note in
-# zgp-game-installer.sh.
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  if [[ -n "${extracted_path}" ]]; then
-    games_dir="${extracted_path}"
-  fi
-fi
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t uninstall_game.db_missing "${lutris_db}")"
@@ -107,43 +71,7 @@ if [[ ! -f "${lutris_db}" ]]; then
 fi
 
 # 4. Fetch Wine games from the Lutris DB
-games_list=$(sqlite3 "${lutris_db}" "SELECT name || char(31) || slug || char(31) || directory FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
-
-if [[ -z "${games_list}" ]]; then
-  zgu_cli_error "$(t uninstall_game.none_found)"
-  exit 0
-fi
-
-declare -A name_by_slug
-declare -A dir_by_slug
-
-# Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
-# outside lpm's one-game-one-prefix model and can never be uninstalled via lpm: deleting
-# them would break the shared prefix for the other games still living in it (see
-# zgu_get_blacklisted_slugs in zgu-lutris-utils.sh).
-declare -A blacklisted_slugs
-while IFS= read -r bl_slug; do
-  [[ -n "${bl_slug}" ]] && blacklisted_slugs["${bl_slug}"]=1
-done < <(zgu_get_blacklisted_slugs "${lutris_db}")
-
-while IFS=$'\x1f' read -r game_name game_slug game_dir; do
-  [[ -z "${game_name}" ]] && continue
-  [[ -n "${blacklisted_slugs[${game_slug}]:-}" ]] && continue
-
-  # game_name (Lutris "name" column) can come from ANY wine game in the DB, not only those
-  # installed by lpm (game added manually in Lutris, hand-edited DB...).
-  # zgp-game-installer.sh already neutralises any "/" in game_real_name before writing it to
-  # the DB ("${game_real_name//\//-}"), but a game added outside lpm can bypass that.
-  # game_name is used below to build deletion paths ("${desktop_dir}/${game_name} ..."):
-  # without the same filter here, a "/" in the name would target a wrong path instead of the
-  # intended shortcut.
-  game_name="${game_name//\//-}"
-
-  [[ -z "${game_dir}" ]] && game_dir="${games_dir}/${game_slug}"
-
-  name_by_slug["${game_slug}"]="${game_name}"
-  dir_by_slug["${game_slug}"]="${game_dir}"
-done <<< "${games_list}"
+zgp_games_load uninstall_game zgu_cli_error blacklist sanitize
 
 games_to_delete=()
 

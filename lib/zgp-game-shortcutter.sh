@@ -14,6 +14,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-games-cli.sh
+source "${script_dir}/zgu-games-cli.sh"
 # shellcheck source=./zgu-lpm-paths.sh
 source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-desktop-utils.sh
@@ -82,21 +84,12 @@ case "${shortcut_mode}" in
 esac
 
 # Lutris path configuration
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
 
 # Installed Wine/Proton builds folder: see the detailed note in zgp-game-installer.sh
 # (needed by zgu_write_game_shortcut to tell a Proton runner from classic Wine).
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-games_dir="${HOME}/Games"
 
 # 1. sqlite3 check
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -106,41 +99,10 @@ fi
 
 # 2. Flatpak vs native package detection (function from zgu-lutris-utils.sh; also handles
 # both being installed)
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t shortcut.lutris_missing)"
   exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak)
-    lutris_system_file="${lutris_flatpak_system_file}"
-    lutris_db="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    runner_dir="${lutris_flatpak_runner_dir}"
-    ;;
-  package)
-    lutris_system_file="${lutris_package_system_file}"
-    lutris_db="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    runner_dir="${lutris_package_runner_dir}"
-    ;;
-  *)
-    # Should never happen: $version is only set to "flatpak" or "package" above (else exit
-    # 1). Safeguard in case that invariant changes.
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
-
-# Custom Games path (if set in Lutris): see the detailed note in zgp-game-installer.sh.
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  if [[ -n "${extracted_path}" ]]; then
-    games_dir="${extracted_path}"
-  fi
-fi
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t shortcut.db_missing "${lutris_db}")"
@@ -155,57 +117,16 @@ fi
 # Lutris, .exe not yet configured) would drop the entire row (sqlite3 prints an empty line,
 # skipped by the "[[ -z "${game_name}" ]] && continue" below) and become unfindable for "lpm
 # shortcut" ("Game not found") although it exists in the DB.
-games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
+zgp_games_load shortcut zgu_cli_error blacklist sanitize
 
-if [[ -z "${games_list}" ]]; then
-  zgu_cli_error "$(t shortcut.none_found)"
-  exit 0
-fi
-
-declare -A slug_by_name
-declare -A dir_by_name
-declare -A name_by_slug
-declare -A id_by_slug
-declare -A exe_by_slug
-declare -A configpath_by_slug
-
-# Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
-# outside lpm's one-game-one-prefix model and never listed here (same filter as
-# zgp-game-uninstaller.sh and zgp-game-lister.sh, see zgu_get_blacklisted_slugs).
-declare -A blacklisted_slugs
-while IFS= read -r bl_slug; do
-  [[ -n "${bl_slug}" ]] && blacklisted_slugs["${bl_slug}"]=1
-done < <(zgu_get_blacklisted_slugs "${lutris_db}")
-
-# Keeps the SQL query's sorted order (ORDER BY name COLLATE NOCASE ASC) in a separate
-# indexed array: see the detailed note in zgp-game-uninstaller.sh.
+# The shortcuts are chosen by game name: index the slug and folder by name too.
+declare -A slug_by_name dir_by_name
 sorted_game_names=()
-
-while IFS=$'\x1f' read -r game_id game_name game_slug game_dir game_exe game_configpath; do
-  [[ -z "${game_name}" ]] && continue
-  [[ -n "${blacklisted_slugs[${game_slug}]:-}" ]] && continue
-
-  # game_name (Lutris "name" column) can come from any wine game in the DB, not only those
-  # installed by lpm. Same filter as zgp-game-uninstaller.sh: game_name is an
-  # associative-array key, and a "/" would not be a problem here by itself, but this stays
-  # consistent with the filter applied elsewhere on this column.
-  game_name="${game_name//\//-}"
-
-  [[ -z "${game_dir}" ]] && game_dir="${games_dir}/${game_slug}"
-
-  slug_by_name["${game_name}"]="${game_slug}"
-  dir_by_name["${game_name}"]="${game_dir}"
-  name_by_slug["${game_slug}"]="${game_name}"
-  id_by_slug["${game_slug}"]="${game_id}"
-  exe_by_slug["${game_slug}"]="${game_exe}"
-  configpath_by_slug["${game_slug}"]="${game_configpath}"
-  sorted_game_names+=("${game_name}")
-done <<< "${games_list}"
-
-if [[ ${#sorted_game_names[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t shortcut.none_found)"
-  exit 0
-fi
+for game_slug in "${sorted_slugs[@]}"; do
+  slug_by_name["${name_by_slug[${game_slug}]}"]="${game_slug}"
+  dir_by_name["${name_by_slug[${game_slug}]}"]="${dir_by_slug[${game_slug}]}"
+  sorted_game_names+=("${name_by_slug[${game_slug}]}")
+done
 
 games_to_process=()
 create_menu=false

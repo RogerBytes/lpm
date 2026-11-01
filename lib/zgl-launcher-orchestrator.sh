@@ -50,6 +50,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-lpm-paths.sh
 source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-lutris-utils.sh
+source "${script_dir}/zgu-lutris-utils.sh"
 
 # --- Final Lutris command: the same as the one used in Exec= before the orchestrator ---
 launch_lutris() {
@@ -85,15 +87,7 @@ fi
 # "package", never "native"; see zgp-game-shortcutter.sh) as elsewhere in the project. No call
 # to zgu_resolve_lutris_version: the version is already known (argument, fixed when the
 # shortcut was created). ---
-if [[ "${version}" = "flatpak" ]]; then
-  lutris_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-  lutris_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-  lutris_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-else
-  lutris_db="${HOME}/.local/share/lutris/pga.db"
-  lutris_system_file="${HOME}/.config/lutris/system.yml"
-  lutris_config_dir="${HOME}/.config/lutris/games"
-fi
+zgu_set_lutris_paths "$([[ "${version}" = "flatpak" ]] && echo flatpak || echo native)"
 
 # --- Database not found: silent direct launch (just a log); a game launch must never fail
 # for that. ---
@@ -133,13 +127,8 @@ fi
 # control file protocol is line-based.
 title_text="${game_name//[$'\n\r']/}"
 
-# Custom Games path (if set in Lutris): same fallback as zgp-game-shortcutter.sh /
-# zgp-game-installer.sh, used only if "directory" is empty in the database.
-games_dir="${HOME}/Games"
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
-fi
+# games_dir (custom Games path of Lutris, else ~/Games) comes from zgu_set_lutris_paths; used only
+# if "directory" is empty in the database.
 [[ -z "${game_dir}" ]] && game_dir="${games_dir}/${slug}"
 
 # --- FIXED-path control file (derived from game_dir, no random mktemp), so that

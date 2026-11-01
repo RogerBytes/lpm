@@ -59,34 +59,11 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
 fi
 
 # --- Lutris resolution (same approach as zgl-launcher-manager.sh / zgl-launcher-orchestrator.sh) ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
-games_dir="${HOME}/Games"
 
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t launcher.lutris_missing)"
   exit 1
-fi
-
-if [[ "${version}" = "flatpak" ]]; then
-  lutris_db="${lutris_flatpak_db}"
-  lutris_config_dir="${lutris_flatpak_config_dir}"
-  lutris_system_file="${lutris_flatpak_system_file}"
-else
-  lutris_db="${lutris_package_db}"
-  lutris_config_dir="${lutris_package_config_dir}"
-  lutris_system_file="${lutris_package_system_file}"
-fi
-
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
-fi
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t launcher.db_missing "${lutris_db}")"

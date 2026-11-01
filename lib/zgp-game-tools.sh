@@ -56,51 +56,17 @@ fi
 
 # --- Flatpak vs native package detection (same paths/conventions as the rest of the project)
 # ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
 
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 # Lutris RUNTIME_DIR: DATA_DIR/runtime (Lutris settings.py); its bundled winetricks lives there
 # (RUNTIME_DIR/winetricks/winetricks).
-lutris_flatpak_runtime_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runtime"
-lutris_package_runtime_dir="${HOME}/.local/share/lutris/runtime"
 
-lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "${lutris_package_runner_dir}")
-if [[ -z "${lutris_version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t game_tools.lutris_missing_cli)"
   exit 1
-fi
-
-case "${lutris_version}" in
-  flatpak)
-    lutris_db="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    lutris_system_file="${lutris_flatpak_system_file}"
-    runner_dir="${lutris_flatpak_runner_dir}"
-    runtime_dir="${lutris_flatpak_runtime_dir}"
-    ;;
-  native)
-    lutris_db="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    lutris_system_file="${lutris_package_system_file}"
-    runner_dir="${lutris_package_runner_dir}"
-    runtime_dir="${lutris_package_runtime_dir}"
-    ;;
-esac
-
-games_dir="${HOME}/Games"
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
-fi
+}
 
 if ! command -v sqlite3 >/dev/null 2>&1 || [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t game_tools.no_games_found_cli "${games_dir}")"

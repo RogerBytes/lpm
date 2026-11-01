@@ -17,17 +17,6 @@
 # (manual mode, "Automatic download" unchecked) once the image is chosen in the GTK visual
 # picker (see lib/zgl-sgdb-images.sh); only one target slug at a time in that case, see the
 # check below.
-cli_targets=()
-forced_url=""
-while [[ $# -gt 0 ]]; do
-  if [[ "$1" = "--url" ]]; then
-    forced_url="${2:-}"
-    shift $(( $# >= 2 ? 2 : 1 ))
-  else
-    cli_targets+=("$1")
-    shift
-  fi
-done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -38,12 +27,16 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-sgdb.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-games-cli.sh
+source "${script_dir}/zgu-games-cli.sh"
 # shellcheck source=./zgu-lpm-paths.sh
 source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+
+zgp_parse_url_args "$@"
 
 # The SteamGridDB key is strictly personal to the user (see zgp_sgdb_ensure_key below): never
 # shared, never bundled with lpm. Kept in a dedicated file with 600 permissions (owner
@@ -56,143 +49,10 @@ zgp_icon_report_error_early() {
   echo "${msg}" >&2
 }
 
-for cmd in sqlite3 curl python3 realpath; do
-  if ! command -v "${cmd}" >/dev/null 2>&1; then
-    zgp_icon_report_error_early "$(t icon.cmd_missing "${cmd}")"
-    exit 1
-  fi
-done
-
-# ImageMagick: needed to convert ".ico" icons (common, originally extracted from Windows
-# executables) to ".png", the only format the freedesktop Desktop Entry spec reliably expects
-# for "Icon=" (see zgp_icon_fetch_and_place below). ImageMagick 7 merges convert/identify into a
-# single "magick" binary; ImageMagick 6 keeps two separate binaries. Both forms are accepted.
-convert_bin=()
-identify_bin=()
-if command -v magick >/dev/null 2>&1; then
-  convert_bin=(magick)
-  identify_bin=(magick identify)
-elif command -v convert >/dev/null 2>&1 && command -v identify >/dev/null 2>&1; then
-  convert_bin=(convert)
-  identify_bin=(identify)
-else
-  zgp_icon_report_error_early "$(t icon.imagemagick_missing)"
-  exit 1
-fi
-
-# --- 2. Flatpak vs native package detection + Lutris path resolution ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
-games_dir="${HOME}/Games"
-
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
-  zgp_icon_report_error_early "$(t icon.lutris_missing)"
-  exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak)
-    lutris_db="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    lutris_system_file="${lutris_flatpak_system_file}"
-    runner_dir="${lutris_flatpak_runner_dir}"
-    ;;
-  package)
-    lutris_db="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    lutris_system_file="${lutris_package_system_file}"
-    runner_dir="${lutris_package_runner_dir}"
-    ;;
-  *)
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
-
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
-fi
-
-if [[ ! -f "${lutris_db}" ]]; then
-  zgp_icon_report_error_early "$(t icon.db_missing "${lutris_db}")"
-  exit 1
-fi
-
-# --- 3. Fetch Wine games from the Lutris database ---
-games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
-
-if [[ -z "${games_list}" ]]; then
-  zgp_icon_report_error_early "$(t icon.none_found)"
-  exit 0
-fi
-
-declare -A name_by_slug
-declare -A dir_by_slug
-declare -A id_by_slug
-declare -A exe_by_slug
-declare -A configpath_by_slug
-
-# Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
-# outside lpm's one-game-one-prefix principle and are never offered here. Same filter as
-# zgp-game-shortcutter.sh/zgp-game-uninstaller.sh (see zgu_get_blacklisted_slugs).
-declare -A blacklisted_slugs
-while IFS= read -r bl_slug; do
-  [[ -n "${bl_slug}" ]] && blacklisted_slugs["${bl_slug}"]=1
-done < <(zgu_get_blacklisted_slugs "${lutris_db}")
-
-sorted_slugs=()
-
-while IFS=$'\x1f' read -r g_id g_name g_slug g_dir g_exe g_configpath; do
-  [[ -z "${g_slug}" ]] && continue
-  [[ -n "${blacklisted_slugs[${g_slug}]:-}" ]] && continue
-  [[ -z "${g_dir}" ]] && g_dir="${games_dir}/${g_slug}"
-
-  name_by_slug["${g_slug}"]="${g_name}"
-  dir_by_slug["${g_slug}"]="${g_dir}"
-  id_by_slug["${g_slug}"]="${g_id}"
-  exe_by_slug["${g_slug}"]="${g_exe}"
-  configpath_by_slug["${g_slug}"]="${g_configpath}"
-  sorted_slugs+=("${g_slug}")
-done <<< "${games_list}"
-
-if [[ ${#sorted_slugs[@]} -eq 0 ]]; then
-  zgp_icon_report_error_early "$(t icon.none_found)"
-  exit 0
-fi
-
-# --- 4. Target game selection ---
-# "cli_targets" is always non-empty here.
-targets=()
-
-if [[ "${cli_targets[0]}" = "--all" ]]; then
-  targets=("${sorted_slugs[@]}")
-else
-  for target_slug in "${cli_targets[@]}"; do
-    if [[ -n "${name_by_slug[${target_slug}]:-}" ]]; then
-      targets+=("${target_slug}")
-    elif [[ -n "${blacklisted_slugs[${target_slug}]:-}" ]]; then
-      zgu_cli_error "$(t icon.slug_blacklisted "${target_slug}")"
-      exit 1
-    else
-      zgu_cli_error "$(t icon.slug_not_found "${target_slug}")"
-      exit 1
-    fi
-  done
-fi
-
-if [[ -n "${forced_url}" ]] && [[ ${#targets[@]} -ne 1 ]]; then
-  zgu_cli_error "$(t icon.force_url_single_target)"
-  exit 1
-fi
+zgp_require_image_tools icon zgp_icon_report_error_early identify
+zgp_require_lutris_db icon zgp_icon_report_error_early
+zgp_games_load icon zgp_icon_report_error_early blacklist
+zgp_games_select_targets icon
 
 # --- 7. Processing one game ---
 #

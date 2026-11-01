@@ -12,8 +12,6 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 
 # Lutris path configuration
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
 # 1. sqlite3 check
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -23,15 +21,10 @@ fi
 
 # 2. Flatpak vs native package detection (function from zgu-lutris-utils.sh; also handles
 # both being installed)
-lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-case "${lutris_version}" in
-  flatpak) lutris_db="${lutris_flatpak_db}" ;;
-  native) lutris_db="${lutris_package_db}" ;;
-  *)
-    zgu_cli_error "$(t list_games.lutris_missing)"
-    exit 1
-    ;;
-esac
+zgu_load_lutris_env || {
+  zgu_cli_error "$(t list_games.lutris_missing)"
+  exit 1
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t list_games.db_missing "${lutris_db}")"

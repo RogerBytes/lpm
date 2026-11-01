@@ -26,12 +26,6 @@ if [[ -z "${slug}" ]]; then
   exit 1
 fi
 
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
-
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
-
 # 1. sqlite3 check
 if ! command -v sqlite3 >/dev/null 2>&1; then
   zgu_cli_error "$(t info.sqlite_missing)"
@@ -40,21 +34,10 @@ fi
 
 # 2. Flatpak vs native package detection (function from zgu-lutris-utils.sh; also handles
 # both being installed)
-lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-case "${lutris_version}" in
-  flatpak)
-    lutris_db="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    ;;
-  native)
-    lutris_db="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    ;;
-  *)
-    zgu_cli_error "$(t info.lutris_missing)"
-    exit 1
-    ;;
-esac
+zgu_load_lutris_env || {
+  zgu_cli_error "$(t info.lutris_missing)"
+  exit 1
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t info.db_missing "${lutris_db}")"

@@ -17,7 +17,7 @@ from i18n import t
 from commandpage import CommandPage
 from sgdb import SgdbPickerWindow, SgdbTitleResolverWindow
 from util import _run_on_main, json_result
-from widgets_rows import LauncherEntryRow, _wrapping_text_factory, add_shortcut_rows, pick_file, pick_folder
+from widgets_rows import LauncherEntryRow, add_shortcut_rows, pick_file, pick_folder
 from widgets_select import GameMultiSelect, RunnerCombo, SingleChoiceSelect, SingleGameSelect
 
 

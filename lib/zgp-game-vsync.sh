@@ -43,28 +43,11 @@ if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null
 fi
 
 # --- Flatpak vs native package detection (same paths as the rest of the project) ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "${lutris_package_runner_dir}")
-if [[ -z "${lutris_version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t game_tools.lutris_missing_cli)"
   exit 1
-fi
-
-case "${lutris_version}" in
-  flatpak)
-    lutris_db="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    ;;
-  native)
-    lutris_db="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    ;;
-esac
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t game_tools.no_games_found_cli "${HOME}/Games")"

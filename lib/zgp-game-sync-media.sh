@@ -43,34 +43,11 @@ for cmd in sqlite3 curl python3; do
 done
 
 # --- 2. Flatpak vs native package detection + path resolution ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
-lutris_flatpak_data_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris"
-lutris_package_data_dir="${HOME}/.local/share/lutris"
 
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t sync_media.lutris_missing)"
   exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak)
-    lutris_db="${lutris_flatpak_db}"
-    lutris_data_dir="${lutris_flatpak_data_dir}"
-    ;;
-  package)
-    lutris_db="${lutris_package_db}"
-    lutris_data_dir="${lutris_package_data_dir}"
-    ;;
-  *)
-    # Should never happen: "${version}" is only set to "flatpak" or "package" above (else
-    # exit 1). Safeguard in case that invariant changes.
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t sync_media.db_missing "${lutris_db}")"

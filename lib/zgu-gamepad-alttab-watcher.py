@@ -35,11 +35,23 @@ import signal
 import subprocess
 import shutil
 import time
-import ctypes
-import ctypes.util
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from zgu_common import find_controllers, load_sdl2
+from zgu_common import (
+    SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+    SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
+    SDL_CONTROLLER_BUTTON_BACK,
+    SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+    SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+    SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
+    SDL_CONTROLLER_BUTTON_DPAD_UP,
+    SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+    SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+    find_controllers,
+    init_sdl,
+    load_sdl2,
+)
 
 if len(sys.argv) < 2 or sys.argv[1] not in ("x11", "wayland"):
     sys.stderr.write("Usage: zgu-gamepad-alttab-watcher.py <x11|wayland> [<prefix_folder>]\n")
@@ -49,7 +61,6 @@ SESSION_KIND = sys.argv[1]
 PREFIX_DIR = sys.argv[2] if len(sys.argv) > 2 else ""
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-GAMECONTROLLERDB_PATH = os.path.join(SCRIPT_DIR, "data", "gamecontrollerdb.txt")
 
 running = True
 
@@ -81,44 +92,12 @@ if sdl is None:
     )
     sys.exit(1)
 
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
-
-SDL_INIT_JOYSTICK = 0x00000200
-SDL_INIT_GAMECONTROLLER = 0x00002000
-SDL_INIT_EVENTS = 0x00004000
-
-sdl.SDL_Init.restype = ctypes.c_int
-sdl.SDL_Init.argtypes = [ctypes.c_uint32]
-sdl.SDL_Quit.restype = None
-sdl.SDL_GetError.restype = ctypes.c_char_p
-sdl.SDL_NumJoysticks.restype = ctypes.c_int
-sdl.SDL_IsGameController.restype = ctypes.c_int
-sdl.SDL_IsGameController.argtypes = [ctypes.c_int]
-sdl.SDL_GameControllerOpen.restype = ctypes.c_void_p
-sdl.SDL_GameControllerOpen.argtypes = [ctypes.c_int]
-sdl.SDL_GameControllerClose.restype = None
-sdl.SDL_GameControllerClose.argtypes = [ctypes.c_void_p]
-sdl.SDL_GameControllerUpdate.restype = None
-sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
-sdl.SDL_GameControllerGetButton.argtypes = [ctypes.c_void_p, ctypes.c_int]
-sdl.SDL_GameControllerGetAxis.restype = ctypes.c_int16
-sdl.SDL_GameControllerGetAxis.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-_add_mappings_from_file = getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None)
-if _add_mappings_from_file is not None:
-    _add_mappings_from_file.restype = ctypes.c_int
-    _add_mappings_from_file.argtypes = [ctypes.c_char_p]
-
-if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
+if not init_sdl(sdl):
     sys.stderr.write(
         "zgu-gamepad-alttab-watcher: SDL_Init failed (%s)\n"
         % sdl.SDL_GetError().decode("utf-8", "replace")
     )
     sys.exit(1)
-
-if _add_mappings_from_file is not None and os.path.isfile(GAMECONTROLLERDB_PATH):
-    _add_mappings_from_file(GAMECONTROLLERDB_PATH.encode("utf-8"))
 
 
 def _resolve_xdotool():
@@ -254,17 +233,6 @@ def _resume_antimicro(pids):
 
 
 # --- SDL2 standardized buttons/axes (same constants as the other watchers) -----------------
-SDL_CONTROLLER_BUTTON_BACK = 4               # Select
-SDL_CONTROLLER_BUTTON_LEFTSTICK = 7
-SDL_CONTROLLER_BUTTON_RIGHTSTICK = 8         # right stick click (R3)
-SDL_CONTROLLER_BUTTON_LEFTSHOULDER = 9       # L1
-SDL_CONTROLLER_BUTTON_RIGHTSHOULDER = 10     # R1
-SDL_CONTROLLER_BUTTON_DPAD_UP = 11
-SDL_CONTROLLER_BUTTON_DPAD_DOWN = 12
-SDL_CONTROLLER_BUTTON_DPAD_LEFT = 13
-SDL_CONTROLLER_BUTTON_DPAD_RIGHT = 14
-SDL_CONTROLLER_AXIS_TRIGGERLEFT = 4          # L2
-SDL_CONTROLLER_AXIS_TRIGGERRIGHT = 5         # R2
 
 # Hold: L1 + R1 + R3 click (buttons) + L2 + R2 (axes), deliberately WITHOUT L3 (left stick
 # click): direction uses the D-pad, never the left stick, so it never overlaps the quit

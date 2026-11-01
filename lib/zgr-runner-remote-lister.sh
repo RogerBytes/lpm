@@ -14,9 +14,6 @@ source "${script_dir}/zgu-github-release-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
-
 # GITHUB_RELEASE_URL is defined in zgu-github-release-utils.sh; change the repo/release there.
 
 # 1. Required dependencies check
@@ -32,12 +29,7 @@ fi
 
 # 2. Flatpak vs native Lutris detection (to flag already installed runners; from zgu-lutris-utils.sh,
 # also handles both being installed)
-lutris_version=$(zgu_resolve_lutris_version "cli" "" "${lutris_package_runner_dir}")
-case "${lutris_version}" in
-  flatpak) runner_dir="${lutris_flatpak_runner_dir}" ;;
-  native) runner_dir="${lutris_package_runner_dir}" ;;
-  *) runner_dir="${HOME}/.local/share/lutris/runners/wine" ;;
-esac
+zgu_load_lutris_env || runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 # 3. Fetch the list of .zgr assets of the GitHub release
 api_url=$(zgu_github_api_url "${GITHUB_RELEASE_URL}")

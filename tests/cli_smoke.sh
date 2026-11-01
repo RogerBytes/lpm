@@ -169,6 +169,12 @@ sqlite3 "${HOME}/.local/share/lutris/pga.db" "delete from games where slug in ('
 expect "lib: no shell function defined in two different files (except the per-script handlers)" bash -c '
   dups=$(grep -hoE "^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{" "$1"/lib/*.sh | sort | uniq -d | grep -vE "^(lpm_cancel_cleanup|say|say_err)\(\)")
   [ -z "$dups" ] || { echo "$dups" >&2; exit 1; }' _ "${repo}"
+# --- Lutris paths: one function (zgu_set_lutris_paths) gives every path of the Flatpak or native install
+expect "lutris paths: flatpak" bash -c 'source "$1/lib/zgu-lutris-utils.sh"; HOME=/h zgu_set_lutris_paths flatpak && [ "$lutris_db" = /h/.var/app/net.lutris.Lutris/data/lutris/pga.db ] && [ "$lutris_config_dir" = /h/.var/app/net.lutris.Lutris/data/lutris/games ] && [ "$runner_dir" = /h/.var/app/net.lutris.Lutris/data/lutris/runners/wine ] && [ "$lutris_umu" = /h/.var/app/net.lutris.Lutris/data/lutris/runtime/umu/umu-run ] && [ "$version" = flatpak ] && [ "$games_dir" = /h/Games ]' _ "${repo}"
+expect "lutris paths: native" bash -c 'source "$1/lib/zgu-lutris-utils.sh"; HOME=/h zgu_set_lutris_paths native && [ "$lutris_db" = /h/.local/share/lutris/pga.db ] && [ "$lutris_config_dir" = /h/.config/lutris/games ] && [ "$lutris_system_file" = /h/.config/lutris/system.yml ] && [ "$runner_dir" = /h/.local/share/lutris/runners/wine ] && [ "$version" = package ]' _ "${repo}"
+expect "lutris paths: game_path of system.yml wins over ~/Games" bash -c 'mkdir -p "$2/.config/lutris"; printf "system:\n  game_path: /data/jeux\n" | sed "s/^system:$//" > "$2/.config/lutris/system.yml"; sed -i "s/^  game_path/game_path/" "$2/.config/lutris/system.yml"; source "$1/lib/zgu-lutris-utils.sh"; HOME="$2" zgu_set_lutris_paths native && [ "$games_dir" = /data/jeux ]' _ "${repo}" "${work}/lutrispaths"
+expect "lutris paths: unknown version is refused" bash -c 'source "$1/lib/zgu-lutris-utils.sh"; ! zgu_set_lutris_paths bogus' _ "${repo}"
+
 # --- sync-media (lutris.net API) with a fake curl: download, 404 = nothing to do, unreachable
 smshim="${work}/smshim"; mkdir -p "${smshim}"
 cat > "${smshim}/curl" <<'CURLEOF'
@@ -212,6 +218,10 @@ for kind in icon splash logo; do
   PATH="${e2e}:${PATH}" check "${kind}: found on SteamGridDB, downloaded and converted" 0 'Link' "${kind}" link
 done
 expect "icon/splash/logo: the 3 images are in the lpm folder" bash -c 'find "$1/lpm" -name "icon.png" | grep -q . && find "$1/lpm" -name "splash.png" | grep -q . && find "$1/lpm" -name "logo.png" | grep -q .' _ "${HOME}/Games/link"
+
+check "icon: unknown slug is refused" 1 'nosuch' icon nosuch
+check "splash: --url needs a single game" 1 '' splash --url http://x/a.png mario zelda
+check "logo: unknown slug is refused" 1 'nosuch' logo nosuch
 
 # --- SteamGridDB functions: one copy (lib/zgu-sgdb.sh), working with a fake curl
 sgshim="${work}/sgshim"; mkdir -p "${sgshim}"

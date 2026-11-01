@@ -60,6 +60,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-games-cli.sh
+source "${script_dir}/zgu-games-cli.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-lpm-paths.sh
@@ -104,38 +106,11 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
 fi
 
 # --- 1. Flatpak vs native package detection + Lutris path resolution ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
-lutris_flatpak_runners_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runners_dir="${HOME}/.local/share/lutris/runners/wine"
-games_dir="${HOME}/Games"
 
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   zgp_launcher_report_error_early "$(t launcher.lutris_missing)"
   exit 1
-fi
-
-if [[ "${version}" = "flatpak" ]]; then
-  lutris_db="${lutris_flatpak_db}"
-  lutris_config_dir="${lutris_flatpak_config_dir}"
-  lutris_system_file="${lutris_flatpak_system_file}"
-  lutris_runners_dir="${lutris_flatpak_runners_dir}"
-else
-  lutris_db="${lutris_package_db}"
-  lutris_config_dir="${lutris_package_config_dir}"
-  lutris_system_file="${lutris_package_system_file}"
-  lutris_runners_dir="${lutris_package_runners_dir}"
-fi
-
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && games_dir="${extracted_path}"
-fi
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgp_launcher_report_error_early "$(t launcher.db_missing "${lutris_db}")"
@@ -146,24 +121,7 @@ fi
 action="${cli_action}"
 
 # --- 3. List of Wine/Proton games, filtered by current state in the YAML ---
-games_list=$(sqlite3 "${lutris_db}" "SELECT COALESCE(id,'') || char(31) || COALESCE(name,'') || char(31) || COALESCE(slug,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(configpath,'') FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
-
-if [[ -z "${games_list}" ]]; then
-  zgp_launcher_report_error_early "$(t launcher.none_found)"
-  exit 0
-fi
-
-declare -A name_by_slug dir_by_slug configpath_by_slug
-sorted_slugs=()
-
-while IFS=$'\x1f' read -r _g_id g_name g_slug g_dir g_configpath; do
-  [[ -z "${g_slug}" ]] && continue
-  [[ -z "${g_dir}" ]] && g_dir="${games_dir}/${g_slug}"
-  name_by_slug["${g_slug}"]="${g_name}"
-  dir_by_slug["${g_slug}"]="${g_dir}"
-  configpath_by_slug["${g_slug}"]="${g_configpath}"
-  sorted_slugs+=("${g_slug}")
-done <<< "${games_list}"
+zgp_games_load launcher zgp_launcher_report_error_early
 
 # Returns 0 (true) if game.exe already points to lpm-launch.bat: that is all the current
 # format needs (no relay, no Lutris prelaunch command: the orchestrator writes the .bat before
@@ -187,58 +145,7 @@ except Exception:
 ' 2>/dev/null
 }
 
-declare -A active_by_slug
-for g_slug in "${sorted_slugs[@]}"; do
-  if zgp_launcher_is_active "${configpath_by_slug[${g_slug}]}"; then
-    active_by_slug["${g_slug}"]=1
-  fi
-done
-
-if [[ "${action}" = "status" ]]; then
-  # See item 7 of the file header: plain read, nothing to apply.
-  for g_slug in "${sorted_slugs[@]}"; do
-    [[ -n "${active_by_slug[${g_slug}]:-}" ]] && echo "${g_slug}"
-  done
-  exit 0
-fi
-
-eligible_slugs=()
-for g_slug in "${sorted_slugs[@]}"; do
-  if [[ "${action}" = "on" ]]; then
-    [[ -z "${active_by_slug[${g_slug}]:-}" ]] && eligible_slugs+=("${g_slug}")
-  else
-    [[ -n "${active_by_slug[${g_slug}]:-}" ]] && eligible_slugs+=("${g_slug}")
-  fi
-done
-
-targets=()
-
-# --- Target selection (CLI only) ---
-declare -A eligible_lookup
-for g_slug in "${eligible_slugs[@]}"; do
-  eligible_lookup["${g_slug}"]=1
-done
-
-for target_slug in "${cli_slugs[@]}"; do
-  if [[ -z "${name_by_slug[${target_slug}]:-}" ]]; then
-    zgu_cli_error "$(t launcher.slug_not_found "${target_slug}")"
-    exit 1
-  fi
-  if [[ -z "${eligible_lookup[${target_slug}]:-}" ]]; then
-    if [[ "${if_needed}" -eq 1 ]]; then
-      # See item 6 of the file header: already in the requested state, the game is just excluded
-      # from the targets (no error, no action).
-      continue
-    fi
-    if [[ "${action}" = "on" ]]; then
-      zgu_cli_error "$(t launcher.already_active "${target_slug}")"
-    else
-      zgu_cli_error "$(t launcher.already_inactive "${target_slug}")"
-    fi
-    exit 1
-  fi
-  targets+=("${target_slug}")
-done
+zgp_games_toggle_targets launcher zgp_launcher_is_active
 
 # --- 4. Apply: enable ---
 # Step state of zgp_launcher_apply_on (globals la_*, same pattern as zgp_isolate_one).
@@ -305,7 +212,7 @@ zgp_launcher_to_windows_path() {
   if [[ "${la_winepath_resolved}" -eq 0 ]]; then
     la_winepath_resolved=1
     local wine_bin
-    wine_bin=$(zgu_get_wine_binary "${lutris_runners_dir}" "${la_version}" 2>/dev/null)
+    wine_bin=$(zgu_get_wine_binary "${runner_dir}" "${la_version}" 2>/dev/null)
     if [[ -n "${wine_bin}" ]] && [[ -x "$(dirname "${wine_bin}")/winepath" ]]; then
       la_winepath_bin="$(dirname "${wine_bin}")/winepath"
     elif command -v winepath >/dev/null 2>&1; then

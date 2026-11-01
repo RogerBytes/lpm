@@ -94,24 +94,11 @@ if [[ "${type_arg}" != "title" ]]; then
 fi
 
 # --- Lutris resolution (slug -> name), same Flatpak/package detection as the 3 dedicated scripts ---
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   zgu_cli_error "$(t sgdb_images.lutris_missing)"
   exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak) lutris_db="${lutris_flatpak_db}" ;;
-  package) lutris_db="${lutris_package_db}" ;;
-  *)
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
+}
 
 if [[ ! -f "${lutris_db}" ]]; then
   zgu_cli_error "$(t sgdb_images.db_missing "${lutris_db}")"

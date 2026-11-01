@@ -52,11 +52,21 @@ import random
 import sys
 import os
 import time
-import ctypes
-import ctypes.util
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from zgu_common import load_sdl2
+from zgu_common import (
+    GAMEPAD_AXIS_THRESHOLD,
+    GAMEPAD_POLL_MS,
+    SDL_CONTROLLER_AXIS_LEFTY,
+    SDL_CONTROLLER_BUTTON_A,
+    SDL_CONTROLLER_BUTTON_B,
+    SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+    PICKER_BUTTON_CSS,
+    PICKER_TEXT_CSS,
+    SDL_CONTROLLER_BUTTON_DPAD_UP,
+    init_sdl,
+    load_sdl2,
+)
 
 try:
     import gi
@@ -213,15 +223,7 @@ CSS = b"""
     border-radius: 10px;
     padding: 46px;
 }
-.lpm-picker-title {
-    font-weight: bold;
-    font-size: 24px;
-    color: #ffffff;
-}
-.lpm-picker-prompt {
-    font-size: 20px;
-    color: #cccccc;
-}
+""" + PICKER_TEXT_CSS + b"""
 /* Noeud CSS "list", PAS "listbox" -- le widget est "Gtk.ListBox" mais son noeud CSS en
    GTK4 s'appelle "list" ; le selecteur "listbox" ne correspondait a rien du tout, d'ou le
    fond reste blanc malgre les regles ci-dessous (symptome observe). */
@@ -286,32 +288,7 @@ CSS = b"""
 }
 .lpm-pad-icon-a { background-color: #2e9e3a; }
 .lpm-pad-icon-b { background-color: #c62828; }
-/* Bordure : couleur du fond du bouton eclaircie uniformement (+0x20 par canal), jamais le
-   blanc par defaut du theme --. "border" en raccourci complet
-   (style + largeur + couleur), meme logique que "background-image: none" plus haut : ne
-   laisser aucune propriete de bordure heritee du theme. */
-.lpm-picker-validate-button {
-    background-image: none;
-    background-color: #2e7d32;
-    border: 1px solid #4e9d52;
-    color: #ffffff;
-}
-.lpm-picker-validate-button:hover {
-    background-image: none;
-    background-color: #388e3c;
-    border: 1px solid #58ae5c;
-}
-.lpm-picker-cancel-button {
-    background-image: none;
-    background-color: #3a3a3a;
-    border: 1px solid #5a5a5a;
-    color: #ffffff;
-}
-.lpm-picker-cancel-button:hover {
-    background-image: none;
-    background-color: #474747;
-    border: 1px solid #676767;
-}
+""" + PICKER_BUTTON_CSS + b"""
 """
 
 
@@ -341,21 +318,8 @@ def draw_spinner(cr, cx, cy, radius, angle):
 # click or several seconds), and Wayland has no portable way to force focus from outside.
 # Reading the gamepad HERE and acting directly on our own GTK widgets works the same on X11
 # AND Wayland. Vertical only, single selection: no LEFT/RIGHT and no X/L1/R1 buttons.
-GAMEPAD_POLL_MS = 20
-GAMEPAD_AXIS_THRESHOLD = int(32767 * 0.5)  # 50% of the axis travel
 
-SDL_INIT_JOYSTICK = 0x00000200
-SDL_INIT_GAMECONTROLLER = 0x00002000
-SDL_INIT_EVENTS = 0x00004000
-SDL_CONTROLLER_BUTTON_A = 0
-SDL_CONTROLLER_BUTTON_B = 1
-SDL_CONTROLLER_BUTTON_DPAD_UP = 11
-SDL_CONTROLLER_BUTTON_DPAD_DOWN = 12
-SDL_CONTROLLER_AXIS_LEFTY = 1
 
-GAMECONTROLLERDB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "data", "gamecontrollerdb.txt"
-)
 
 _sdl = None
 _gamepad_pads = []
@@ -376,28 +340,8 @@ def init_gamepad():
         sdl = load_sdl2()
         if sdl is None:
             return
-        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-        os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
-        sdl.SDL_Init.restype = ctypes.c_int
-        sdl.SDL_Init.argtypes = [ctypes.c_uint32]
-        sdl.SDL_NumJoysticks.restype = ctypes.c_int
-        sdl.SDL_IsGameController.restype = ctypes.c_int
-        sdl.SDL_IsGameController.argtypes = [ctypes.c_int]
-        sdl.SDL_GameControllerOpen.restype = ctypes.c_void_p
-        sdl.SDL_GameControllerOpen.argtypes = [ctypes.c_int]
-        sdl.SDL_GameControllerUpdate.restype = None
-        sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
-        sdl.SDL_GameControllerGetButton.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        sdl.SDL_GameControllerGetAxis.restype = ctypes.c_int16
-        sdl.SDL_GameControllerGetAxis.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        add_mappings = getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None)
-        if add_mappings is not None:
-            add_mappings.restype = ctypes.c_int
-            add_mappings.argtypes = [ctypes.c_char_p]
-        if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
+        if not init_sdl(sdl):
             return
-        if add_mappings is not None and os.path.isfile(GAMECONTROLLERDB_PATH):
-            add_mappings(GAMECONTROLLERDB_PATH.encode("utf-8"))
         for i in range(sdl.SDL_NumJoysticks()):
             if sdl.SDL_IsGameController(i):
                 handle = sdl.SDL_GameControllerOpen(i)

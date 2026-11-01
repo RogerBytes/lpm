@@ -78,8 +78,6 @@ zgr_hash_filter() {
 }
 
 # Lutris runner paths
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
 # GITHUB_RELEASE_URL is defined in zgu-github-release-utils.sh; change the repo/release there.
 
@@ -104,28 +102,12 @@ if ! command -v sha256sum >/dev/null 2>&1; then
 fi
 
 # 2. Flatpak vs native Lutris detection (from zgu-lutris-utils.sh; also handles both being installed)
-version=$(zgu_resolve_lutris_version "cli" "" "${lutris_package_runner_dir}")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   t install_runner.lutris_missing_cli
   exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
+}
 
-case "${version}" in
-  flatpak)
-    lutris_runner_dir="${lutris_flatpak_runner_dir}"
-    ;;
-  package)
-    lutris_runner_dir="${lutris_package_runner_dir}"
-    ;;
-  *)
-    # Should never happen: $version is only set to "flatpak" or "package" above (else exit 1).
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
-
-mkdir -p "${lutris_runner_dir}"
+mkdir -p "${runner_dir}"
 
 # ---------------------------------------------------------------------------------------------
 # Only explicit command-line targets are handled (local .zgr files and/or remote GitHub names).
@@ -153,7 +135,7 @@ declare -A runner_source   # "local" or "distant"
       runner_archive["${runner_name}"]="${runner_name}.zgr"
     fi
 
-    if [[ -d "${lutris_runner_dir}/${runner_name}" ]]; then
+    if [[ -d "${runner_dir}/${runner_name}" ]]; then
       conflicts+=("${runner_name}")
     fi
 
@@ -240,7 +222,7 @@ declare -A runner_source   # "local" or "distant"
     if [[ -n "${temp_cli_dir}" ]] && { [[ "${temp_cli_dir}" == "${TMPDIR:-/tmp}"/* ]] || [[ "${temp_cli_dir}" == */.lpm-dl-* ]]; }; then
       rm -rf -- "${temp_cli_dir}"
     fi
-    if [[ -n "${inprogress_dir}" ]] && [[ "${inprogress_dir}" == "${lutris_runner_dir}/"* ]]; then
+    if [[ -n "${inprogress_dir}" ]] && [[ "${inprogress_dir}" == "${runner_dir}/"* ]]; then
       rm -rf -- "${inprogress_dir}"
     fi
     echo "[CANCELLED]"
@@ -297,7 +279,7 @@ except Exception:
       dl_base="${TMPDIR:-/tmp}"
       dl_free=$(zgu_free_bytes "${dl_base}")
       if [[ "${asset_size:-0}" =~ ^[0-9]+$ ]] && (( asset_size > 0 )) && [[ -n "${dl_free}" ]] && (( asset_size + 67108864 > dl_free )); then
-        dl_base="$(dirname "${lutris_runner_dir}")"
+        dl_base="$(dirname "${runner_dir}")"
         dl_free=$(zgu_free_bytes "${dl_base}")
         if [[ -n "${dl_free}" ]] && (( asset_size + 67108864 > dl_free )); then
           zgu_cli_error "$(t install_runner.not_enough_space_precheck "${runner_name}" "$(zgu_human_size "${asset_size}")" "$(zgu_human_size "${dl_free}")" "${dl_base}")"
@@ -364,16 +346,16 @@ except Exception:
     # Free space check BEFORE extracting: the archive's own size is a lower bound of what it
     # needs (extracted data is never smaller); a runner that needs more is reported by the
     # "disk full" message below.
-    run_free=$(zgu_free_bytes "${lutris_runner_dir}")
+    run_free=$(zgu_free_bytes "${runner_dir}")
     if [[ -n "${run_free}" ]] && [[ "${archive_size:-0}" =~ ^[0-9]+$ ]] && (( archive_size > run_free )); then
-      zgu_cli_error "$(t install_runner.not_enough_space_precheck "${runner_name}" "$(zgu_human_size "${archive_size}")" "$(zgu_human_size "${run_free}")" "${lutris_runner_dir}")"
+      zgu_cli_error "$(t install_runner.not_enough_space_precheck "${runner_name}" "$(zgu_human_size "${archive_size}")" "$(zgu_human_size "${run_free}")" "${runner_dir}")"
       zgu_log "install-runner" "ERROR" "runner=${runner_name} reason=not_enough_space needed=${archive_size} free=${run_free}"
       [[ -n "${temp_cli_dir}" ]] && rm -rf -- "${temp_cli_dir}" && temp_cli_dir=""
       install_failures=$((install_failures + 1))
       continue
     fi
     extract_err_file=$(mktemp 2>/dev/null) || extract_err_file="/dev/null"
-    inprogress_dir="${lutris_runner_dir}/${runner_name}"
+    inprogress_dir="${runner_dir}/${runner_name}"
     _lpm_old_umask=$(umask)
     umask 022
     # "pv -n" + process substitution on stderr: same mechanism as in zgp-game-installer.sh.
@@ -381,7 +363,7 @@ except Exception:
       # Remote: extraction takes the 2nd half of the bar (50-100 %).
       [[ "${src}" = "distant" ]] && _lpm_pct=$(( 50 + ${_lpm_pct:-0} / 2 ))
       printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
-    done) | bsdtar -xf - -C "${lutris_runner_dir}" 2> "${extract_err_file}"
+    done) | bsdtar -xf - -C "${runner_dir}" 2> "${extract_err_file}"
     tar_exit="${PIPESTATUS[1]}"
     umask "${_lpm_old_umask}"
 
@@ -392,16 +374,16 @@ except Exception:
     if [[ "${tar_exit}" -ne 0 ]]; then
       # Full disk or corrupted archive? Decided BEFORE removing the half-extracted runner (which
       # would free the space again).
-      run_free=$(zgu_free_bytes "${lutris_runner_dir}")
+      run_free=$(zgu_free_bytes "${runner_dir}")
       if grep -qiE "no space left|disk quota" "${extract_err_file}" 2>/dev/null \
          || { [[ -n "${run_free}" ]] && [[ "${run_free}" -lt "${ZGU_DISK_FULL_MARGIN}" ]]; }; then
-        zgu_cli_error "$(t install_runner.disk_full_cli "${runner_name}" "${lutris_runner_dir}")"
+        zgu_cli_error "$(t install_runner.disk_full_cli "${runner_name}" "${runner_dir}")"
         zgu_log "install-runner" "ERROR" "runner=${runner_name} reason=disk_full code=${tar_exit}"
       else
         zgu_cli_error "$(t install_runner.corrupt_archive_cli "${runner_name}" "${tar_exit}")"
       fi
       [[ "${extract_err_file}" = "/dev/null" ]] || rm -f "${extract_err_file}"
-      rm -rf "${lutris_runner_dir:?}/${runner_name}"
+      rm -rf "${runner_dir:?}/${runner_name}"
       inprogress_dir=""
       install_failures=$((install_failures + 1))
       continue

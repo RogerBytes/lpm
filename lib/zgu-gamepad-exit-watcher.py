@@ -46,11 +46,20 @@ import sys
 import os
 import signal
 import time
-import ctypes
-import ctypes.util
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from zgu_common import env_value, find_controllers, load_sdl2
+from zgu_common import (
+    SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+    SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
+    SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    SDL_CONTROLLER_BUTTON_LEFTSTICK,
+    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+    SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+    env_value,
+    find_controllers,
+    init_sdl,
+    load_sdl2,
+)
 
 if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]:
     sys.stderr.write("Usage: zgu-gamepad-exit-watcher.py <x11|wayland> <prefix_folder>\n")
@@ -60,7 +69,6 @@ SESSION_KIND = sys.argv[1]
 PREFIX_DIR = os.path.realpath(sys.argv[2])
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-GAMECONTROLLERDB_PATH = os.path.join(SCRIPT_DIR, "data", "gamecontrollerdb.txt")
 
 running = True
 
@@ -92,56 +100,13 @@ if sdl is None:
     )
     sys.exit(1)
 
-# No window here, only gamepad reading: force a dummy video driver so SDL_Init never tries
-# to reach a display server (also useful if DISPLAY/WAYLAND_DISPLAY is not reachable at
-# launch).
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-# The gamepad must keep being read even though this process never has focus (it has no
-# window). This is SDL2's default for the joystick subsystem on Linux (direct joystick/evdev
-# reads, not tied to X11/Wayland focus); set explicitly so it does not depend on a default.
-os.environ.setdefault("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1")
-
-SDL_INIT_JOYSTICK = 0x00000200
-SDL_INIT_GAMECONTROLLER = 0x00002000
-SDL_INIT_EVENTS = 0x00004000
-
-sdl.SDL_Init.restype = ctypes.c_int
-sdl.SDL_Init.argtypes = [ctypes.c_uint32]
-sdl.SDL_Quit.restype = None
-sdl.SDL_GetError.restype = ctypes.c_char_p
-sdl.SDL_NumJoysticks.restype = ctypes.c_int
-sdl.SDL_IsGameController.restype = ctypes.c_int
-sdl.SDL_IsGameController.argtypes = [ctypes.c_int]
-sdl.SDL_GameControllerOpen.restype = ctypes.c_void_p
-sdl.SDL_GameControllerOpen.argtypes = [ctypes.c_int]
-sdl.SDL_GameControllerClose.restype = None
-sdl.SDL_GameControllerClose.argtypes = [ctypes.c_void_p]
-sdl.SDL_GameControllerUpdate.restype = None
-sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
-sdl.SDL_GameControllerGetButton.argtypes = [ctypes.c_void_p, ctypes.c_int]
-sdl.SDL_GameControllerGetAxis.restype = ctypes.c_int16
-sdl.SDL_GameControllerGetAxis.argtypes = [ctypes.c_void_p, ctypes.c_int]
-# SDL_GameControllerAddMappingsFromFile is optional: some libSDL2 builds do not export it
-# (absent from Ubuntu's libSDL2-2.0.so.0 2.30.0). Resolve it defensively via getattr so a
-# missing symbol never crashes startup; the library's built-in database is used instead.
-_add_mappings_from_file = getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None)
-if _add_mappings_from_file is not None:
-    _add_mappings_from_file.restype = ctypes.c_int
-    _add_mappings_from_file.argtypes = [ctypes.c_char_p]
-
-if sdl.SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0:
+if not init_sdl(sdl):
     sys.stderr.write(
         "zgu-gamepad-exit-watcher: SDL_Init failed (%s)\n"
         % sdl.SDL_GetError().decode("utf-8", "replace")
     )
     sys.exit(1)
-
-# Load the bundled community database, giving SDL2 the standard mapping for many known
-# gamepads rather than relying only on the libSDL2 built-in one (varies by distribution).
-# A missing file or symbol is not fatal: falls back to the built-in database.
-if _add_mappings_from_file is not None and os.path.isfile(GAMECONTROLLERDB_PATH):
-    _add_mappings_from_file(GAMECONTROLLERDB_PATH.encode("utf-8"))
-elif _add_mappings_from_file is None:
+elif getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None) is None:
     sys.stderr.write(
         "zgu-gamepad-exit-watcher: SDL_GameControllerAddMappingsFromFile unavailable in "
         "this libSDL2 -- bundled database ignored, falling back to the installed library's built-in one.\n"
@@ -185,12 +150,6 @@ def close_game():
 # --- SDL2 standardized buttons/axes (SDL_GameControllerButton / SDL_GameControllerAxis,
 # fixed numeric values of the C API, see SDL_gamecontroller.h). SDL2 translates every
 # recognized gamepad to this fixed layout, whatever the model.
-SDL_CONTROLLER_BUTTON_LEFTSTICK = 7        # left stick click (L3)
-SDL_CONTROLLER_BUTTON_RIGHTSTICK = 8       # right stick click (R3)
-SDL_CONTROLLER_BUTTON_LEFTSHOULDER = 9     # L1
-SDL_CONTROLLER_BUTTON_RIGHTSHOULDER = 10   # R1
-SDL_CONTROLLER_AXIS_TRIGGERLEFT = 4        # L2 (analog, 0..32767)
-SDL_CONTROLLER_AXIS_TRIGGERRIGHT = 5       # R2 (analog, 0..32767)
 
 COMBO_BUTTONS = (
     SDL_CONTROLLER_BUTTON_LEFTSHOULDER,

@@ -80,21 +80,12 @@ case "${shortcut_mode}" in
 esac
 
 # Path configuration
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
 
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
 # Wine/Proton builds directory: zgu_write_game_shortcut checks for "toolmanifest.vdf" there
 # (same test as umu-run) to tell a Proton runner from plain Wine. See zgu-desktop-utils.sh.
-lutris_flatpak_runner_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/runners/wine"
-lutris_package_runner_dir="${HOME}/.local/share/lutris/runners/wine"
 
-games_dir="${HOME}/Games"
 
 # 1. Dependency check
 # sqlite3, pv and bsdtar are always required. bsdtar (package "libarchive-tools" on
@@ -131,43 +122,10 @@ pkill -9 -f "/usr/bin/lutris" 2>/dev/null
 
 # 3. Detect Flatpak vs native package (function from zgu-lutris-utils.sh; also handles both
 # being installed)
-version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${version}" ]]; then
+zgu_load_lutris_env || {
   t install_game.lutris_missing_cli
   exit 1
-fi
-[[ "${version}" = "native" ]] && version="package"
-
-case "${version}" in
-  flatpak)
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    lutris_db="${lutris_flatpak_db}"
-    lutris_system_file="${lutris_flatpak_system_file}"
-    runner_dir="${lutris_flatpak_runner_dir}"
-    ;;
-  package)
-    lutris_config_dir="${lutris_package_config_dir}"
-    lutris_db="${lutris_package_db}"
-    lutris_system_file="${lutris_package_system_file}"
-    runner_dir="${lutris_package_runner_dir}"
-    ;;
-  *)
-    # Should never happen: $version is only set to "flatpak" or "package" above (otherwise
-    # exit 1). Safeguard in case that invariant changes.
-    echo "Erreur interne : version Lutris inattendue '${version}'." >&2
-    exit 1
-    ;;
-esac
-
-# Custom Games path (if set in Lutris): this global preference lives in system.yml under
-# "system: game_path:", not in runners/wine.yml. The awk matches any "game_path:" line
-# regardless of indentation or parent key.
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  if [[ -n "${extracted_path}" ]]; then
-    games_dir="${extracted_path}"
-  fi
-fi
+}
 
 mkdir -p "${lutris_config_dir}"
 mkdir -p "$(dirname "${lutris_db}")"

@@ -33,48 +33,20 @@ OUTPUT_DIR="${HOME}"
 # Lutris paths (Flatpak vs native package), using the same detection as all other lib/ scripts
 # (via zgu-lutris-utils.sh). Checking for leftover files could read the wrong database if an old
 # Flatpak or native profile still lies around.
-lutris_flatpak_db="${HOME}/.var/app/net.lutris.Lutris/data/lutris/pga.db"
-lutris_package_db="${HOME}/.local/share/lutris/pga.db"
 
-lutris_flatpak_config_dir="${HOME}/.var/app/net.lutris.Lutris/data/lutris/games"
-lutris_package_config_dir="${HOME}/.config/lutris/games"
 
-lutris_flatpak_system_file="${HOME}/.var/app/net.lutris.Lutris/data/lutris/system.yml"
-lutris_package_system_file="${HOME}/.config/lutris/system.yml"
 
 GAMES_DIR="${HOME}/Games"
 
 # Detect Flatpak vs native package (function from zgu-lutris-utils.sh; also handles both being
 # installed)
-lutris_version=$(zgu_resolve_lutris_version "cli" "${lutris_package_db}" "")
-if [[ -z "${lutris_version}" ]]; then
+zgu_load_lutris_env || {
   # Explicit detection (aligned with the other lib/ scripts): a silent fallback to native
   # paths would give a "folder not found" message later, much less clear than the real cause
   # (Lutris not installed).
   zgu_cli_error "$(t pack_game.lutris_missing_cli)"
   exit 1
-fi
-case "${lutris_version}" in
-  flatpak)
-    lutris_db_path="${lutris_flatpak_db}"
-    lutris_config_dir="${lutris_flatpak_config_dir}"
-    lutris_system_file="${lutris_flatpak_system_file}"
-    ;;
-  native)
-    lutris_db_path="${lutris_package_db}"
-    lutris_config_dir="${lutris_package_config_dir}"
-    lutris_system_file="${lutris_package_system_file}"
-    ;;
-esac
-
-# Custom Games path (if set in Lutris): read dynamically as in zgp-game-installer.sh and
-# zgp-game-uninstaller.sh. This global preference lives in system.yml ("system: game_path:"),
-# NOT in runners/wine.yml (which only holds Wine runner options such as
-# system_winetricks/version).
-if [[ -f "${lutris_system_file}" ]]; then
-  extracted_path=$(awk -F': ' '/^[[:space:]]*game_path:/ {print $2}' "${lutris_system_file}")
-  [[ -n "${extracted_path}" ]] && GAMES_DIR="${extracted_path}"
-fi
+}
 
 # Anonymize any user path (Windows "Users\\<name>\\" / "Users\<name>\\" and POSIX
 # "/home/<name>/") to "anonuser", whatever the user name: a fixed list of known names would
@@ -134,10 +106,10 @@ games_to_export=()
 # damage the shared prefix for the other games still using it (see zgu_get_blacklisted_slugs in
 # zgu-lutris-utils.sh).
 declare -A blacklisted_slugs
-if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
+if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db}" ]]; then
   while IFS= read -r bl_slug; do
     [[ -n "${bl_slug}" ]] && blacklisted_slugs["${bl_slug}"]=1
-  done < <(zgu_get_blacklisted_slugs "${lutris_db_path}")
+  done < <(zgu_get_blacklisted_slugs "${lutris_db}")
 fi
 
 # --all (CLI only): replaces the lone "--all" argument with the sorted list of all
@@ -148,12 +120,12 @@ pack_skipped=0
 if [[ ${#cli_games[@]} -eq 1 ]] && [[ "${cli_games[0]}" = "--all" ]]; then
   pack_all_mode=true
   all_wine_slugs=()
-  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db}" ]]; then
     while IFS= read -r all_slug; do
       [[ -z "${all_slug}" ]] && continue
       [[ -n "${blacklisted_slugs[${all_slug}]:-}" ]] && continue
       all_wine_slugs+=("${all_slug}")
-    done < <(sqlite3 "${lutris_db_path}" "SELECT slug FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
+    done < <(sqlite3 "${lutris_db}" "SELECT slug FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
   fi
   if [[ ${#all_wine_slugs[@]} -eq 0 ]]; then
     zgu_cli_error "$(t pack_game.no_prefix_found "${GAMES_DIR}")"
@@ -182,7 +154,7 @@ for target_slug_raw in "${cli_games[@]}"; do
     exit 1
   fi
 
-  resolved_dir=$(zgu_resolve_prefix_dir_by_slug "${target_slug}" "${lutris_db_path}" "${GAMES_DIR}")
+  resolved_dir=$(zgu_resolve_prefix_dir_by_slug "${target_slug}" "${lutris_db}" "${GAMES_DIR}")
   if [[ -z "${resolved_dir}" ]]; then
     zgu_cli_error "$(t pack_game.folder_not_found_cli "${target_slug_raw}" "${GAMES_DIR}")"
     # With --all, a game whose folder is missing must not prevent packing the others: it is
@@ -195,9 +167,9 @@ for target_slug_raw in "${cli_games[@]}"; do
   fi
 
   game_real_name=""
-  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
+  if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db}" ]]; then
     safe_target_slug="${target_slug//\'/\'\'}"
-    game_real_name=$(sqlite3 "${lutris_db_path}" "SELECT name FROM games WHERE slug='${safe_target_slug}' LIMIT 1;" 2>/dev/null)
+    game_real_name=$(sqlite3 "${lutris_db}" "SELECT name FROM games WHERE slug='${safe_target_slug}' LIMIT 1;" 2>/dev/null)
   fi
   [[ -z "${game_real_name}" ]] && game_real_name="${target_slug}"
   # A "/" in the name would target a wrong archive path (same neutralization as
@@ -290,9 +262,9 @@ for game_real_name in "${games_to_export[@]}"; do
 
   configpath=""
 
-  if [[ -n "${game_slug}" ]] && command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
+  if [[ -n "${game_slug}" ]] && command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db}" ]]; then
     safe_game_slug="${game_slug//\'/\'\'}"
-    configpath=$(sqlite3 "${lutris_db_path}" "SELECT configpath FROM games WHERE slug='${safe_game_slug}' LIMIT 1;" 2>/dev/null)
+    configpath=$(sqlite3 "${lutris_db}" "SELECT configpath FROM games WHERE slug='${safe_game_slug}' LIMIT 1;" 2>/dev/null)
   fi
 
   ARCHIVE_NAME="${game_real_name}"
