@@ -58,7 +58,7 @@ import ctypes.util
 try:
     import gi
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gtk, Gdk, GLib
+    from gi.repository import Gtk, Gdk, GLib, Pango
     import cairo
 except Exception as exc:  # pragma: no cover - system dependency missing
     sys.stderr.write("zgu-launcher-screen: GTK4/PyGObject indisponible (%s)\n" % exc)
@@ -202,7 +202,7 @@ CSS = b"""
     color: #ffffff;
     border: 2px solid #2f2f2f;
     border-radius: 10px;
-    padding: 46px;
+    padding: 66px 46px 46px 46px;
 }
 .lpm-picker-title {
     font-weight: bold;
@@ -262,6 +262,9 @@ CSS = b"""
 }
 .lpm-picker-fade {
     background-image: linear-gradient(to top, #1a1a1a, rgba(26, 26, 26, 0));
+}
+.lpm-picker-fade-top {
+    background-image: linear-gradient(to bottom, #1a1a1a, rgba(26, 26, 26, 0));
 }
 .lpm-picker-button.lpm-pad-flat,
 .lpm-picker-button.lpm-pad-flat:hover {
@@ -629,6 +632,15 @@ class ScreenWindow(Gtk.Window):
         self.picker_fade.set_can_target(False)
         self.picker_fade.set_visible(False)
         scroll_overlay.add_overlay(self.picker_fade)
+        self.picker_fade_top = Gtk.Box()
+        self.picker_fade_top.add_css_class("lpm-picker-fade-top")
+        self.picker_fade_top.set_valign(Gtk.Align.START)
+        self.picker_fade_top.set_halign(Gtk.Align.FILL)
+        self.picker_fade_top.set_size_request(-1, PICKER_FADE_HEIGHT)
+        self.picker_fade_top.set_margin_end(18)
+        self.picker_fade_top.set_can_target(False)
+        self.picker_fade_top.set_visible(False)
+        scroll_overlay.add_overlay(self.picker_fade_top)
         self.picker_scroll = scroll
         adj = scroll.get_vadjustment()
         for sig in ("changed", "value-changed"):
@@ -693,6 +705,7 @@ class ScreenWindow(Gtk.Window):
         adj = self.picker_scroll.get_vadjustment()
         hidden_below = adj.get_value() + adj.get_page_size() < adj.get_upper() - 1
         self.picker_fade.set_visible(hidden_below)
+        self.picker_fade_top.set_visible(adj.get_value() > 1)
         # With a scrollbar, the rows stop before it so the selection's right rounding shows.
         scrollable = adj.get_upper() > adj.get_page_size() + 1
         if scrollable != self.picker_scrollable:
@@ -740,6 +753,9 @@ class ScreenWindow(Gtk.Window):
         for entry in entries:
             row = Gtk.ListBoxRow()
             label = Gtk.Label(xalign=0)
+            # A long entry is cut with "..." instead of widening the whole card (the card
+            # used to grow to the widest entry).
+            label.set_ellipsize(Pango.EllipsizeMode.END)
             label.set_markup(_entry_markup(entry))
             row.set_child(label)
             self.picker_listbox.append(row)
