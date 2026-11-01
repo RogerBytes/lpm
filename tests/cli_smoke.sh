@@ -417,7 +417,7 @@ expect "install: --allow-scripts keeps the hook on the copy" bash -c 'grep -hE "
 rm -rf "${HOME}/hookdir"
 rm -f "${HOME}/Zelda.zgp"
 rm -f "${HOME}/Zelda.zgp"
-printf 'game:\n  exe: /x.exe\nsystem:\n  prefix_command: %s/Games/mario/scripts/lpm-winetrace.sh %s/Games/mario/scripts/lpm-winetrace.log\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/mario-1.yml"
+printf 'name: Old Name\ngame:\n  exe: /x.exe\nsystem:\n  prefix_command: %s/Games/mario/scripts/lpm-winetrace.sh %s/Games/mario/scripts/lpm-winetrace.log\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/mario-1.yml"
 
 # --- Pack: the free space for the WHOLE batch is checked before anything is touched
 pshim="${work}/pshim"; mkdir -p "${pshim}"
@@ -447,6 +447,7 @@ rm -rf "${pshim}"
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
 expect "pack: relay only -> no prefix_command exported" bash -c '! bsdtar -xOqf "$1" .lpm-config.yml | grep -q prefix_command' _ "${HOME}/Mario.zgp"
 expect "pack: .zgp created" test -s "${HOME}/Mario.zgp"
+expect "pack: the name in the archive is the one in Lutris' database (renamed game), not the stale YAML one" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"name\"]==\"Mario\""' _ "${HOME}/Mario.zgp"
 expect "pack: .lpm-config.yml is the first member of the archive" bash -c 'zstd -dc "$1" | head -c 100 | tr -d "\0" | grep -qx ".lpm-config.yml"' _ "${HOME}/Mario.zgp"
 expect "pack: first-member YAML holds the exact size" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"lpm_archive\"][\"size\"] > 0"' _ "${HOME}/Mario.zgp"
 expect "pack: no .lpm-size and no zgp-game-config.yml left in the archive" bash -c '! zstd -dc "$1" | tar -t | grep -qE "(^|/)(\.lpm-size|zgp-game-config\.yml)$"' _ "${HOME}/Mario.zgp"
