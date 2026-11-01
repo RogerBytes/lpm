@@ -9,6 +9,7 @@ from gi.repository import Adw, Gtk  # noqa: E402
 
 import backend
 from i18n import t
+from util import _run_on_main
 from commandpage import CommandPage
 from widgets_rows import (PrefixEntryRow, add_compression_rows, add_shortcut_rows, ask_keep_or_delete,
                           pick_file, sibling_files)
@@ -250,10 +251,6 @@ class InstallPage:
             self.file_selector.set_paths([])
 
     def _add_option_rows(self):
-        self.allow_scripts_row = Adw.SwitchRow(title=t("gui.install.allow_scripts_title"),
-                                           subtitle=t("gui.install.allow_scripts_subtitle"))
-        self.page.add_row(self.allow_scripts_row)
-
         self.ignore_hash_row = Adw.SwitchRow(title=t("gui.common.ignore_hash_title"))
         self.page.add_row(self.ignore_hash_row)
 
@@ -286,7 +283,6 @@ class InstallPage:
     # everything: the file list AND the switches.
     def reset_fields(self):
         self.file_selector.set_paths([])
-        self.allow_scripts_row.set_active(False)
         self.ignore_hash_row.set_active(False)
         self.menu_shortcut_row.set_active(True)
         self.desktop_shortcut_row.set_active(False)
@@ -304,9 +300,9 @@ class InstallPage:
             return "desktop"
         return "none"
 
-    def _install_args(self, selected: list[str]) -> list[str]:
+    def _install_args(self, selected: list[str], allow_scripts: bool) -> list[str]:
         args = ["install", "-y"]
-        if self.allow_scripts_row.get_active():
+        if allow_scripts:
             args.append("--allow-scripts")
         if self.ignore_hash_row.get_active():
             args.append("--ignore-hash")
@@ -344,16 +340,69 @@ class InstallPage:
             delete_installed,
         )
 
+    @staticmethod
+    def _parse_hooks(stdout: str) -> list[tuple[str, str, list[tuple[str, str]]]]:
+        """Output of "lpm install --list-hooks": [(game name, file name, [(key, value)])]."""
+        games = []
+        for line in stdout.splitlines():
+            kind, _, rest = line.partition("\x1f")
+            fields = rest.split("\x1f")
+            if kind == "GAME" and len(fields) >= 2:
+                games.append((fields[0], fields[1], []))
+            elif kind == "HOOK" and games and len(fields) >= 2:
+                value = fields[1] if len(fields[1]) <= 120 else fields[1][:117] + "..."
+                games[-1][2].append((fields[0], value))
+        return games
+
+    def _ask_hooks(self, games, total: int, on_choice):
+        """One confirmation for the whole batch, listing every package that embeds scripts.
+        on_choice(None) = cancel, on_choice(False) = install without them, on_choice(True) = allow."""
+        listing = "\n\n".join(
+            f"\u2022 {name} ({filename})\n" + "\n".join(f"    {key}: {value}" for key, value in hooks)
+            for name, filename, hooks in games)
+        dialog = Adw.AlertDialog(
+            heading=t("gui.install.hooks_dialog_heading"),
+            body=t("gui.install.hooks_dialog_body", f"{len(games)}/{total}", listing))
+        dialog.add_response("cancel", t("gui.common.cancel"))
+        dialog.add_response("without", t("gui.install.hooks_dialog_without"))
+        dialog.add_response("allow", t("gui.install.hooks_dialog_allow"))
+        dialog.set_response_appearance("allow", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("without")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", lambda _d, r: on_choice({"without": False, "allow": True}.get(r)))
+        dialog.present(self.window)
+
+    def _start_install(self, selected: list[str], allow_scripts: bool):
+        batch_desktop_dir = self.desktop_path_row.value() if self.desktop_shortcut_row.get_active() else ""
+        self.page.run_command(
+            self._install_args(selected, allow_scripts), t("gui.common.install_done"), refresh="games",
+            cancellable=True,
+            on_cancelled=lambda slugs: self._on_cancelled(slugs, batch_desktop_dir))
+
+    def _on_hooks_scanned(self, selected: list[str], result):
+        self.page.run_button.set_sensitive(True)
+        games = self._parse_hooks(result.stdout) if result.returncode == 0 else []
+        if not games:
+            self._start_install(selected, False)
+            return
+
+        def on_choice(allow):
+            if allow is not None:
+                self._start_install(selected, allow)
+
+        self._ask_hooks(games, len(selected), on_choice)
+
     def on_run(self, *_):
         selected = self.file_selector.selected_paths()
         if not selected:
             self.page.toast(t("gui.install.toast_choose_file"))
             return
-        batch_desktop_dir = self.desktop_path_row.value() if self.desktop_shortcut_row.get_active() else ""
-        self.page.run_command(
-            self._install_args(selected), t("gui.common.install_done"), refresh="games",
-            cancellable=True,
-            on_cancelled=lambda slugs: self._on_cancelled(slugs, batch_desktop_dir))
+        # Scripts embedded in the archives are listed first (read-only), so that ONE
+        # confirmation can name every package that has some, as the CLI does.
+        self.page.run_button.set_sensitive(False)
+        backend.run_lpm_async(
+            ["install", "-y", "--list-hooks", *selected],
+            on_done=lambda result: _run_on_main(self._on_hooks_scanned, selected, result))
 
 
 class LifecyclePages:

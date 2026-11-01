@@ -45,6 +45,7 @@ shift || true
 shortcut_mode="both"
 desktop_dir_override=""
 loadingscreen_enabled=true
+list_hooks_only=false
 cli_targets=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -64,6 +65,10 @@ while [[ $# -gt 0 ]]; do
       loadingscreen_enabled=false
       shift
       ;;
+    --list-hooks)
+      list_hooks_only=true
+      shift
+      ;;
     *)
       cli_targets+=("$1")
       shift
@@ -78,6 +83,40 @@ case "${shortcut_mode}" in
     exit 1
     ;;
 esac
+
+# Automatic launch/close scripts embedded in one archive (read from its first member, nothing is
+# extracted). Args: filepath fallback_name. Prints nothing if there are none, otherwise a
+# "GAME<US>name<US>file" line then one "HOOK<US>key<US>value" line per script (US = \x1f).
+zgp_archive_hooks() {
+  local filepath="$1" fallback_name="$2" cfg hooks game_name hook_path hook_value
+  cfg=$(zgu_archive_config "${filepath}") || return 0
+  hooks=$(printf '%s\n' "${cfg}" | zgu_yaml_hooks)
+  [[ -n "${hooks}" ]] || return 0
+  game_name=$(printf '%s\n' "${cfg}" | python3 -c '
+import sys, yaml
+try:
+    print((yaml.safe_load(sys.stdin.read()) or {}).get("name", "") or "")
+except Exception:
+    pass
+' 2>/dev/null)
+  game_name="${game_name//[$'\n\r']/ }"
+  [[ -z "${game_name}" ]] && game_name="${fallback_name}"
+  printf 'GAME\x1f%s\x1f%s\n' "${game_name}" "$(basename "${filepath}")"
+  while IFS=$'\x1f' read -r hook_path hook_value; do
+    [[ -z "${hook_path}" ]] && continue
+    printf 'HOOK\x1f%s\x1f%s\n' "${hook_path}" "${hook_value//[$'\n\r']/ }"
+  done <<< "${hooks}"
+}
+
+# --list-hooks (used by the GUI before installing): lists the scripts embedded in the given
+# archives and exits. Read-only: Lutris is not touched, nothing is extracted or installed.
+if [[ "${list_hooks_only}" = true ]]; then
+  for target in "${cli_targets[@]}"; do
+    [[ -f "${target}" ]] || continue
+    zgp_archive_hooks "${target}" "$(basename "${target}" .zgp)"
+  done
+  exit 0
+fi
 
 # Path configuration
 
@@ -257,25 +296,19 @@ if [[ "${batch_hooks_decision}" != "yes" ]]; then
   batch_hook_games=0
   batch_hook_report=""
   for name in "${games_to_install[@]}"; do
-    batch_cfg=$(zgu_archive_config "${filepath_by_name[${name}]}") || continue
-    batch_hooks=$(printf '%s\n' "${batch_cfg}" | zgu_yaml_hooks)
-    [[ -n "${batch_hooks}" ]] || continue
-    batch_name=$(printf '%s\n' "${batch_cfg}" | python3 -c '
-import sys, yaml
-try:
-    print((yaml.safe_load(sys.stdin.read()) or {}).get("name", "") or "")
-except Exception:
-    pass
-' 2>/dev/null)
-    batch_name="${batch_name//[$'\n\r']/ }"
-    [[ -z "${batch_name}" ]] && batch_name="${name}"
-    batch_hook_games=$((batch_hook_games + 1))
-    batch_hook_report+="$(t install_game.hooks_confirm_header_cli "${batch_name}")"$'\n'
-    while IFS=$'\x1f' read -r hook_path hook_value; do
-      [[ -z "${hook_path}" ]] && continue
-      hook_value="${hook_value//[$'\n\r']/ }"
-      batch_hook_report+="$(t install_game.hooks_list_item_cli "${hook_path}" "${hook_value}")"$'\n'
-    done <<< "${batch_hooks}"
+    batch_out=$(zgp_archive_hooks "${filepath_by_name[${name}]}" "${name}")
+    [[ -n "${batch_out}" ]] || continue
+    while IFS=$'\x1f' read -r hook_kind hook_a hook_b; do
+      case "${hook_kind}" in
+        GAME)
+          batch_hook_games=$((batch_hook_games + 1))
+          batch_hook_report+="$(t install_game.hooks_confirm_header_cli "${hook_a}")"$'\n'
+          ;;
+        HOOK)
+          batch_hook_report+="$(t install_game.hooks_list_item_cli "${hook_a}" "${hook_b}")"$'\n'
+          ;;
+      esac
+    done <<< "${batch_out}"
   done
   if [[ "${batch_hook_games}" -gt 0 ]]; then
     t install_game.hooks_batch_summary_cli "${batch_hook_games}" "${#games_to_install[@]}"

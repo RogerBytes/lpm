@@ -1001,8 +1001,10 @@ gui.install.page_subtitle=Paquet(s) .zgp
 gui.install.file_selector_title=Fichier(s) .zgp
 gui.install.choose_dialog_title=Choisir un ou plusieurs .zgp
 gui.install.choose_tooltip=Choisir des fichiers .zgp
-gui.install.allow_scripts_title=Autoriser les scripts automatiques
-gui.install.allow_scripts_subtitle=Hooks prelaunch/postexit détectés dans le paquet (désactivé = retirés par sécurité)
+gui.install.hooks_dialog_heading=Scripts automatiques détectés
+gui.install.hooks_dialog_body=%s des paquets sélectionnés embarquent des scripts que Lutris exécute automatiquement à chaque lancement ou fermeture du jeu. Ne les autorisez que si vous avez créé ces paquets vous-même ou si vous faites entièrement confiance à leur source.\n\n%s
+gui.install.hooks_dialog_without=Installer sans les scripts
+gui.install.hooks_dialog_allow=Autoriser et installer
 gui.install.menu_shortcut_title=Ajouter au menu des applications
 gui.install.desktop_shortcut_title=Raccourci dans un dossier
 gui.install.toast_choose_file=Choisis au moins un fichier .zgp.

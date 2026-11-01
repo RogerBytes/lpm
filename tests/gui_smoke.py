@@ -233,6 +233,36 @@ try:
 except Exception:
     errors.append("failure toast:\n" + traceback.format_exc())
 
+# --- Install: scripts embedded in archives are listed, then ONE confirmation -------------
+try:
+    import subprocess, tempfile, pages_lifecycle
+    from gi.repository import Adw
+    tmp = tempfile.mkdtemp()
+    cfg = os.path.join(tmp, ".lpm-config.yml")
+    with open(cfg, "w") as f:
+        f.write("name: Hook Game\ngame:\n  exe: /x.exe\nsystem:\n  prelaunch_command: /bin/true\n")
+    os.makedirs(os.path.join(tmp, "hookgame"))
+    zgp = os.path.join(tmp, "Hook Game.zgp")
+    subprocess.run("tar -C %s --zstd -cf '%s' .lpm-config.yml hookgame" % (tmp, zgp), shell=True, check=True)
+    res = backend.run_lpm(["install", "-y", "--list-hooks", zgp])
+    games = pages_lifecycle.InstallPage._parse_hooks(res.stdout)
+    assert games == [("Hook Game", "Hook Game.zgp", [("system.prelaunch_command", "/bin/true")])] or \
+        (len(games) == 1 and games[0][0] == "Hook Game" and games[0][2] and "prelaunch_command" in games[0][2][0][0]), games
+    shown_dialogs = []
+    Adw.AlertDialog.present = lambda self, parent=None: shown_dialogs.append(self)
+    choices = []
+    stub = types.SimpleNamespace(window=win)
+    pages_lifecycle.InstallPage._ask_hooks(stub, games, 2, choices.append)
+    dlg = shown_dialogs[0]
+    assert "Hook Game" in dlg.get_body() and "prelaunch_command" in dlg.get_body() and "1/2" in dlg.get_body()
+    assert dlg.get_default_response() == "without", dlg.get_default_response()
+    for response in ("without", "allow", "cancel"):
+        dlg.emit("response", response)
+    assert choices == [False, True, None], choices
+    print("install scripts confirmation: OK")
+except Exception:
+    errors.append("install scripts confirmation:\n" + traceback.format_exc())
+
 print("pages built: %d/%d" % (len(ok), len(page_ids)))
 print("pages: " + ", ".join(ok))
 if errors:

@@ -577,6 +577,9 @@ expect "pack: YAML points to the copied script" bash -c 'bsdtar -xOqf "$1" .lpm-
 # Install: the script travels in the archive; without --allow-scripts the hook is neutralized,
 # with it the hook points to the copy in the new lpm/scripts.
 mkdir -p "${HOME}/hookdir"; cp "${HOME}/Zelda.zgp" "${HOME}/hookdir/Zelda.zgp"
+# --list-hooks (used by the GUI confirmation): read-only list of the scripts of the archives.
+check "install --list-hooks: game with a script" 0 'GAME.*Zelda.zgp' install -y --list-hooks "${HOME}/hookdir/Zelda.zgp"
+check "install --list-hooks: lists the script key" 0 'HOOK.*prelaunch_command' install -y --list-hooks "${HOME}/hookdir/Zelda.zgp"
 check "uninstall zelda (hook test)" 0 '\[REMOVED\] zelda' uninstall -y zelda
 check "install: archive with a script, no --allow-scripts" 0 '\[INSTALLED\] zelda' install -y "${HOME}/hookdir/Zelda.zgp"
 expect "install: script restored in lpm/scripts" test -f "${HOME}/Games/zelda/lpm/scripts/before.sh"

@@ -34,6 +34,7 @@ Lutris is **killed** (`SIGKILL`) at the start of the command so that its databas
 | `-s <mode>`, `--shortcut <mode>`, `--shortcut=<mode>` | Which shortcuts to create: `menu`, `desktop`, `both` (default) or `none`. Any other value: error, exit 1. If the option is the very last argument with no value, the default `both` is used. |
 | `--desktop-dir=<dir>` | Folder in which to write the desktop shortcut instead of the detected desktop folder. The folder must already exist, otherwise the desktop shortcut is silently not written. Ignored when the mode is `menu` or `none`. |
 | `-n`, `--no-loadingscreen` | Disables the lpm loading screen for the game's shortcuts (creates an empty marker file `lpm/settings/no-loadingscreen` in the prefix). |
+| `--list-hooks` | Read-only: prints the launch/exit scripts embedded in the given archives and exits, without installing anything and without touching Lutris. One `GAME<US>name<US>file` line per archive that has some, followed by one `HOOK<US>key<US>value` line per script (`<US>` = the control character `0x1f`). Archives without scripts print nothing. Used by the graphical interface to show a single confirmation listing every package that embeds scripts. |
 
 The compression-level options (`-0` to `-22`) and `--hash` are accepted by the router but have no effect on `install`.
 
