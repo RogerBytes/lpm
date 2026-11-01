@@ -135,6 +135,12 @@ class LauncherEntryRow(Gtk.Box):
         # text is always the source of truth whatever its form.
         self._workdir_form = "win"
 
+        self._build_top_row(on_add, on_remove)
+        self._build_exe_row()
+        self._build_workdir_row()
+        self._build_args_and_separator()
+
+    def _build_top_row(self, on_add, on_remove):
         top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.label_entry = Gtk.Entry(
             placeholder_text=t("gui.launcher_entries.label_placeholder"), hexpand=True, valign=Gtk.Align.CENTER
@@ -151,6 +157,7 @@ class LauncherEntryRow(Gtk.Box):
         top_row.append(self.remove_btn)
         self.append(top_row)
 
+    def _build_exe_row(self):
         exe_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.exe_entry = Gtk.Entry(
             placeholder_text=t("gui.launcher_entries.exe_placeholder"), hexpand=True, valign=Gtk.Align.CENTER
@@ -167,6 +174,7 @@ class LauncherEntryRow(Gtk.Box):
         exe_row.append(exe_browse_btn)
         self.append(exe_row)
 
+    def _build_workdir_row(self):
         workdir_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.workdir_entry = Gtk.Entry(
             placeholder_text=t("gui.launcher_entries.workdir_placeholder"), hexpand=True, valign=Gtk.Align.CENTER
@@ -179,6 +187,7 @@ class LauncherEntryRow(Gtk.Box):
         workdir_row.append(workdir_browse_btn)
         self.append(workdir_row)
 
+    def _build_args_and_separator(self):
         self.args_entry = Gtk.Entry(
             placeholder_text=t("gui.launcher_entries.args_placeholder"), hexpand=True, valign=Gtk.Align.CENTER
         )

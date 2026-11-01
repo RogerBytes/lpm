@@ -280,6 +280,9 @@ class SgdbPickerWindow(Adw.Window):
         self._all_choices_done = False
         self._finished_naturally = False
 
+        self._build_widgets(auto_pick)
+
+    def _build_widgets(self, auto_pick: bool):
         self._window_title = Adw.WindowTitle(title=t("gui.sgdb_picker.window_title"))
         header = Adw.HeaderBar(title_widget=self._window_title, show_end_title_buttons=True)
 

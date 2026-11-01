@@ -15,119 +15,351 @@ from widgets_rows import (PrefixEntryRow, add_compression_rows, add_shortcut_row
 from widgets_select import FileMultiSelect, GameMultiSelect, RunnerCombo
 
 
-class LifecyclePages:
-    # --- Games ---
-    def page_install(self, initial_files: list[str] | None = None):
-        page = CommandPage(t("gui.install.page_title"), t("gui.install.page_subtitle"))
+class CreatePrefixPage:
+    def __init__(self, owner):
+        self.owner = owner
+        self.window = owner.window
 
-        file_selector = FileMultiSelect(t("gui.install.file_selector_title"))
+    def build(self):
+        self._add_rows_box()
+        self._add_runner_rows()
+        self._wire_reset_and_run()
+        return self.page
 
-        def _scan_and_set(chosen_paths: list[str]):
-            # Not limited to the files chosen in the native picker: the other .zgp files in the
-            # same folder are listed too, so they can be added at once with "check all"
-            # without going back to the file picker.
-            all_in_dir = sibling_files(chosen_paths, ".zgp")
-            file_selector.set_paths(all_in_dir, checked_paths=chosen_paths)
+    def _add_rows_box(self):
+        self.page = CommandPage(t("gui.create_prefix.page_title"))
 
-        def choose():
-            def got(paths):
-                if paths:
-                    _scan_and_set(paths)
+        # Repeatable list of PrefixEntryRow (name + slug, see that class): one row at the
+        # start, "+" on a row adds one right after it (Gtk.Box.insert_child_after), the trash
+        # button removes it (never the last remaining one, see update_remove_sensitivity).
+        # Each row is already a separate entry, with a live slug preview like Lutris.
+        self.rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.page.add_row(self.rows_box)
 
-            pick_file(self.window, t("gui.install.choose_dialog_title"), got, [(".zgp", ["*.zgp"])], multiple=True)
+        self.add_row()
+
+    def _add_runner_rows(self):
+        self.runner_row = RunnerCombo()
+        self.page.add_row(self.runner_row)
+        self.arch_row = Adw.ComboRow(title=t("gui.common.arch_title"))
+        self.arch_row.set_model(Gtk.StringList.new(["win64", "win32"]))
+        self.page.add_row(self.arch_row)
+
+    def _wire_reset_and_run(self):
+        self.page.reset_selection = self.reset_fields
+
+        self.page.run_button.connect("clicked", self.on_run)
+
+    def iter_rows(self):
+        child = self.rows_box.get_first_child()
+        while child is not None:
+            yield child
+            child = child.get_next_sibling()
+
+    def update_remove_sensitivity(self):
+        rows = list(self.iter_rows())
+        only_one = len(rows) <= 1
+        for row in rows:
+            row.remove_btn.set_sensitive(not only_one)
+
+    def add_row(self, after_row=None):
+        new_row = PrefixEntryRow(on_add=self.add_row, on_remove=self.remove_row)
+        if after_row is None:
+            self.rows_box.append(new_row)
+        else:
+            self.rows_box.insert_child_after(new_row, after_row)
+        self.update_remove_sensitivity()
+
+    def remove_row(self, row):
+        if len(list(self.iter_rows())) <= 1:
+            return
+        self.rows_box.remove(row)
+        self.update_remove_sensitivity()
+
+    def reset_rows(self):
+        rows = list(self.iter_rows())
+        for extra in rows[1:]:
+            self.rows_box.remove(extra)
+        if rows:
+            rows[0].reset()
+        self.update_remove_sensitivity()
+
+    # Runner and architecture are reset too, see CommandPage.reset_selection.
+    def reset_fields(self):
+        self.reset_rows()
+        self.runner_row.refresh()
+        self.arch_row.set_selected(0)
+
+    def on_run(self, *_):
+        targets = [spec for row in self.iter_rows() if (spec := row.target_spec())]
+        if not targets:
+            self.page.toast(t("gui.create_prefix.toast_need_name"))
+            return
+        runner = self.runner_row.selected_runner()
+        arch_idx = self.arch_row.get_selected()
+        arch = "win64" if arch_idx in (0, Gtk.INVALID_LIST_POSITION) else "win32"
+        args = ["create-prefix", "-y"]
+        if runner:
+            args.extend(["-r", runner])
+        args.extend(["-a", arch, *targets])
+        self.page.run_command(args, t("gui.create_prefix.done"), refresh="games")
+
+
+
+class ExeInstallPage:
+    def __init__(self, owner):
+        self.owner = owner
+        self.window = owner.window
+
+    def build(self):
+        self._add_exe_row()
+        self._add_name_rows()
+        self._add_runner_rows()
+        self._wire_reset_and_run()
+        return self.page
+
+    def _add_exe_row(self):
+        self.page = CommandPage(t("gui.exe_install.page_title"))
+        self.exe_path = ""
+        self.path_row = Adw.ActionRow(title=t("gui.exe_install.exe_title"), subtitle=t("gui.common.no_file_selected"))
+
+        choose_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER)
+        choose_btn.connect("clicked", lambda *_: self.choose())
+        self.path_row.add_suffix(choose_btn)
+        self.page.add_row(self.path_row)
+
+    def _add_name_rows(self):
+        self.name_row = Adw.EntryRow(title=t("gui.exe_install.name_title"))
+        self.page.add_row(self.name_row)
+        self.slug_row = Adw.EntryRow(title=t("gui.exe_install.slug_title"))
+        self.page.add_row(self.slug_row)
+
+        # Live slug preview from the name, same behavior as "create an empty prefix" (see
+        # PrefixEntryRow): filled automatically until the user edits the slug field, after
+        # which tracking is PERMANENTLY detached.
+        self.slug_follows_name = True
+        self.updating_slug = False
+
+        self.name_row.connect("changed", self._on_name_changed)
+        self.slug_row.connect("changed", self._on_slug_changed)
+
+    def _add_runner_rows(self):
+        self.runner_row = RunnerCombo()
+        self.page.add_row(self.runner_row)
+        self.arch_row = Adw.ComboRow(title=t("gui.common.arch_title"))
+        self.arch_row.set_model(Gtk.StringList.new(["win64", "win32"]))
+        self.page.add_row(self.arch_row)
+        self.final_exe_row = Adw.EntryRow(title=t("gui.exe_install.final_exe_title"))
+        self.page.add_row(self.final_exe_row)
+
+    def _wire_reset_and_run(self):
+        self.page.reset_selection = self.reset_fields
+
+        self.page.run_button.connect("clicked", self.on_run)
+
+    def choose(self):
+        def got(paths):
+            if paths:
+                self.exe_path = paths[0]
+                self.path_row.set_subtitle(self.exe_path)
+
+        # zgp-exe-installer.sh natively handles .exe/.msi/.bat/.cmd (it just runs
+        # "wine <file>", which dispatches to msiexec/cmd.exe by extension -- see the
+        # header comment of that script); only this dialog's filter restricted the choice
+        # to .exe.
+        pick_file(self.window, t("gui.exe_install.choose_dialog_title"), got,
+                  [(t("gui.exe_install.filter_label"), ["*.exe", "*.msi", "*.bat", "*.cmd"])])
+
+    def _on_name_changed(self, *_):
+        if not self.slug_follows_name:
+            return
+        name = self.name_row.get_text()
+        self.updating_slug = True
+        self.slug_row.set_text(backend.slugify_preview(name) if name.strip() else "")
+        self.updating_slug = False
+
+    def _on_slug_changed(self, *_):
+        if self.updating_slug:
+            return
+        self.slug_follows_name = False
+
+    # Reset after a successful run and when leaving the page (see
+    # CommandPage.reset_selection).
+    def reset_fields(self):
+        self.exe_path = ""
+        self.path_row.set_subtitle(t("gui.common.no_file_selected"))
+        self.updating_slug = True
+        self.name_row.set_text("")
+        self.slug_row.set_text("")
+        self.updating_slug = False
+        self.slug_follows_name = True
+        self.runner_row.refresh()
+        self.arch_row.set_selected(0)
+        self.final_exe_row.set_text("")
+
+    def on_run(self, *_):
+        name = self.name_row.get_text().strip()
+        if not self.exe_path or not name:
+            self.page.toast(t("gui.exe_install.toast_need_exe_and_name"))
+            return
+        target = f"{self.exe_path}|{name}"
+        # Explicit slug passed only if edited by hand AND different from the automatic
+        # preview -- same principle as PrefixEntryRow.target_spec(): otherwise let the
+        # backend (zgp_slugify, identical to backend.slugify_preview) derive it from the name.
+        if not self.slug_follows_name:
+            slug = self.slug_row.get_text().strip()
+            if slug and slug != backend.slugify_preview(name):
+                target += f"|{slug}"
+        runner = self.runner_row.selected_runner()
+        arch = "win64" if self.arch_row.get_selected() in (0, Gtk.INVALID_LIST_POSITION) else "win32"
+        args = ["exe-install", "-y", target]
+        if runner:
+            args.extend(["-r", runner])
+        args.extend(["-a", arch])
+        if self.final_exe_row.get_text().strip():
+            args.extend(["-f", self.final_exe_row.get_text().strip()])
+        self.page.run_command(args, t("gui.common.install_done"), refresh="games")
+
+
+
+class InstallPage:
+    def __init__(self, owner, initial_files):
+        self.owner = owner
+        self.window = owner.window
+        self.initial_files = initial_files
+
+    def build(self):
+        self._add_file_selector()
+        self._add_option_rows()
+        self._wire_reset_and_run()
+        return self.page
+
+    def _add_file_selector(self):
+        self.page = CommandPage(t("gui.install.page_title"), t("gui.install.page_subtitle"))
+
+        self.file_selector = FileMultiSelect(t("gui.install.file_selector_title"))
 
         choose_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER,
                                  tooltip_text=t("gui.install.choose_tooltip"))
-        choose_btn.connect("clicked", lambda *_: choose())
-        file_selector.add_suffix(choose_btn)
-        page.add_row(file_selector)
-        if initial_files:
-            _scan_and_set(list(initial_files))
+        choose_btn.connect("clicked", lambda *_: self.choose())
+        self.file_selector.add_suffix(choose_btn)
+        self.page.add_row(self.file_selector)
+        if self.initial_files:
+            self._scan_and_set(list(self.initial_files))
         else:
-            file_selector.set_paths([])
+            self.file_selector.set_paths([])
 
-        allow_scripts_row = Adw.SwitchRow(title=t("gui.install.allow_scripts_title"),
+    def _add_option_rows(self):
+        self.allow_scripts_row = Adw.SwitchRow(title=t("gui.install.allow_scripts_title"),
                                            subtitle=t("gui.install.allow_scripts_subtitle"))
-        page.add_row(allow_scripts_row)
+        self.page.add_row(self.allow_scripts_row)
 
-        ignore_hash_row = Adw.SwitchRow(title=t("gui.common.ignore_hash_title"))
-        page.add_row(ignore_hash_row)
+        self.ignore_hash_row = Adw.SwitchRow(title=t("gui.common.ignore_hash_title"))
+        self.page.add_row(self.ignore_hash_row)
 
         # Install shortcut: menu on by default, file off (see add_shortcut_rows); the file
         # list may hold several .zgp, and an on-by-default file shortcut would create several
         # at once.
-        menu_shortcut_row, desktop_shortcut_row, desktop_path_row, loadingscreen_row = \
-            add_shortcut_rows(page, self.window)
+        self.menu_shortcut_row, self.desktop_shortcut_row, self.desktop_path_row, self.loadingscreen_row = \
+            add_shortcut_rows(self.page, self.window)
 
-        # Going back to the category menu, changing page, or a successful run resets
-        # everything: the file list AND the switches.
-        def reset_fields():
-            file_selector.set_paths([])
-            allow_scripts_row.set_active(False)
-            ignore_hash_row.set_active(False)
-            menu_shortcut_row.set_active(True)
-            desktop_shortcut_row.set_active(False)
-            desktop_path_row.reset()
-            loadingscreen_row.set_active(True)
+    def _wire_reset_and_run(self):
+        self.page.reset_selection = self.reset_fields
 
-        page.reset_selection = reset_fields
+        self.page.run_button.connect("clicked", self.on_run)
 
-        def on_run(*_):
-            selected = file_selector.selected_paths()
-            if not selected:
-                page.toast(t("gui.install.toast_choose_file"))
-                return
-            args = ["install", "-y"]
-            if allow_scripts_row.get_active():
-                args.append("--allow-scripts")
-            if ignore_hash_row.get_active():
-                args.append("--ignore-hash")
-            menu_on = menu_shortcut_row.get_active()
-            desktop_on = desktop_shortcut_row.get_active()
-            if menu_on and desktop_on:
-                shortcut_mode = "both"
-            elif menu_on:
-                shortcut_mode = "menu"
-            elif desktop_on:
-                shortcut_mode = "desktop"
-            else:
-                shortcut_mode = "none"
-            args.append(f"--shortcut={shortcut_mode}")
-            if (menu_on or desktop_on) and not loadingscreen_row.get_active():
-                args.append("--no-loadingscreen")
-            if desktop_on:
-                desktop_path = desktop_path_row.value()
-                if desktop_path:
-                    args.append(f"--desktop-dir={desktop_path}")
-            args.extend(selected)
-            batch_desktop_dir = desktop_path_row.value() if desktop_on else ""
+    def _scan_and_set(self, chosen_paths: list[str]):
+        # Not limited to the files chosen in the native picker: the other .zgp files in the
+        # same folder are listed too, so they can be added at once with "check all"
+        # without going back to the file picker.
+        all_in_dir = sibling_files(chosen_paths, ".zgp")
+        self.file_selector.set_paths(all_in_dir, checked_paths=chosen_paths)
 
-            # Cancellation: the current game is cleaned up by the script; if games from this
-            # batch are already finished, offer to uninstall them too (ONLY those, never other
-            # existing games). Default: keep them (avoids a misclick, deletion is irreversible).
-            def on_cancelled(installed_slugs):
-                if not installed_slugs:
-                    return
-                def delete_installed():
-                    uninstall_args = ["uninstall", "-y"]
-                    if batch_desktop_dir:
-                        uninstall_args.append(f"--desktop-dir={batch_desktop_dir}")
-                    uninstall_args.extend(installed_slugs)
-                    page.run_command(uninstall_args, t("gui.install.toast_cancel_deleted"), refresh="games")
+    def choose(self):
+        def got(paths):
+            if paths:
+                self._scan_and_set(paths)
 
-                ask_keep_or_delete(
-                    self.window,
-                    t("gui.install.cancel_dialog_heading"),
-                    t("gui.install.cancel_dialog_body", len(installed_slugs),
-                      "\n".join(f"• {slug}" for slug in installed_slugs)),
-                    delete_installed,
-                )
+        pick_file(self.window, t("gui.install.choose_dialog_title"), got, [(".zgp", ["*.zgp"])], multiple=True)
 
-            page.run_command(args, t("gui.common.install_done"), refresh="games",
-                             cancellable=True, on_cancelled=on_cancelled)
+    # Going back to the category menu, changing page, or a successful run resets
+    # everything: the file list AND the switches.
+    def reset_fields(self):
+        self.file_selector.set_paths([])
+        self.allow_scripts_row.set_active(False)
+        self.ignore_hash_row.set_active(False)
+        self.menu_shortcut_row.set_active(True)
+        self.desktop_shortcut_row.set_active(False)
+        self.desktop_path_row.reset()
+        self.loadingscreen_row.set_active(True)
 
-        page.run_button.connect("clicked", on_run)
-        return page
+    def _shortcut_mode(self) -> str:
+        menu_on = self.menu_shortcut_row.get_active()
+        desktop_on = self.desktop_shortcut_row.get_active()
+        if menu_on and desktop_on:
+            return "both"
+        if menu_on:
+            return "menu"
+        if desktop_on:
+            return "desktop"
+        return "none"
+
+    def _install_args(self, selected: list[str]) -> list[str]:
+        args = ["install", "-y"]
+        if self.allow_scripts_row.get_active():
+            args.append("--allow-scripts")
+        if self.ignore_hash_row.get_active():
+            args.append("--ignore-hash")
+        menu_on = self.menu_shortcut_row.get_active()
+        desktop_on = self.desktop_shortcut_row.get_active()
+        args.append(f"--shortcut={self._shortcut_mode()}")
+        if (menu_on or desktop_on) and not self.loadingscreen_row.get_active():
+            args.append("--no-loadingscreen")
+        if desktop_on:
+            desktop_path = self.desktop_path_row.value()
+            if desktop_path:
+                args.append(f"--desktop-dir={desktop_path}")
+        args.extend(selected)
+        return args
+
+    def _on_cancelled(self, installed_slugs, batch_desktop_dir):
+        """Cancellation: the current game is cleaned up by the script; if games from this
+        batch are already finished, offer to uninstall them too (ONLY those). Default: keep
+        them (deletion is irreversible)."""
+        if not installed_slugs:
+            return
+
+        def delete_installed():
+            uninstall_args = ["uninstall", "-y"]
+            if batch_desktop_dir:
+                uninstall_args.append(f"--desktop-dir={batch_desktop_dir}")
+            uninstall_args.extend(installed_slugs)
+            self.page.run_command(uninstall_args, t("gui.install.toast_cancel_deleted"), refresh="games")
+
+        ask_keep_or_delete(
+            self.window,
+            t("gui.install.cancel_dialog_heading"),
+            t("gui.install.cancel_dialog_body", len(installed_slugs),
+              "\n".join(f"\u2022 {slug}" for slug in installed_slugs)),
+            delete_installed,
+        )
+
+    def on_run(self, *_):
+        selected = self.file_selector.selected_paths()
+        if not selected:
+            self.page.toast(t("gui.install.toast_choose_file"))
+            return
+        batch_desktop_dir = self.desktop_path_row.value() if self.desktop_shortcut_row.get_active() else ""
+        self.page.run_command(
+            self._install_args(selected), t("gui.common.install_done"), refresh="games",
+            cancellable=True,
+            on_cancelled=lambda slugs: self._on_cancelled(slugs, batch_desktop_dir))
+
+
+class LifecyclePages:
+    # --- Games ---
+    def page_install(self, initial_files: list[str] | None = None):
+        return InstallPage(self, initial_files).build()
 
     def _confirm_destructive(self, heading: str, body: str, confirm_label: str, on_confirm):
         """Confirmation alert before a destructive action (same style as page_killwine):
@@ -167,184 +399,10 @@ class LifecyclePages:
         return page
 
     def page_create_prefix(self):
-        page = CommandPage(t("gui.create_prefix.page_title"))
-
-        # Repeatable list of PrefixEntryRow (name + slug, see that class): one row at the
-        # start, "+" on a row adds one right after it (Gtk.Box.insert_child_after), the trash
-        # button removes it (never the last remaining one, see update_remove_sensitivity).
-        # Each row is already a separate entry, with a live slug preview like Lutris.
-        rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        page.add_row(rows_box)
-
-        def iter_rows():
-            child = rows_box.get_first_child()
-            while child is not None:
-                yield child
-                child = child.get_next_sibling()
-
-        def update_remove_sensitivity():
-            rows = list(iter_rows())
-            only_one = len(rows) <= 1
-            for row in rows:
-                row.remove_btn.set_sensitive(not only_one)
-
-        def add_row(after_row=None):
-            new_row = PrefixEntryRow(on_add=add_row, on_remove=remove_row)
-            if after_row is None:
-                rows_box.append(new_row)
-            else:
-                rows_box.insert_child_after(new_row, after_row)
-            update_remove_sensitivity()
-
-        def remove_row(row):
-            if len(list(iter_rows())) <= 1:
-                return
-            rows_box.remove(row)
-            update_remove_sensitivity()
-
-        def reset_rows():
-            rows = list(iter_rows())
-            for extra in rows[1:]:
-                rows_box.remove(extra)
-            if rows:
-                rows[0].reset()
-            update_remove_sensitivity()
-
-        add_row()
-
-        runner_row = RunnerCombo()
-        page.add_row(runner_row)
-        arch_row = Adw.ComboRow(title=t("gui.common.arch_title"))
-        arch_row.set_model(Gtk.StringList.new(["win64", "win32"]))
-        page.add_row(arch_row)
-
-        # Runner and architecture are reset too, see CommandPage.reset_selection.
-        def reset_fields():
-            reset_rows()
-            runner_row.refresh()
-            arch_row.set_selected(0)
-
-        page.reset_selection = reset_fields
-
-        def on_run(*_):
-            targets = [spec for row in iter_rows() if (spec := row.target_spec())]
-            if not targets:
-                page.toast(t("gui.create_prefix.toast_need_name"))
-                return
-            runner = runner_row.selected_runner()
-            arch_idx = arch_row.get_selected()
-            arch = "win64" if arch_idx in (0, Gtk.INVALID_LIST_POSITION) else "win32"
-            args = ["create-prefix", "-y"]
-            if runner:
-                args.extend(["-r", runner])
-            args.extend(["-a", arch, *targets])
-            page.run_command(args, t("gui.create_prefix.done"), refresh="games")
-
-        page.run_button.connect("clicked", on_run)
-        return page
+        return CreatePrefixPage(self).build()
 
     def page_exe_install(self):
-        page = CommandPage(t("gui.exe_install.page_title"))
-        self._exe_path = ""
-        path_row = Adw.ActionRow(title=t("gui.exe_install.exe_title"), subtitle=t("gui.common.no_file_selected"))
-
-        def choose():
-            def got(paths):
-                if paths:
-                    self._exe_path = paths[0]
-                    path_row.set_subtitle(self._exe_path)
-
-            # zgp-exe-installer.sh natively handles .exe/.msi/.bat/.cmd (it just runs
-            # "wine <file>", which dispatches to msiexec/cmd.exe by extension -- see the
-            # header comment of that script); only this dialog's filter restricted the choice
-            # to .exe.
-            pick_file(self.window, t("gui.exe_install.choose_dialog_title"), got,
-                      [(t("gui.exe_install.filter_label"), ["*.exe", "*.msi", "*.bat", "*.cmd"])])
-
-        choose_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER)
-        choose_btn.connect("clicked", lambda *_: choose())
-        path_row.add_suffix(choose_btn)
-        page.add_row(path_row)
-
-        name_row = Adw.EntryRow(title=t("gui.exe_install.name_title"))
-        page.add_row(name_row)
-        slug_row = Adw.EntryRow(title=t("gui.exe_install.slug_title"))
-        page.add_row(slug_row)
-
-        # Live slug preview from the name, same behavior as "create an empty prefix" (see
-        # PrefixEntryRow): filled automatically until the user edits the slug field, after
-        # which tracking is PERMANENTLY detached.
-        slug_follows_name = True
-        updating_slug = False
-
-        def _on_name_changed(*_):
-            nonlocal updating_slug
-            if not slug_follows_name:
-                return
-            name = name_row.get_text()
-            updating_slug = True
-            slug_row.set_text(backend.slugify_preview(name) if name.strip() else "")
-            updating_slug = False
-
-        def _on_slug_changed(*_):
-            nonlocal slug_follows_name
-            if updating_slug:
-                return
-            slug_follows_name = False
-
-        name_row.connect("changed", _on_name_changed)
-        slug_row.connect("changed", _on_slug_changed)
-
-        runner_row = RunnerCombo()
-        page.add_row(runner_row)
-        arch_row = Adw.ComboRow(title=t("gui.common.arch_title"))
-        arch_row.set_model(Gtk.StringList.new(["win64", "win32"]))
-        page.add_row(arch_row)
-        final_exe_row = Adw.EntryRow(title=t("gui.exe_install.final_exe_title"))
-        page.add_row(final_exe_row)
-
-        # Reset after a successful run and when leaving the page (see
-        # CommandPage.reset_selection).
-        def reset_fields():
-            nonlocal slug_follows_name, updating_slug
-            self._exe_path = ""
-            path_row.set_subtitle(t("gui.common.no_file_selected"))
-            updating_slug = True
-            name_row.set_text("")
-            slug_row.set_text("")
-            updating_slug = False
-            slug_follows_name = True
-            runner_row.refresh()
-            arch_row.set_selected(0)
-            final_exe_row.set_text("")
-
-        page.reset_selection = reset_fields
-
-        def on_run(*_):
-            name = name_row.get_text().strip()
-            if not self._exe_path or not name:
-                page.toast(t("gui.exe_install.toast_need_exe_and_name"))
-                return
-            target = f"{self._exe_path}|{name}"
-            # Explicit slug passed only if edited by hand AND different from the automatic
-            # preview -- same principle as PrefixEntryRow.target_spec(): otherwise let the
-            # backend (zgp_slugify, identical to backend.slugify_preview) derive it from the name.
-            if not slug_follows_name:
-                slug = slug_row.get_text().strip()
-                if slug and slug != backend.slugify_preview(name):
-                    target += f"|{slug}"
-            runner = runner_row.selected_runner()
-            arch = "win64" if arch_row.get_selected() in (0, Gtk.INVALID_LIST_POSITION) else "win32"
-            args = ["exe-install", "-y", target]
-            if runner:
-                args.extend(["-r", runner])
-            args.extend(["-a", arch])
-            if final_exe_row.get_text().strip():
-                args.extend(["-f", final_exe_row.get_text().strip()])
-            page.run_command(args, t("gui.common.install_done"), refresh="games")
-
-        page.run_button.connect("clicked", on_run)
-        return page
+        return ExeInstallPage(self).build()
 
     def page_pack(self):
         page = CommandPage(t("gui.pack.page_title"))

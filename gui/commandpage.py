@@ -70,12 +70,14 @@ class CommandPage(Gtk.Box):
         self.group = Adw.PreferencesGroup(title=subtitle or None)
         self.page.add(self.group)
 
+        self._build_progress_group()
+        self._build_action_group()
+
+    def _build_progress_group(self):
         # Progress bar: hidden while no command runs (see run_command). Pulsing by default,
-        # since nothing is known until a "[n/total]" line arrives (see _ITEM_LINE_RE; some
-        # commands never emit it, so pulsing is their only feedback). Once received, the text
-        # shows "which item out of how many" and the fill restarts at 0%, advancing only on
-        # "[PROGRESS] <pct>" lines (see _ITEM_LINE_RE/_PERCENT_LINE_RE): the real progress of
-        # the current item.
+        # since nothing is known until a "[n/total]" line arrives (see _ITEM_LINE_RE); once
+        # received, the text shows "which item out of how many" and the fill advances only on
+        # "[PROGRESS] <pct>" lines (the real progress of the current item).
         self._pulse_source_id: int | None = None
         self.progress_bar = Gtk.ProgressBar()
         self.progress_bar.set_show_text(True)
@@ -83,6 +85,7 @@ class CommandPage(Gtk.Box):
         self.progress_bar.set_visible(False)
         self.page.add(self._wrap_action_group(self.progress_bar))
 
+    def _build_action_group(self):
         self.run_button = Gtk.Button(label=t("gui.common.run"))
         self.run_button.add_css_class("suggested-action")
         self.run_button.add_css_class("pill")
@@ -91,8 +94,7 @@ class CommandPage(Gtk.Box):
         self.run_button.set_margin_end(6)
         self.run_button.set_margin_bottom(6)
         action_row_box = Gtk.Box(halign=Gtk.Align.END, spacing=6)
-        # "Cancel" button: hidden except during a command run with cancellable=True
-        # (see run_command; currently game installation).
+        # "Cancel" button: hidden except during a command run with cancellable=True.
         self.cancel_button = Gtk.Button(label=t("gui.install.cancel_button"))
         self.cancel_button.add_css_class("destructive-action")
         self.cancel_button.add_css_class("pill")
@@ -192,112 +194,132 @@ class CommandPage(Gtk.Box):
         """"refresh": None (default), "games" or "runners" -- whether this command changes
         the list of installed games or runners, so that all selectors built elsewhere are
         refreshed (see _refresh_game_lists/_refresh_runner_lists) after a successful run.
-        Deliberately coarse (no partial refresh): simple, and a needless refresh costs only
-        a few instant CLI calls like "lpm list"."""
-        self.run_button.set_sensitive(False)
-        _run_on_main(self._start_progress)
-        _GUI_LOGGER.info("$ bin/lpm " + " ".join(args))
+        Deliberately coarse (no partial refresh): a needless refresh costs only a few instant
+        CLI calls like "lpm list"."""
+        _CommandRun(self, args, done_message, refresh, cancellable, on_cancelled,
+                    cancel_toast, cancel_group, on_report).start()
 
-        # --- Cancellation (cancellable=True): SIGTERM is sent to the WHOLE process group of
-        # the command (see backend.run_lpm, new_session); the lib/ script cleans up the
-        # current game itself (see lpm_cancel_cleanup in zgp-game-installer.sh) and exits
-        # with 130. Games already finished come from the "[INSTALLED] <slug>" output lines. ---
-        state = {"proc": None, "cancel": False, "installed": [], "report": []}
 
-        def on_proc(proc):
-            state["proc"] = proc
+class _CommandRun:
+    """One run of a bin/lpm command from a CommandPage: progress, cancellation, result."""
 
-        def request_cancel(*_):
-            proc = state["proc"]
-            if proc is None or proc.poll() is not None:
+    def __init__(self, page, args, done_message, refresh, cancellable, on_cancelled,
+                 cancel_toast, cancel_group, on_report):
+        self.page = page
+        self.args = args
+        self.done_message = done_message
+        self.refresh = refresh
+        self.cancellable = cancellable
+        self.on_cancelled = on_cancelled
+        self.cancel_toast = cancel_toast
+        self.cancel_group = cancel_group
+        self.on_report = on_report
+        self.proc = None
+        self.cancelled = False
+        self.installed: list[str] = []
+        self.report: list[tuple[str, str]] = []
+        self.cancel_handler_id = None
+
+    def start(self):
+        page = self.page
+        page.run_button.set_sensitive(False)
+        _run_on_main(page._start_progress)
+        _GUI_LOGGER.info("$ bin/lpm " + " ".join(self.args))
+        # Cancellation (cancellable=True): SIGTERM goes to the WHOLE process group (see
+        # backend.run_lpm, new_session); the lib/ script cleans up the current game itself
+        # (lpm_cancel_cleanup in zgp-game-installer.sh) and exits with 130.
+        if self.cancellable:
+            page.cancel_button.set_sensitive(True)
+            page.cancel_button.set_visible(True)
+            self.cancel_handler_id = page.cancel_button.connect("clicked", self._request_cancel)
+        backend.run_lpm_async(self.args, on_line=self._on_line, on_done=self._on_done,
+                              on_proc=self._on_proc, new_session=self.cancellable)
+
+    def _on_proc(self, proc):
+        self.proc = proc
+
+    def _request_cancel(self, *_):
+        proc = self.proc
+        if proc is None or proc.poll() is not None:
+            return
+        self.cancelled = True
+        self.page.cancel_button.set_sensitive(False)
+        try:
+            if self.cancel_group:
+                os.killpg(proc.pid, signal.SIGTERM)
+            else:
+                # Uninstalls: SIGTERM to the script ONLY (not its children), which finishes
+                # the current item then stops, never leaving a half-deleted folder.
+                os.kill(proc.pid, signal.SIGTERM)
+        except OSError:
+            pass
+
+    def _on_line(self, line: str):
+        # Called from the background thread (see backend.run_lpm_async): GTK widgets are only
+        # touched via _run_on_main; the logger is thread-safe.
+        _GUI_LOGGER.info(line)
+        stripped = line.strip()
+        # "[INSTALLED] <slug>" / "[EXPORTED] <.zgp path>" / "[REMOVED] ...": batch items
+        # already done, offered for deletion on cancellation.
+        for done_prefix in ("[INSTALLED] ", "[EXPORTED] ", "[REMOVED] "):
+            if stripped.startswith(done_prefix):
+                self.installed.append(stripped[len(done_prefix):])
                 return
-            state["cancel"] = True
-            self.cancel_button.set_sensitive(False)
-            try:
-                if cancel_group:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                else:
-                    # Uninstalls: SIGTERM to the script ONLY (not its children), which
-                    # finishes the current item then stops, never leaving a half-deleted
-                    # folder (see zgr-runner-uninstaller.sh / zgp-game-uninstaller.sh).
-                    os.kill(proc.pid, signal.SIGTERM)
-            except OSError:
-                pass
+        self._on_progress_line(stripped)
 
-        cancel_handler_id = None
-        if cancellable:
-            self.cancel_button.set_sensitive(True)
-            self.cancel_button.set_visible(True)
-            cancel_handler_id = self.cancel_button.connect("clicked", request_cancel)
+    def _on_progress_line(self, stripped: str):
+        page = self.page
+        step_match = _STEP_LINE_RE.match(stripped)
+        if step_match:
+            _run_on_main(page._update_step, t("gui.check.step_format", step_match.group(1),
+                                              step_match.group(2), step_match.group(3)))
+            return
+        report_match = _REPORT_LINE_RE.match(stripped)
+        if report_match:
+            self.report.append((report_match.group(1), report_match.group(2)))
+            return
+        item_match = _ITEM_LINE_RE.match(stripped)
+        if item_match:
+            name_match = _ITEM_NAME_RE.search(stripped)
+            _run_on_main(page._update_item_progress, int(item_match.group(1)), int(item_match.group(2)),
+                         name_match.group(1) if name_match else "")
+            return
+        percent_match = _PERCENT_LINE_RE.match(stripped)
+        if percent_match:
+            _run_on_main(page._update_item_percent, int(percent_match.group(1)))
 
-        def on_line(line: str):
-            # Called from the background thread (see backend.run_lpm_async): no GTK widget
-            # is touched directly (only via _run_on_main, which re-posts to the main
-            # thread); the rest goes to the logger (standard module, thread-safe).
-            _GUI_LOGGER.info(line)
-            stripped = line.strip()
-            # "[INSTALLED] <slug>" (install) / "[EXPORTED] <.zgp path>" (export): batch items
-            # already done, offered for deletion on cancellation.
-            for done_prefix in ("[INSTALLED] ", "[EXPORTED] ", "[REMOVED] "):
-                if stripped.startswith(done_prefix):
-                    state["installed"].append(stripped[len(done_prefix):])
-                    return
-            step_match = _STEP_LINE_RE.match(stripped)
-            if step_match:
-                _run_on_main(self._update_step, t("gui.check.step_format", step_match.group(1),
-                                                  step_match.group(2), step_match.group(3)))
-                return
-            report_match = _REPORT_LINE_RE.match(stripped)
-            if report_match:
-                state["report"].append((report_match.group(1), report_match.group(2)))
-                return
-            item_match = _ITEM_LINE_RE.match(stripped)
-            if item_match:
-                name_match = _ITEM_NAME_RE.search(stripped)
-                _run_on_main(self._update_item_progress, int(item_match.group(1)), int(item_match.group(2)),
-                             name_match.group(1) if name_match else "")
-                return
-            percent_match = _PERCENT_LINE_RE.match(stripped)
-            if percent_match:
-                _run_on_main(self._update_item_percent, int(percent_match.group(1)))
+    def _on_done(self, result: backend.CommandResult):
+        for err_line in result.stderr.strip().splitlines():
+            _GUI_LOGGER.info("! " + err_line)
+        _run_on_main(self._finish, result)
 
-        def on_done(result: backend.CommandResult):
-            if result.stderr.strip():
-                for err_line in result.stderr.strip().splitlines():
-                    _GUI_LOGGER.info("! " + err_line)
+    def _refresh_lists(self):
+        if self.refresh == "games":
+            _refresh_game_lists()
+        elif self.refresh == "runners":
+            _refresh_runner_lists()
 
-            def finish():
-                self.run_button.set_sensitive(True)
-                self._finish_progress()
-                if cancel_handler_id is not None:
-                    self.cancel_button.disconnect(cancel_handler_id)
-                    self.cancel_button.set_visible(False)
-                if on_report is not None and state["report"] and not state["cancel"]:
-                    on_report(list(state["report"]), result.returncode, result.stderr)
-                if state["cancel"] and result.returncode != 0:
-                    if cancel_toast != "":
-                        self.toast(cancel_toast or t("gui.install.toast_cancelled"))
-                    if refresh == "games":
-                        _refresh_game_lists()
-                    elif refresh == "runners":
-                        _refresh_runner_lists()
-                    if on_cancelled is not None:
-                        on_cancelled(list(state["installed"]))
-                elif result.returncode == 0:
-                    self.toast(done_message or t("gui.common.done"))
-                    if refresh == "games":
-                        _refresh_game_lists()
-                    elif refresh == "runners":
-                        _refresh_runner_lists()
-                    # Reset this page's selection after a successful run (see
-                    # self.reset_selection, CommandPage.__init__), never after a failure:
-                    # the user will likely want to retry with the same selection.
-                    self.reset_selection()
-                else:
-                    err_lines = [ln.strip() for ln in result.stderr.splitlines() if ln.strip()]
-                    self.toast_failure(result.returncode, err_lines[-1] if err_lines else "")
-
-            _run_on_main(finish)
-
-        backend.run_lpm_async(args, on_line=on_line, on_done=on_done, on_proc=on_proc,
-                              new_session=cancellable)
+    def _finish(self, result: backend.CommandResult):
+        page = self.page
+        page.run_button.set_sensitive(True)
+        page._finish_progress()
+        if self.cancel_handler_id is not None:
+            page.cancel_button.disconnect(self.cancel_handler_id)
+            page.cancel_button.set_visible(False)
+        if self.on_report is not None and self.report and not self.cancelled:
+            self.on_report(list(self.report), result.returncode, result.stderr)
+        if self.cancelled and result.returncode != 0:
+            if self.cancel_toast != "":
+                page.toast(self.cancel_toast or t("gui.install.toast_cancelled"))
+            self._refresh_lists()
+            if self.on_cancelled is not None:
+                self.on_cancelled(list(self.installed))
+        elif result.returncode == 0:
+            page.toast(self.done_message or t("gui.common.done"))
+            self._refresh_lists()
+            # Reset the selection after a success only: after a failure the user will
+            # likely retry with the same selection.
+            page.reset_selection()
+        else:
+            err_lines = [ln.strip() for ln in result.stderr.splitlines() if ln.strip()]
+            page.toast_failure(result.returncode, err_lines[-1] if err_lines else "")

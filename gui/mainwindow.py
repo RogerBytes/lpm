@@ -100,74 +100,68 @@ class MainWindow(Adw.ApplicationWindow):
         # Leaving a page for another (even without going through the category menu) also
         # resets it -- see show_page() below.
         self._current_page_id: str | None = None
+        self._sidebar_mode = "root"
+        self._sidebar_row_map: dict = {}
 
         split_view = Adw.NavigationSplitView()
         sidebar_min_width = self._compute_min_sidebar_width()
         split_view.set_min_sidebar_width(sidebar_min_width)
         self.set_content(split_view)
 
-        # --- Content bar (right, above the viewport): no fixed app brand here (the home page
-        #     already shows it large). Only the name of the current function appears (set by
-        #     show_page/open_install_for via set_title()), and nothing on the home page
-        #     (label_by_id.get("home", "") already falls back to an empty string, "home" never
-        #     being a category id, see _categories()).
+        split_view.set_content(self._build_content_pane())
+        split_view.set_sidebar(self._build_sidebar_pane())
+
+        self._render_sidebar_root()
+        # Neutral home page at launch (see page_home), rather than starting an action the
+        # user did not ask for.
+        self.show_page("home")
+        self._apply_min_window_size(sidebar_min_width)
+
+    def _build_content_pane(self) -> Adw.NavigationPage:
+        """Right pane: header bar showing only the current function name (set by
+        show_page/open_install_for via set_title()), and the page stack."""
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
 
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         content_header = Adw.HeaderBar()
-        # "flat": same reason as sidebar_header above -- removes the separator line between
-        # this bar and the viewport; Gtk.ScrolledWindow (top_scroller, see CommandPage) still
-        # shows its own "undershoot" scroll shadow whenever content remains to scroll, so the
-        # visual cue is only contextual rather than permanent.
+        # "flat": removes the separator line between this bar and the viewport.
         content_header.add_css_class("flat")
         self.title_widget = Adw.WindowTitle()
         content_header.set_title_widget(self.title_widget)
         content_box.append(content_header)
         content_box.append(self.stack)
-        content_page = Adw.NavigationPage(title="lpm", child=content_box)
-        split_view.set_content(content_page)
+        return Adw.NavigationPage(title="lpm", child=content_box)
 
-        # --- Sidebar: EMPTY header by default (at the root) -- the category name and the
-        #     back button (pack_start, hidden otherwise) appear only inside a category. Below,
-        #     a single Gtk.ListBox whose content is rebuilt in place for the current level
-        #     (categories, or a category's items); unlike an Adw.NavigationView, it never
-        #     replaces the header, only shows/hides what it contains.
-        sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        # show_start_title_buttons stays at its default (shown): with window buttons
-        # configured on the left, they must stay here, above the category list (there is no
-        # duplicate in the content bar). These buttons take space in the same left area as
-        # the category name, which _compute_min_sidebar_width() accounts for.
-        sidebar_header = Adw.HeaderBar(show_end_title_buttons=False)
-        # "flat" removes the separator/shadow Adw.HeaderBar draws at its bottom edge, so the
-        # whole left part (window bar + categories) reads as one continuous block.
-        sidebar_header.add_css_class("flat")
+    def _build_sidebar_header(self) -> Adw.HeaderBar:
+        """Sidebar header: category name (centered, empty at the root) and back button."""
+        # show_start_title_buttons stays at its default (shown): window buttons configured on
+        # the left stay above the category list; _compute_min_sidebar_width() accounts for them.
+        header = Adw.HeaderBar(show_end_title_buttons=False)
+        header.add_css_class("flat")
 
-        # CENTERED title widget (the real "title-widget" slot, not pack_start): shows the
-        # category name inside a category, nothing at the root. It also explicitly replaces the
-        # default title: without a title-widget, Adw.HeaderBar automatically shows the window
-        # title ("lpm"), which must not appear in this header. Empty text at the root has the
-        # same effect without swapping two different widgets.
+        # Real "title-widget" slot: without it Adw.HeaderBar would show the window title.
         self.sidebar_category_label = Gtk.Label()
         self.sidebar_category_label.add_css_class("heading")
-        # Safety net only: set_min_sidebar_width() above is computed so this never triggers
-        # in practice (category names must not be shortened).
+        # Safety net only: the min sidebar width is computed so this never triggers.
         self.sidebar_category_label.set_ellipsize(Pango.EllipsizeMode.END)
-        sidebar_header.set_title_widget(self.sidebar_category_label)
+        header.set_title_widget(self.sidebar_category_label)
 
         self.sidebar_back_button = Gtk.Button(
             icon_name="go-previous-symbolic", tooltip_text=t("gui.common.back_to_categories_tooltip")
         )
-        # Frame forced by CSS (see _BACK_BUTTON_CSS, loaded in LpmApp.do_activate): removing
-        # the "flat" class is not enough, most themes flatten all headerbar buttons.
+        # Frame forced by CSS (see _BACK_BUTTON_CSS, loaded in LpmApp.do_activate).
         self.sidebar_back_button.add_css_class("lpm-back-button")
         self.sidebar_back_button.connect("clicked", lambda _b: self._on_back_to_categories())
         self.sidebar_back_button.set_visible(False)
-        # pack_end, not pack_start: the back button is right-aligned in the bar, separated
-        # from the category name (which stays on the left).
-        sidebar_header.pack_end(self.sidebar_back_button)
+        header.pack_end(self.sidebar_back_button)
+        return header
 
-        sidebar_box.append(sidebar_header)
+    def _build_sidebar_pane(self) -> Adw.NavigationPage:
+        """Left pane: a single ListBox rebuilt in place for the current level (categories,
+        or a category's items)."""
+        sidebar_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        sidebar_box.append(self._build_sidebar_header())
 
         sidebar_scroller = Gtk.ScrolledWindow(vexpand=True)
         self.sidebar_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
@@ -175,52 +169,31 @@ class MainWindow(Adw.ApplicationWindow):
         sidebar_scroller.set_child(self.sidebar_list)
         sidebar_box.append(sidebar_scroller)
 
-        sidebar_page = Adw.NavigationPage(title="lpm", child=sidebar_box)
-        split_view.set_sidebar(sidebar_page)
+        self.sidebar_list.connect("row-activated", self._on_sidebar_row_activated)
+        return Adw.NavigationPage(title="lpm", child=sidebar_box)
 
-        self._sidebar_mode = "root"
-        self._sidebar_row_map: dict = {}
+    def _on_sidebar_row_activated(self, _listbox, row):
+        if self._sidebar_mode == "root":
+            cat_label, items = self._sidebar_row_map[row]
+            self._render_sidebar_category(cat_label, items)
+            return
+        cmd_id = self._sidebar_row_map.get(row)
+        if cmd_id is None:
+            return
+        self.show_page(cmd_id)
+        # On narrow layouts NavigationSplitView collapses into one stack: push the content
+        # explicitly after choosing an item, otherwise the view stays on the sidebar.
+        content = self.get_content()
+        if isinstance(content, Adw.NavigationSplitView):
+            content.set_show_content(True)
 
-        def on_sidebar_row_activated(_listbox, row):
-            if self._sidebar_mode == "root":
-                cat_label, items = self._sidebar_row_map[row]
-                self._render_sidebar_category(cat_label, items)
-            else:
-                cmd_id = self._sidebar_row_map.get(row)
-                if cmd_id is None:
-                    return
-                self.show_page(cmd_id)
-                # On narrow/mobile layouts, NavigationSplitView collapses sidebar+content into
-                # one stack: the content must be pushed explicitly after choosing an item,
-                # otherwise the view stays on the sidebar.
-                content = self.get_content()
-                if isinstance(content, Adw.NavigationSplitView):
-                    content.set_show_content(True)
-
-        self.sidebar_list.connect("row-activated", on_sidebar_row_activated)
-
-        self._render_sidebar_root()
-        # Neutral home page at launch (see page_home), rather than starting an action the
-        # user did not ask for.
-        self.show_page("home")
-
-        # --- Minimum window size ---
-        # set_size_request() on the window sets a floor (passed to the window manager)
-        # without preventing growth; no maximum is set. Without it, the window could shrink
-        # until the sidebar showed a single row and the content became unreadable.
-        #
-        # Minimum width = sidebar minimum width (sidebar_min_width, computed above so that no
-        # category name is truncated) + a generous reserve for the content pane, which may
-        # contain checklists with a "check all" button in the group header
-        # (Adw.ExpanderRow.set_header_suffix) that needs a minimum width to avoid overlapping
-        # the title.
+    def _apply_min_window_size(self, sidebar_min_width: int) -> None:
+        """Floor for the window size (set_size_request, no maximum): sidebar minimum width
+        plus a generous reserve for the content pane (checklists with a header suffix need
+        room), and enough height for the header, a few rows and the "Run" button."""
         content_min_width_reserve = 750
-        min_window_width = sidebar_min_width + content_min_width_reserve
-        # Minimum height: enough to keep the header, a few content rows and the "Run" button
-        # visible without scrolling right away. Fixed value (no page has an incompressible
-        # content height comparable to the longest category name).
         min_window_height = 480
-        self.set_size_request(min_window_width, min_window_height)
+        self.set_size_request(sidebar_min_width + content_min_width_reserve, min_window_height)
 
     def _compute_min_sidebar_width(self) -> int:
         """Minimum sidebar width computed from the longest category name (self._categories()),

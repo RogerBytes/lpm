@@ -17,77 +17,97 @@ from updatecheck import _check_update_async, _version_key
 from util import _run_on_main
 
 
-class HomePages:
-    # --- Home ---
-    def page_home(self):
-        """Page shown by default at launch until a category is chosen in the sidebar -- a
-        neutral state (Adw.StatusPage, the standard GNOME/HIG widget: centered icon, title,
-        description) rather than starting an action the user did not ask for.
+class HomePage:
+    """Page shown by default at launch until a category is chosen in the sidebar -- a
+    neutral state (Adw.StatusPage, the standard GNOME/HIG widget: centered icon, title,
+    description) rather than starting an action the user did not ask for.
 
-        Two discreet secondary elements under the description (CSS class "dim-label"), built
-        once (this page is cached by show_page, see MainWindow._built_pages):
-          - the "LUDIS" backronym joke ("Ludis Usually Disregards the Imitation Shame"),
-            deliberately always in English and never passed through t(): it is an
-            English-language pun (like WINE/GNU) that does not translate.
-          - the version number, read via "bin/lpm --version" (LPM_VERSION in bin/lpm is the
-            single source of truth, see backend.get_lpm_version), shown as a clickable link
-            to the GitHub repository.
-        """
-        status_page = Adw.StatusPage(
+    Two discreet secondary elements under the description (CSS class "dim-label"), built
+    once (this page is cached by show_page, see MainWindow._built_pages):
+    - the "LUDIS" backronym joke ("Ludis Usually Disregards the Imitation Shame"),
+    deliberately always in English and never passed through t(): it is an
+    English-language pun (like WINE/GNU) that does not translate.
+    - the version number, read via "bin/lpm --version" (LPM_VERSION in bin/lpm is the
+    single source of truth, see backend.get_lpm_version), shown as a clickable link
+    to the GitHub repository.
+    """
+
+    def __init__(self, owner):
+        self.owner = owner
+        self.window = owner.window
+
+    def build(self):
+        self._build_status_page()
+        self._add_tagline_and_version()
+        self._add_update_button()
+        self._finish()
+        return self.status_page
+
+    def _build_status_page(self):
+        self.status_page = Adw.StatusPage(
             icon_name="lpm",
             title=t("gui.home.title"),
             description=t("gui.home.description"),
         )
 
-        extra_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        extra_box.set_halign(Gtk.Align.CENTER)
-        extra_box.set_margin_top(12)
+    def _add_tagline_and_version(self):
+        self.extra_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.extra_box.set_halign(Gtk.Align.CENTER)
+        self.extra_box.set_margin_top(12)
 
         tagline_label = Gtk.Label(label="Ludis Usually Disregards the Imitation Shame")
         tagline_label.add_css_class("dim-label")
         tagline_label.add_css_class("caption")
-        extra_box.append(tagline_label)
+        self.extra_box.append(tagline_label)
 
         # Same size as the StatusPage description ("Ludis Prefix Manager", just above), so
         # no "caption" class (it would shrink the font), only "dim-label".
-        version_button = Gtk.LinkButton(
+        self.version_button = Gtk.LinkButton(
             uri="https://github.com/RogerBytes/lpm",
             label=backend.get_lpm_version(),
         )
-        version_button.set_halign(Gtk.Align.CENTER)
-        version_button.add_css_class("dim-label")
-        extra_box.append(version_button)
+        self.version_button.set_halign(Gtk.Align.CENTER)
+        self.version_button.add_css_class("dim-label")
+        self.extra_box.append(self.version_button)
 
+    def _add_update_button(self):
         # Update button under the version number: hidden until a newer version is known
         # (background check, cached 24 h, silent when offline). Accent-colored so it stands out
         # without taking over the page like a full-width banner would.
-        update_button = Gtk.Button()
-        update_button.add_css_class("suggested-action")
-        update_button.add_css_class("pill")
-        update_button.set_halign(Gtk.Align.CENTER)
-        update_button.set_margin_top(8)
-        update_button.set_visible(False)
-        extra_box.append(update_button)
+        self.update_button = Gtk.Button()
+        self.update_button.add_css_class("suggested-action")
+        self.update_button.add_css_class("pill")
+        self.update_button.set_halign(Gtk.Align.CENTER)
+        self.update_button.set_margin_top(8)
+        self.update_button.set_visible(False)
+        self.extra_box.append(self.update_button)
 
-        installed_version = backend.get_lpm_version()
-        update_state = {"info": None}
+        self.installed_version = backend.get_lpm_version()
+        self.update_state = {"info": None}
 
-        def on_update_info(info):
-            if not info or _version_key(info["latest"]) <= _version_key(installed_version):
-                return
-            update_state["info"] = info
-            update_button.set_label(t("gui.update.available", "v" + info["latest"]))
-            update_button.set_tooltip_text(
-                t("gui.update.button_release" if info["method"] == "manual" else "gui.update.button_install")
-            )
-            update_button.set_visible(True)
+        self.update_button.connect("clicked", lambda *_: self.owner._start_self_update(self.update_state["info"]))
+        _check_update_async(self.on_update_info)
 
-        update_button.connect("clicked", lambda *_: self._start_self_update(update_state["info"]))
-        _check_update_async(on_update_info)
+    def _finish(self):
+        self.status_page.set_child(self.extra_box)
+        self.status_page.set_vexpand(True)
 
-        status_page.set_child(extra_box)
-        status_page.set_vexpand(True)
-        return status_page
+    def on_update_info(self, info):
+        if not info or _version_key(info["latest"]) <= _version_key(self.installed_version):
+            return
+        self.update_state["info"] = info
+        self.update_button.set_label(t("gui.update.available", "v" + info["latest"]))
+        self.update_button.set_tooltip_text(
+            t("gui.update.button_release" if info["method"] == "manual" else "gui.update.button_install")
+        )
+        self.update_button.set_visible(True)
+
+
+
+class HomePages:
+    # --- Home ---
+    def page_home(self):
+        return HomePage(self).build()
 
     def _start_self_update(self, info):
         """Update button on the home page: manual/unknown install -> opens the release page; package
@@ -114,88 +134,106 @@ class HomePages:
         confirm.present(self.window)
 
     def _run_self_update(self, info):
-        dialog = Adw.Dialog()
-        dialog.set_title(t("gui.update.progress_title"))
-        dialog.set_content_width(420)
-        dialog.set_can_close(False)
+        _SelfUpdateRun(self.window).start()
+
+
+class _SelfUpdateRun:
+    """Progress dialog + "lpm self-update install" run, then restart of the GUI."""
+
+    def __init__(self, window):
+        self.window = window
+        self.updated = False
+        self.pulse_id: int | None = None
+
+    def _build_dialog(self):
+        self.dialog = Adw.Dialog()
+        self.dialog.set_title(t("gui.update.progress_title"))
+        self.dialog.set_content_width(420)
+        self.dialog.set_can_close(False)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=18, margin_bottom=18,
                       margin_start=18, margin_end=18)
-        bar = Gtk.ProgressBar(show_text=True)
-        bar.set_text(t("gui.update.progress_title"))
-        box.append(bar)
-        dialog.set_child(box)
-        pulse_id = {"id": GLib.timeout_add(150, lambda: (bar.pulse(), True)[1])}
-        state = {"updated": False}
+        self.bar = Gtk.ProgressBar(show_text=True)
+        self.bar.set_text(t("gui.update.progress_title"))
+        box.append(self.bar)
+        self.dialog.set_child(box)
 
-        def stop_pulse():
-            if pulse_id["id"] is not None:
-                GLib.source_remove(pulse_id["id"])
-                pulse_id["id"] = None
+    def _start_pulse(self):
+        self.pulse_id = GLib.timeout_add(150, lambda: (self.bar.pulse(), True)[1])
 
-        def set_step(text):
-            bar.set_text(text)
-            bar.set_fraction(0.0)
-            if pulse_id["id"] is None:
-                pulse_id["id"] = GLib.timeout_add(150, lambda: (bar.pulse(), True)[1])
+    def _stop_pulse(self):
+        if self.pulse_id is not None:
+            GLib.source_remove(self.pulse_id)
+            self.pulse_id = None
 
-        def set_percent(pct):
-            stop_pulse()
-            bar.set_fraction(max(0.0, min(1.0, pct / 100.0)))
+    def _set_step(self, text):
+        self.bar.set_text(text)
+        self.bar.set_fraction(0.0)
+        if self.pulse_id is None:
+            self._start_pulse()
 
+    def _set_percent(self, pct):
+        self._stop_pulse()
+        self.bar.set_fraction(max(0.0, min(1.0, pct / 100.0)))
+
+    def start(self):
+        self._build_dialog()
+        self._start_pulse()
         _GUI_LOGGER.info("$ bin/lpm self-update install")
+        self.dialog.present(self.window)
+        backend.run_lpm_async(["self-update", "install"], on_line=self._on_line, on_done=self._on_done)
 
-        def on_line(line):
-            _GUI_LOGGER.info(line)
-            stripped = line.strip()
-            m = _STEP_LINE_RE.match(stripped)
-            if m:
-                _run_on_main(set_step, t("gui.check.step_format", m.group(1), m.group(2), m.group(3)))
-                return
-            m = _PERCENT_LINE_RE.match(stripped)
-            if m:
-                _run_on_main(set_percent, int(m.group(1)))
-                return
-            if stripped.startswith("[UPDATED] "):
-                state["updated"] = True
+    def _on_line(self, line):
+        _GUI_LOGGER.info(line)
+        stripped = line.strip()
+        m = _STEP_LINE_RE.match(stripped)
+        if m:
+            _run_on_main(self._set_step, t("gui.check.step_format", m.group(1), m.group(2), m.group(3)))
+            return
+        m = _PERCENT_LINE_RE.match(stripped)
+        if m:
+            _run_on_main(self._set_percent, int(m.group(1)))
+            return
+        if stripped.startswith("[UPDATED] "):
+            self.updated = True
 
-        def on_done(result):
-            for err_line in result.stderr.strip().splitlines():
-                _GUI_LOGGER.info("! " + err_line)
+    def _on_done(self, result):
+        for err_line in result.stderr.strip().splitlines():
+            _GUI_LOGGER.info("! " + err_line)
+        _run_on_main(self._finish, result)
 
-            def finish():
-                stop_pulse()
-                if result.returncode == 0 and state["updated"]:
-                    bar.set_fraction(1.0)
-                    launcher = shutil.which("lpm-gui")
-                    if launcher:
-                        bar.set_text(t("gui.update.restarting"))
-                        # New copy launched AFTER this one closes: lpm is a single-instance
-                        # application, so the new one must wait for the old one to release
-                        # its application id.
-                        subprocess.Popen(["sh", "-c", 'sleep 1.5; exec "$0"', launcher],
-                                         start_new_session=True, stdout=subprocess.DEVNULL,
-                                         stderr=subprocess.DEVNULL)
-                        GLib.timeout_add(600, lambda: (self.window.get_application().quit(), False)[1])
-                    else:
-                        dialog.set_can_close(True)
-                        dialog.force_close()
-                        done = Adw.AlertDialog(heading=t("gui.update.progress_title"),
-                                               body=t("gui.update.restart_manual"))
-                        done.add_response("ok", t("gui.update.failed_close"))
-                        done.present(self.window)
-                    return
-                dialog.set_can_close(True)
-                dialog.force_close()
-                details = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
-                failed = Adw.AlertDialog(heading=t("gui.update.failed_heading"), body=details)
-                failed.add_response("close", t("gui.update.failed_close"))
-                failed.add_response("log", t("gui.common.view_log"))
-                failed.set_default_response("close")
-                failed.set_close_response("close")
-                failed.connect("response", lambda _d, r: show_log_dialog(self.window) if r == "log" else None)
-                failed.present(self.window)
+    def _close_dialog(self):
+        self.dialog.set_can_close(True)
+        self.dialog.force_close()
 
-            _run_on_main(finish)
+    def _finish(self, result):
+        self._stop_pulse()
+        if result.returncode == 0 and self.updated:
+            self.bar.set_fraction(1.0)
+            self._restart()
+            return
+        self._close_dialog()
+        details = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else ""
+        failed = Adw.AlertDialog(heading=t("gui.update.failed_heading"), body=details)
+        failed.add_response("close", t("gui.update.failed_close"))
+        failed.add_response("log", t("gui.common.view_log"))
+        failed.set_default_response("close")
+        failed.set_close_response("close")
+        failed.connect("response", lambda _d, r: show_log_dialog(self.window) if r == "log" else None)
+        failed.present(self.window)
 
-        dialog.present(self.window)
-        backend.run_lpm_async(["self-update", "install"], on_line=on_line, on_done=on_done)
+    def _restart(self):
+        launcher = shutil.which("lpm-gui")
+        if launcher:
+            self.bar.set_text(t("gui.update.restarting"))
+            # New copy launched AFTER this one closes: lpm is single-instance, so the new
+            # one must wait for the old one to release its application id.
+            subprocess.Popen(["sh", "-c", 'sleep 1.5; exec "$0"', launcher],
+                             start_new_session=True, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+            GLib.timeout_add(600, lambda: (self.window.get_application().quit(), False)[1])
+            return
+        self._close_dialog()
+        done = Adw.AlertDialog(heading=t("gui.update.progress_title"),
+                               body=t("gui.update.restart_manual"))
+        done.add_response("ok", t("gui.update.failed_close"))
+        done.present(self.window)

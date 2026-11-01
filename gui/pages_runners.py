@@ -15,62 +15,80 @@ from widgets_rows import add_compression_rows, ask_keep_or_delete, pick_file, si
 from widgets_select import FileMultiSelect, RemoteRunnerMultiSelect, RunnerMultiSelect
 
 
-class RunnerPages:
-    # --- Runners ---
-    def page_install_runner(self, initial_files: list[str] | None = None):
-        page = CommandPage(t("gui.install_runner.page_title"), t("gui.install_runner.page_subtitle"))
+class InstallRunnerPage:
+    def __init__(self, owner, initial_files):
+        self.owner = owner
+        self.window = owner.window
+        self.initial_files = initial_files
 
-        file_selector = FileMultiSelect(t("gui.install_runner.file_selector_title"))
+    def build(self):
+        self._add_file_selector()
+        self._add_options()
+        self._wire_reset_and_run()
+        return self.page
 
-        def _scan_and_set(chosen_paths: list[str]):
-            # Same principle as page_install() for .zgp: the other .zgr files in the same
-            # folder are listed too, so they can be added at once with "check all".
-            all_in_dir = sibling_files(chosen_paths, ".zgr")
-            file_selector.set_paths(all_in_dir, checked_paths=chosen_paths)
+    def _add_file_selector(self):
+        self.page = CommandPage(t("gui.install_runner.page_title"), t("gui.install_runner.page_subtitle"))
 
-        def choose():
-            def got(paths):
-                if paths:
-                    _scan_and_set(paths)
-
-            pick_file(self.window, t("gui.install_runner.choose_dialog_title"), got, [(".zgr", ["*.zgr"])], multiple=True)
+        self.file_selector = FileMultiSelect(t("gui.install_runner.file_selector_title"))
 
         choose_btn = Gtk.Button(icon_name="document-open-symbolic", valign=Gtk.Align.CENTER,
                                  tooltip_text=t("gui.install_runner.choose_tooltip"))
-        choose_btn.connect("clicked", lambda *_: choose())
-        file_selector.add_suffix(choose_btn)
-        page.add_row(file_selector)
-        if initial_files:
-            _scan_and_set(list(initial_files))
+        choose_btn.connect("clicked", lambda *_: self.choose())
+        self.file_selector.add_suffix(choose_btn)
+        self.page.add_row(self.file_selector)
+        if self.initial_files:
+            self._scan_and_set(list(self.initial_files))
         else:
-            file_selector.set_paths([])
+            self.file_selector.set_paths([])
 
-        ignore_hash_row = Adw.SwitchRow(title=t("gui.common.ignore_hash_title"))
-        page.add_row(ignore_hash_row)
+    def _add_options(self):
+        self.ignore_hash_row = Adw.SwitchRow(title=t("gui.common.ignore_hash_title"))
+        self.page.add_row(self.ignore_hash_row)
 
-        # The hash switch is reset too, see CommandPage.reset_selection. (Downloading from
-        # the repository has its own page: page_download_runner.)
-        def reset_fields():
-            file_selector.set_paths([])
-            ignore_hash_row.set_active(False)
+    def _wire_reset_and_run(self):
+        self.page.reset_selection = self.reset_fields
 
-        page.reset_selection = reset_fields
+        self.page.run_button.connect("clicked", self.on_run)
 
-        def on_run(*_):
-            targets = file_selector.selected_paths()
-            if not targets:
-                page.toast(t("gui.install_runner.toast_need_target"))
-                return
-            args = ["install-runner", "-y"]
-            if ignore_hash_row.get_active():
-                args.append("--ignore-hash")
-            args.extend(targets)
-            page.run_command(args, t("gui.install_runner.done"), refresh="runners",
-                             cancellable=True, cancel_toast=t("gui.install_runner.toast_cancelled"),
-                             on_cancelled=self._runner_install_cancel_handler(page))
+    def _scan_and_set(self, chosen_paths: list[str]):
+        # Same principle as page_install() for .zgp: the other .zgr files in the same
+        # folder are listed too, so they can be added at once with "check all".
+        all_in_dir = sibling_files(chosen_paths, ".zgr")
+        self.file_selector.set_paths(all_in_dir, checked_paths=chosen_paths)
 
-        page.run_button.connect("clicked", on_run)
-        return page
+    def choose(self):
+        def got(paths):
+            if paths:
+                self._scan_and_set(paths)
+
+        pick_file(self.window, t("gui.install_runner.choose_dialog_title"), got, [(".zgr", ["*.zgr"])], multiple=True)
+
+    # The hash switch is reset too, see CommandPage.reset_selection. (Downloading from
+    # the repository has its own page: page_download_runner.)
+    def reset_fields(self):
+        self.file_selector.set_paths([])
+        self.ignore_hash_row.set_active(False)
+
+    def on_run(self, *_):
+        targets = self.file_selector.selected_paths()
+        if not targets:
+            self.page.toast(t("gui.install_runner.toast_need_target"))
+            return
+        args = ["install-runner", "-y"]
+        if self.ignore_hash_row.get_active():
+            args.append("--ignore-hash")
+        args.extend(targets)
+        self.page.run_command(args, t("gui.install_runner.done"), refresh="runners",
+                         cancellable=True, cancel_toast=t("gui.install_runner.toast_cancelled"),
+                         on_cancelled=self.owner._runner_install_cancel_handler(self.page))
+
+
+
+class RunnerPages:
+    # --- Runners ---
+    def page_install_runner(self, initial_files: list[str] | None = None):
+        return InstallRunnerPage(self, initial_files).build()
 
     def _runner_install_cancel_handler(self, page):
         """on_cancelled for runner download/install: the current runner is cleaned up by the
