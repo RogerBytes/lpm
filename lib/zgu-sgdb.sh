@@ -10,6 +10,7 @@
 # Same file for every command: single source of truth, read/written identically everywhere.
 sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
 sgdb_api="https://www.steamgriddb.com/api/v2"
+ZGU_SGDB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- 5. SteamGridDB API key ---
 #
@@ -87,14 +88,60 @@ for g in data.get("data", []) or []:
 
 # Output: one line per candidate icon, "full_resolution_url<TAB>thumbnail_url". SteamGridDB's
 # "thumb" field (each icon has "url" AND "thumb", per the JSON structure documented by official
-# third-party clients such as node-steamgriddb and the Go steam-shortcut-manager) is a thumbnail
-# already reduced by SteamGridDB, much lighter and faster to download than the full-resolution
-# image. It is used only for the picker preview, never for the icon finally applied (always
-# "url", full quality). Falls back to "url" if "thumb" is ever missing from a response.
-zgp_sgdb_icons() {
-  local game_id="$1" g_name="$2"
-  local endpoint="${sgdb_api}/icons/game/${game_id}"
+# Picks the SteamGridDB game among search results ("id<TAB>name" lines): asks the user when
+# several match (CLI), else takes the single one. Sets sgdb_pick_id / sgdb_pick_name.
+# Args: lang_prefix (icon|splash|logo, for the messages) g_name search_results.
+# Returns 1 if the user's choice is invalid (cancelled).
+sgdb_pick_id="" sgdb_pick_name=""
+zgp_sgdb_pick_game() {
+  local lang="$1" g_name="$2" search_results="$3"
+  local chosen_game_id="" chosen_game_name=""
+  local n_matches
+  n_matches=$(printf '%s\n' "${search_results}" | grep -c .)
 
+  if [[ "${n_matches}" -gt 1 ]]; then
+    t "${lang}.pick_game_text_cli" "${g_name}"
+    local -A idx_to_id=() idx_to_name=()
+    local idx=1 g_gid g_sgdb_name
+    while IFS=$'\t' read -r g_gid g_sgdb_name; do
+      [[ -z "${g_gid}" ]] && continue
+      printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
+      idx_to_id["${idx}"]="${g_gid}"
+      idx_to_name["${idx}"]="${g_sgdb_name}"
+      idx=$((idx + 1))
+    done <<< "${search_results}"
+    local choice
+    read -r -p "$(t "${lang}.pick_game_prompt_cli")" choice
+    chosen_game_id="${idx_to_id[${choice}]:-}"
+    chosen_game_name="${idx_to_name[${choice}]:-}"
+    [[ -n "${chosen_game_id}" ]] || return 1
+  else
+    chosen_game_id=$(printf '%s\n' "${search_results}" | head -n1 | cut -f1)
+    chosen_game_name=$(printf '%s\n' "${search_results}" | head -n1 | cut -f2)
+  fi
+
+  # The CONFIRMED SteamGridDB name (that of the chosen row), never the raw Lutris name: Lutris
+  # may hold a customized or misspelled name, which the Steam store search does not tolerate.
+  # Looked up by ID in the results (single source of truth); falls back to g_name.
+  local sr_gid sr_name
+  while IFS=$'\t' read -r sr_gid sr_name; do
+    if [[ "${sr_gid}" = "${chosen_game_id}" ]]; then
+      chosen_game_name="${sr_name}"
+      break
+    fi
+  done <<< "${search_results}"
+  [[ -z "${chosen_game_name}" ]] && chosen_game_name="${g_name}"
+
+  # shellcheck disable=SC2034  # both read by the scripts that source this library
+  sgdb_pick_id="${chosen_game_id}"
+  # shellcheck disable=SC2034
+  sgdb_pick_name="${chosen_game_name}"
+  return 0
+}
+
+# Steam AppID of a game name (official Steam store search), empty if not found. Arg: name.
+zgp_sgdb_steam_appid() {
+  local g_name="$1"
   # Third source, distinct from the two SteamGridDB calls below: the real Steam "Client Icon"
   # (hash "clienticon"/"icon" + Steam AppID), for games for which SteamGridDB hosts NO icon (0
   # icons, whatever the style), e.g. Crossbar Cards. SteamGridDB shows a "View Original Steam
@@ -133,6 +180,19 @@ if items:
     fi
   fi
 
+  printf '%s' "${steam_appid}"
+}
+
+# third-party clients such as node-steamgriddb and the Go steam-shortcut-manager) is a thumbnail
+# already reduced by SteamGridDB, much lighter and faster to download than the full-resolution
+# image. It is used only for the picker preview, never for the icon finally applied (always
+# "url", full quality). Falls back to "url" if "thumb" is ever missing from a response.
+zgp_sgdb_icons() {
+  local game_id="$1" g_name="$2"
+  local endpoint="${sgdb_api}/icons/game/${game_id}"
+  local steam_appid=""
+  [[ -n "${g_name}" ]] && steam_appid=$(zgp_sgdb_steam_appid "${g_name}")
+
   {
     curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${endpoint}" 2>/dev/null
     echo
@@ -148,68 +208,7 @@ if items:
     if [[ -n "${steam_appid}" ]]; then
       curl -s --max-time 15 "https://api.steamcmd.net/v1/info/${steam_appid}" 2>/dev/null
     fi
-  } | python3 -c '
-import sys, json
-
-buf = sys.stdin.read()
-decoder = json.JSONDecoder()
-idx = 0
-n = len(buf)
-seen = set()
-results = []
-
-def add(url, thumb=None):
-    if url and url not in seen:
-        seen.add(url)
-        results.append((url, thumb or url))
-
-while idx < n:
-    while idx < n and buf[idx] in " \t\n\r":
-        idx += 1
-    if idx >= n:
-        break
-    try:
-        obj, end = decoder.raw_decode(buf, idx)
-    except Exception:
-        break
-    idx = end
-    if not isinstance(obj, dict):
-        continue
-    ok = obj.get("success") is True or obj.get("status") == "success"
-    if not ok:
-        continue
-    data = obj.get("data")
-    if isinstance(data, list):
-        # Shape of the two SteamGridDB calls (icons/game/{id}, with or without
-        # ?styles=official).
-        for i in data:
-            add(i.get("url", ""), i.get("thumb", ""))
-    elif isinstance(data, dict):
-        # Shape of the api.steamcmd.net/v1/info/{appid} response: {"<appid>":
-        # {"appid":..., "common": {"clienticon": "...", "icon": "...", ...}, ...}}.
-        for entry in data.values():
-            if not isinstance(entry, dict):
-                continue
-            appid = entry.get("appid")
-            common = entry.get("common") or {}
-            if not appid or not isinstance(common, dict):
-                continue
-            # "icon" (the small Steam favicon, always low resolution, ~32x32) is
-            # added ONLY if "clienticon" (the real Client Icon, up to 256x256) is
-            # absent, never both at once: "icon" is never better than "clienticon"
-            # when the latter exists. It remains a useful fallback for the (rare)
-            # games with "icon" but no "clienticon".
-            clienticon = common.get("clienticon")
-            if clienticon:
-                add(f"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{appid}/{clienticon}.ico")
-            else:
-                icon = common.get("icon")
-                if icon:
-                    add(f"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{appid}/{icon}.jpg")
-
-for url, thumb in results:
-    print(f"{url}\t{thumb}")
-'
+  } | python3 "${ZGU_SGDB_DIR}/zgu-sgdb-merge-icons.py"
 }
 
 zgp_sgdb_heroes() {

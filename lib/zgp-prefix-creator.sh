@@ -251,55 +251,33 @@ skipped_file=$(mktemp)
 failed_file=$(mktemp)
 echo "0" > "${created_count_file}"
 
-zgp_run_creation_batch() {
-  local created=0
-  local i c_name c_slug prefix_dir step_num
-  local timestamp config_id yml_config_file safe_name safe_slug safe_prefix_dir safe_config_id
+# Creates the Wine/Proton prefix with the chosen runner. Arg: prefix_dir.
+zgp_boot_prefix() {
+  local prefix_dir="$1"
+  if [[ "${runner_type}" = "wine" ]]; then
+    env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="winemenubuilder=" \
+      "${runner_dir}/${runner_choice}/bin/wineboot" >/dev/null 2>&1
+  else
+    env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" PROTONPATH="${runner_dir}/${runner_choice}" GAMEID="0" \
+      "${umu_run_path}" createprefix >/dev/null 2>&1
+  fi
+}
 
-  for (( i=0; i<total; i++ )); do
-    c_name="${batch_names[i]}"
-    c_slug="${batch_slugs[i]}"
-    prefix_dir="${games_dir}/${c_slug}"
+# Writes the Lutris yml and the DB row of a new prefix. Args: c_name c_slug prefix_dir.
+zgp_register_prefix() {
+  local c_name="$1" c_slug="$2" prefix_dir="$3"
+  local config_id yml_config_file safe_name safe_slug safe_prefix_dir safe_config_id
+  config_id="${c_slug}-$(date +%s%N)"
+  yml_config_file="${lutris_config_dir}/${config_id}.yml"
+  zgp_write_config_yml "${yml_config_file}" "${prefix_dir}" "${c_slug}" "${c_name}" "${runner_choice}"
 
-    step_num=$(( i + 1 ))
+  safe_name="${c_name//\'/\'\'}"
+  safe_slug="${c_slug//\'/\'\'}"
+  safe_prefix_dir="${prefix_dir//\'/\'\'}"
+  safe_config_id="${config_id//\'/\'\'}"
 
-    t create_prefix.creating_cli "${c_name}" "${c_slug}" "${step_num}" "${total}"
-
-    # Strict refusal if the prefix already exists (same guard as the installer): this entry
-    # is skipped rather than overwriting an existing folder, and the rest of the batch
-    # continues.
-    if [[ -d "${prefix_dir}" ]]; then
-      echo "${c_name}" >> "${skipped_file}"
-      continue
-    fi
-
-    mkdir -p "${prefix_dir}"
-
-    if [[ "${runner_type}" = "wine" ]]; then
-      env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="winemenubuilder=" \
-        "${runner_dir}/${runner_choice}/bin/wineboot" >/dev/null 2>&1
-    else
-      env WINEARCH="${arch_choice}" WINEPREFIX="${prefix_dir}" PROTONPATH="${runner_dir}/${runner_choice}" GAMEID="0" \
-        "${umu_run_path}" createprefix >/dev/null 2>&1
-    fi
-
-    if ! zgp_wait_for_prefix "${prefix_dir}"; then
-      echo "${c_name}" >> "${failed_file}"
-      continue
-    fi
-
-    timestamp=$(date +%s%N)
-    config_id="${c_slug}-${timestamp}"
-    yml_config_file="${lutris_config_dir}/${config_id}.yml"
-    zgp_write_config_yml "${yml_config_file}" "${prefix_dir}" "${c_slug}" "${c_name}" "${runner_choice}"
-
-    safe_name="${c_name//\'/\'\'}"
-    safe_slug="${c_slug//\'/\'\'}"
-    safe_prefix_dir="${prefix_dir//\'/\'\'}"
-    safe_config_id="${config_id//\'/\'\'}"
-
-    sqlite3 "${lutris_db}" "DELETE FROM games WHERE slug='${safe_slug}';"
-    sqlite3 "${lutris_db}" <<EOF
+  sqlite3 "${lutris_db}" "DELETE FROM games WHERE slug='${safe_slug}';"
+  sqlite3 "${lutris_db}" <<EOF
 INSERT INTO games (name, slug, installer_slug, parent_slug, runner, executable, directory, configpath, updated, installed, installed_at)
 VALUES (
   '${safe_name}',
@@ -315,6 +293,35 @@ VALUES (
   strftime('%s','now')
 );
 EOF
+}
+
+zgp_run_creation_batch() {
+  local created=0
+  local i c_name c_slug prefix_dir step_num
+
+  for (( i=0; i<total; i++ )); do
+    c_name="${batch_names[i]}"
+    c_slug="${batch_slugs[i]}"
+    prefix_dir="${games_dir}/${c_slug}"
+    step_num=$(( i + 1 ))
+
+    t create_prefix.creating_cli "${c_name}" "${c_slug}" "${step_num}" "${total}"
+
+    # Strict refusal if the prefix already exists (same guard as the installer): this entry
+    # is skipped rather than overwriting an existing folder, and the rest of the batch
+    # continues.
+    if [[ -d "${prefix_dir}" ]]; then
+      echo "${c_name}" >> "${skipped_file}"
+      continue
+    fi
+
+    mkdir -p "${prefix_dir}"
+    zgp_boot_prefix "${prefix_dir}"
+    if ! zgp_wait_for_prefix "${prefix_dir}"; then
+      echo "${c_name}" >> "${failed_file}"
+      continue
+    fi
+    zgp_register_prefix "${c_name}" "${c_slug}" "${prefix_dir}"
 
     created=$(( created + 1 ))
     # Written on EACH success, not only once at the end of the loop: if this function were

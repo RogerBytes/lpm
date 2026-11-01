@@ -35,6 +35,97 @@ zgu_get_desktop_dir() {
   fi
 }
 
+# Folder of this file (where lib/zgu-umu-gameid.py sits), whatever the script that sources it.
+ZGU_DESKTOP_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# --- Pieces of zgu_write_game_shortcut (each one does one thing; see the header above) ---
+
+# zgu_shortcut_icon <prefix_dir>: prints the icon of the shortcut, an image of the game folder
+# "lpm/images/icon" or our generic fallback icon.
+zgu_shortcut_icon() {
+  local icon_path="lpm-game-generic" icon_src_dir icon_file
+  icon_src_dir="$(zgu_lpm_find "$1" icon)"
+  if [[ -d "${icon_src_dir}" ]]; then
+    icon_file=$(find "${icon_src_dir}" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -print -quit 2>/dev/null)
+    # icon_file is a real file name possibly forged by a third party (shared .zgp package) and injected
+    # as-is into "Icon=${icon_path}" of the generated .desktop: a newline in the name could add an
+    # arbitrary "Exec=" line (silent execution on double-click, since the .desktop is marked
+    # "metadata::trusted true"). Same filter as for slug/game_real_name elsewhere in the project.
+    icon_file="${icon_file//[$'\n\r\t']/}"
+    [[ -n "${icon_file}" ]] && icon_path="${icon_file}"
+  fi
+  printf '%s' "${icon_path}"
+}
+
+# zgu_shortcut_wm_class <executable_path> <game_id> <configpath> <lutris_config_dir> <runner_dir>:
+# prints the StartupWMClass of the shortcut (empty if unknown).
+# Wine WM_CLASS = executable file name as-is (case and extension kept, e.g. "Notepad.exe"), never
+# the full path. executable_path comes from the Lutris database (column "executable"), so it may be
+# forged by a third party (shared .zgp): same anti-injection filter as for icon_file/slug/
+# game_real_name, before landing in "StartupWMClass=" of the generated .desktop.
+# Proton/umu fallback (see the header): lib/zgu-umu-gameid.py adds the missing GAMEID to the game's
+# YAML and prints the class umu-run will give the window. It does nothing if a required ingredient
+# is missing (configpath/lutris_config_dir/runner_dir not provided, YAML file not found, or
+# python3/PyYAML absent) -- the classic wine behavior then stays unchanged.
+zgu_shortcut_wm_class() {
+  local executable_path="$1" game_id="$2" configpath="$3" config_dir="$4" runner_dir="$5"
+  local wm_class="" proton_wm_class yml_path="${4}/${3}.yml"
+  if [[ -n "${executable_path}" ]]; then
+    wm_class=$(basename -- "${executable_path}")
+    wm_class="${wm_class//[$'\n\r\t']/}"
+  fi
+
+  if [[ -n "${configpath}" ]] && [[ -n "${config_dir}" ]] && [[ -n "${runner_dir}" ]] \
+     && [[ -f "${yml_path}" ]] \
+     && command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
+    proton_wm_class=$(YML_PATH="${yml_path}" RUNNER_DIR="${runner_dir}" GAME_ID="${game_id}" \
+      python3 "${ZGU_DESKTOP_UTILS_DIR}/zgu-umu-gameid.py" 2>/dev/null)
+    [[ -n "${proton_wm_class}" ]] && wm_class="${proton_wm_class}"
+  fi
+  printf '%s' "${wm_class}"
+}
+
+# zgu_shortcut_write_menu <slug> <create_menu> <content>: writes the menu shortcut, or removes it
+# when create_menu is not true (see the header: only the menu shortcut can be removed).
+zgu_shortcut_write_menu() {
+  local slug="$1" create_menu="$2" content="$3"
+  local menu_desktop_file="${HOME}/.local/share/applications/net.lutris.${slug}.desktop"
+  if [[ "${create_menu}" = true ]]; then
+    mkdir -p "${HOME}/.local/share/applications"
+    echo "${content}" > "${menu_desktop_file}"
+    update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+  elif [[ -f "${menu_desktop_file}" ]]; then
+    rm -f "${menu_desktop_file}"
+    update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
+  fi
+}
+
+# zgu_shortcut_write_desktop <slug> <game_real_name> <prefix_dir> <desktop_dir_override> <content>:
+# writes the shortcut in the desktop/custom folder (trusted, executable) and, when the game has
+# extras, a link to them next to it.
+zgu_shortcut_write_desktop() {
+  local slug="$1" game_real_name="$2" prefix_dir="$3" desktop_dir_override="$4" content="$5"
+  local desktop_dir
+  if [[ -n "${desktop_dir_override}" ]]; then
+    desktop_dir="${desktop_dir_override}"
+  else
+    desktop_dir=$(zgu_get_desktop_dir)
+  fi
+  [[ -d "${desktop_dir}" ]] || return 0
+
+  echo "${content}" > "${desktop_dir}/${slug}.desktop"
+  chmod +x "${desktop_dir}/${slug}.desktop"
+  gio set "${desktop_dir}/${slug}.desktop" metadata::trusted true 2>/dev/null || true
+
+  local extras_src_dir bonus_dir_name
+  extras_src_dir="$(zgu_lpm_find "${prefix_dir}" extras)"
+  if [[ -d "${extras_src_dir}" ]]; then
+    bonus_dir_name="${game_real_name} $(t install_game.bonus_folder_suffix)"
+    rm -rf "${desktop_dir}/${bonus_dir_name:?}"
+    ln -s "${extras_src_dir}" "${desktop_dir}/${bonus_dir_name}"
+  fi
+}
+
 # --- Shared utility: generates the .desktop shortcut(s) of an lpm game ---
 #
 # zgu_write_game_shortcut <nom_affiche> <slug> <prefix_dir> <game_id> <version> <create_menu> <create_desktop> [<executable_path>] [<configpath>] [<lutris_config_dir>] [<runner_dir>] [<desktop_dir_override>]
@@ -92,32 +183,13 @@ zgu_get_desktop_dir() {
 # If python3/PyYAML is missing, the game does not use Proton, or an incompatible custom GAMEID is
 # already present: silent fallback to the classic wine behavior (executable name) above.
 zgu_write_game_shortcut() {
-  local game_real_name="$1"
-  local slug="$2"
-  local prefix_dir="$3"
-  local game_id="$4"
-  local version="$5"
-  local create_menu="$6"
-  local create_desktop="$7"
-  local executable_path="${8:-}"
-  local configpath="${9:-}"
-  local lutris_config_dir="${10:-}"
-  local runner_dir="${11:-}"
-  local desktop_dir_override="${12:-}"
+  local game_real_name="$1" slug="$2" prefix_dir="$3" game_id="$4" version="$5"
+  local create_menu="$6" create_desktop="$7" executable_path="${8:-}" configpath="${9:-}"
+  local lutris_config_dir="${10:-}" runner_dir="${11:-}" desktop_dir_override="${12:-}"
 
-  local icon_path="lpm-game-generic"
-  local icon_src_dir
-  icon_src_dir="$(zgu_lpm_find "${prefix_dir}" icon)"
-  if [[ -d "${icon_src_dir}" ]]; then
-    local icon_file
-    icon_file=$(find "${icon_src_dir}" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -print -quit 2>/dev/null)
-    # icon_file is a real file name possibly forged by a third party (shared .zgp package) and injected
-    # as-is into "Icon=${icon_path}" of the generated .desktop: a newline in the name could add an
-    # arbitrary "Exec=" line (silent execution on double-click, since the .desktop is marked
-    # "metadata::trusted true"). Same filter as for slug/game_real_name elsewhere in the project.
-    icon_file="${icon_file//[$'\n\r\t']/}"
-    [[ -n "${icon_file}" ]] && icon_path="${icon_file}"
-  fi
+  local icon_path wm_class
+  icon_path="$(zgu_shortcut_icon "${prefix_dir}")"
+  wm_class="$(zgu_shortcut_wm_class "${executable_path}" "${game_id}" "${configpath}" "${lutris_config_dir}" "${runner_dir}")"
 
   # All lpm .desktop shortcuts go through the orchestrator (lib/zgl-launcher-orchestrator.sh), the
   # single entry point -- see its header for the full design. Only "game_id" (integer) and "version"
@@ -129,195 +201,19 @@ zgu_write_game_shortcut() {
   # bash dynamic scope, not an undefined variable.
   local exec_cmd="${script_dir}/zgl-launcher-orchestrator.sh ${game_id} ${version}"
 
-  # Wine WM_CLASS = executable file name as-is (case and extension kept, e.g. "Notepad.exe"), never
-  # the full path. executable_path comes from the Lutris database (column "executable"), so it may be
-  # forged by a third party (shared .zgp): same anti-injection filter as for icon_file/slug/
-  # game_real_name, before landing in "StartupWMClass=${wm_class}" of the generated .desktop.
-  local wm_class=""
-  if [[ -n "${executable_path}" ]]; then
-    wm_class=$(basename -- "${executable_path}")
-    wm_class="${wm_class//[$'\n\r\t']/}"
-  fi
-
-  # Proton/umu fallback (see the detailed comment above): does nothing if a required ingredient is
-  # missing (configpath/lutris_config_dir/runner_dir not provided, YAML file not found, or
-  # python3/PyYAML absent) -- the classic wine behavior above then stays unchanged.
-  if [[ -n "${configpath}" ]] && [[ -n "${lutris_config_dir}" ]] && [[ -n "${runner_dir}" ]] \
-     && command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
-
-    local yml_path="${lutris_config_dir}/${configpath}.yml"
-    if [[ -f "${yml_path}" ]]; then
-      local proton_wm_class
-      proton_wm_class=$(YML_PATH="${yml_path}" RUNNER_DIR="${runner_dir}" GAME_ID="${game_id}" python3 -c '
-import os, re, sys
-
-yml_path = os.environ["YML_PATH"]
-runner_dir = os.environ["RUNNER_DIR"]
-game_id = os.environ["GAME_ID"]
-
-try:
-    import yaml
-except Exception:
-    sys.exit(0)
-
-try:
-    with open(yml_path, "r") as f:
-        raw_text = f.read()
-    data = yaml.safe_load(raw_text)
-except Exception:
-    sys.exit(0)
-
-if not isinstance(data, dict):
-    sys.exit(0)
-
-wine_version = data.get("wine", {}).get("version", "") if isinstance(data.get("wine"), dict) else ""
-if not wine_version:
-    sys.exit(0)
-
-# Same check umu-run does to validate a PROTONPATH: a classic wine build folder never has this file.
-if not os.path.isfile(os.path.join(runner_dir, wine_version, "toolmanifest.vdf")):
-    sys.exit(0)
-
-system_cfg = data.get("system")
-env_cfg = system_cfg.get("env") if isinstance(system_cfg, dict) else None
-
-existing = env_cfg.get("GAMEID") if isinstance(env_cfg, dict) else None
-if existing:
-    # Never overwrite a GAMEID already set by hand: the expected WM_CLASS is only deduced if it follows
-    # the pattern recognized by umu-run (see umu_run.py); otherwise we cannot know the result, so bail out.
-    m = re.match(r"^umu-([\d\w]+)$", str(existing))
-    if m:
-        print(f"steam_app_{m.group(1)}")
-    sys.exit(0)
-
-# --- Targeted text insertion: never "yaml.safe_load" + "yaml.dump" to rewrite the whole file. A
-# standard YAML parser ignores comments (a line "# prelaunch_command: ...  # lpm:hook-disabled" does
-# not exist for it), so a full roundtrip would silently erase every hook currently neutralized by
-# zgu_apply_hook_policy. Only the missing GAMEID line is added, by plain text manipulation of the
-# file lines; "data"/"raw_text" above only DECIDE whether a write is needed, never produce it.
-lines = raw_text.splitlines()
-
-
-def indent_of(line):
-    return len(line) - len(line.lstrip(" "))
-
-
-def find_top_block(key):
-    """Intervalle [start, end) (end exclu) du bloc top-level "<key>:", ou None si la
-    cle n existe pas a l indentation 0."""
-    for i, line in enumerate(lines):
-        if line.startswith(key + ":") and indent_of(line) == 0:
-            j = i + 1
-            while j < len(lines) and (lines[j].strip() == "" or indent_of(lines[j]) > 0):
-                j += 1
-            return i, j
-    return None
-
-
-def child_indent(start, end, own_indent):
-    """Indentation de la premiere ligne non vide du bloc -- repli a "own_indent + 2"
-    (convention 2-espaces constatee partout ailleurs dans ce projet) si le bloc est
-    vide."""
-    for k in range(start + 1, end):
-        if lines[k].strip() != "":
-            return indent_of(lines[k])
-    return own_indent + 2
-
-
-system_block = find_top_block("system")
-
-if system_block is None:
-    # No "system:" key at all -- appended at end of file with its "env:" and the GAMEID key.
-    if lines and lines[-1].strip() != "":
-        lines.append("")
-    lines.extend(["system:", "  env:", f"    GAMEID: umu-{game_id}"])
-else:
-    sys_start, sys_end = system_block
-    sys_child_indent = child_indent(sys_start, sys_end, 0)
-    env_block = None
-    for i in range(sys_start + 1, sys_end):
-        if lines[i].strip().startswith("env:") and indent_of(lines[i]) == sys_child_indent:
-            j = i + 1
-            while j < sys_end and (lines[j].strip() == "" or indent_of(lines[j]) > sys_child_indent):
-                j += 1
-            env_block = (i, j)
-            break
-
-    if env_block is None:
-        # "system:" exists but without "env:" -- inserted as first child of the block.
-        lines[sys_start + 1:sys_start + 1] = [
-            " " * sys_child_indent + "env:",
-            " " * (sys_child_indent + 2) + f"GAMEID: umu-{game_id}",
-        ]
-    else:
-        env_start, env_end = env_block
-        # "env: {}" (inline empty mapping, as written by a YAML dump) cannot take an indented
-        # child: it is turned into a block "env:" first. Any other inline value is left alone
-        # (nothing is written) rather than producing an invalid file.
-        env_inline = lines[env_start].split("env:", 1)[1].split("#", 1)[0].strip()
-        if env_inline == "{}":
-            lines[env_start] = lines[env_start].split("env:", 1)[0] + "env:"
-        elif env_inline != "":
-            sys.exit(0)
-        env_child_indent = child_indent(env_start, env_end, indent_of(lines[env_start]))
-        lines.insert(env_end, " " * env_child_indent + f"GAMEID: umu-{game_id}")
-
-try:
-    with open(yml_path, "w") as f:
-        f.write("\n".join(lines) + "\n")
-except Exception:
-    sys.exit(0)
-
-print(f"steam_app_{game_id}")
-' 2>/dev/null)
-
-      [[ -n "${proton_wm_class}" ]] && wm_class="${proton_wm_class}"
-    fi
-  fi
-
   local shortcut_content="[Desktop Entry]
 Type=Application
 Name=${game_real_name}
 Icon=${icon_path}
 Exec=${exec_cmd}
 Categories=Game"
-
   [[ -n "${wm_class}" ]] && shortcut_content="${shortcut_content}
 StartupWMClass=${wm_class}"
 
-  local menu_desktop_file="${HOME}/.local/share/applications/net.lutris.${slug}.desktop"
-  if [[ "${create_menu}" = true ]]; then
-    mkdir -p "${HOME}/.local/share/applications"
-    echo "${shortcut_content}" > "${menu_desktop_file}"
-    update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
-  elif [[ -f "${menu_desktop_file}" ]]; then
-    rm -f "${menu_desktop_file}"
-    update-desktop-database "${HOME}/.local/share/applications" 2>/dev/null || true
-  fi
-
-  if [[ "${create_desktop}" = true ]]; then
-    local desktop_dir
-    if [[ -n "${desktop_dir_override}" ]]; then
-      desktop_dir="${desktop_dir_override}"
-    else
-      desktop_dir=$(zgu_get_desktop_dir)
-    fi
-    if [[ -d "${desktop_dir}" ]]; then
-      echo "${shortcut_content}" > "${desktop_dir}/${slug}.desktop"
-      chmod +x "${desktop_dir}/${slug}.desktop"
-      gio set "${desktop_dir}/${slug}.desktop" metadata::trusted true 2>/dev/null || true
-
-      local extras_src_dir
-      extras_src_dir="$(zgu_lpm_find "${prefix_dir}" extras)"
-      if [[ -d "${extras_src_dir}" ]]; then
-        local bonus_dir_name bonus_suffix
-        bonus_suffix="$(t install_game.bonus_folder_suffix)"
-        bonus_dir_name="${game_real_name} ${bonus_suffix}"
-        rm -rf "${desktop_dir}/${bonus_dir_name:?}"
-        ln -s "${extras_src_dir}" "${desktop_dir}/${bonus_dir_name}"
-      fi
-    fi
-  fi
+  zgu_shortcut_write_menu "${slug}" "${create_menu}" "${shortcut_content}"
+  [[ "${create_desktop}" = true ]] && \
+    zgu_shortcut_write_desktop "${slug}" "${game_real_name}" "${prefix_dir}" "${desktop_dir_override}" "${shortcut_content}"
+  return 0
 }
 
 # --- Shared utility: neutralizes/restores the Lutris launch hooks of a game ---
@@ -364,125 +260,5 @@ zgu_apply_hook_policy() {
   local disabled_comment
   disabled_comment="$(t shortcut.hook_disabled_comment)"
 
-  python3 - "${yml_path}" "${allow_hooks}" "${disabled_comment}" "${mode}" <<'PYEOF'
-import re
-import sys
-
-yml_path, allow_hooks, disabled_comment, mode = sys.argv[1], sys.argv[2] == "true", sys.argv[3], sys.argv[4]
-
-FIXED_KEYS = {"prelaunch_command", "prelaunch_wait", "postexit_command"}
-MARKER = "lpm:hook-disabled"
-# Suffix of the relay generated by "lpm launcher ... on" (see zgl-launcher-manager.sh) -- never a
-# third-party hook, see the header comment of zgu_apply_hook_policy.
-LPM_RELAY_SUFFIX = "/scripts/lpm-launcher.sh"
-
-
-def is_target_key(key):
-    if mode == "broad":
-        kl = key.lower()
-        return kl.endswith("_command") or kl.endswith("_script") or kl.endswith("_wait") or "exec" in kl
-    return key in FIXED_KEYS
-
-
-# Captures any "identifier:" key -- the real filtering (fixed/broad) is done afterwards by
-# is_target_key(), not in the regex itself.
-active_re = re.compile(r'^(?P<indent>\s*)(?P<key>[A-Za-z0-9_]+):(?P<rest>.*)$')
-disabled_re = re.compile(
-    r'^(?P<indent>\s*)#\s*(?P<key>[A-Za-z0-9_]+):(?P<rest>.*?)\s*(?P<tail>#\s*' + re.escape(MARKER) + r'.*)$'
-)
-# A line that starts a key ("name: ...", "name:") or a list item: never a continuation line.
-key_like_re = re.compile(r'^\s*(-\s|[^\s:#][^:]*:(\s|$))')
-
-
-def indent_of(text):
-    return len(text) - len(text.lstrip(" "))
-
-
-def continuation_lines(all_lines, start, base_indent, orphans_only):
-    """A long value (path, command...) is often written by YAML tools on SEVERAL lines, the
-    following ones being more indented than the key. Commenting only the first line leaves the
-    others alone and the file invalid (Lutris: "game has no executable"). Returns (parts, next
-    index): the stripped text of those lines. With orphans_only (lines left by an older lpm after
-    a disabled hook), a line that looks like a key or a list item is never taken."""
-    parts = []
-    index = start
-    while index < len(all_lines):
-        text = all_lines[index].rstrip("\n")
-        if not text.strip() or text.lstrip().startswith("#") or indent_of(text) <= base_indent:
-            break
-        if orphans_only and key_like_re.match(text):
-            break
-        parts.append(text.strip())
-        index += 1
-    return parts, index
-
-
-def joined(rest, parts):
-    return " " + " ".join([piece for piece in [rest.strip()] + parts if piece])
-
-try:
-    with open(yml_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-except OSError:
-    sys.exit(0)
-
-# Pre-pass: does "prelaunch_command" point to lpm's own relay, whether currently active or already
-# neutralized (marker "lpm:hook-disabled")? Decides below whether "prelaunch_command" AND
-# "prelaunch_wait" must entirely escape neutralization -- "prelaunch_wait" alone (just "true")
-# cannot tell by itself.
-is_lpm_relay = False
-for line in lines:
-    stripped = line.rstrip("\n")
-    m = active_re.match(stripped) or disabled_re.match(stripped)
-    if m and m.group("key") == "prelaunch_command" and m.group("rest").strip().endswith(LPM_RELAY_SUFFIX):
-        is_lpm_relay = True
-        break
-
-# lpm's own relay entirely escapes "allow_hooks" (see the header comment of zgu_apply_hook_policy),
-# in "fixed" mode ("lpm shortcut") as in "broad" mode (install -- zgp-game-installer.sh rewrites this
-# path itself just before calling this function, so the value seen here is its own, not a third-party
-# .zgp's).
-effective_allow = allow_hooks or is_lpm_relay
-
-changed = False
-out = []
-i = 0
-while i < len(lines):
-    line = lines[i]
-    stripped = line.rstrip("\n")
-    if effective_allow:
-        m = disabled_re.match(stripped)
-        if m and is_target_key(m.group("key")):
-            # Lines an older lpm left behind after the commented first line are taken back too
-            parts, next_i = continuation_lines(lines, i + 1, len(m.group("indent")), True)
-            out.append(f"{m.group('indent')}{m.group('key')}:{joined(m.group('rest'), parts)}\n")
-            changed = True
-            i = next_i
-            continue
-    else:
-        m = active_re.match(stripped)
-        if m and is_target_key(m.group("key")):
-            # The whole value goes into the comment, whatever the number of lines
-            parts, next_i = continuation_lines(lines, i + 1, len(m.group("indent")), False)
-            out.append(f"{m.group('indent')}# {m.group('key')}:{joined(m.group('rest'), parts)}  # {MARKER} ({disabled_comment})\n")
-            changed = True
-            i = next_i
-            continue
-        m = disabled_re.match(stripped)
-        if m and is_target_key(m.group("key")):
-            # Repair of a file written by an older lpm: hook already commented, its next lines left
-            # active (invalid YAML)
-            parts, next_i = continuation_lines(lines, i + 1, len(m.group("indent")), True)
-            if parts:
-                out.append(f"{m.group('indent')}# {m.group('key')}:{joined(m.group('rest'), parts)}  {m.group('tail')}\n")
-                changed = True
-                i = next_i
-                continue
-    out.append(line)
-    i += 1
-
-if changed:
-    with open(yml_path, "w", encoding="utf-8") as f:
-        f.writelines(out)
-PYEOF
+  python3 "${ZGU_DESKTOP_UTILS_DIR}/zgu-hook-policy.py" "${yml_path}" "${allow_hooks}" "${disabled_comment}" "${mode}"
 }

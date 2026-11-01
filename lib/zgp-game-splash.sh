@@ -196,16 +196,17 @@ zgp_splash_report_skip() {
   echo "${msg}" >&2
 }
 
-zgp_splash_process_one() {
-  local slug="$1" g_name="$2" game_dir="$3"
-
-  local chosen_url=""
-
-  # "--url" already set by the caller (gui/page_images, manual mode) -- see zgp-game-icon.sh
-  # for this short-circuit.
+# Finds the banner URL into splash_chosen_url (forced_url, else SteamGridDB search).
+# Args: slug g_name. Returns 1 when nothing usable was found / user cancelled.
+splash_chosen_url=""
+zgp_splash_choose_url() {
+  local slug="$1" g_name="$2"
+  splash_chosen_url=""
+  # "--url" already set by the caller (gui/page_images, manual mode): search skipped.
   if [[ -n "${forced_url}" ]]; then
-    chosen_url="${forced_url}"
-  else
+    splash_chosen_url="${forced_url}"
+    return 0
+  fi
   local search_results
   search_results=$(zgp_sgdb_search "${g_name}")
   if [[ -z "${search_results}" ]]; then
@@ -213,60 +214,26 @@ zgp_splash_process_one() {
     zgu_log "splash" "ERROR" "slug=${slug} reason=game_not_found_sgdb"
     return 1
   fi
-
-  local n_matches
-  n_matches=$(printf '%s\n' "${search_results}" | grep -c .)
-
-  local chosen_game_id="" chosen_game_name=""
-  if [[ "${n_matches}" -gt 1 ]]; then
-    t splash.pick_game_text_cli "${g_name}"
-    local -A idx_to_id=() idx_to_name=()
-    local idx=1 g_gid g_sgdb_name
-    while IFS=$'\t' read -r g_gid g_sgdb_name; do
-      [[ -z "${g_gid}" ]] && continue
-      printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
-      idx_to_id["${idx}"]="${g_gid}"
-      idx_to_name["${idx}"]="${g_sgdb_name}"
-      idx=$((idx + 1))
-    done <<< "${search_results}"
-    local choice
-    read -r -p "$(t splash.pick_game_prompt_cli)" choice
-    chosen_game_id="${idx_to_id[${choice}]:-}"
-    chosen_game_name="${idx_to_name[${choice}]:-}"
-
-    if [[ -z "${chosen_game_id}" ]]; then
-      zgp_splash_report_skip "$(t splash.cancelled_by_user "${g_name}")"
-      return 1
-    fi
-  else
-    chosen_game_id=$(printf '%s\n' "${search_results}" | head -n1 | cut -f1)
-    chosen_game_name=$(printf '%s\n' "${search_results}" | head -n1 | cut -f2)
+  if ! zgp_sgdb_pick_game splash "${g_name}" "${search_results}"; then
+    zgp_splash_report_skip "$(t splash.cancelled_by_user "${g_name}")"
+    return 1
   fi
 
-  local sr_gid sr_name
-  while IFS=$'\t' read -r sr_gid sr_name; do
-    if [[ "${sr_gid}" = "${chosen_game_id}" ]]; then
-      chosen_game_name="${sr_name}"
-      break
-    fi
-  done <<< "${search_results}"
-  [[ -z "${chosen_game_name}" ]] && chosen_game_name="${g_name}"
-
   local banners_urls
-  banners_urls=$(zgp_sgdb_heroes "${chosen_game_id}")
+  banners_urls=$(zgp_sgdb_heroes "${sgdb_pick_id}")
   if [[ -z "${banners_urls}" ]]; then
     zgp_splash_report_skip "$(t splash.no_banner_available "${g_name}")"
     zgu_log "splash" "ERROR" "slug=${slug} reason=no_banner_available"
     return 1
   fi
+  # In CLI the first candidate banner is always taken; the GUI has a visual picker ("--url").
+  splash_chosen_url=$(printf '%s\n' "${banners_urls}" | head -n1 | cut -f1)
+  return 0
+}
 
-  # The former Zenity visual picker was removed (no interactive entry point in bin/lpm); in
-  # CLI the first candidate banner is always taken. The visual picker exists again in the
-  # GUI (see "--url" above).
-  chosen_url=$(printf '%s\n' "${banners_urls}" | head -n1 | cut -f1)
-  fi
-
-  # --- Download + systematic conversion to PNG ---
+# Downloads splash_chosen_url and converts it to PNG. Args: slug g_name game_dir.
+zgp_splash_download() {
+  local slug="$1" g_name="$2" game_dir="$3" chosen_url="${splash_chosen_url}"
   local splash_dir
   splash_dir="$(zgu_lpm_path "${game_dir}" splash)"
   mkdir -p "${splash_dir}"
@@ -281,7 +248,6 @@ zgp_splash_process_one() {
     rm -f "${raw_file}"
     return 1
   fi
-
   if ! "${convert_bin[@]}" "${raw_file}" "${splash_dir}/splash.png" 2>/dev/null; then
     zgp_splash_report_skip "$(t splash.convert_failed "${g_name}")"
     zgu_log "splash" "ERROR" "slug=${slug} reason=conversion_failed"
@@ -289,6 +255,14 @@ zgp_splash_process_one() {
     return 1
   fi
   rm -f "${raw_file}"
+  return 0
+}
+
+zgp_splash_process_one() {
+  local slug="$1" g_name="$2" game_dir="$3"
+
+  zgp_splash_choose_url "${slug}" "${g_name}" || return 1
+  zgp_splash_download "${slug}" "${g_name}" "${game_dir}" || return 1
 
   zgu_log "splash" "OK" "slug=${slug} name=${g_name}"
   t splash.done_cli "${g_name}"

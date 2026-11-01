@@ -140,6 +140,62 @@ else
 fi
 
 # --- 5. Process one game: the API is only needed if at least one medium is missing ---
+# Fetches the lutris.net API record of a game into sm_response.
+# Returns 0 = got it, 2 = game not listed (nothing to do, not an error), 1 = network error.
+sm_response="" sm_banner_url="" sm_icon_url="" sm_cover_url=""
+zgp_sync_media_fetch() {
+  local slug="$1"
+  # An HTTP code other than 200 (most often 404) just means this game is not listed on
+  # lutris.net (e.g. an itch.io/custom game added by other means than lpm) -- never an
+  # error, simply nothing to download. Only a failure of "curl" itself (network down,
+  # DNS...) is a real error.
+  local tmp_response http_code
+  tmp_response=$(mktemp)
+  http_code=$(curl -s --max-time 15 -w '%{http_code}' -o "${tmp_response}" "${site_url}/api/games/${slug}" 2>/dev/null)
+  if [[ $? -ne 0 ]]; then
+    rm -f "${tmp_response}"
+    zgu_cli_error "$(t sync_media.api_unreachable "${slug}")"
+    zgu_log "sync-media" "ERROR" "slug=${slug} reason=api_unreachable"
+    return 1
+  fi
+  if [[ "${http_code}" != "200" ]]; then
+    rm -f "${tmp_response}"
+    return 2
+  fi
+  sm_response=$(cat "${tmp_response}")
+  rm -f "${tmp_response}"
+  return 0
+}
+
+# Extracts banner / icon / cover URLs from sm_response into sm_banner_url, sm_icon_url,
+# sm_cover_url. "<x>_url" fields are tried before "<x>" -- same priority order as
+# lutris/services/lutris.py::_get_response_game_banner/_get_response_game_icon (cover art
+# has only one possible field: "coverart").
+zgp_sync_media_parse() {
+  local parsed
+  parsed=$(RESP="${sm_response}" python3 -c '
+import os, json
+try:
+    data = json.loads(os.environ.get("RESP", "") or "{}")
+except Exception:
+    data = {}
+print(data.get("banner_url") or data.get("banner") or "")
+print(data.get("icon_url") or data.get("icon") or "")
+print(data.get("coverart") or "")
+' 2>/dev/null)
+  { IFS= read -r sm_banner_url; IFS= read -r sm_icon_url; IFS= read -r sm_cover_url; } <<< "${parsed}"
+}
+
+# Downloads <url> to <dest>; removes a partial file on failure. Returns curl's status.
+zgp_sync_media_download() {
+  local url="$1" dest="$2"
+  if curl -sLf --max-time 30 "${url}" -o "${dest}" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "${dest}"
+  return 1
+}
+
 zgp_sync_media_process_one() {
   local slug="$1"
   local banner_path="${banner_dir}/${slug}.jpg"
@@ -158,87 +214,30 @@ zgp_sync_media_process_one() {
     return 0
   fi
 
-  # An HTTP code other than 200 (most often 404) just means this game is not listed on
-  # lutris.net (e.g. an itch.io/custom game added by other means than lpm) -- never an
-  # error, simply nothing to download. Only a failure of "curl" itself (network down,
-  # DNS...) is a real error.
-  local tmp_response http_code
-  tmp_response=$(mktemp)
-  http_code=$(curl -s --max-time 15 -w '%{http_code}' -o "${tmp_response}" "${site_url}/api/games/${slug}" 2>/dev/null)
-  if [[ $? -ne 0 ]]; then
-    rm -f "${tmp_response}"
-    zgu_cli_error "$(t sync_media.api_unreachable "${slug}")"
-    zgu_log "sync-media" "ERROR" "slug=${slug} reason=api_unreachable"
+  local rc=0
+  zgp_sync_media_fetch "${slug}" || rc=$?
+  if [[ "${rc}" -eq 1 ]]; then
     return 1
-  fi
-  if [[ "${http_code}" != "200" ]]; then
-    rm -f "${tmp_response}"
+  elif [[ "${rc}" -eq 2 ]]; then
     zgu_log "sync-media" "OK" "slug=${slug} reason=game_not_found_on_lutris_net"
     t sync_media.nothing_found_cli "${slug}"
     return 0
   fi
-
-  local response
-  response=$(cat "${tmp_response}")
-  rm -f "${tmp_response}"
-
-  # "<x>_url" fields are tried before "<x>" -- same priority order as
-  # lutris/services/lutris.py::_get_response_game_banner/_get_response_game_icon (cover art
-  # has only one possible field: "coverart").
-  local banner_url icon_url cover_url
-  banner_url=$(RESP="${response}" python3 -c '
-import os, json
-try:
-    data = json.loads(os.environ.get("RESP", "") or "{}")
-except Exception:
-    data = {}
-print(data.get("banner_url") or data.get("banner") or "")
-' 2>/dev/null)
-  icon_url=$(RESP="${response}" python3 -c '
-import os, json
-try:
-    data = json.loads(os.environ.get("RESP", "") or "{}")
-except Exception:
-    data = {}
-print(data.get("icon_url") or data.get("icon") or "")
-' 2>/dev/null)
-  cover_url=$(RESP="${response}" python3 -c '
-import os, json
-try:
-    data = json.loads(os.environ.get("RESP", "") or "{}")
-except Exception:
-    data = {}
-print(data.get("coverart") or "")
-' 2>/dev/null)
+  zgp_sync_media_parse
 
   local downloaded_any=false
-
-  if [[ "${has_banner}" = false ]] && [[ -n "${banner_url}" ]]; then
-    if curl -sLf --max-time 30 "${banner_url}" -o "${banner_path}" 2>/dev/null; then
-      downloaded_any=true
-    else
-      rm -f "${banner_path}"
-    fi
+  if [[ "${has_banner}" = false ]] && [[ -n "${sm_banner_url}" ]]; then
+    zgp_sync_media_download "${sm_banner_url}" "${banner_path}" && downloaded_any=true
   fi
-
-  if [[ "${has_cover}" = false ]] && [[ -n "${cover_url}" ]]; then
-    if curl -sLf --max-time 30 "${cover_url}" -o "${cover_path}" 2>/dev/null; then
-      downloaded_any=true
-    else
-      rm -f "${cover_path}"
-    fi
+  if [[ "${has_cover}" = false ]] && [[ -n "${sm_cover_url}" ]]; then
+    zgp_sync_media_download "${sm_cover_url}" "${cover_path}" && downloaded_any=true
   fi
-
-  if [[ "${has_icon}" = false ]] && [[ -n "${icon_url}" ]]; then
-    if curl -sLf --max-time 30 "${icon_url}" -o "${icon_path}" 2>/dev/null; then
+  if [[ "${has_icon}" = false ]] && [[ -n "${sm_icon_url}" ]]; then
+    if zgp_sync_media_download "${sm_icon_url}" "${icon_path}"; then
       downloaded_any=true
-      # Same as Lutris itself after an icon download
-      # (ServiceMedia.run_system_update_desktop_icons): refreshes the system icon cache so
-      # the new icon appears immediately instead of waiting for a periodic refresh.
-      # Best-effort: absent on some minimal systems, must never make the rest fail.
+      # Same as Lutris itself after an icon download: refreshes the system icon cache so the
+      # new icon appears immediately. Best-effort, must never make the rest fail.
       gtk-update-icon-cache -q -t -f "${HOME}/.local/share/icons/hicolor" 2>/dev/null || true
-    else
-      rm -f "${icon_path}"
     fi
   fi
 

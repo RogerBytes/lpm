@@ -163,15 +163,10 @@ fi
 # prints "on" or "off" on stdout. MangoHud itself is not installed by lpm: when it cannot be found
 # for this Lutris, "on" still writes the setting but says it will have no effect until it is
 # installed (native: "mangohud" in PATH; Flatpak: the MangoHud Vulkan layer extension). ---
-run_mangohud() {
-  local action="${1:-status}" yml_file="${lutris_config_dir}/${target_configpath}.yml" state
-  case "${action}" in
-    on|off|status) ;;
-    *)
-      zgu_cli_error "$(t game_tools.mangohud_invalid_action_cli "${action}")"
-      return 1
-      ;;
-  esac
+# Checks the environment (config file, python yaml). Arg: yml_file. Returns 1 with an error
+# message otherwise. Shared by the gamepad and mangohud commands.
+tools_check_env() {
+  local yml_file="$1"
   if [[ -z "${target_configpath}" ]] || [[ ! -f "${yml_file}" ]]; then
     zgu_cli_error "$(t game_tools.env_config_missing_cli "${target_name}")"
     return 1
@@ -180,9 +175,12 @@ run_mangohud() {
     zgu_cli_error "$(t game_tools.env_yaml_missing_cli)"
     return 1
   fi
+  return 0
+}
 
-  if [[ "${action}" = "status" ]]; then
-    state=$(YML_PATH="${yml_file}" python3 -c '
+mango_status() {
+  local yml_file="$1" state
+  state=$(YML_PATH="${yml_file}" python3 -c '
 import os, yaml
 try:
     with open(os.environ["YML_PATH"], "r") as f:
@@ -192,27 +190,30 @@ try:
 except Exception:
     print("off")
 ' 2>/dev/null)
-    echo "${state:-off}"
-    return 0
-  fi
+  echo "${state:-off}"
+  return 0
+}
 
-  if [[ "${action}" = "on" ]]; then
-    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set system mangohud true --bool >/dev/null 2>&1; then
-      zgu_cli_error "$(t game_tools.mangohud_write_failed_cli "${target_name}")"
-      return 1
-    fi
-    zgu_cli_ok "$(t game_tools.mangohud_on_cli "${target_name}")"
-    if [[ "${lutris_version}" = "flatpak" ]]; then
-      if ! flatpak list --runtime --columns=application 2>/dev/null | grep -qi 'MangoHud'; then
-        echo "$(t game_tools.mangohud_missing_flatpak_cli)" >&2
-      fi
-    elif ! command -v mangohud >/dev/null 2>&1; then
-      echo "$(t game_tools.mangohud_missing_native_cli)" >&2
-    fi
-    return 0
+mango_on() {
+  local yml_file="$1"
+  if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set system mangohud true --bool >/dev/null 2>&1; then
+    zgu_cli_error "$(t game_tools.mangohud_write_failed_cli "${target_name}")"
+    return 1
   fi
+  zgu_cli_ok "$(t game_tools.mangohud_on_cli "${target_name}")"
+  if [[ "${lutris_version}" = "flatpak" ]]; then
+    if ! flatpak list --runtime --columns=application 2>/dev/null | grep -qi 'MangoHud'; then
+      echo "$(t game_tools.mangohud_missing_flatpak_cli)" >&2
+    fi
+  elif ! command -v mangohud >/dev/null 2>&1; then
+    echo "$(t game_tools.mangohud_missing_native_cli)" >&2
+  fi
+  return 0
+}
 
-  # off: removing a key that is already absent is not an error
+mango_off() {
+  local yml_file="$1"
+  # removing a key that is already absent is not an error
   if grep -Eq '^[[:space:]]+mangohud:' "${yml_file}" 2>/dev/null; then
     if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" unset system mangohud >/dev/null 2>&1; then
       zgu_cli_error "$(t game_tools.mangohud_write_failed_cli "${target_name}")"
@@ -220,6 +221,23 @@ except Exception:
     fi
   fi
   zgu_cli_ok "$(t game_tools.mangohud_off_cli "${target_name}")"
+}
+
+run_mangohud() {
+  local action="${1:-status}" yml_file="${lutris_config_dir}/${target_configpath}.yml"
+  case "${action}" in
+    on|off|status) ;;
+    *)
+      zgu_cli_error "$(t game_tools.mangohud_invalid_action_cli "${action}")"
+      return 1
+      ;;
+  esac
+  tools_check_env "${yml_file}" || return 1
+  case "${action}" in
+    status) mango_status "${yml_file}" ;;
+    on) mango_on "${yml_file}" ;;
+    off) mango_off "${yml_file}" ;;
+  esac
 }
 
 if [[ "${cli_tool}" = "mangohud" ]]; then
@@ -240,29 +258,12 @@ fi
 # points that option to it, and can open it in AntiMicroX for editing (nothing is watched).
 # An antimicro_config that points elsewhere belongs to the user and is never replaced.
 # Actions: on | off | edit | status (default status; status prints on, off or other).
-run_gamepad() {
-  local action="${1:-status}" yml_file="${lutris_config_dir}/${target_configpath}.yml"
-  local profile_dir
-  profile_dir="$(zgu_lpm_find "${prefix_dir}" gamepad)"
-  local profile_file="${profile_dir}/lpm-gamepad.gamecontroller.amgp"
-  local current
-  case "${action}" in
-    on|off|edit|status) ;;
-    *)
-      zgu_cli_error "$(t game_tools.gamepad_invalid_action_cli "${action}")"
-      return 1
-      ;;
-  esac
-  if [[ -z "${target_configpath}" ]] || [[ ! -f "${yml_file}" ]]; then
-    zgu_cli_error "$(t game_tools.env_config_missing_cli "${target_name}")"
-    return 1
-  fi
-  if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import yaml" >/dev/null 2>&1; then
-    zgu_cli_error "$(t game_tools.env_yaml_missing_cli)"
-    return 1
-  fi
+# State of run_gamepad (set by run_gamepad, read by the gp_* steps).
+gp_yml="" gp_profile_dir="" gp_profile_file="" gp_current=""
 
-  current=$(YML_PATH="${yml_file}" python3 -c '
+# Reads system.antimicro_config of the Lutris yml into gp_current.
+gp_read_current() {
+  gp_current=$(YML_PATH="${gp_yml}" python3 -c '
 import os, yaml
 try:
     with open(os.environ["YML_PATH"], "r") as f:
@@ -272,60 +273,58 @@ try:
 except Exception:
     print("")
 ' 2>/dev/null)
+}
 
-  case "${action}" in
-    status)
-      if [[ -z "${current}" ]]; then
-        echo "off"
-      elif [[ "${current}" = "${profile_file}" ]]; then
-        echo "on"
-      else
-        echo "other"
-      fi
-      return 0
-      ;;
-    edit)
-      if [[ ! -f "${profile_file}" ]]; then
-        zgu_cli_error "$(t game_tools.gamepad_missing_profile_cli "${target_name}")"
-        return 1
-      fi
-      if command -v antimicrox >/dev/null 2>&1; then
-        setsid antimicrox --profile "${profile_file}" >/dev/null 2>&1 &
-      elif command -v antimicro >/dev/null 2>&1; then
-        setsid antimicro --profile "${profile_file}" >/dev/null 2>&1 &
-      elif command -v flatpak >/dev/null 2>&1 && flatpak info io.github.antimicrox.antimicrox >/dev/null 2>&1; then
-        setsid flatpak run io.github.antimicrox.antimicrox --profile "${profile_file}" >/dev/null 2>&1 &
-      else
-        zgu_cli_error "$(t game_tools.gamepad_missing_cli)"
-        return 1
-      fi
-      zgu_cli_ok "$(t game_tools.gamepad_edit_cli "${profile_file}")"
-      return 0
-      ;;
-    off)
-      if [[ -n "${current}" ]] && [[ "${current}" != "${profile_file}" ]]; then
-        zgu_cli_error "$(t game_tools.gamepad_other_cli "${target_name}" "${current}")"
-        return 1
-      fi
-      if [[ -n "${current}" ]]; then
-        if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" unset system antimicro_config >/dev/null 2>&1; then
-          zgu_cli_error "$(t game_tools.gamepad_write_failed_cli "${target_name}")"
-          return 1
-        fi
-      fi
-      zgu_cli_ok "$(t game_tools.gamepad_off_cli "${target_name}")"
-      return 0
-      ;;
-  esac
+gp_status() {
+  if [[ -z "${gp_current}" ]]; then
+    echo "off"
+  elif [[ "${gp_current}" = "${gp_profile_file}" ]]; then
+    echo "on"
+  else
+    echo "other"
+  fi
+  return 0
+}
 
-  # on
-  if [[ -n "${current}" ]] && [[ "${current}" != "${profile_file}" ]]; then
-    zgu_cli_error "$(t game_tools.gamepad_other_cli "${target_name}" "${current}")"
+gp_edit() {
+  if [[ ! -f "${gp_profile_file}" ]]; then
+    zgu_cli_error "$(t game_tools.gamepad_missing_profile_cli "${target_name}")"
     return 1
   fi
-  if [[ ! -f "${profile_file}" ]]; then
-    mkdir -p "${profile_dir}" 2>/dev/null
-    if ! cat > "${profile_file}" 2>/dev/null <<'AMGP'
+  if command -v antimicrox >/dev/null 2>&1; then
+    setsid antimicrox --profile "${gp_profile_file}" >/dev/null 2>&1 &
+  elif command -v antimicro >/dev/null 2>&1; then
+    setsid antimicro --profile "${gp_profile_file}" >/dev/null 2>&1 &
+  elif command -v flatpak >/dev/null 2>&1 && flatpak info io.github.antimicrox.antimicrox >/dev/null 2>&1; then
+    setsid flatpak run io.github.antimicrox.antimicrox --profile "${gp_profile_file}" >/dev/null 2>&1 &
+  else
+    zgu_cli_error "$(t game_tools.gamepad_missing_cli)"
+    return 1
+  fi
+  zgu_cli_ok "$(t game_tools.gamepad_edit_cli "${gp_profile_file}")"
+  return 0
+}
+
+gp_off() {
+  if [[ -n "${gp_current}" ]] && [[ "${gp_current}" != "${gp_profile_file}" ]]; then
+    zgu_cli_error "$(t game_tools.gamepad_other_cli "${target_name}" "${gp_current}")"
+    return 1
+  fi
+  if [[ -n "${gp_current}" ]]; then
+    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${gp_yml}" unset system antimicro_config >/dev/null 2>&1; then
+      zgu_cli_error "$(t game_tools.gamepad_write_failed_cli "${target_name}")"
+      return 1
+    fi
+  fi
+  zgu_cli_ok "$(t game_tools.gamepad_off_cli "${target_name}")"
+  return 0
+}
+
+# Writes the default AntiMicroX profile if missing. Returns 1 if it cannot be created.
+gp_write_default_profile() {
+  [[ -f "${gp_profile_file}" ]] && return 0
+  mkdir -p "${gp_profile_dir}" 2>/dev/null
+  if ! cat > "${gp_profile_file}" 2>/dev/null <<'AMGP'
 <?xml version="1.0" encoding="UTF-8"?>
 <gamecontroller configversion="19" appversion="3.6.1">
     <stickAxisAssociation index="1" xAxis="1" yAxis="2"/>
@@ -343,23 +342,53 @@ except Exception:
     <sets/>
 </gamecontroller>
 AMGP
-    then
-      zgu_cli_error "$(t game_tools.gamepad_create_failed_cli "${profile_file}")"
-      return 1
-    fi
+  then
+    zgu_cli_error "$(t game_tools.gamepad_create_failed_cli "${gp_profile_file}")"
+    return 1
   fi
-  if [[ "${current}" != "${profile_file}" ]]; then
-    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set system antimicro_config "${profile_file}" >/dev/null 2>&1; then
+  return 0
+}
+
+gp_on() {
+  if [[ -n "${gp_current}" ]] && [[ "${gp_current}" != "${gp_profile_file}" ]]; then
+    zgu_cli_error "$(t game_tools.gamepad_other_cli "${target_name}" "${gp_current}")"
+    return 1
+  fi
+  gp_write_default_profile || return 1
+  if [[ "${gp_current}" != "${gp_profile_file}" ]]; then
+    if ! python3 "${script_dir}/zgu-yaml-edit.py" "${gp_yml}" set system antimicro_config "${gp_profile_file}" >/dev/null 2>&1; then
       zgu_cli_error "$(t game_tools.gamepad_write_failed_cli "${target_name}")"
       return 1
     fi
   fi
-  zgu_cli_ok "$(t game_tools.gamepad_on_cli "${target_name}" "${profile_file}")"
+  zgu_cli_ok "$(t game_tools.gamepad_on_cli "${target_name}" "${gp_profile_file}")"
   if ! command -v antimicrox >/dev/null 2>&1 && ! command -v antimicro >/dev/null 2>&1 \
      && ! { command -v flatpak >/dev/null 2>&1 && flatpak info io.github.antimicrox.antimicrox >/dev/null 2>&1; }; then
     echo "$(t game_tools.gamepad_missing_warn_cli)" >&2
   fi
   return 0
+}
+
+run_gamepad() {
+  local action="${1:-status}"
+  gp_yml="${lutris_config_dir}/${target_configpath}.yml"
+  gp_profile_dir="$(zgu_lpm_find "${prefix_dir}" gamepad)"
+  gp_profile_file="${gp_profile_dir}/lpm-gamepad.gamecontroller.amgp"
+  case "${action}" in
+    on|off|edit|status) ;;
+    *)
+      zgu_cli_error "$(t game_tools.gamepad_invalid_action_cli "${action}")"
+      return 1
+      ;;
+  esac
+  tools_check_env "${gp_yml}" || return 1
+  gp_read_current
+  case "${action}" in
+    status) gp_status ;;
+    edit) gp_edit ;;
+    off) gp_off ;;
+    on) gp_on ;;
+  esac
 }
 
 if [[ "${cli_tool}" = "gamepad" ]]; then

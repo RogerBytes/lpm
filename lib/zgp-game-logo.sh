@@ -226,91 +226,63 @@ zgp_logo_save_from_url() {
   return 0
 }
 
-zgp_logo_process_one() {
-  local slug="$1" g_name="$2" game_dir="$3"
-
-  local chosen_url=""
-
-  # "--url" already set by the caller (gui/page_images, manual mode) -- see zgp-game-icon.sh
-  # for this short-circuit (it also skips the Steam fallback below, since an image is
-  # already chosen).
-  if [[ -n "${forced_url}" ]]; then
-    chosen_url="${forced_url}"
-  else
-  local search_results
+# Looks the logo up on SteamGridDB; sets logo_found_url (empty if none). Args: g_name.
+# Returns 1 only when the user cancelled the game choice.
+logo_found_url=""
+zgp_logo_find_on_sgdb() {
+  local g_name="$1"
+  logo_found_url=""
+  local search_results logos_urls=""
   search_results=$(zgp_sgdb_search "${g_name}")
-
-  local chosen_game_id="" chosen_game_name="" logos_urls=""
-
-  if [[ -n "${search_results}" ]]; then
-    local n_matches
-    n_matches=$(printf '%s\n' "${search_results}" | grep -c .)
-
-    if [[ "${n_matches}" -gt 1 ]]; then
-      t logo.pick_game_text_cli "${g_name}"
-      local -A idx_to_id=() idx_to_name=()
-      local idx=1 g_gid g_sgdb_name
-      while IFS=$'\t' read -r g_gid g_sgdb_name; do
-        [[ -z "${g_gid}" ]] && continue
-        printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
-        idx_to_id["${idx}"]="${g_gid}"
-        idx_to_name["${idx}"]="${g_sgdb_name}"
-        idx=$((idx + 1))
-      done <<< "${search_results}"
-      local choice
-      read -r -p "$(t logo.pick_game_prompt_cli)" choice
-      chosen_game_id="${idx_to_id[${choice}]:-}"
-      chosen_game_name="${idx_to_name[${choice}]:-}"
-
-      if [[ -z "${chosen_game_id}" ]]; then
-        zgp_logo_report_skip "$(t logo.cancelled_by_user "${g_name}")"
-        return 1
-      fi
-    else
-      chosen_game_id=$(printf '%s\n' "${search_results}" | head -n1 | cut -f1)
-      chosen_game_name=$(printf '%s\n' "${search_results}" | head -n1 | cut -f2)
-    fi
-
-    local sr_gid sr_name
-    while IFS=$'\t' read -r sr_gid sr_name; do
-      if [[ "${sr_gid}" = "${chosen_game_id}" ]]; then
-        chosen_game_name="${sr_name}"
-        break
-      fi
-    done <<< "${search_results}"
-    [[ -z "${chosen_game_name}" ]] && chosen_game_name="${g_name}"
-
-    logos_urls=$(zgp_sgdb_logos "${chosen_game_id}")
+  [[ -n "${search_results}" ]] || return 0
+  if ! zgp_sgdb_pick_game logo "${g_name}" "${search_results}"; then
+    zgp_logo_report_skip "$(t logo.cancelled_by_user "${g_name}")"
+    return 1
   fi
+  logos_urls=$(zgp_sgdb_logos "${sgdb_pick_id}")
+  # In CLI the first candidate logo is always taken.
+  [[ -n "${logos_urls}" ]] && logo_found_url=$(printf '%s\n' "${logos_urls}" | head -n1 | cut -f1)
+  return 0
+}
 
-  if [[ -n "${logos_urls}" ]]; then
-    # The former Zenity visual picker was removed (no interactive entry point in bin/lpm);
-    # in CLI the first candidate logo is always taken.
-    chosen_url=$(printf '%s\n' "${logos_urls}" | head -n1 | cut -f1)
+# Steam fallback, only if SteamGridDB gave nothing; sets logo_found_url. Arg: g_name.
+zgp_logo_find_on_steam() {
+  local g_name="$1" steam_appid steam_url
+  steam_appid=$(zgp_steam_find_appid "${g_name}")
+  [[ -n "${steam_appid}" ]] || return 0
+  steam_url=$(zgp_steam_logo_url "${steam_appid}")
+  if curl -sLf --max-time 15 -o /dev/null "${steam_url}" 2>/dev/null; then
+    logo_found_url="${steam_url}"
   fi
+}
 
-  # --- Steam fallback: only if SteamGridDB gave nothing (game not found, or found with no
-  # published logo); same logic as zgp-game-icon.sh for Client Icons. ---
-  if [[ -z "${chosen_url}" ]]; then
-    local steam_appid
-    steam_appid=$(zgp_steam_find_appid "${g_name}")
-    if [[ -n "${steam_appid}" ]]; then
-      local steam_url
-      steam_url=$(zgp_steam_logo_url "${steam_appid}")
-      if curl -sLf --max-time 15 -o /dev/null "${steam_url}" 2>/dev/null; then
-        chosen_url="${steam_url}"
-      fi
-    fi
+# Finds the logo URL into logo_chosen_url (forced_url, else SteamGridDB then Steam).
+# Args: slug g_name. Returns 1 when nothing usable was found / user cancelled.
+logo_chosen_url=""
+zgp_logo_choose_url() {
+  local slug="$1" g_name="$2"
+  logo_chosen_url=""
+  # "--url" already set by the caller (gui/page_images): search and Steam fallback skipped.
+  if [[ -n "${forced_url}" ]]; then
+    logo_chosen_url="${forced_url}"
+    return 0
   fi
-
-  if [[ -z "${chosen_url}" ]]; then
+  zgp_logo_find_on_sgdb "${g_name}" || return 1
+  [[ -z "${logo_found_url}" ]] && zgp_logo_find_on_steam "${g_name}"
+  if [[ -z "${logo_found_url}" ]]; then
     zgp_logo_report_skip "$(t logo.no_logo_available "${g_name}")"
     zgu_log "logo" "ERROR" "slug=${slug} reason=no_logo_available"
     return 1
   fi
-  fi
+  logo_chosen_url="${logo_found_url}"
+  return 0
+}
 
-  if ! zgp_logo_save_from_url "${slug}" "${game_dir}" "${chosen_url}"; then
+zgp_logo_process_one() {
+  local slug="$1" g_name="$2" game_dir="$3"
+
+  zgp_logo_choose_url "${slug}" "${g_name}" || return 1
+  if ! zgp_logo_save_from_url "${slug}" "${game_dir}" "${logo_chosen_url}"; then
     zgp_logo_report_skip "$(t logo.download_failed "${g_name}")"
     zgu_log "logo" "ERROR" "slug=${slug} reason=download_or_conversion_failed"
     return 1

@@ -371,25 +371,10 @@ done
 # MESA_VK_DEVICE_SELECT (multi-GPU detection) was removed: unnecessary with the real
 # lsfg-vk.dll (beta branch); the black screen once blamed on GPU selection came from the
 # wrong DLL file (see item 3 of the file header).
-zgp_lsfg_apply_one() {
-  local slug="$1" prefix_dir="$2" configpath="$3" mode="$4"
-  local yml_file="${lutris_config_dir}/${configpath}.yml"
-
-  if [[ ! -f "${yml_file}" ]]; then
-    zgp_lsfg_report_error_early "$(t lsfg.yml_missing "${slug}")"
-    zgu_log "lsfg" "ERROR" "slug=${slug} reason=yaml_not_found"
-    return 1
-  fi
-
-  if [[ "${mode}" = "on" ]]; then
-    mkdir -p "$(zgu_lpm_path "${prefix_dir}" lsfg)"
-    if ! cp -f -- "${lsfg_dll_master}" "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll"; then
-      zgp_lsfg_report_error_early "$(t lsfg.dll_copy_failed_for "${slug}")"
-      zgu_log "lsfg" "ERROR" "slug=${slug} reason=dll_copy_failed"
-      return 1
-    fi
-  fi
-
+# Edits the env of the Lutris yml for the "on"/"off" mode: line-based text editing first, full
+# rewrite as fallback. Args: yml_file prefix_dir mode. Returns the editor's status.
+zgp_lsfg_edit_env() {
+  local yml_file="$1" prefix_dir="$2" mode="$3" edit_py
 # Line-based text editing (zgu-env-edit.py): a yaml.dump round-trip would destroy the Lutris
 # YAML comments, including hooks disabled by LPM ("# lpm:hook-disabled"). Falls back to the
 # full rewrite below if targeted editing is not possible.
@@ -445,6 +430,35 @@ except Exception as e:
     raise SystemExit(1)
 ' 2>/dev/null
 fi
+}
+
+# Copies the master lsfg-vk.dll into the prefix. Args: slug prefix_dir. Returns 1 on failure.
+zgp_lsfg_install_dll() {
+  local slug="$1" prefix_dir="$2"
+  mkdir -p "$(zgu_lpm_path "${prefix_dir}" lsfg)"
+  if ! cp -f -- "${lsfg_dll_master}" "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll"; then
+    zgp_lsfg_report_error_early "$(t lsfg.dll_copy_failed_for "${slug}")"
+    zgu_log "lsfg" "ERROR" "slug=${slug} reason=dll_copy_failed"
+    return 1
+  fi
+  return 0
+}
+
+zgp_lsfg_apply_one() {
+  local slug="$1" prefix_dir="$2" configpath="$3" mode="$4"
+  local yml_file="${lutris_config_dir}/${configpath}.yml"
+
+  if [[ ! -f "${yml_file}" ]]; then
+    zgp_lsfg_report_error_early "$(t lsfg.yml_missing "${slug}")"
+    zgu_log "lsfg" "ERROR" "slug=${slug} reason=yaml_not_found"
+    return 1
+  fi
+
+  if [[ "${mode}" = "on" ]]; then
+    zgp_lsfg_install_dll "${slug}" "${prefix_dir}" || return 1
+  fi
+
+  zgp_lsfg_edit_env "${yml_file}" "${prefix_dir}" "${mode}"
   local py_status=$?
   if [[ "${py_status}" -ne 0 ]]; then
     zgp_lsfg_report_error_early "$(t lsfg.yaml_patch_failed "${slug}")"

@@ -67,6 +67,80 @@ check "list-runner" 0 'GE-Test' list-runner
 check "list-isolable" 0 'No isolable|Nothing' list-isolable
 check "isolate without shared store" 0 'Nothing to isolate' isolate
 check "sgdb-key get" 0 '"key"' sgdb-key get
+# --- lpm isolate: every store (Epic, EA, Battle.net, Ubisoft), game split out of the shared prefix
+# Fixture: a shared prefix holding the launcher (base), the game to isolate and ANOTHER game. After
+# "lpm isolate -y <store>" the game has its own prefix (base + its own folders, not the other
+# game), its Lutris row/YAML point to it, and it is purged from the shared prefix.
+iso_db="${HOME}/.local/share/lutris/pga.db"
+iso_cfg="${HOME}/.config/lutris/games"
+iso_row() { # name slug dir configpath exe
+  sqlite3 "${iso_db}" "insert into games(name,slug,runner,directory,configpath,executable,installer_slug) values('$1','$2','wine','$3','$4','$5','$2');"
+}
+iso_yml() { # configpath prefix exe args
+  printf 'game:\n  exe: %s\n  prefix: %s\n  args: %s\nwine:\n  version: GE-Test\nsystem:\n  prelaunch_command: /bin/evil.sh\n' "$3" "$2" "$4" > "${iso_cfg}/$1.yml"
+}
+iso_mk() { mkdir -p "$(dirname "$1")"; echo data > "$1"; }
+iso_cleanup() {
+  sqlite3 "${iso_db}" "delete from games where slug in ('epic-store','cool-game','ea-store','mass-effect','mass-effect-mass-effect','bnet','diablo','ubi-store','far-cry');"
+  rm -rf "${HOME}/Games/epic" "${HOME}/Games/cool-game" "${HOME}/Games/ea" "${HOME}/Games/mass-effect-mass-effect" "${HOME}/Games/bnet" "${HOME}/Games/diablo" "${HOME}/Games/ubi" "${HOME}/Games/far-cry"
+  rm -f "${iso_cfg}"/cool-game-* "${iso_cfg}"/epic-cfg.yml "${iso_cfg}"/mass-* "${iso_cfg}"/diablo-* "${iso_cfg}"/far-cry-* "${iso_cfg}"/ea-cfg.yml "${iso_cfg}"/bnet-cfg.yml "${iso_cfg}"/ubi-cfg.yml
+}
+iso_check_common() { # name newslug
+  expect "isolate ($1): new prefix has the c: link and its own YAML without the evil hook" bash -c 'test -L "$1/Games/$2/dosdevices/c:" && f=$(ls "$1"/.config/lutris/games/$2-*.yml | head -1) && grep -q "prefix: $1/Games/$2" "$f" && ! grep -E "^[[:space:]]*prelaunch_command:" "$f"' _ "${HOME}" "$2"
+  expect "isolate ($1): Lutris row moved to the new prefix, old row gone" bash -c 'r=$(sqlite3 "$1" "select directory from games where slug=\"$2\";"); [ "$r" = "$3/Games/$2" ]' _ "${iso_db}" "$2" "${HOME}"
+}
+# --- Epic Games Store
+iso_cleanup
+g="${HOME}/Games/epic"
+iso_mk "${g}/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Manifests/a.item"; printf '{"DisplayName":"Cool Game","MandatoryAppFolderName":"CoolGame"}' > "${g}/drive_c/ProgramData/Epic/EpicGamesLauncher/Data/Manifests/a.item"
+iso_mk "${g}/drive_c/Program Files/Epic Games/CoolGame/game.exe"; iso_mk "${g}/drive_c/Program Files/Epic Games/OtherGame/other.exe"
+iso_mk "${g}/drive_c/Program Files/Epic Games/Launcher/launcher.exe"
+iso_row "Epic Games Store" epic-store "${g}" epic-cfg "${g}/x.exe"; iso_row "Cool Game" cool-game "${g}" cool-game-111 "${g}/drive_c/Program Files/Epic Games/CoolGame/game.exe"
+iso_yml cool-game-111 "${g}" "${g}/drive_c/Program Files/Epic Games/CoolGame/game.exe" ""
+check "isolate: Epic game" 0 'Cool Game' isolate -y egs
+expect "isolate (egs): own prefix has base + its folder, not the other game" bash -c 'p="$1/Games/cool-game/drive_c/Program Files/Epic Games"; test -f "$p/CoolGame/game.exe" && test -f "$p/Launcher/launcher.exe" && test ! -e "$p/OtherGame"' _ "${HOME}"
+expect "isolate (egs): purged from the shared prefix, other game and base kept" bash -c 'p="$1/Games/epic/drive_c/Program Files/Epic Games"; test ! -e "$p/CoolGame" && test -f "$p/OtherGame/other.exe" && test -f "$p/Launcher/launcher.exe"' _ "${HOME}"
+expect "isolate (egs): old YAML removed" test ! -e "${iso_cfg}/cool-game-111.yml"
+iso_check_common egs cool-game
+# --- Battle.net
+iso_cleanup
+g="${HOME}/Games/bnet"
+iso_mk "${g}/drive_c/Program Files (x86)/Battle.net/b.exe"; iso_mk "${g}/drive_c/Program Files (x86)/Diablo/d.exe"; iso_mk "${g}/drive_c/Program Files (x86)/Other/o.exe"
+iso_row "Battle.net" bnet "${g}" bnet-cfg "${g}/x.exe"; iso_row "Diablo" diablo "${g}" diablo-111 "${g}/drive_c/Program Files (x86)/Diablo/d.exe"
+iso_yml diablo-111 "${g}" "${g}/drive_c/Program Files (x86)/Diablo/d.exe" ""
+check "isolate: Battle.net game" 0 'Diablo' isolate -y battlenet
+expect "isolate (battlenet): own prefix has Battle.net + Diablo, not Other" bash -c 'p="$1/Games/diablo/drive_c/Program Files (x86)"; test -f "$p/Diablo/d.exe" && test -f "$p/Battle.net/b.exe" && test ! -e "$p/Other"' _ "${HOME}"
+expect "isolate (battlenet): purged from the shared prefix" bash -c 'p="$1/Games/bnet/drive_c/Program Files (x86)"; test ! -e "$p/Diablo" && test -f "$p/Other/o.exe"' _ "${HOME}"
+iso_check_common battlenet diablo
+# --- EA App (the slug is renamed "<slug>-<name>")
+iso_cleanup
+g="${HOME}/Games/ea"
+iso_mk "${g}/drive_c/Program Files/Electronic Arts/EA Desktop/e.exe"; iso_mk "${g}/drive_c/Program Files/EA Games/Mass Effect/m.exe"; iso_mk "${g}/drive_c/Program Files/EA Games/Other/o.exe"
+iso_row "EA App" ea-store "${g}" ea-cfg "${g}/x.exe"; iso_row "Mass Effect" mass-effect "${g}" mass-111 "${g}/drive_c/Program Files/EA Games/Mass Effect/m.exe"
+iso_yml mass-111 "${g}" "${g}/drive_c/Program Files/EA Games/Mass Effect/m.exe" ""
+check "isolate: EA game" 0 'Mass Effect' isolate -y ea
+expect "isolate (ea): own prefix named slug-name, with base + its folder" bash -c 'p="$1/Games/mass-effect-mass-effect/drive_c/Program Files"; test -f "$p/EA Games/Mass Effect/m.exe" && test -f "$p/Electronic Arts/EA Desktop/e.exe" && test ! -e "$p/EA Games/Other"' _ "${HOME}"
+expect "isolate (ea): purged from the shared prefix" bash -c 'test ! -e "$1/Games/ea/drive_c/Program Files/EA Games/Mass Effect" && test -f "$1/Games/ea/drive_c/Program Files/EA Games/Other/o.exe"' _ "${HOME}"
+iso_check_common ea mass-effect-mass-effect
+# --- Ubisoft Connect (base = launcher folder minus games/ and data/, game folder + data/<id> from the launch args)
+iso_cleanup
+g="${HOME}/Games/ubi"; u="${g}/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher"
+iso_mk "${u}/upc.exe"; iso_mk "${u}/games/Far Cry/fc.exe"; iso_mk "${u}/games/Other/o.exe"; iso_mk "${u}/data/123/save"; iso_mk "${u}/data/999/save"
+iso_row "Ubisoft Connect" ubi-store "${g}" ubi-cfg "${g}/x.exe"; iso_row "Far Cry" far-cry "${g}" far-111 "${u}/upc.exe"
+iso_yml far-111 "${g}" "${u}/upc.exe" "uplay://launch/123/0"
+check "isolate: Ubisoft game" 0 'Far Cry' isolate -y ubisoft
+expect "isolate (ubisoft): own prefix has launcher files, its game and its data/<id> only" bash -c 'p="$1/Games/far-cry/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher"; test -f "$p/upc.exe" && test -f "$p/games/Far Cry/fc.exe" && test -f "$p/data/123/save" && test ! -e "$p/games/Other" && test ! -e "$p/data/999"' _ "${HOME}"
+expect "isolate (ubisoft): purged from the shared prefix" bash -c 'p="$1/Games/ubi/drive_c/Program Files (x86)/Ubisoft/Ubisoft Game Launcher"; test ! -e "$p/games/Far Cry" && test ! -e "$p/data/123" && test -f "$p/games/Other/o.exe" && test -f "$p/data/999/save"' _ "${HOME}"
+iso_check_common ubisoft far-cry
+# --- Refusals leave everything untouched
+iso_cleanup
+g="${HOME}/Games/epic"
+iso_mk "${g}/drive_c/Program Files/Epic Games/Launcher/launcher.exe"
+iso_row "Epic Games Store" epic-store "${g}" epic-cfg "${g}/x.exe"; iso_row "Cool Game" cool-game "${g}" "../../etc/x" "${g}/x.exe"
+check "isolate: configpath with a slash is refused" 1 '' isolate -y egs
+expect "isolate: refusal leaves the Lutris row alone" bash -c '[ "$(sqlite3 "$1" "select directory from games where slug=\"cool-game\";")" = "$2/Games/epic" ]' _ "${iso_db}" "${HOME}"
+check "isolate: unknown store argument" 1 'nvalid|not|unknown' isolate -y nosuchstore
+iso_cleanup
 # --- Prefix creation helpers (lib/zgu-prefix-common.sh), shared by exe-install and create-prefix
 expect "prefix lib: slug, runner type, registry wait, YAML with and without exe" bash -c '
   source "$1/lib/zgu-prefix-common.sh"; d=$(mktemp -d); trap "rm -rf $d" EXIT
@@ -95,6 +169,50 @@ sqlite3 "${HOME}/.local/share/lutris/pga.db" "delete from games where slug in ('
 expect "lib: no shell function defined in two different files (except the per-script handlers)" bash -c '
   dups=$(grep -hoE "^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{" "$1"/lib/*.sh | sort | uniq -d | grep -vE "^(lpm_cancel_cleanup|say|say_err)\(\)")
   [ -z "$dups" ] || { echo "$dups" >&2; exit 1; }' _ "${repo}"
+# --- sync-media (lutris.net API) with a fake curl: download, 404 = nothing to do, unreachable
+smshim="${work}/smshim"; mkdir -p "${smshim}"
+cat > "${smshim}/curl" <<'CURLEOF'
+#!/bin/bash
+out=""; prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
+case "$*" in
+  *api/games/mario*) printf '{"banner_url":"http://x/b.jpg","icon":"http://x/i.png","coverart":"http://x/c.jpg"}' > "$out"; printf 200;;
+  *api/games/zelda*) printf '404';;
+  *http://x/*) printf 'IMG' > "$out";;
+  *) exit 6;;
+esac
+CURLEOF
+chmod +x "${smshim}/curl"
+PATH="${smshim}:${PATH}" check "sync-media: downloads banner, cover and icon" 0 'mario' sync-media mario
+expect "sync-media: 3 files written" bash -c 'for p in "$HOME"/.local/share/lutris/banners/mario.jpg "$HOME"/.local/share/lutris/coverart/mario.jpg "$HOME"/.local/share/icons/hicolor/128x128/apps/lutris_mario.png; do [ -s "$p" ] || exit 1; done'
+PATH="${smshim}:${PATH}" check "sync-media: game not on lutris.net is not an error" 0 '.' sync-media zelda
+
+# --- icon / splash / logo end to end with a fake curl (SteamGridDB search, download, convert)
+e2e="${work}/e2eshim"; mkdir -p "${e2e}"
+convert -size 4x4 xc:red "${work}/test.png" 2>/dev/null || magick -size 4x4 xc:red "${work}/test.png"
+cat > "${e2e}/curl" <<CURLEOF
+#!/bin/bash
+out=""; prev=""
+for a in "\$@"; do [ "\$prev" = "-o" ] && out="\$a"; prev="\$a"; done
+case "\$*" in
+  *autocomplete/a*) printf 200;;
+  *autocomplete/Link*) echo '{"success":true,"data":[{"id":7,"name":"Link"}]}';;
+  *heroes/game/7*) echo '{"success":true,"data":[{"url":"http://x/h.png"}]}';;
+  *logos/game/7*) echo '{"success":true,"data":[{"url":"http://x/l.png"}]}';;
+  *icons/game/7*) echo '{"success":true,"data":[{"url":"http://x/i.png"}]}';;
+  *http://x/*) cp "${work}/test.png" "\$out";;
+  *) echo '{}';;
+esac
+CURLEOF
+chmod +x "${e2e}/curl"
+sqlite3 "${HOME}/.local/share/lutris/pga.db" "insert into games(name,slug,runner,directory,configpath) values('Link','link','wine','${HOME}/Games/link','link-1');"
+mkdir -p "${HOME}/Games/link"; printf 'game:\n  exe: /z.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/link-1.yml"
+mkdir -p "${HOME}/.config/lpm"; echo testkey > "${HOME}/.config/lpm/steamgriddb.key"
+for kind in icon splash logo; do
+  PATH="${e2e}:${PATH}" check "${kind}: found on SteamGridDB, downloaded and converted" 0 'Link' "${kind}" link
+done
+expect "icon/splash/logo: the 3 images are in the lpm folder" bash -c 'find "$1/lpm" -name "icon.png" | grep -q . && find "$1/lpm" -name "splash.png" | grep -q . && find "$1/lpm" -name "logo.png" | grep -q .' _ "${HOME}/Games/link"
+
 # --- SteamGridDB functions: one copy (lib/zgu-sgdb.sh), working with a fake curl
 sgshim="${work}/sgshim"; mkdir -p "${sgshim}"
 cat > "${sgshim}/curl" <<'CURLEOF'

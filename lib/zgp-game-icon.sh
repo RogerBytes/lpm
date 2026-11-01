@@ -204,18 +204,15 @@ zgp_icon_report_skip() {
   echo "${msg}" >&2
 }
 
-zgp_icon_process_one() {
-  local slug="$1" g_name="$2" prefix_dir="$3" g_id="$4" g_exe="$5" g_configpath="$6"
-
-  local chosen_url=""
-
-  # "--url" already supplied by the caller (gui/page_images, manual mode): the user picked
-  # this image in the GTK visual picker (see lib/zgl-sgdb-images.sh), so the
-  # search/disambiguation/automatic choice below is skipped entirely, going straight to
-  # download/conversion/placement, unchanged.
+# Finds the icon URL to use into icon_chosen_url (forced_url, else SteamGridDB search).
+# Args: slug g_name. Returns 1 when nothing usable was found / user cancelled.
+zgp_icon_choose_url() {
+  local slug="$1" g_name="$2"
+  icon_chosen_url=""
   if [[ -n "${forced_url}" ]]; then
-    chosen_url="${forced_url}"
-  else
+    icon_chosen_url="${forced_url}"
+    return 0
+  fi
   local search_results
   search_results=$(zgp_sgdb_search "${g_name}")
   if [[ -z "${search_results}" ]]; then
@@ -223,57 +220,13 @@ zgp_icon_process_one() {
     zgu_log "icon" "ERROR" "slug=${slug} reason=game_not_found_sgdb"
     return 1
   fi
-
-  local n_matches
-  n_matches=$(printf '%s\n' "${search_results}" | grep -c . )
-
-  local chosen_game_id="" chosen_game_name=""
-  if [[ "${n_matches}" -gt 1 ]]; then
-    t icon.pick_game_text_cli "${g_name}"
-    local -A idx_to_id=() idx_to_name=()
-    local idx=1 g_gid g_sgdb_name
-    while IFS=$'\t' read -r g_gid g_sgdb_name; do
-      [[ -z "${g_gid}" ]] && continue
-      printf '  %d) %s\n' "${idx}" "${g_sgdb_name}"
-      idx_to_id["${idx}"]="${g_gid}"
-      idx_to_name["${idx}"]="${g_sgdb_name}"
-      idx=$((idx + 1))
-    done <<< "${search_results}"
-    local choice
-    read -r -p "$(t icon.pick_game_prompt_cli)" choice
-    chosen_game_id="${idx_to_id[${choice}]:-}"
-    chosen_game_name="${idx_to_name[${choice}]:-}"
-
-    if [[ -z "${chosen_game_id}" ]]; then
-      zgp_icon_report_skip "$(t icon.cancelled_by_user "${g_name}")"
-      return 1
-    fi
-  else
-    chosen_game_id=$(printf '%s\n' "${search_results}" | head -n1 | cut -f1)
-    chosen_game_name=$(printf '%s\n' "${search_results}" | head -n1 | cut -f2)
+  if ! zgp_sgdb_pick_game icon "${g_name}" "${search_results}"; then
+    zgp_icon_report_skip "$(t icon.cancelled_by_user "${g_name}")"
+    return 1
   fi
 
-  # The CONFIRMED SteamGridDB name (that of the chosen row), never the raw Lutris name
-  # ("g_name"): Lutris may hold a user-customized or misspelled name (e.g. "Crossybara"
-  # instead of "Crossbar Cards"). The SteamGridDB autocomplete tolerates this (fuzzy search),
-  # but the official store.steampowered.com search used by zgp_sgdb_icons to find the Steam
-  # AppID (see above) does not, and returns 0 results, which made the Client Icon fail for
-  # Crossbar Cards.
-  #
-  # Found here by looking up "chosen_game_id" in "search_results" (single source of truth,
-  # always overriding the value already set by the branches above). Falls back to "g_name"
-  # only if the chosen ID is, unexpectedly, not found in "search_results".
-  local sr_gid sr_name
-  while IFS=$'\t' read -r sr_gid sr_name; do
-    if [[ "${sr_gid}" = "${chosen_game_id}" ]]; then
-      chosen_game_name="${sr_name}"
-      break
-    fi
-  done <<< "${search_results}"
-  [[ -z "${chosen_game_name}" ]] && chosen_game_name="${g_name}"
-
   local icons_urls
-  icons_urls=$(zgp_sgdb_icons "${chosen_game_id}" "${chosen_game_name}")
+  icons_urls=$(zgp_sgdb_icons "${sgdb_pick_id}" "${sgdb_pick_name}")
   if [[ -z "${icons_urls}" ]]; then
     zgp_icon_report_skip "$(t icon.no_icon_available "${g_name}")"
     zgu_log "icon" "ERROR" "slug=${slug} reason=no_icon_available"
@@ -281,12 +234,16 @@ zgp_icon_process_one() {
   fi
 
   # In CLI the first candidate icon is always taken (already the best found by zgp_sgdb_icons:
-  # "clienticon", then "official", then the rest, see above). The GUI visual picker (see
-  # "--url" above) is what imposes a choice other than the first result.
-  chosen_url=$(printf '%s\n' "${icons_urls}" | head -n1 | cut -f1)
-  fi
+  # "clienticon", then "official", then the rest). The GUI visual picker ("--url") is what
+  # imposes a choice other than the first result.
+  icon_chosen_url=$(printf '%s\n' "${icons_urls}" | head -n1 | cut -f1)
+  return 0
+}
 
-  # --- Download + .ico -> .png conversion if needed ---
+# Downloads icon_chosen_url into <prefix>/lpm/images/icon (.ico converted to .png).
+# Args: slug g_name prefix_dir. Returns 1 on failure.
+zgp_icon_download() {
+  local slug="$1" g_name="$2" prefix_dir="$3" chosen_url="${icon_chosen_url}"
   local icon_dir
   icon_dir="$(zgu_lpm_path "${prefix_dir}" icon)"
   mkdir -p "${icon_dir}"
@@ -322,10 +279,15 @@ zgp_icon_process_one() {
   else
     mv "${raw_file}" "${icon_dir}/icon.${ext}"
   fi
+  return 0
+}
 
-  # --- Regenerate existing shortcuts (never creates new ones: only those already present for
-  # this game, menu and/or desktop) so they point to the new icon; see zgu_write_game_shortcut
-  # in zgu-desktop-utils.sh, which re-reads <prefix_dir>/icon at (re)generation time. ---
+# Regenerates the shortcuts that already exist so they point to the new icon (never creates
+# new ones). Args: slug g_name prefix_dir g_id g_exe g_configpath.
+zgp_icon_refresh_shortcuts() {
+  local slug="$1" g_name="$2" prefix_dir="$3" g_id="$4" g_exe="$5" g_configpath="$6"
+  # Only the shortcuts already present for this game (menu and/or desktop); see
+  # zgu_write_game_shortcut in zgu-desktop-utils.sh, which re-reads the icon at generation time.
   local menu_file="${HOME}/.local/share/applications/net.lutris.${slug}.desktop"
   local desktop_dir desktop_file
   desktop_dir=$(zgu_get_desktop_dir)
@@ -338,6 +300,14 @@ zgp_icon_process_one() {
   if [[ "${has_menu}" = true ]] || [[ "${has_desktop}" = true ]]; then
     zgu_write_game_shortcut "${g_name}" "${slug}" "${prefix_dir}" "${g_id}" "${version}" "${has_menu}" "${has_desktop}" "${g_exe}" "${g_configpath}" "${lutris_config_dir}" "${runner_dir}"
   fi
+}
+
+zgp_icon_process_one() {
+  local slug="$1" g_name="$2" prefix_dir="$3" g_id="$4" g_exe="$5" g_configpath="$6"
+
+  zgp_icon_choose_url "${slug}" "${g_name}" || return 1
+  zgp_icon_download "${slug}" "${g_name}" "${prefix_dir}" || return 1
+  zgp_icon_refresh_shortcuts "${slug}" "${g_name}" "${prefix_dir}" "${g_id}" "${g_exe}" "${g_configpath}"
 
   zgu_log "icon" "OK" "slug=${slug} name=${g_name}"
   t icon.done_cli "${g_name}"

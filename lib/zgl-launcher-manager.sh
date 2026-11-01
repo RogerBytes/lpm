@@ -241,16 +241,14 @@ for target_slug in "${cli_slugs[@]}"; do
 done
 
 # --- 4. Apply: enable ---
-zgp_launcher_apply_on() {
-  local slug="$1" game_dir="$2" configpath="$3"
-  local yml_file="${lutris_config_dir}/${configpath}.yml"
+# Step state of zgp_launcher_apply_on (globals la_*, same pattern as zgp_isolate_one).
+la_exe="" la_workdir="" la_prefix="" la_version=""
+la_win_exe="" la_win_workdir="" la_bat_dir="" la_bat_path=""
+la_drive_c_root="" la_winepath_bin="" la_winepath_resolved=0
 
-  if [[ ! -f "${yml_file}" ]]; then
-    zgp_launcher_report_error_early "$(t launcher.yml_missing "${slug}")"
-    zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_not_found"
-    return 1
-  fi
-
+# Reads exe/workdir/prefix/version of the Lutris yml into la_*. Args: slug yml_file game_dir.
+zgp_launcher_read_state() {
+  local slug="$1" yml_file="$2" game_dir="$3"
   # Reads the current exe/working_dir/prefix/version and resolves the effective working_dir
   # exactly like Lutris (explicit working_dir, else the exe folder; see Lutris source
   # lutris/runners/wine.py, _get_explicit_working_dir()).
@@ -287,56 +285,62 @@ print(version)
     zgu_log "launcher" "ERROR" "slug=${slug} reason=no_current_exe"
     return 1
   fi
+  { IFS= read -r la_exe; IFS= read -r la_workdir; IFS= read -r la_prefix; IFS= read -r la_version; } <<< "${current_data}"
+  [[ -z "${la_prefix}" ]] && la_prefix="${game_dir}"
+  return 0
+}
 
-  local current_exe current_workdir current_prefix current_version
-  { IFS= read -r current_exe; IFS= read -r current_workdir; IFS= read -r current_prefix; IFS= read -r current_version; } <<< "${current_data}"
+# Linux -> Windows path conversion (see comments in zgp_launcher_resolve_windows_paths).
+zgp_launcher_to_windows_path() {
+  local linux_path="$1" rel
+  if [[ "${linux_path}" = "${la_drive_c_root}" ]]; then
+    printf 'C:\\\n'
+    return 0
+  fi
+  if [[ "${linux_path}" = "${la_drive_c_root}/"* ]]; then
+    rel="${linux_path#"${la_drive_c_root}"/}"
+    printf 'C:\\%s\n' "${rel//\//\\}"
+    return 0
+  fi
+  if [[ "${la_winepath_resolved}" -eq 0 ]]; then
+    la_winepath_resolved=1
+    local wine_bin
+    wine_bin=$(zgu_get_wine_binary "${lutris_runners_dir}" "${la_version}" 2>/dev/null)
+    if [[ -n "${wine_bin}" ]] && [[ -x "$(dirname "${wine_bin}")/winepath" ]]; then
+      la_winepath_bin="$(dirname "${wine_bin}")/winepath"
+    elif command -v winepath >/dev/null 2>&1; then
+      la_winepath_bin="winepath"
+    fi
+  fi
+  [[ -n "${la_winepath_bin}" ]] || return 1
+  WINEPREFIX="${la_prefix}" "${la_winepath_bin}" -w "${linux_path}" 2>/dev/null | tr -d '\r'
+}
 
-  [[ -z "${current_prefix}" ]] && current_prefix="${game_dir}"
-
+# Converts exe/workdir to Windows paths into la_win_*. Arg: slug.
+zgp_launcher_resolve_windows_paths() {
+  local slug="$1"
   # Linux -> Windows path conversion. A path inside "<prefix>/drive_c" is converted by plain
   # text replacement ("<prefix>/drive_c/Games/x.exe" -> "C:\Games\x.exe"): no Wine process is
   # started (winepath would start wineserver and could pop up a Wine window, e.g. "updating the
   # prefix", just to write a YAML file). Same rule as zgl-launcher-entries.sh.
   # "winepath" is only the fallback for a path outside drive_c (other drive letter): first the
   # one next to the wine binary of the runner used by this game, else a generic one from PATH.
-  local drive_c_root="${current_prefix%/}/drive_c"
-  local winepath_bin="" winepath_resolved=0
+  la_drive_c_root="${la_prefix%/}/drive_c"
+  la_winepath_bin=""; la_winepath_resolved=0
+  la_win_exe=$(zgp_launcher_to_windows_path "${la_exe}")
+  la_win_workdir=$(zgp_launcher_to_windows_path "${la_workdir}")
 
-  zgp_launcher_to_windows_path() {
-    local linux_path="$1" rel
-    if [[ "${linux_path}" = "${drive_c_root}" ]]; then
-      printf 'C:\\\n'
-      return 0
-    fi
-    if [[ "${linux_path}" = "${drive_c_root}/"* ]]; then
-      rel="${linux_path#"${drive_c_root}"/}"
-      printf 'C:\\%s\n' "${rel//\//\\}"
-      return 0
-    fi
-    if [[ "${winepath_resolved}" -eq 0 ]]; then
-      winepath_resolved=1
-      local wine_bin
-      wine_bin=$(zgu_get_wine_binary "${lutris_runners_dir}" "${current_version}" 2>/dev/null)
-      if [[ -n "${wine_bin}" ]] && [[ -x "$(dirname "${wine_bin}")/winepath" ]]; then
-        winepath_bin="$(dirname "${wine_bin}")/winepath"
-      elif command -v winepath >/dev/null 2>&1; then
-        winepath_bin="winepath"
-      fi
-    fi
-    [[ -n "${winepath_bin}" ]] || return 1
-    WINEPREFIX="${current_prefix}" "${winepath_bin}" -w "${linux_path}" 2>/dev/null | tr -d '\r'
-  }
-
-  local win_exe="" win_workdir=""
-  win_exe=$(zgp_launcher_to_windows_path "${current_exe}")
-  win_workdir=$(zgp_launcher_to_windows_path "${current_workdir}")
-
-  if [[ -z "${win_exe}" ]] || [[ -z "${win_workdir}" ]]; then
+  if [[ -z "${la_win_exe}" ]] || [[ -z "${la_win_workdir}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.winepath_failed "${slug}")"
     zgu_log "launcher" "ERROR" "slug=${slug} reason=winepath_failed"
     return 1
   fi
+  return 0
+}
 
+# Computes la_bat_dir / la_bat_path. Arg: slug.
+zgp_launcher_compute_bat_dir() {
+  local slug="$1"
   # FIXED location of lpm-launch.bat, INSIDE drive_c (never the root of $GAMEDIR). Lutris runs
   # a ".bat" via "cmd /C <name>" with the .bat folder as process working directory; a folder
   # outside drive_c (e.g. the prefix root) is only reachable from Wine if the prefix has a Z:
@@ -351,53 +355,53 @@ print(version)
   #   drive_c/Games/Jeu/lpm-launch.bat
   # i.e. the first level under "Games/" leading to the exe, never deeper. "Games/" is the
   # standard install folder used by Lutris/lpm installers.
-  local drive_c games_root bat_dir bat_path_linux
-  drive_c="${current_prefix}/drive_c"
+  local drive_c games_root
+  drive_c="${la_prefix}/drive_c"
   games_root="${drive_c}/Games"
 
-  if [[ "${current_exe}" = "${games_root}/"* ]]; then
+  if [[ "${la_exe}" = "${games_root}/"* ]]; then
     local rel_to_games top_component
-    rel_to_games="${current_exe#"${games_root}"/}"
+    rel_to_games="${la_exe#"${games_root}"/}"
     top_component="${rel_to_games%%/*}"
-    bat_dir="${games_root}/${top_component}"
+    la_bat_dir="${games_root}/${top_component}"
   else
     # Fallback: install outside the drive_c/Games/<game>/... convention, so the rule above
-    # cannot apply. Uses "current_workdir" (resolved above: explicit config working_dir, else
+    # cannot apply. Uses "la_workdir" (resolved above: explicit config working_dir, else
     # dirname(exe)), and logs it.
-    bat_dir="${current_workdir}"
-    zgu_log "launcher" "WARN" "slug=${slug} reason=exe_outside_games_convention bat_dir=${bat_dir}"
+    la_bat_dir="${la_workdir}"
+    zgu_log "launcher" "WARN" "slug=${slug} reason=exe_outside_games_convention bat_dir=${la_bat_dir}"
   fi
 
-  bat_path_linux="${bat_dir}/lpm-launch.bat"
+  la_bat_path="${la_bat_dir}/lpm-launch.bat"
+}
 
+# Writes lpm-launch.bat at activation.
+zgp_launcher_write_bat() {
   # Writes lpm-launch.bat NOW, at activation, not only at the first real launch
   # (zgl-launcher-runtime.sh rewrites it anyway with the chosen entry). Required: "game.exe"
   # is pointed to this path below, in this same activation; if the file does not exist yet,
   # Lutris reports it missing/misbehaves before the first launch. Same content as the template
-  # of zgl-launcher-runtime.sh, with the default auto-filled entry (win_workdir/win_exe,
+  # of zgl-launcher-runtime.sh, with the default auto-filled entry (la_win_workdir/la_win_exe,
   # resolved above).
-  mkdir -p "${bat_dir}" 2>/dev/null
+  mkdir -p "${la_bat_dir}" 2>/dev/null
   {
     printf '@echo off\r\n'
-    printf 'cd /d "%s"\r\n' "${win_workdir}"
-    printf 'start "" "%s"\r\n' "${win_exe}"
-  } > "${bat_path_linux}" 2>/dev/null
+    printf 'cd /d "%s"\r\n' "${la_win_workdir}"
+    printf 'start "" "%s"\r\n' "${la_win_exe}"
+  } > "${la_bat_path}" 2>/dev/null
+}
 
-  # --- Write lpm-launcher.yml (auto-filled entry + commented example) --
-  # ONLY if it does not exist yet. "off" deletes it (item 4 of the file header), so a file
-  # that exists here comes from a hand edit or a restored .zgp; overwriting it on "on" would
-  # lose that customization, including on a repair re-enable after a reinstall that dropped
-  # system.prelaunch_command (see zgp_launcher_is_active above). ---
-  local launcher_yml_on
-  launcher_yml_on="$(zgu_lpm_find "${game_dir}" launcher)"
-  if [[ ! -f "${launcher_yml_on}" ]]; then
-    mkdir -p "$(dirname "${launcher_yml_on}")" 2>/dev/null
-    local default_label
-    default_label="$(t launcher.default_entry_label)"
+# Creates lpm/launcher.yml with the auto-filled entry + a commented example. Args: slug
+# launcher_yml. Returns 1 on failure.
+zgp_launcher_create_launcher_yml() {
+  local slug="$1" launcher_yml_on="$2"
+  mkdir -p "$(dirname "${launcher_yml_on}")" 2>/dev/null
+  local default_label
+  default_label="$(t launcher.default_entry_label)"
 
-    YML_PATH="${launcher_yml_on}" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
-      LABEL="${default_label}" WORKDIR="${win_workdir}" EXE="${win_exe}" ORIGINAL_EXE="${current_exe}" \
-      BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
+  YML_PATH="${launcher_yml_on}" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
+    LABEL="${default_label}" WORKDIR="${la_win_workdir}" EXE="${la_win_exe}" ORIGINAL_EXE="${la_exe}" \
+    BAT_PATH_LINUX="${la_bat_path}" python3 -c '
 import os, yaml
 
 data = {
@@ -412,33 +416,39 @@ data = {
 with open(os.environ["YML_PATH"], "w") as f:
     yaml.dump(data, f, sort_keys=False, allow_unicode=True)
 ' 2>/dev/null
-    if [[ $? -ne 0 ]]; then
-      zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
-      zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_write_failed"
-      return 1
-    fi
+  if [[ $? -ne 0 ]]; then
+    zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_write_failed"
+    return 1
+  fi
 
-    {
-      echo "# $(t launcher.example_entry_comment)"
-      echo "#  - label: \"$(t launcher.example_entry_label)\""
-      echo "#    workdir: \"C:\\\\Games\\\\...\""
-      echo "#    exe: \"C:\\\\Games\\\\...\\\\game.exe\""
-    } >> "${launcher_yml_on}"
-  else
-    # lpm-launcher.yml already exists (hand-written, restored from a .zgp, or left by an
-    # earlier "off"). Its entries are kept, but the two keys lpm itself relies on are brought
-    # up to date:
-    #  - "bat_path": where Lutris REALLY runs lpm-launch.bat (the one just written above). Both
-    #    keys hold absolute Linux paths, so they are also wrong after an import on another
-    #    machine. Without it, the runtime falls back to "<game>/lpm-launch.bat", rewrites THAT
-    #    file with the chosen entry, while Lutris keeps running the other one (always the
-    #    default entry: the picker seems to ignore the choice).
-    #  - "original_exe": the exe to restore on "off". Only set when game.exe does not already
-    #    point to an lpm-launch.bat (then the real original exe is unknown and an existing
-    #    value is never overwritten with the .bat).
-    # Comment lines at the end of the file are kept.
-    YML_PATH="${launcher_yml_on}" ORIGINAL_EXE="${current_exe}" \
-      BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
+  {
+    echo "# $(t launcher.example_entry_comment)"
+    echo "#  - label: \"$(t launcher.example_entry_label)\""
+    echo "#    workdir: \"C:\\\\Games\\\\...\""
+    echo "#    exe: \"C:\\\\Games\\\\...\\\\game.exe\""
+  } >> "${launcher_yml_on}"
+  return 0
+}
+
+# Brings the two keys lpm relies on up to date in an existing lpm/launcher.yml. Args: slug
+# launcher_yml. Returns 1 on failure.
+zgp_launcher_update_launcher_yml() {
+  local slug="$1" launcher_yml_on="$2"
+  # lpm-launcher.yml already exists (hand-written, restored from a .zgp, or left by an
+  # earlier "off"). Its entries are kept, but the two keys lpm itself relies on are brought
+  # up to date:
+  #  - "bat_path": where Lutris REALLY runs lpm-launch.bat (the one just written above). Both
+  #    keys hold absolute Linux paths, so they are also wrong after an import on another
+  #    machine. Without it, the runtime falls back to "<game>/lpm-launch.bat", rewrites THAT
+  #    file with the chosen entry, while Lutris keeps running the other one (always the
+  #    default entry: the picker seems to ignore the choice).
+  #  - "original_exe": the exe to restore on "off". Only set when game.exe does not already
+  #    point to an lpm-launch.bat (then the real original exe is unknown and an existing
+  #    value is never overwritten with the .bat).
+  # Comment lines at the end of the file are kept.
+  YML_PATH="${launcher_yml_on}" ORIGINAL_EXE="${la_exe}" \
+    BAT_PATH_LINUX="${la_bat_path}" python3 -c '
 import os, yaml
 
 path = os.environ["YML_PATH"]
@@ -465,13 +475,35 @@ if changed:
     with open(path, "w") as f:
         f.write(out)
 ' 2>/dev/null
-    if [[ $? -ne 0 ]]; then
-      zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
-      zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_update_failed"
-      return 1
-    fi
+  if [[ $? -ne 0 ]]; then
+    zgp_launcher_report_error_early "$(t launcher.yaml_write_failed "${slug}")"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_update_failed"
+    return 1
   fi
+  return 0
+}
 
+# Creates or updates lpm/launcher.yml. Args: slug game_dir.
+zgp_launcher_write_launcher_yml() {
+  local slug="$1" game_dir="$2"
+  # --- Write lpm-launcher.yml (auto-filled entry + commented example) --
+  # ONLY if it does not exist yet. "off" deletes it (item 4 of the file header), so a file
+  # that exists here comes from a hand edit or a restored .zgp; overwriting it on "on" would
+  # lose that customization, including on a repair re-enable after a reinstall that dropped
+  # system.prelaunch_command (see zgp_launcher_is_active above). ---
+  local launcher_yml_on
+  launcher_yml_on="$(zgu_lpm_find "${game_dir}" launcher)"
+  if [[ ! -f "${launcher_yml_on}" ]]; then
+    zgp_launcher_create_launcher_yml "${slug}" "${launcher_yml_on}" || return 1
+  else
+    zgp_launcher_update_launcher_yml "${slug}" "${launcher_yml_on}" || return 1
+  fi
+  return 0
+}
+
+# Points game.exe of the Lutris yml to lpm-launch.bat. Args: slug yml_file.
+zgp_launcher_wire_lutris_yml() {
+  local slug="$1" yml_file="$2"
   # --- Wiring into the Lutris config: ONLY game.exe -> lpm-launch.bat ---
   #
   # No relay script, no system.prelaunch_command: the orchestrator (entry point of every lpm
@@ -482,10 +514,10 @@ if changed:
   # Line-based text editing (zgu-yaml-edit.py): yaml.dump would destroy the Lutris YAML comments,
   # including hooks disabled by LPM ("# lpm:hook-disabled"). Falls back to the full rewrite
   # below if targeted editing is not possible.
-  if python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set game exe "${bat_path_linux}" >/dev/null 2>&1; then
+  if python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set game exe "${la_bat_path}" >/dev/null 2>&1; then
     :
   else
-    YML_PATH="${yml_file}" BAT_PATH="${bat_path_linux}" python3 -c '
+    YML_PATH="${yml_file}" BAT_PATH="${la_bat_path}" python3 -c '
 import os, yaml
 
 yml_path = os.environ["YML_PATH"]
@@ -505,6 +537,25 @@ with open(yml_path, "w") as f:
     zgu_log "launcher" "ERROR" "slug=${slug} reason=lutris_yaml_patch_failed"
     return 1
   fi
+  return 0
+}
+
+zgp_launcher_apply_on() {
+  local slug="$1" game_dir="$2" configpath="$3"
+  local yml_file="${lutris_config_dir}/${configpath}.yml"
+
+  if [[ ! -f "${yml_file}" ]]; then
+    zgp_launcher_report_error_early "$(t launcher.yml_missing "${slug}")"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=yaml_not_found"
+    return 1
+  fi
+
+  zgp_launcher_read_state "${slug}" "${yml_file}" "${game_dir}" || return 1
+  zgp_launcher_resolve_windows_paths "${slug}" || return 1
+  zgp_launcher_compute_bat_dir "${slug}"
+  zgp_launcher_write_bat
+  zgp_launcher_write_launcher_yml "${slug}" "${game_dir}" || return 1
+  zgp_launcher_wire_lutris_yml "${slug}" "${yml_file}" || return 1
 
   # A relay of the old format (lpm <= 0.9.5) left in this game is removed (and bat_path of
   # lpm-launcher.yml aligned on game.exe).
@@ -519,31 +570,23 @@ with open(yml_path, "w") as f:
 }
 
 # --- 5. Apply: disable ---
-zgp_launcher_apply_off() {
-  local slug="$1" game_dir="$2" configpath="$3"
-  local yml_file="${lutris_config_dir}/${configpath}.yml"
-  local launcher_yml
-  launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
-
-  if [[ ! -f "${launcher_yml}" ]]; then
-    zgp_launcher_report_error_early "$(t launcher.launcher_yml_missing "${slug}")"
-    zgu_log "launcher" "ERROR" "slug=${slug} reason=lpm_launcher_yml_not_found"
-    return 1
-  fi
-
-  local original_exe
-  original_exe=$(YML_PATH="${launcher_yml}" python3 -c '
+# Finds the exe to restore into off_original_exe: "original_exe" of lpm/launcher.yml, else rebuilt
+# from the first entry. Args: slug game_dir yml_file launcher_yml. Returns 1 if nothing found.
+off_original_exe=""
+zgp_launcher_find_original_exe() {
+  local slug="$1" game_dir="$2" yml_file="$3" launcher_yml="$4"
+  off_original_exe=$(YML_PATH="${launcher_yml}" python3 -c '
 import os, yaml
 with open(os.environ["YML_PATH"], "r") as f:
     data = yaml.safe_load(f) or {}
 print(data.get("original_exe") or "")
 ' 2>/dev/null)
 
-  if [[ -z "${original_exe}" ]]; then
+  if [[ -z "${off_original_exe}" ]]; then
     # No saved original exe (file written by hand or by a very old lpm): fall back on the exe of the
     # FIRST menu entry, which is nearly always the game's original exe, converted from its Windows
     # path to the Linux path Lutris expects (only "C:\..." is convertible: pure text, no Wine).
-    original_exe=$(YML_PATH="${launcher_yml}" LUTRIS_YML="${yml_file}" GAME_DIR="${game_dir}" python3 -c '
+    off_original_exe=$(YML_PATH="${launcher_yml}" LUTRIS_YML="${yml_file}" GAME_DIR="${game_dir}" python3 -c '
 import os, yaml
 
 try:
@@ -570,15 +613,22 @@ except SystemExit:
 except Exception:
     pass
 ' 2>/dev/null)
-    if [[ -z "${original_exe}" ]]; then
+    if [[ -z "${off_original_exe}" ]]; then
       zgp_launcher_report_error_early "$(t launcher.no_original_exe "${slug}")"
       zgu_log "launcher" "ERROR" "slug=${slug} reason=original_exe_missing"
       return 1
     fi
-    echo "$(t launcher.original_exe_fallback "${name_by_slug[${slug}]}" "${original_exe}")" >&2
-    zgu_log "launcher" "WARN" "slug=${slug} reason=original_exe_from_first_entry exe=${original_exe}"
+    echo "$(t launcher.original_exe_fallback "${name_by_slug[${slug}]}" "${off_original_exe}")" >&2
+    zgu_log "launcher" "WARN" "slug=${slug} reason=original_exe_from_first_entry exe=${off_original_exe}"
   fi
+  return 0
+}
 
+# Restores game.exe (and drops the relay prelaunch of an old format) in the Lutris yml.
+# Args: slug yml_file. Uses off_original_exe. Returns 1 on failure.
+zgp_launcher_restore_lutris_yml() {
+  local slug="$1" yml_file="$2"
+  local original_exe="${off_original_exe}"
 # Line-based text editing (zgu-yaml-edit.py), see zgp_launcher_apply_on above.
 if {
   yaml_edit_py="${script_dir}/zgu-yaml-edit.py"
@@ -624,7 +674,12 @@ fi
     zgu_log "launcher" "ERROR" "slug=${slug} reason=lutris_yaml_patch_failed"
     return 1
   fi
+  return 0
+}
 
+# Removes the files the launcher itself added. Args: game_dir launcher_yml.
+zgp_launcher_remove_files() {
+  local game_dir="$1" launcher_yml="$2"
   # --- Removal of the files the LPM Launcher itself added (only AFTER the Lutris config was
   # restored above). Exactly these, by name, nothing else:
   #   <game dir>/lpm-launcher.yml, <game dir>/scripts/lpm-launcher.sh,
@@ -652,6 +707,23 @@ print(data.get("bat_path") or "")
   zgu_lpm_remove "${game_dir}" launcher_choice
   rmdir "${game_dir}/scripts" 2>/dev/null
   zgu_lpm_prune "${game_dir}"
+}
+
+zgp_launcher_apply_off() {
+  local slug="$1" game_dir="$2" configpath="$3"
+  local yml_file="${lutris_config_dir}/${configpath}.yml"
+  local launcher_yml
+  launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
+
+  if [[ ! -f "${launcher_yml}" ]]; then
+    zgp_launcher_report_error_early "$(t launcher.launcher_yml_missing "${slug}")"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=lpm_launcher_yml_not_found"
+    return 1
+  fi
+
+  zgp_launcher_find_original_exe "${slug}" "${game_dir}" "${yml_file}" "${launcher_yml}" || return 1
+  zgp_launcher_restore_lutris_yml "${slug}" "${yml_file}" || return 1
+  zgp_launcher_remove_files "${game_dir}" "${launcher_yml}"
 
   zgu_log "launcher" "OK" "slug=${slug} action=off"
   return 0
