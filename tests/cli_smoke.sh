@@ -220,6 +220,26 @@ expect "legacy launcher: a user's own prelaunch command is left alone" bash -c '
 rm -f "${lg}/.lpm-no-loadingscreen" "${lg}/lpm-launcher.yml" "${lg_bat}" "${lg}/scripts/lpm-winetrace.sh"
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
 
+# --- The orchestrator reads the Lutris YAML AS YAML. Lutris/PyYAML fold a long "exe:" value on two lines
+# (a game folder with spaces is enough); a line-based match then missed the launcher and the game
+# started with the lpm-launch.bat of the PREVIOUS launch: no picker, the last entry.
+fold_dir="${lg}/drive_c/Games/A folder name with spaces long enough to fold"
+mkdir -p "${fold_dir}"
+fold_bat="${fold_dir}/lpm-launch.bat"
+printf '@echo off\r\nstart "" "C:\\Games\\old.exe"\r\n' > "${fold_bat}"
+FOLD_BAT="${fold_bat}" FOLD_PREFIX="${lg}" python3 -c "
+import os, yaml
+d = {'game': {'exe': os.environ['FOLD_BAT'], 'prefix': os.environ['FOLD_PREFIX']}, 'wine': {'version': 'GE-Test'}}
+open('${HOME}/.config/lutris/games/mario-1.yml', 'w').write(yaml.dump(d, sort_keys=False))
+"
+expect "folded exe: the fixture really is folded on two lines" bash -c '! grep -Eq "^[[:space:]]*exe:.*lpm-launch\.bat" "$1" && grep -q "lpm-launch.bat" "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
+printf 'title: T\nprompt: P\nentries:\n- label: Only\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\folded-new.exe\n' > "${lg}/lpm-launcher.yml"
+touch "${lg}/.lpm-no-loadingscreen"
+expect "folded exe: shortcut launch (orchestrator) still sees the launcher" env DISPLAY=:99 bash "${repo}/lib/zgl-launcher-orchestrator.sh" 1 package
+expect "folded exe: lpm-launch.bat rewritten with the chosen entry" grep -q 'folded-new.exe' "${fold_bat}"
+rm -rf "${fold_dir}" "${lg}/.lpm-no-loadingscreen" "${lg}/lpm-launcher.yml"
+printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
+
 # --- "off" without original_exe (hand-written file): fallback on the first entry
 mkdir -p "${lg}/drive_c/Games/Mario"
 printf 'title: T\nprompt: P\nentries:\n- label: Only\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\first.exe\n' > "${lg}/lpm-launcher.yml"

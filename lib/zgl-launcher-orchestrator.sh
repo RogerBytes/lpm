@@ -154,11 +154,30 @@ control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 # mechanism keeps working untouched: "legacy_relay_present". ---
 lutris_game_yml=""
 [[ -n "${configpath}" ]] && lutris_game_yml="${lutris_config_dir}/${configpath}.yml"
+# The Lutris YAML is READ AS YAML, never with grep: Lutris and PyYAML fold a long value onto
+# two lines (a game folder with spaces in its name is enough: "exe: .../Zelda solarus" newline
+# "    games/lpm-launch.bat"), and a line-based match then fails to see the launcher. The game
+# silently launched with the lpm-launch.bat of the PREVIOUS launch: no picker, the last entry.
+# Same test as zgp_launcher_is_active in zgl-launcher-manager.sh (what "lpm launcher status"
+# and the GUI show). python3 is guaranteed here (checked above).
+lutris_exe_is_launch_bat() {
+  YML_PATH="$1" python3 -c '
+import os, sys, yaml
+try:
+    with open(os.environ["YML_PATH"], "r") as f:
+        data = yaml.safe_load(f) or {}
+    exe = str((data.get("game") or {}).get("exe") or "")
+    sys.exit(0 if os.path.basename(exe) == "lpm-launch.bat" else 1)
+except Exception:
+    sys.exit(1)
+' 2>/dev/null
+}
+
 launcher_active=false
 legacy_relay_present=false
 if [[ -d "${game_dir}" ]] && [[ -f "${game_dir}/lpm-launcher.yml" ]] \
     && [[ -n "${lutris_game_yml}" ]] && [[ -f "${lutris_game_yml}" ]] \
-    && grep -Eq "^[[:space:]]*exe:.*lpm-launch\.bat['\"]?[[:space:]]*$" "${lutris_game_yml}" 2>/dev/null; then
+    && lutris_exe_is_launch_bat "${lutris_game_yml}"; then
   launcher_active=true
   bash "${script_dir}/zgl-launcher-legacy.sh" "${lutris_game_yml}" "${game_dir}" >/dev/null 2>&1 || legacy_relay_present=true
 fi
