@@ -467,10 +467,20 @@ cp "${HOME}/old-archive/.lpm-config.yml" "${HOME}/old-archive/mario/zgp-game-con
 # ... and with the relay of the old LPM Launcher format (lpm <= 0.9.5)
 mkdir -p "${HOME}/old-archive/mario/scripts"
 printf '#!/bin/sh\n' > "${HOME}/old-archive/mario/scripts/lpm-launcher.sh"
+# Every old-layout lpm file at the prefix root (they must all end up in lpm/ at install)
+mkdir -p "${HOME}/old-archive/mario/extras/Manual" "${HOME}/old-archive/mario/splash" "${HOME}/old-archive/mario/lpm_gamepad"
+echo m > "${HOME}/old-archive/mario/extras/Manual/readme.txt"; echo s > "${HOME}/old-archive/mario/splash/splash.png"
+echo g > "${HOME}/old-archive/mario/lpm_gamepad/profile.amgp"; echo i > "${HOME}/old-archive/mario/icon"
+echo w > "${HOME}/old-archive/mario/lpm-ignore-windows.txt"; : > "${HOME}/old-archive/mario/.lpm-no-loadingscreen"
+printf 'title: T\nentries: []\n' > "${HOME}/old-archive/mario/lpm-launcher.yml"
+printf '#!/bin/sh\n' > "${HOME}/old-archive/mario/scripts/hook.sh"
 tar -C "${HOME}/old-archive" -cf - mario | zstd -q > "${HOME}/Mario-old.zgp"
 check "uninstall before old archive" 0 '\[REMOVED\] mario' uninstall -y mario
 check "install old archive" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario-old.zgp"
 expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/version"
+expect "migration: every old file moved into lpm/" bash -c 'g="$1"; test -f "$g/lpm/extras/Manual/readme.txt" && test -f "$g/lpm/images/splash/splash.png" && test -f "$g/lpm/gamepad/profile.amgp" && test -f "$g/lpm/images/icon" && test -f "$g/lpm/settings/ignore-windows.txt" && test -e "$g/lpm/settings/no-loadingscreen" && test -f "$g/lpm/launcher.yml" && test -f "$g/lpm/scripts/hook.sh"' _ "${HOME}/Games/mario"
+expect "migration: nothing lpm-owned left at the prefix root" bash -c 'g="$1"; for f in extras splash lpm_gamepad icon lpm-ignore-windows.txt .lpm-no-loadingscreen lpm-launcher.yml scripts zgp-game-config.yml; do test ! -e "$g/$f" || { echo "left: $f"; exit 1; }; done' _ "${HOME}/Games/mario"
+
 check "list after an old-format install (name read from the old YAML)" 0 'mario +Mario' list
 expect "install: relay of the old LPM Launcher format removed (legacy)" test ! -e "${HOME}/Games/mario/scripts/lpm-launcher.sh"
 rm -rf "${HOME}/old-archive" "${HOME}/Mario-old.zgp"

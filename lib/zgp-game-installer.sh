@@ -575,6 +575,11 @@ for name in "${games_to_install[@]}"; do
     timestamp=$(date +%s%N)
     config_id="${slug}-${timestamp}"
 
+    # A package made with the old layout (lpm files scattered at the prefix root) is brought to
+    # the current one at once: everything moves into "lpm/" with its new name, so the game needs
+    # no new export. No-op for a package that already has the "lpm/" layout.
+    zgu_lpm_migrate "${prefix_dir}"
+
     # The display name (.desktop shortcut, messages...) comes straight from the "name" field
     # of the bundled zgp-game-config.yml, which is a copy of the original Lutris YAML where
     # it is a root key.

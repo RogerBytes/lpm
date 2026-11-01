@@ -85,6 +85,9 @@ fi
 if ! relay_in_yml && [[ -n "${game_dir}" ]]; then
   rm -f -- "${game_dir}/scripts/lpm-launcher.sh" 2>/dev/null
   rmdir "${game_dir}/scripts" 2>/dev/null
+  # Same relay once the prefix was migrated to the "lpm/" layout (installer moves "scripts/").
+  rm -f -- "${game_dir}/lpm/scripts/lpm-launcher.sh" 2>/dev/null
+  rmdir "${game_dir}/lpm/scripts" 2>/dev/null
 fi
 
 # --- 3. bat_path of lpm-launcher.yml, from the game.exe Lutris really runs ---

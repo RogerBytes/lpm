@@ -101,3 +101,43 @@ zgu_lpm_prune() {
   rmdir "${base}" 2>/dev/null
   return 0
 }
+
+# zgu_lpm_migrate <prefix>: moves the lpm files of an OLD-layout prefix (prefix root) into
+# "<prefix>/lpm" with their new names, so that a game installed from an old .zgp is brought to
+# the current layout at once (no new export needed). Safe to run again (nothing left to move =
+# nothing happens) and never overwrites: if the new location already exists the old item stays
+# where it is (folders are merged child by child, existing files win). Nothing is moved when
+# "<prefix>/lpm" is a link (a forged archive could aim it elsewhere).
+# Prints nothing. The temporary choice file is deleted instead of moved.
+# Also fixes the hook paths "$GAMEDIR/scripts/" -> "$GAMEDIR/lpm/scripts/" in the bundled
+# config.yml, since the "scripts" folder moves.
+zgu_lpm_migrate() {
+  local prefix="${1%/}" key legacy new child
+  [[ -d "${prefix}" ]] || return 0
+  [[ -L "${prefix}/${ZGU_LPM_DIRNAME}" ]] && return 0
+  for key in config launcher launcher_choice no_loadingscreen keep_focus max_wait extra_loading \
+             loading_message ignore_windows scripts gamepad splash icon lsfg extras; do
+    legacy="$(zgu_lpm_legacy_path "${prefix}" "${key}")"
+    new="$(zgu_lpm_path "${prefix}" "${key}")"
+    [[ -e "${legacy}" || -L "${legacy}" ]] || continue
+    if [[ "${key}" = "launcher_choice" ]]; then
+      rm -rf -- "${legacy}" 2>/dev/null
+      continue
+    fi
+    mkdir -p -- "$(dirname "${new}")" 2>/dev/null || continue
+    if [[ ! -e "${new}" && ! -L "${new}" ]]; then
+      mv -- "${legacy}" "${new}" 2>/dev/null
+    elif [[ -d "${legacy}" && ! -L "${legacy}" && -d "${new}" && ! -L "${new}" ]]; then
+      for child in "${legacy}"/* "${legacy}"/.[!.]*; do
+        [[ -e "${child}" || -L "${child}" ]] || continue
+        mv -n -- "${child}" "${new}/" 2>/dev/null
+      done
+      rmdir -- "${legacy}" 2>/dev/null
+    fi
+  done
+  new="$(zgu_lpm_path "${prefix}" config)"
+  if [[ -f "${new}" ]] && grep -q 'GAMEDIR/scripts/' "${new}" 2>/dev/null; then
+    sed -i 's|\$GAMEDIR/scripts/|$GAMEDIR/lpm/scripts/|g' "${new}" 2>/dev/null
+  fi
+  return 0
+}
