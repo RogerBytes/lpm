@@ -162,11 +162,11 @@ with tempfile.TemporaryDirectory() as tmp:
     expect("/proc detection: after stop", pw.prefix_alive(os.path.join(tmp, "game")), False)
 
 
-# --- Random order of the help lines (lib/zgu-launcher-screen.py) ---------------------------
+# --- Random order of the help lines (lib/zgu_screen_config.py) ---------------------------
 import ast
 import random
 
-tree = ast.parse(open(os.path.join(ROOT, "lib", "zgu-launcher-screen.py")).read())
+tree = ast.parse(open(os.path.join(ROOT, "lib", "zgu_screen_config.py")).read())
 func = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "extend_help_sequence")
 namespace = {"random": random}
 exec(compile(ast.Module([func], []), "extend_help_sequence", "exec"), namespace)
