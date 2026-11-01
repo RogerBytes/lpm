@@ -31,8 +31,9 @@
 # lines above (zgl-launcher-runtime.sh also rewrites lines 2 and 3, so mixing could corrupt
 # reads/writes):
 #   "<control_file>.picker-req" -- written by zgl-launcher-orchestrator.sh when a picker
-#     must be shown. Five or more lines: TITLE, PROMPT, VALIDATE_LABEL, CANCEL_LABEL, then
-#     one entry per line. Read at the same polling as the control file: once it appears
+#     must be shown. Seven or more lines: TITLE, PROMPT, VALIDATE_LABEL, CANCEL_LABEL,
+#     PAD_VALIDATE_LABEL, PAD_CANCEL_LABEL (texts shown next to the gamepad A/B icons, see
+#     set_pad_mode), then one entry per line. Read at the same polling as the control file: once it appears
 #     (and no picker is already shown), its content fills the list and the picker card
 #     becomes visible; the file is then deleted (processed once).
 #   "<control_file>.picker-res" -- written by THIS script once the user validated or
@@ -160,6 +161,13 @@ BLOCK_EXTRA_DOWN_FRACTION = 0.05
 
 CURSOR_IDLE_S = 1.0
 
+# Held direction (d-pad or left stick) on the picker list: first move on press, then after
+# GAMEPAD_REPEAT_DELAY_S one move every GAMEPAD_REPEAT_INTERVAL_S while it stays held.
+GAMEPAD_REPEAT_DELAY_S = 0.4
+GAMEPAD_REPEAT_INTERVAL_S = 0.07
+# Height of the dark fade at the bottom of the list while rows are hidden below.
+PICKER_FADE_HEIGHT = 56
+
 MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30
 BANNER_EXTRA_LIFT_NO_LABEL = 15
@@ -212,7 +220,7 @@ CSS = b"""
     background-color: transparent;
 }
 .lpm-picker-card list row {
-    padding: 8px 14px;
+    padding: 14px 22px;
     background-color: transparent;
     color: #ffffff;
 }
@@ -224,6 +232,30 @@ CSS = b"""
 .lpm-picker-button {
     font-size: 20px;
 }
+/* Always-visible scrollbar (no overlay): tells at once that the list scrolls. */
+.lpm-picker-card scrollbar {
+    background-color: #262626;
+    border-radius: 6px;
+}
+.lpm-picker-card scrollbar slider {
+    background-color: #9a9a9a;
+    min-width: 10px;
+    min-height: 48px;
+    border-radius: 5px;
+}
+.lpm-picker-fade {
+    background-image: linear-gradient(to top, #1a1a1a, rgba(26, 26, 26, 0));
+}
+.lpm-pad-icon {
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 18px;
+    min-width: 30px;
+    min-height: 30px;
+    border-radius: 15px;
+}
+.lpm-pad-icon-a { background-color: #2e9e3a; }
+.lpm-pad-icon-b { background-color: #c62828; }
 /* Bordure : couleur du fond du bouton eclaircie uniformement (+0x20 par canal), jamais le
    blanc par defaut du theme --. "border" en raccourci complet
    (style + largeur + couleur), meme logique que "background-image: none" plus haut : ne
@@ -301,6 +333,7 @@ _gamepad_prev_a = {}
 _gamepad_prev_b = {}
 _gamepad_prev_dpad_y = {}
 _gamepad_prev_stick_y = {}
+_gamepad_next_repeat = {}
 
 
 def _load_sdl2():
@@ -357,6 +390,7 @@ def init_gamepad():
                     _gamepad_prev_b[handle] = 0
                     _gamepad_prev_dpad_y[handle] = 0
                     _gamepad_prev_stick_y[handle] = 0
+                    _gamepad_next_repeat[handle] = 0.0
         _sdl = sdl
     except Exception:
         _sdl = None
@@ -383,25 +417,33 @@ def tick_gamepad():
 
         dpad_up = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP)
         dpad_down = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN)
-        dpad_dir = -1 if dpad_up else (1 if dpad_down else 0)
-        if dpad_dir != _gamepad_prev_dpad_y[pad] and dpad_dir != 0:
-            for win in windows:
-                if win.picker_visible:
-                    win.gamepad_move_selection(dpad_dir)
-        _gamepad_prev_dpad_y[pad] = dpad_dir
-
         stick_y = _sdl.SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY)
-        if stick_y <= -GAMEPAD_AXIS_THRESHOLD:
-            stick_dir = -1
+        if dpad_up or dpad_down:
+            direction = -1 if dpad_up else 1
+        elif stick_y <= -GAMEPAD_AXIS_THRESHOLD:
+            direction = -1
         elif stick_y >= GAMEPAD_AXIS_THRESHOLD:
-            stick_dir = 1
+            direction = 1
         else:
-            stick_dir = 0
-        if stick_dir != _gamepad_prev_stick_y[pad] and stick_dir != 0:
-            for win in windows:
-                if win.picker_visible:
-                    win.gamepad_move_selection(stick_dir)
-        _gamepad_prev_stick_y[pad] = stick_dir
+            direction = 0
+
+        now = time.monotonic()
+        if direction == 0:
+            _gamepad_prev_dpad_y[pad] = 0
+        else:
+            if direction != _gamepad_prev_dpad_y[pad]:
+                fire = True
+                _gamepad_next_repeat[pad] = now + GAMEPAD_REPEAT_DELAY_S
+            elif now >= _gamepad_next_repeat[pad]:
+                fire = True
+                _gamepad_next_repeat[pad] = now + GAMEPAD_REPEAT_INTERVAL_S
+            else:
+                fire = False
+            _gamepad_prev_dpad_y[pad] = direction
+            if fire:
+                for win in windows:
+                    if win.picker_visible:
+                        win.gamepad_move_selection(direction)
     return True
 
 
@@ -420,6 +462,9 @@ class ScreenWindow(Gtk.Window):
         # --- Picker (see file header): built once here, hidden by default -- a centered
         # "card" over the background, never a second window. ---
         self.picker_visible = False
+        self.pad_mode = False
+        self.validate_label = self.cancel_label = ""
+        self.pad_validate_label = self.pad_cancel_label = ""
         self.picker_entries = []  # [(row, label_text), ...]
         self.picker_listbox = None
 
@@ -544,8 +589,24 @@ class ScreenWindow(Gtk.Window):
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_overlay_scrolling(False)
         scroll.set_vexpand(True)
-        card.append(scroll)
+        scroll_overlay = Gtk.Overlay()
+        scroll_overlay.set_vexpand(True)
+        scroll_overlay.set_child(scroll)
+        self.picker_fade = Gtk.Box()
+        self.picker_fade.add_css_class("lpm-picker-fade")
+        self.picker_fade.set_valign(Gtk.Align.END)
+        self.picker_fade.set_halign(Gtk.Align.FILL)
+        self.picker_fade.set_size_request(-1, PICKER_FADE_HEIGHT)
+        self.picker_fade.set_can_target(False)
+        self.picker_fade.set_visible(False)
+        scroll_overlay.add_overlay(self.picker_fade)
+        self.picker_scroll = scroll
+        adj = scroll.get_vadjustment()
+        for sig in ("changed", "value-changed"):
+            adj.connect(sig, self._update_picker_fade)
+        card.append(scroll_overlay)
 
         self.picker_listbox = Gtk.ListBox()
         self.picker_listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
@@ -560,6 +621,12 @@ class ScreenWindow(Gtk.Window):
         button_box.set_halign(Gtk.Align.END)
 
         self.picker_cancel_button = Gtk.Button()
+        self.picker_cancel_icon = self._make_pad_icon("B", "lpm-pad-icon-b")
+        self.picker_cancel_text = Gtk.Label()
+        cancel_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        cancel_box.append(self.picker_cancel_icon)
+        cancel_box.append(self.picker_cancel_text)
+        self.picker_cancel_button.set_child(cancel_box)
         self.picker_cancel_button.add_css_class("lpm-picker-button")
         self.picker_cancel_button.add_css_class("lpm-picker-cancel-button")
         self.picker_cancel_button.connect("clicked", self.on_picker_cancel_clicked)
@@ -570,6 +637,12 @@ class ScreenWindow(Gtk.Window):
         # environment): fixed dark theme, white text, green Validate button, fully
         # independent of the system theme or its absence (Linux without a desktop).
         self.picker_validate_button = Gtk.Button()
+        self.picker_validate_icon = self._make_pad_icon("A", "lpm-pad-icon-a")
+        self.picker_validate_text = Gtk.Label()
+        validate_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        validate_box.append(self.picker_validate_icon)
+        validate_box.append(self.picker_validate_text)
+        self.picker_validate_button.set_child(validate_box)
         self.picker_validate_button.add_css_class("lpm-picker-button")
         self.picker_validate_button.add_css_class("lpm-picker-validate-button")
         self.picker_validate_button.connect("clicked", self.on_picker_validate_clicked)
@@ -578,13 +651,43 @@ class ScreenWindow(Gtk.Window):
         card.append(button_box)
         return card
 
-    def show_picker(self, title, prompt, validate_label, cancel_label, entries):
+    def _make_pad_icon(self, letter, css_class):
+        icon = Gtk.Label(label=letter)
+        icon.add_css_class("lpm-pad-icon")
+        icon.add_css_class(css_class)
+        icon.set_halign(Gtk.Align.CENTER)
+        icon.set_valign(Gtk.Align.CENTER)
+        icon.set_visible(False)
+        return icon
+
+    def _update_picker_fade(self, *_args):
+        adj = self.picker_scroll.get_vadjustment()
+        hidden_below = adj.get_value() + adj.get_page_size() < adj.get_upper() - 1
+        self.picker_fade.set_visible(hidden_below)
+
+    def set_pad_mode(self, on):
+        """Gamepad mode: the buttons show a green "A" / red "B" icon and the gamepad texts;
+        otherwise the plain Launch / Cancel texts. Called on any gamepad input (on) and on
+        any keyboard or mouse input (off)."""
+        if on == self.pad_mode:
+            return
+        self.pad_mode = on
+        self.picker_validate_icon.set_visible(on)
+        self.picker_cancel_icon.set_visible(on)
+        self.picker_validate_text.set_label(self.pad_validate_label if on else self.validate_label)
+        self.picker_cancel_text.set_label(self.pad_cancel_label if on else self.cancel_label)
+
+    def show_picker(self, title, prompt, validate_label, cancel_label, pad_validate_label, pad_cancel_label, entries):
         self.picker_title_label.set_label(title)
         self.picker_title_label.set_visible(bool(title))
         self.picker_prompt_label.set_label(prompt)
         self.picker_prompt_label.set_visible(bool(prompt))
-        self.picker_cancel_button.set_label(cancel_label)
-        self.picker_validate_button.set_label(validate_label)
+        self.validate_label = validate_label
+        self.cancel_label = cancel_label
+        self.pad_validate_label = pad_validate_label
+        self.pad_cancel_label = pad_cancel_label
+        self.pad_mode = None
+        self.set_pad_mode(False)
 
         while True:
             row = self.picker_listbox.get_row_at_index(0)
@@ -607,6 +710,7 @@ class ScreenWindow(Gtk.Window):
 
         self.picker_visible = True
         self.picker_card.set_visible(True)
+        GLib.idle_add(self._update_picker_fade)
         self.picker_listbox.grab_focus()
 
     def hide_picker(self):
@@ -643,6 +747,7 @@ class ScreenWindow(Gtk.Window):
     # --- Gamepad navigation (see init_gamepad()/tick_gamepad() above): direct actions
     # on our own widgets, never a key injected from outside. ---
     def gamepad_move_selection(self, delta):
+        self.set_pad_mode(True)
         row = self.picker_listbox.get_selected_row()
         idx = row.get_index() if row is not None else -1
         new_row = self.picker_listbox.get_row_at_index(idx + delta)
@@ -651,11 +756,13 @@ class ScreenWindow(Gtk.Window):
             new_row.grab_focus()
 
     def gamepad_validate(self):
+        self.set_pad_mode(True)
         if not self.cursor_hidden:
             self.hide_cursor()
         self._validate_selected_row()
 
     def gamepad_cancel(self):
+        self.set_pad_mode(True)
         if not self.cursor_hidden:
             self.hide_cursor()
         self._write_picker_result(False)
@@ -669,6 +776,8 @@ class ScreenWindow(Gtk.Window):
         return False
 
     def on_key_pressed(self, _ctrl, keyval, _keycode, _state):
+        if self.picker_visible:
+            self.set_pad_mode(False)
         if self.picker_visible and not self.cursor_hidden:
             self.hide_cursor()
         if keyval == Gdk.KEY_Escape and self.picker_visible:
@@ -677,6 +786,8 @@ class ScreenWindow(Gtk.Window):
         return False
 
     def on_motion(self, _ctrl, _x, _y):
+        if self.picker_visible:
+            self.set_pad_mode(False)
         self.last_motion_ts = time.monotonic()
         if self.cursor_hidden:
             self.show_cursor()
@@ -1128,7 +1239,7 @@ def poll_picker_request():
     except OSError:
         return True
 
-    if len(lines) < 4:
+    if len(lines) < 6:
         # File still being written (half read) -- retry on the next tick, never fatal
         # (same best-effort approach as the control file itself).
         return True
@@ -1139,13 +1250,14 @@ def poll_picker_request():
         pass
 
     title, prompt, validate_label, cancel_label = lines[0], lines[1], lines[2], lines[3]
-    entries = [e for e in lines[4:] if e]
+    pad_validate_label, pad_cancel_label = lines[4], lines[5]
+    entries = [e for e in lines[6:] if e]
     if not entries:
         return True
 
     picker_request_pending = True
     for win in windows:
-        win.show_picker(title, prompt, validate_label, cancel_label, entries)
+        win.show_picker(title, prompt, validate_label, cancel_label, pad_validate_label, pad_cancel_label, entries)
     return True
 
 

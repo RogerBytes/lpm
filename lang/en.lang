@@ -852,6 +852,8 @@ launcher.done_one_off_cli=%s: disabled.
 launcher.picker_column=Choose
 launcher.picker_validate_button=Launch
 launcher.picker_cancel_button=Cancel
+launcher.picker_pad_validate=Confirm
+launcher.picker_pad_cancel=Quit
 launcher.runtime_error=LPM Launcher error: %s
 launcher.runtime_sandbox_unreachable=The LPM Launcher could not start: "%s" is not visible from Lutris's Flatpak sandbox. The game will launch without the picker menu. Fix it with:\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.loading_text=Loading...
