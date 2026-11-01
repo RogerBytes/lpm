@@ -163,7 +163,7 @@ CURSOR_IDLE_S = 1.0
 
 # A selected entry too long for the card scrolls sideways so it can be read: it starts
 # MARQUEE_START_DELAY_S after the selection, moves at MARQUEE_SPEED_PX_S, waits
-# MARQUEE_END_PAUSE_S at the end, goes back to the start and loops.
+# MARQUEE_END_PAUSE_S at the end, comes back the other way to the start and loops.
 MARQUEE_START_DELAY_S = 0.9
 MARQUEE_SPEED_PX_S = 90.0
 MARQUEE_END_PAUSE_S = 1.2
@@ -813,7 +813,7 @@ class ScreenWindow(Gtk.Window):
         now = time.monotonic()
         if st["phase"] == "wait_start":
             if now - st["t0"] >= 0.3:
-                st["phase"], st["t0"], st["last"] = "run", now, now
+                st["phase"], st["last"] = "run", now
         elif st["phase"] == "run":
             st["x"] = min(end_x, st["x"] + MARQUEE_SPEED_PX_S * (now - st["last"]))
             st["last"] = now
@@ -822,8 +822,13 @@ class ScreenWindow(Gtk.Window):
                 st["phase"], st["t0"] = "wait_end", now
         elif st["phase"] == "wait_end":
             if now - st["t0"] >= MARQUEE_END_PAUSE_S:
-                st["x"] = 0.0
-                adj.set_value(0.0)
+                st["phase"], st["last"] = "back", now
+        elif st["phase"] == "back":
+            # Back the other way (no jump): left, then right, and so on.
+            st["x"] = max(0.0, st["x"] - MARQUEE_SPEED_PX_S * (now - st["last"]))
+            st["last"] = now
+            adj.set_value(st["x"])
+            if st["x"] <= 0.0:
                 st["phase"], st["t0"] = "wait_start", now
         return True
 
