@@ -202,7 +202,7 @@ CSS = b"""
     color: #ffffff;
     border: 2px solid #2f2f2f;
     border-radius: 10px;
-    padding: 36px;
+    padding: 46px;
 }
 .lpm-picker-title {
     font-weight: bold;
@@ -231,6 +231,7 @@ CSS = b"""
 }
 .lpm-picker-button {
     font-size: 20px;
+    min-height: 34px;
 }
 /* Always-visible scrollbar (no overlay): tells at once that the list scrolls. Every
    border/shadow/image of the theme is removed (a light line showed on its left side). */
@@ -645,6 +646,8 @@ class ScreenWindow(Gtk.Window):
 
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         button_box.set_halign(Gtk.Align.END)
+        button_box.set_margin_top(22)
+        button_box.set_size_request(-1, 44)
 
         self.picker_cancel_button = Gtk.Button()
         self.picker_cancel_icon = self._make_pad_icon("B", "lpm-pad-icon-b")
