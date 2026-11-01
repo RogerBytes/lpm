@@ -256,6 +256,42 @@ ZGU_LUTRIS_VERSION_CONFIG="${HOME}/.config/lpm/lutris-version"
 #
 # Writes "flatpak" or "native" on stdout. Returns 1 if neither is installed (the "Lutris not
 # found" message is each caller's job).
+# Saved choice (ZGU_LUTRIS_VERSION_CONFIG): prints it if that version is still installed (has_*
+# args), otherwise deletes the stale file. Args: has_flatpak has_native. Returns 0 if printed.
+_zgu_saved_lutris_version() {
+  local has_flatpak="$1" has_native="$2" saved
+  [[ -f "${ZGU_LUTRIS_VERSION_CONFIG}" ]] || return 1
+  saved=$(<"${ZGU_LUTRIS_VERSION_CONFIG}")
+  saved="${saved//[$'\t\r\n ']/}"
+  if [[ "${saved}" = "flatpak" ]] && [[ "${has_flatpak}" = true ]]; then
+    echo "flatpak"; return 0
+  elif [[ "${saved}" = "native" ]] && [[ "${has_native}" = true ]]; then
+    echo "native"; return 0
+  fi
+  rm -f "${ZGU_LUTRIS_VERSION_CONFIG}"
+  return 1
+}
+
+# Both versions installed, nothing saved: warning + immediate CLI choice, saved unless the answer
+# was cancelled (then Flatpak for THIS run only). "display_mode" is always "cli" now (bin/lpm has
+# no interactive entry point): no zenity branch.
+_zgu_ask_lutris_version() {
+  local choice="" confirmed=true response
+  t common.dual_lutris_warning_cli >&2
+  read -r -p "$(t common.dual_lutris_prompt_cli)" response
+  case "${response}" in
+    2) choice="native" ;;
+    1|"") choice="flatpak" ;;
+    *) choice="flatpak"; confirmed=false ;;
+  esac
+
+  if [[ "${confirmed}" = true ]]; then
+    mkdir -p "$(dirname "${ZGU_LUTRIS_VERSION_CONFIG}")"
+    echo "${choice}" > "${ZGU_LUTRIS_VERSION_CONFIG}"
+  fi
+  echo "${choice}"
+}
+
 zgu_resolve_lutris_version() {
   # $1 (display mode, "cli" for all callers) is no longer used; kept in first position so callers
   # need no change.
@@ -274,18 +310,7 @@ zgu_resolve_lutris_version() {
     native) [[ "${has_native}" = true ]] && { echo "native"; return 0; } ;;
   esac
 
-  if [[ -f "${ZGU_LUTRIS_VERSION_CONFIG}" ]]; then
-    local saved
-    saved=$(<"${ZGU_LUTRIS_VERSION_CONFIG}")
-    saved="${saved//[$'\t\r\n ']/}"
-    if [[ "${saved}" = "flatpak" ]] && [[ "${has_flatpak}" = true ]]; then
-      echo "flatpak"; return 0
-    elif [[ "${saved}" = "native" ]] && [[ "${has_native}" = true ]]; then
-      echo "native"; return 0
-    else
-      rm -f "${ZGU_LUTRIS_VERSION_CONFIG}"
-    fi
-  fi
+  _zgu_saved_lutris_version "${has_flatpak}" "${has_native}" && return 0
 
   if [[ "${has_flatpak}" = true ]] && [[ "${has_native}" = false ]]; then
     echo "flatpak"; return 0
@@ -294,25 +319,7 @@ zgu_resolve_lutris_version() {
     echo "native"; return 0
   fi
 
-  # Both are installed and nothing is saved: warning + immediate choice. "display_mode" is always
-  # "cli" now (bin/lpm has no interactive entry point; the GUI always calls this script with explicit
-  # targets): no zenity branch here.
-  local choice="" confirmed=true
-  t common.dual_lutris_warning_cli >&2
-  local response
-  read -r -p "$(t common.dual_lutris_prompt_cli)" response
-  case "${response}" in
-    2) choice="native" ;;
-    1|"") choice="flatpak" ;;
-    *) choice="flatpak"; confirmed=false ;;
-  esac
-
-  if [[ "${confirmed}" = true ]]; then
-    mkdir -p "$(dirname "${ZGU_LUTRIS_VERSION_CONFIG}")"
-    echo "${choice}" > "${ZGU_LUTRIS_VERSION_CONFIG}"
-  fi
-  echo "${choice}"
-  return 0
+  _zgu_ask_lutris_version
 }
 
 # zgu_get_wine_binary <runner_dir> <version>

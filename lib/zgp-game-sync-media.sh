@@ -173,6 +173,31 @@ zgp_sync_media_download() {
   return 1
 }
 
+# Downloads the media still missing for a slug. Args: slug has_banner has_cover has_icon.
+# Returns 0 if at least one file was downloaded, 1 otherwise.
+zgp_sync_media_download_missing() {
+  local slug="$1" has_banner="$2" has_cover="$3" has_icon="$4"
+  local banner_path="${banner_dir}/${slug}.jpg"
+  local cover_path="${coverart_dir}/${slug}.jpg"
+  local icon_path="${icon_dir}/lutris_${slug}.png"
+  local downloaded_any=false
+  if [[ "${has_banner}" = false ]] && [[ -n "${sm_banner_url}" ]]; then
+    zgp_sync_media_download "${sm_banner_url}" "${banner_path}" && downloaded_any=true
+  fi
+  if [[ "${has_cover}" = false ]] && [[ -n "${sm_cover_url}" ]]; then
+    zgp_sync_media_download "${sm_cover_url}" "${cover_path}" && downloaded_any=true
+  fi
+  if [[ "${has_icon}" = false ]] && [[ -n "${sm_icon_url}" ]]; then
+    if zgp_sync_media_download "${sm_icon_url}" "${icon_path}"; then
+      downloaded_any=true
+      # Same as Lutris itself after an icon download: refreshes the system icon cache so the
+      # new icon appears immediately. Best-effort, must never make the rest fail.
+      gtk-update-icon-cache -q -t -f "${HOME}/.local/share/icons/hicolor" 2>/dev/null || true
+    fi
+  fi
+  [[ "${downloaded_any}" = true ]]
+}
+
 zgp_sync_media_process_one() {
   local slug="$1"
   local banner_path="${banner_dir}/${slug}.jpg"
@@ -203,20 +228,7 @@ zgp_sync_media_process_one() {
   zgp_sync_media_parse
 
   local downloaded_any=false
-  if [[ "${has_banner}" = false ]] && [[ -n "${sm_banner_url}" ]]; then
-    zgp_sync_media_download "${sm_banner_url}" "${banner_path}" && downloaded_any=true
-  fi
-  if [[ "${has_cover}" = false ]] && [[ -n "${sm_cover_url}" ]]; then
-    zgp_sync_media_download "${sm_cover_url}" "${cover_path}" && downloaded_any=true
-  fi
-  if [[ "${has_icon}" = false ]] && [[ -n "${sm_icon_url}" ]]; then
-    if zgp_sync_media_download "${sm_icon_url}" "${icon_path}"; then
-      downloaded_any=true
-      # Same as Lutris itself after an icon download: refreshes the system icon cache so the
-      # new icon appears immediately. Best-effort, must never make the rest fail.
-      gtk-update-icon-cache -q -t -f "${HOME}/.local/share/icons/hicolor" 2>/dev/null || true
-    fi
-  fi
+  zgp_sync_media_download_missing "${slug}" "${has_banner}" "${has_cover}" "${has_icon}" && downloaded_any=true
 
   if [[ "${downloaded_any}" = true ]]; then
     zgu_log "sync-media" "OK" "slug=${slug}"

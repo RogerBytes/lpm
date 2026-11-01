@@ -295,28 +295,30 @@ zgp_games_toggle_targets lsfg zgp_lsfg_is_active
 # MESA_VK_DEVICE_SELECT (multi-GPU detection) was removed: unnecessary with the real
 # lsfg-vk.dll (beta branch); the black screen once blamed on GPU selection came from the
 # wrong DLL file (see item 3 of the file header).
-# Edits the env of the Lutris yml for the "on"/"off" mode: line-based text editing first, full
-# rewrite as fallback. Args: yml_file prefix_dir mode. Returns the editor's status.
-zgp_lsfg_edit_env() {
-  local yml_file="$1" prefix_dir="$2" mode="$3" edit_py
+
 # Line-based text editing (zgu-env-edit.py): a yaml.dump round-trip would destroy the Lutris
-# YAML comments, including hooks disabled by LPM ("# lpm:hook-disabled"). Falls back to the
-# full rewrite below if targeted editing is not possible.
-if {
-  edit_py="${script_dir}/zgu-env-edit.py"
-  if [[ "${mode}" = "on" ]]; then
-    python3 "${edit_py}" "${yml_file}" set LSFGVK_ENV 1 &&
-    python3 "${edit_py}" "${yml_file}" set LSFGVK_DLL_PATH "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" &&
-    { python3 "${edit_py}" "${yml_file}" list | grep -q '^LSFGVK_MULTIPLIER=' ||
-      python3 "${edit_py}" "${yml_file}" set LSFGVK_MULTIPLIER 2; }
-  else
-    python3 "${edit_py}" "${yml_file}" unset LSFGVK_ENV &&
-    python3 "${edit_py}" "${yml_file}" unset LSFGVK_DLL_PATH &&
-    python3 "${edit_py}" "${yml_file}" unset LSFGVK_MULTIPLIER
-  fi
-} >/dev/null 2>&1; then
-  :
-else
+# YAML comments, including hooks disabled by LPM ("# lpm:hook-disabled"). Args: yml_file
+# prefix_dir mode. Returns non-zero if targeted editing is not possible.
+zgp_lsfg_edit_env_lines() {
+  local yml_file="$1" prefix_dir="$2" mode="$3"
+  local edit_py="${script_dir}/zgu-env-edit.py"
+  {
+    if [[ "${mode}" = "on" ]]; then
+      python3 "${edit_py}" "${yml_file}" set LSFGVK_ENV 1 &&
+      python3 "${edit_py}" "${yml_file}" set LSFGVK_DLL_PATH "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" &&
+      { python3 "${edit_py}" "${yml_file}" list | grep -q '^LSFGVK_MULTIPLIER=' ||
+        python3 "${edit_py}" "${yml_file}" set LSFGVK_MULTIPLIER 2; }
+    else
+      python3 "${edit_py}" "${yml_file}" unset LSFGVK_ENV &&
+      python3 "${edit_py}" "${yml_file}" unset LSFGVK_DLL_PATH &&
+      python3 "${edit_py}" "${yml_file}" unset LSFGVK_MULTIPLIER
+    fi
+  } >/dev/null 2>&1
+}
+
+# Fallback: full YAML rewrite (loses comments). Args: yml_file prefix_dir mode.
+zgp_lsfg_edit_env_rewrite() {
+  local yml_file="$1" prefix_dir="$2" mode="$3"
   YML_PATH="${yml_file}" DLL_PATH="$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" LSFG_MODE="${mode}" python3 -c '
 import os, yaml
 
@@ -353,7 +355,12 @@ except Exception as e:
     print(str(e))
     raise SystemExit(1)
 ' 2>/dev/null
-fi
+}
+
+# Edits the env of the Lutris yml for the "on"/"off" mode: line-based text editing first, full
+# rewrite as fallback. Args: yml_file prefix_dir mode. Returns the editor's status.
+zgp_lsfg_edit_env() {
+  zgp_lsfg_edit_env_lines "$@" || zgp_lsfg_edit_env_rewrite "$@"
 }
 
 # Copies the master lsfg-vk.dll into the prefix. Args: slug prefix_dir. Returns 1 on failure.
