@@ -285,83 +285,94 @@ def button_down(pads, code):
     return any(sdl.SDL_GameControllerGetButton(pad, code) for pad in pads)
 
 
-def main():
-    # "pads" must not be detected only once at startup (same fix as
-    # zgu-gamepad-exit-watcher.py, see its main()): keep running even with no gamepad at
-    # start, and re-scan periodically (RESCAN_INTERVAL_LOOPS, ~1x/s) to catch a pad that
-    # appears later or reconnects mid-game.
-    pads = find_controllers(sdl)
-    loops_since_rescan = 0
+class AltTabLoop:
+    """State of the watcher: connected pads, whether Alt is held, previous button states."""
 
-    alt_is_held = False
-    prev_dpad_dir = 0
-    prev_one_shot = {}  # button -> was pressed on the previous tick (see ONE_SHOT_ACTIONS)
-    antimicro_paused_pids = []  # see _pause_antimicro()/_resume_antimicro() above
+    def __init__(self):
+        # "pads" must not be detected only once at startup (same fix as
+        # zgu-gamepad-exit-watcher.py): keep running even with no gamepad at start, and
+        # re-scan periodically (RESCAN_INTERVAL_LOOPS, ~1x/s) to catch a pad that appears
+        # later or reconnects mid-game.
+        self.pads = find_controllers(sdl)
+        self.loops_since_rescan = 0
+        self.alt_is_held = False
+        self.prev_dpad_dir = 0
+        self.prev_one_shot = {}  # button -> was pressed on the previous tick (ONE_SHOT_ACTIONS)
+        self.antimicro_paused_pids = []  # see _pause_antimicro()/_resume_antimicro() above
 
-    game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
-
-    try:
-        while running:
-            if game_watch.game_ended():
-                break
-            sdl.SDL_GameControllerUpdate()
-
-            loops_since_rescan += 1
-            if loops_since_rescan >= RESCAN_INTERVAL_LOOPS:
-                loops_since_rescan = 0
-                if count_available_controllers() != len(pads):
-                    for pad in pads:
-                        try:
-                            sdl.SDL_GameControllerClose(pad)
-                        except Exception:
-                            pass
-                    pads = find_controllers(sdl)
-
-            active = hold_active(pads)
-
-            if active and not alt_is_held:
-                alt_down()
-                alt_is_held = True
-                prev_dpad_dir = 0  # restart from zero on each new hold
-                # A button already held when the combo completes triggers nothing:
-                # only a NEW press during the hold counts.
-                prev_one_shot = {code: button_down(pads, code) for code, _ in ONE_SHOT_ACTIONS}
-                antimicro_paused_pids = _pause_antimicro()
-            elif not active and alt_is_held:
-                alt_up()
-                alt_is_held = False
-                prev_dpad_dir = 0
-                _resume_antimicro(antimicro_paused_pids)
-                antimicro_paused_pids = []
-
-            if alt_is_held:
-                direction = dpad_direction(pads)
-                if direction != prev_dpad_dir and direction != 0:
-                    send_tab(reverse=(direction < 0))
-                prev_dpad_dir = direction
-
-                for code, action in ONE_SHOT_ACTIONS:
-                    pressed = button_down(pads, code)
-                    if pressed and not prev_one_shot.get(code, False):
-                        action()
-                    prev_one_shot[code] = pressed
-
-            time.sleep(POLL_INTERVAL_SECONDS)
-    finally:
-        # Safety net: if we exit (SIGTERM, game killed...) while Alt is still held on the
-        # virtual keyboard, release it, otherwise Alt would stay stuck for the rest of the
-        # desktop session and break keyboard/mouse navigation. Same for AntiMicro: if it is
-        # paused at that point it MUST be resumed, or it would stay frozen until the user
-        # restarts it by hand.
-        if alt_is_held:
-            alt_up()
-            _resume_antimicro(antimicro_paused_pids)
-        for pad in pads:
+    def _close_pads(self):
+        for pad in self.pads:
             try:
                 sdl.SDL_GameControllerClose(pad)
             except Exception:
                 pass
+
+    def _rescan_pads(self):
+        self.loops_since_rescan += 1
+        if self.loops_since_rescan < RESCAN_INTERVAL_LOOPS:
+            return
+        self.loops_since_rescan = 0
+        if count_available_controllers() != len(self.pads):
+            self._close_pads()
+            self.pads = find_controllers(sdl)
+
+    def _update_alt_state(self):
+        active = hold_active(self.pads)
+        if active and not self.alt_is_held:
+            alt_down()
+            self.alt_is_held = True
+            self.prev_dpad_dir = 0  # restart from zero on each new hold
+            # A button already held when the combo completes triggers nothing: only a NEW
+            # press during the hold counts.
+            self.prev_one_shot = {code: button_down(self.pads, code) for code, _ in ONE_SHOT_ACTIONS}
+            self.antimicro_paused_pids = _pause_antimicro()
+        elif not active and self.alt_is_held:
+            alt_up()
+            self.alt_is_held = False
+            self.prev_dpad_dir = 0
+            _resume_antimicro(self.antimicro_paused_pids)
+            self.antimicro_paused_pids = []
+
+    def _handle_held_inputs(self):
+        direction = dpad_direction(self.pads)
+        if direction != self.prev_dpad_dir and direction != 0:
+            send_tab(reverse=(direction < 0))
+        self.prev_dpad_dir = direction
+        for code, action in ONE_SHOT_ACTIONS:
+            pressed = button_down(self.pads, code)
+            if pressed and not self.prev_one_shot.get(code, False):
+                action()
+            self.prev_one_shot[code] = pressed
+
+    def tick(self):
+        sdl.SDL_GameControllerUpdate()
+        self._rescan_pads()
+        self._update_alt_state()
+        if self.alt_is_held:
+            self._handle_held_inputs()
+
+    def shutdown(self):
+        # Safety net: if we exit (SIGTERM, game killed...) while Alt is still held on the
+        # virtual keyboard, release it, otherwise Alt would stay stuck for the rest of the
+        # desktop session. Same for AntiMicro: if paused it MUST be resumed.
+        if self.alt_is_held:
+            alt_up()
+            _resume_antimicro(self.antimicro_paused_pids)
+        self._close_pads()
         sdl.SDL_Quit()
+
+
+def main():
+    loop = AltTabLoop()
+    game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
+    try:
+        while running:
+            if game_watch.game_ended():
+                break
+            loop.tick()
+            time.sleep(POLL_INTERVAL_SECONDS)
+    finally:
+        loop.shutdown()
 
 
 if __name__ == "__main__":

@@ -230,8 +230,8 @@ class DrawMixin:
         total += 8 + cr.text_extents(text).x_advance
         return total
 
-    def draw_gamepad_help(self, cr, bottom_center_y, width):
-        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    def _help_lines(self):
+        """Help lines (items, text) actually available, per the configured texts."""
         lines = []
         if HELP_ALTTAB_TEXT:
             lines.append(self._help_line_items(["L1", "L2", "R1", "R2", "R3"], True, HELP_ALTTAB_TEXT))
@@ -243,13 +243,48 @@ class DrawMixin:
         if HELP_QUIT_TEXT:
             quit_items, quit_text = self._help_line_items(hotkey, False, HELP_QUIT_TEXT)
             lines.append((quit_items + [("plus", "+"), ("L3", "L3")], quit_text))
+        return lines
+
+    @staticmethod
+    def _help_line_alpha(k, count, current, u):
+        """Fade in, full, fade out to black (nothing written), only then the next line. A
+        single available line is always opaque."""
+        if count == 1:
+            return 1.0
+        if k != current:
+            return 0.0
+        if u < HELP_FADE_S:
+            return u / HELP_FADE_S
+        if u < HELP_PERIOD_S - HELP_FADE_S:
+            return 1.0
+        return (HELP_PERIOD_S - u) / HELP_FADE_S
+
+    def _help_draw_line(self, cr, items, text, x, cy):
+        for kind, label in items:
+            cr.set_source_rgba(0.91, 0.91, 0.91, 0.75)
+            if kind == "plus":
+                cr.set_font_size(HELP_FONT_SIZE)
+                ext = cr.text_extents("+")
+                cr.move_to(x, cy - ext.y_bearing - ext.height / 2)  # center of the "+" glyph itself
+                cr.show_text("+")
+                x += ext.x_advance + HELP_GAP
+            else:
+                x += self._help_draw_item(cr, kind, label, x, cy) + HELP_GAP
+        cr.set_source_rgba(0.91, 0.91, 0.91, 0.75)
+        cr.set_font_size(HELP_FONT_SIZE)
+        cr.move_to(x + 8, self._help_text_baseline(cr, cy))
+        cr.show_text(text)
+
+    def draw_gamepad_help(self, cr, bottom_center_y, width):
+        cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        lines = self._help_lines()
         available = width - HELP_MARGIN_LEFT - HELP_RIGHT_RESERVED
         widest = max(self._help_line_width(cr, items, text) for items, text in lines)
         scale = min(1.0, available / widest) if widest > 0 else 1.0
 
         # Alpha of each line (one at a time, cross-fade) from the time elapsed since the help
-        # first appeared; a single available line is always opaque. The order is random (see
-        # extend_help_sequence), restarted each time the help reappears.
+        # first appeared. The order is random (see extend_help_sequence), restarted each
+        # time the help reappears.
         now = time.monotonic()
         if help_start[0] is None:
             help_start[0] = now
@@ -260,41 +295,14 @@ class DrawMixin:
         extend_help_sequence(help_sequence, len(lines), slot)
         current = help_sequence[slot]
 
-        def line_alpha(k):
-            # Fade in, full, fade out to black (nothing written), only then the next line.
-            if len(lines) == 1:
-                return 1.0
-            if k != current:
-                return 0.0
-            if u < HELP_FADE_S:
-                return u / HELP_FADE_S
-            if u < HELP_PERIOD_S - HELP_FADE_S:
-                return 1.0
-            return (HELP_PERIOD_S - u) / HELP_FADE_S
-
         for k, (items, text) in enumerate(lines):
-            alpha = line_alpha(k)
+            alpha = self._help_line_alpha(k, len(lines), current, u)
             if alpha <= 0:
                 continue
             cr.save()
             cr.scale(scale, scale)
             cr.push_group()
-            cy = bottom_center_y / scale
-            x = HELP_MARGIN_LEFT / scale
-            for kind, label in items:
-                cr.set_source_rgba(0.91, 0.91, 0.91, 0.75)
-                if kind == "plus":
-                    cr.set_font_size(HELP_FONT_SIZE)
-                    ext = cr.text_extents("+")
-                    cr.move_to(x, cy - ext.y_bearing - ext.height / 2)  # center of the "+" glyph itself
-                    cr.show_text("+")
-                    x += ext.x_advance + HELP_GAP
-                else:
-                    x += self._help_draw_item(cr, kind, label, x, cy) + HELP_GAP
-            cr.set_source_rgba(0.91, 0.91, 0.91, 0.75)
-            cr.set_font_size(HELP_FONT_SIZE)
-            cr.move_to(x + 8, self._help_text_baseline(cr, cy))
-            cr.show_text(text)
+            self._help_draw_line(cr, items, text, HELP_MARGIN_LEFT / scale, bottom_center_y / scale)
             cr.pop_group_to_source()
             cr.paint_with_alpha(alpha)
             cr.restore()

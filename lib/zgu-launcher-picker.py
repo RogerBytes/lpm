@@ -230,6 +230,14 @@ class PickerWindow(Gtk.Window):
             prompt_label.add_css_class("lpm-picker-prompt")
             box.append(prompt_label)
 
+        first_row = self._build_list(box)
+        box.append(self._build_buttons())
+
+        if first_row is not None:
+            self.listbox.select_row(first_row)
+        self.listbox.grab_focus()
+
+    def _build_list(self, box):
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
@@ -253,7 +261,9 @@ class PickerWindow(Gtk.Window):
             self.listbox.append(row)
             if first_row is None:
                 first_row = row
+        return first_row
 
+    def _build_buttons(self):
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         button_box.set_halign(Gtk.Align.END)
 
@@ -270,12 +280,7 @@ class PickerWindow(Gtk.Window):
         validate_button.add_css_class("lpm-picker-validate-button")
         validate_button.connect("clicked", self.on_validate_clicked)
         button_box.append(validate_button)
-
-        box.append(button_box)
-
-        if first_row is not None:
-            self.listbox.select_row(first_row)
-        self.listbox.grab_focus()
+        return button_box
 
     def on_close_request(self, _window):
         # Decorated window: closing with the cross cancels, exactly like the Cancel button.

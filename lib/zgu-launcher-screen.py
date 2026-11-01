@@ -209,20 +209,7 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
         self.monitor = monitor
         self.monitor_geom = geom
 
-        # --- Picker (see file header): built once here, hidden by default -- a centered
-        # "card" over the background, never a second window. ---
-        self.picker_visible = False
-        self.marquee_row = None
-        self.marquee_source = 0
-        self.marquee_pending = 0
-        self.marquee_state = {}
-        self.pad_mode = False
-        self.picker_scrollable = False
-        self.last_pointer_pos = None
-        self.validate_label = self.cancel_label = ""
-        self.pad_validate_label = self.pad_cancel_label = ""
-        self.picker_entries = []  # [(row, label_text), ...]
-        self.picker_listbox = None
+        self._init_picker_state()
 
         self.overlay = Gtk.Overlay()
         self.set_child(self.overlay)
@@ -241,6 +228,15 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
         self.picker_card.set_visible(False)
         self.overlay.add_overlay(self.picker_card)
 
+        top_zone_bottom = self._compute_logo_layout()
+        self._compute_zones(top_zone_bottom)
+        self.current_surface = None
+        self._setup_controllers()
+
+        self.fullscreen_on_monitor(monitor)
+
+    def _compute_logo_layout(self):
+        geom = self.monitor_geom
         # Logo (see file header): loaded once, size/position also computed once.
         self.logo_surface = None
         self.logo_draw_x = 0
@@ -274,7 +270,10 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
             draw_y = (top_zone_bottom - self.logo_draw_h) / 2 + offset
             max_draw_y = top_zone_bottom - self.logo_draw_h - TOP_ZONE_MIN_MARGIN
             self.logo_draw_y = max(TOP_ZONE_MIN_MARGIN, min(draw_y, max_draw_y))
+        return top_zone_bottom
 
+    def _compute_zones(self, top_zone_bottom):
+        geom = self.monitor_geom
         self.block_extra_down = 0 if NO_LABEL else geom.height * BLOCK_EXTRA_DOWN_FRACTION
         self.title_zone_bottom = top_zone_bottom
         self.title_centered = NO_LABEL
@@ -284,8 +283,7 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
         self.banner_zone_top = self.label_zone_bottom
         self.banner_zone_height = max(0, geom.height - self.banner_zone_top)
 
-        self.current_surface = None
-
+    def _setup_controllers(self):
         # Auto-hidden mouse cursor -- Gtk.EventControllerMotion replaces GTK3's
         # "motion-notify-event" (removed in GTK4).
         motion = Gtk.EventControllerMotion()
@@ -312,7 +310,21 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
         # limit of modern window systems (focus-stealing prevention).
         self.connect("notify::is-active", self.on_active_changed)
 
-        self.fullscreen_on_monitor(monitor)
+    def _init_picker_state(self):
+        # --- Picker (see file header): built once here, hidden by default -- a centered
+        # "card" over the background, never a second window. ---
+        self.picker_visible = False
+        self.marquee_row = None
+        self.marquee_source = 0
+        self.marquee_pending = 0
+        self.marquee_state = {}
+        self.pad_mode = False
+        self.picker_scrollable = False
+        self.last_pointer_pos = None
+        self.validate_label = self.cancel_label = ""
+        self.pad_validate_label = self.pad_cancel_label = ""
+        self.picker_entries = []  # [(row, label_text), ...]
+        self.picker_listbox = None
 
     def on_active_changed(self, *_args):
         # Disabled by default, see "keep_focus_env" in zgl-launcher-orchestrator.sh: forcibly

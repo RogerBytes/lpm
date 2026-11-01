@@ -84,49 +84,36 @@ def edit(lines, section, key, value):
     return lines[:sec_idx + 1] + [" " * child + key + ": " + value + "\n"] + lines[sec_idx + 1:]
 
 
-def main():
-    args = sys.argv[1:]
+def _parse_args(args):
+    """Returns (path, action, section, key, py_value, yaml_value); exits on bad usage."""
     if len(args) < 4 or args[1] not in ("set", "unset"):
         sys.exit("usage: zgu-yaml-edit.py <yml> set <section> <key> <value> [--bool] | unset <section> <key>")
     path, action, section, key = args[0], args[1], args[2], args[3]
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", section) or not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
         sys.exit("invalid section or key")
-    if action == "set":
-        if len(args) < 5:
-            sys.exit("missing value")
-        raw = args[4]
-        if "\n" in raw or "\r" in raw:
-            sys.exit("newline in value")
-        as_bool = "--bool" in args[5:]
-        py_value = (raw.lower() == "true") if as_bool else raw
-        yaml_value = ("true" if py_value else "false") if as_bool else quote(raw)
-    else:
-        py_value = None
-        yaml_value = None
+    if action != "set":
+        return path, action, section, key, None, None
+    if len(args) < 5:
+        sys.exit("missing value")
+    raw = args[4]
+    if "\n" in raw or "\r" in raw:
+        sys.exit("newline in value")
+    as_bool = "--bool" in args[5:]
+    py_value = (raw.lower() == "true") if as_bool else raw
+    yaml_value = ("true" if py_value else "false") if as_bool else quote(raw)
+    return path, action, section, key, py_value, yaml_value
 
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    before = yaml.safe_load("".join(lines)) or {}
-    if not isinstance(before, dict):
-        sys.exit("root is not a mapping")
-    if section in before and not isinstance(before[section], dict):
-        sys.exit("section is not a mapping")
 
+def _expected_after(before, action, section, key, py_value):
     expected = copy.deepcopy(before)
     if action == "set":
         expected.setdefault(section, {})[key] = py_value
     elif isinstance(expected.get(section), dict):
         expected[section].pop(key, None)
+    return expected
 
-    new_lines = edit(list(lines), section, key, yaml_value)
-    try:
-        after = yaml.safe_load("".join(new_lines)) or {}
-    except yaml.YAMLError as exc:
-        sys.exit("refusing to write, result is not valid YAML: %s" % exc)
-    if after != expected:
-        sys.exit("refusing to write, result differs from expected")
-    if new_lines == lines:
-        return
+
+def _write_atomic(path, new_lines):
     fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".lpm-yaml-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -137,6 +124,29 @@ def main():
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise
+
+
+def main():
+    path, action, section, key, py_value, yaml_value = _parse_args(sys.argv[1:])
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    before = yaml.safe_load("".join(lines)) or {}
+    if not isinstance(before, dict):
+        sys.exit("root is not a mapping")
+    if section in before and not isinstance(before[section], dict):
+        sys.exit("section is not a mapping")
+
+    expected = _expected_after(before, action, section, key, py_value)
+    new_lines = edit(list(lines), section, key, yaml_value)
+    try:
+        after = yaml.safe_load("".join(new_lines)) or {}
+    except yaml.YAMLError as exc:
+        sys.exit("refusing to write, result is not valid YAML: %s" % exc)
+    if after != expected:
+        sys.exit("refusing to write, result differs from expected")
+    if new_lines == lines:
+        return
+    _write_atomic(path, new_lines)
 
 
 if __name__ == "__main__":

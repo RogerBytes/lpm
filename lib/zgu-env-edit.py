@@ -63,9 +63,9 @@ def block_end(lines, start, parent_indent):
     return last + 1
 
 
-def edit_lines(lines, desired):
-    current_env = load_env_from_lines(lines)
-    # --- locate / create system: then env: ---
+def _ensure_env_block(lines, desired):
+    """Locate (or create) "system:" then its "env:" child. Returns (env_idx, child) or
+    None when there is nothing to do (no env block and nothing desired)."""
     sys_idx = next((i for i, l in enumerate(lines)
                     if re.match(r"^system:\s*(#.*)?$", l)), None)
     if sys_idx is None:
@@ -84,18 +84,15 @@ def edit_lines(lines, desired):
                     and re.match(r"^env:\s*(\{\s*\}\s*)?(#.*)?$", lines[i].strip())), None)
     if env_idx is None:
         if not desired:
-            return lines
+            return None
         lines.insert(sys_idx + 1, " " * child + "env:\n")
-        env_idx = sys_idx + 1
-    else:
-        lines[env_idx] = " " * child + "env:\n"
-    env_end = block_end(lines, env_idx, child)
-    entry_indent = child + 2
-    for i in range(env_idx + 1, env_end):
-        if not is_skippable(lines[i]):
-            entry_indent = indent_of(lines[i])
-            break
-    # --- in-place removals / modifications ---
+        return sys_idx + 1, child
+    lines[env_idx] = " " * child + "env:\n"
+    return env_idx, child
+
+
+def _rewrite_env_entries(lines, env_idx, env_end, entry_indent, desired, current_env):
+    """In-place removals / modifications of existing entries, then append the new ones."""
     key_re = re.compile(r"^(\s*)(?:\"([^\"]+)\"|'([^']+)'|([^:#\s][^:]*?))\s*:(\s|$)")
     out_block = []
     seen = set()
@@ -116,6 +113,22 @@ def edit_lines(lines, desired):
     for key, value in desired.items():
         if key not in seen:
             out_block.append(entry_line(key, value, entry_indent))
+    return out_block
+
+
+def edit_lines(lines, desired):
+    current_env = load_env_from_lines(lines)
+    located = _ensure_env_block(lines, desired)
+    if located is None:
+        return lines
+    env_idx, child = located
+    env_end = block_end(lines, env_idx, child)
+    entry_indent = child + 2
+    for i in range(env_idx + 1, env_end):
+        if not is_skippable(lines[i]):
+            entry_indent = indent_of(lines[i])
+            break
+    out_block = _rewrite_env_entries(lines, env_idx, env_end, entry_indent, desired, current_env)
     return lines[:env_idx + 1] + out_block + lines[env_end:]
 
 

@@ -65,6 +65,11 @@ class PickerMixin:
         adj.connect("changed", self._update_picker_fade)
         card.append(scroll_overlay)
 
+        self._build_picker_listbox(scroll)
+        card.append(self._build_picker_buttons())
+        return card
+
+    def _build_picker_listbox(self, scroll):
         self.picker_listbox = Gtk.ListBox()
         self.picker_listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
         self.picker_listbox.connect("row-selected", self._on_row_selected)
@@ -75,6 +80,7 @@ class PickerMixin:
         self.picker_listbox.add_controller(listbox_key_ctrl)
         scroll.set_child(self.picker_listbox)
 
+    def _build_picker_buttons(self):
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         button_box.set_halign(Gtk.Align.END)
         button_box.set_margin_top(22)
@@ -108,8 +114,7 @@ class PickerMixin:
         self.picker_validate_button.connect("clicked", self.on_picker_validate_clicked)
         button_box.append(self.picker_validate_button)
 
-        card.append(button_box)
-        return card
+        return button_box
 
     def _make_pad_icon(self, letter, css_class):
         icon = Gtk.Label(label=letter)
