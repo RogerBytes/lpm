@@ -2,7 +2,7 @@
 
 # --- lpm launcher-entries <slug> get|set ---
 #
-# Counterpart of manually editing lpm-launcher.yml (still possible, see
+# Counterpart of manually editing lpm/launcher.yml (still possible, see
 # zgl-launcher-manager.sh): only reads/writes the LPM Launcher picker entries (title,
 # prompt, and per entry: label, executable, working directory, launch arguments). It never
 # enables/disables the LPM Launcher ("lpm launcher ... on|off") nor changes anything else.
@@ -22,7 +22,7 @@
 # "set" <json_file>: FULLY replaces title/prompt/entries from a JSON of the same format. An
 # empty "workdir_linux" is accepted (derived from the executable's folder). Preserves
 # "original_exe" and "bat_path" if already in the file (written by "lpm launcher ... on"):
-# merge, not a full replacement. Creates lpm-launcher.yml if missing.
+# merge, not a full replacement. Creates lpm/launcher.yml if missing.
 
 slug="${1:-}"
 action="${2:-}"

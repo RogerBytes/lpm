@@ -4,17 +4,17 @@
 #
 # Fetches a loading banner (SteamGridDB "Hero": a wide image meant as a wallpaper/backdrop,
 # NOT the square icon or the library thumbnail) for one or more installed games and saves it
-# as $GAMEDIR/splash/splash.png -- the image the LPM Launcher shows full-screen while
+# as $GAMEDIR/lpm/images/splash/splash.png -- the image the LPM Launcher shows full-screen while
 # loading (see zgl-launcher-manager.sh / zgu-launcher-screen.py).
 #
 # Separate command, never hooked into "lpm launcher ... on": it is the only feature that
 # depends on a third-party service (network + API key), so a SteamGridDB outage or a missing
 # key must not block enabling the launcher. "lpm launcher ... on" installs no default image;
-# without $GAMEDIR/splash/splash.png the orchestrator simply shows a plain black loading
+# without $GAMEDIR/lpm/images/splash/splash.png the orchestrator simply shows a plain black loading
 # screen (see zgl-launcher-manager.sh / zgl-launcher-orchestrator.sh). Structure mirrors
 # zgp-game-icon.sh ("lpm icon").
 #
-# Independent of the launcher's activation state: $GAMEDIR/splash/ is created here if
+# Independent of the launcher's activation state: $GAMEDIR/lpm/images/splash/ is created here if
 # missing.
 #
 # $1, $2... = target game slugs (always non-empty in CLI), or "--all" for all eligible

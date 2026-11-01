@@ -13,7 +13,7 @@ lpm exchanges data in two archive types that share the same container: a **tar a
 ## Container
 
 - The file is a tar stream compressed as a single zstd frame: `tar -C <parent folder> -cf - <folder name> | zstd -<level>`.
-- The tar stream has **exactly one top-level folder**, named after the folder being archived (the prefix folder of the game, or the runner folder), with no leading path.
+- The tar stream has **exactly one top-level folder**, named after the folder being archived (the prefix folder of the game, or the runner folder), with no leading path. The only exception is the hidden first member `.lpm-config.yml` of a `.zgp` (see below).
 - The compression level is chosen with `-0` to `-22` on the command line (default 3). Levels 20 to 22 use zstd's `--ultra` mode (much more memory and time). The level is not stored in any lpm header: it is the usual zstd frame, and decompression needs no option.
 - The archive file is created with mode `600` (readable only by its owner), because a prefix can contain licence keys, saved paths and similar data.
 - Reading uses `bsdtar`, which detects the compression by itself; lpm does not require the file to be zstd specifically (a gzip tar named `.zgr` also extracts), but archives created by lpm are always zstd.
@@ -33,16 +33,41 @@ Built by [`lpm pack`](pack.md) from the prefix folder registered in Lutris for t
 Layout:
 
 ```
+.lpm-config.yml                <- FIRST member: the game's cleaned Lutris configuration (added by pack)
 <prefix-folder>/               <- single top-level folder; its name becomes the slug on install
     drive_c/                   <- the Windows C: drive (game files, users, windows, ...)
     system.reg, user.reg, userdef.reg
     lutris.json, ...           <- if present in the prefix
-    zgp-game-config.yml        <- the game's Lutris configuration (added by pack)
+    lpm/                       <- everything lpm adds to the game (see below)
 ```
+
+Because `.lpm-config.yml` comes first, the installer reads the game's name, the launch hooks and the exact space needed from the very start of the archive, without extracting anything. Only this first member counts: a second `.lpm-config.yml` placed later in the archive is ignored, and the one in the archive is never extracted.
+
+### The `lpm/` folder of a prefix
+
+Everything lpm adds to a game lives in ONE folder, `<prefix-folder>/lpm/`. It is part of the archive (except the temporary `.launcher-choice`):
+
+```
+lpm/
+    launcher.yml               <- LPM Launcher entries (title, prompt, executables)
+    settings/                  <- loading-screen switches: no-loadingscreen, keep-focus,
+                                  max-wait-s, extra-loading-ms, loading-message.txt, ignore-windows.txt
+    scripts/                   <- wine trace wrapper and the game's pre/post-launch scripts
+    gamepad/                   <- AntiMicroX profile
+    images/splash/             <- loading-screen banner and logo (splash.png, logo.png)
+    images/icon/               <- game icon
+    lsfg-vk/                   <- copy of lsfg-vk.dll
+    extras/                    <- bonus content you add yourself (manuals, soundtrack...)
+    .launcher-choice           <- temporary file, never packed
+```
+
+Empty folders are removed when the last file in them is deleted.
+
+**Old archives and old games.** Archives made before this layout have the same files scattered at the prefix root (`zgp-game-config.yml`, `lpm-launcher.yml`, `splash/`, `icon/`, `lpm_gamepad/`, `.lpm-no-loadingscreen`...). They still install: [`lpm install`](install.md) moves everything into `lpm/` with the new names right after extraction (nothing is overwritten, and the paths written in the Lutris config are updated), so no new export is needed. For a game already installed with the old layout, every command still reads the old location when the new one does not exist, and writes to the new one.
 
 Before archiving, `pack` prepares the prefix (these changes are made on the installed game itself, not on a copy): broken and device symbolic links, `dosdevices`, `Local Settings`, Proton's `version` file, temporary and package-cache files and `*.orig` files in `system32`/`syswow64` are removed, links pointing outside the game folder are deleted (never copied), the other links inside `drive_c` are replaced by real copies, the user folder is renamed to `steamuser`, and user names in the registry files, `lutris.json` and `goglog.ini` are replaced by the placeholder `anonuser`.
 
-The embedded `zgp-game-config.yml` is the game's Lutris YAML, cleaned: the keys `script`, `version` and `slug` are removed, `system.env.GAMEID` is removed, the absolute prefix path is replaced by `$GAMEDIR`, any other `/home/<user>/` by `/home/anonuser/`, and `wine.version` is set to Lutris' default runner when the game had none. It carries the display name (`name:`), which the installer uses. If the game has no Lutris config file, the archive has no `zgp-game-config.yml` (the installer then reports an error but still registers the game).
+The embedded `.lpm-config.yml` is the game's Lutris YAML, cleaned: the keys `script`, `version` and `slug` are removed, `system.env.GAMEID` is removed, the absolute prefix path is replaced by `$GAMEDIR`, any other `/home/<user>/` by `/home/anonuser/`, and `wine.version` is set to Lutris' default runner when the game had none. It also carries the key `lpm_archive` (`format: 2` and `size`, the exact size of the extracted prefix in bytes, used for the free-space check before extraction) and the display name (`name:`), which the installer uses. If the game has no Lutris config file, the archive has no `.lpm-config.yml` (the installer then reports an error but still registers the game). Archives of earlier versions carried the YAML as `zgp-game-config.yml` inside the prefix (and the size in a tiny `.lpm-size` first member); they are still understood.
 
 On install ([`lpm install`](install.md)), the archive is extracted into a temporary folder inside the games folder; the first top-level entry becomes the slug (it must be a real directory whose name has no `/`, control characters, and is not a symbolic link); the folder is refused if `<games folder>/<slug>` already exists; `anonuser` is replaced by your user name; the embedded config is turned into a local Lutris config (`$GAMEDIR` and `/home/<user>` resolved to this machine) and the game is registered. If the config contains launch/exit scripts, they are commented out unless allowed (see [Global options](options.md), `--allow-scripts`). An archive should contain a single top-level folder: if there were several, only the first found is used.
 

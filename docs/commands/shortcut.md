@@ -31,7 +31,7 @@ Options may be mixed freely with the targets.
 | Option | Effect |
 | --- | --- |
 | `-s MODE`, `--shortcut MODE`, `--shortcut=MODE` | Where to write shortcuts: `menu`, `desktop`, `both` (default) or `none`. Any other value is rejected. With the separate-word form, the value is the next argument. |
-| `-n`, `--no-loadingscreen` | Disable lpm's loading screen for the selected game(s): creates the empty marker file `<game dir>/.lpm-no-loadingscreen`. Without `-n`, the marker is removed (loading screen enabled). |
+| `-n`, `--no-loadingscreen` | Disable lpm's loading screen for the selected game(s): creates the empty marker file `<game dir>/lpm/settings/no-loadingscreen`. Without `-n`, the marker is removed (loading screen enabled). |
 | `-k`, `--allow-hooks` | Allow the Lutris launch hooks already configured for the game(s). Without `-k` they are neutralised (see Behavior). |
 | `--desktop-dir=<path>` | Folder where the desktop shortcut is written instead of the auto-detected desktop folder. Only the `=` form exists. No effect when the mode is `menu` or `none`. |
 
@@ -43,10 +43,10 @@ Options may be mixed freely with the targets.
 2. Lists Wine games, excluding shared-store prefixes. If none: prints "No Wine game found in the Lutris database." on stderr and exits 0.
 3. Validates **all** targets before writing anything: the first unknown or excluded slug aborts the whole run with exit status 1 (nothing was created for the previous slugs either).
 4. For each game (in name order for `--all`, in the given order otherwise):
-   - Icon: the first `*.png`, `*.ico`, `*.svg` or `*.xpm` found in `<game dir>/icon/`; otherwise the generic icon name `lpm-game-generic`.
+   - Icon: the first `*.png`, `*.ico`, `*.svg` or `*.xpm` found in `<game dir>/lpm/images/icon/`; otherwise the generic icon name `lpm-game-generic`.
    - Window class: `StartupWMClass` is the file name of the game's executable recorded in Lutris. For a Proton runner (a `toolmanifest.vdf` exists in the runner folder) and when python3 with PyYAML is available, lpm instead uses `steam_app_<game id>` and, if the game's Lutris YAML has no `system.env.GAMEID`, **adds** `GAMEID: umu-<game id>` to it.
    - Menu shortcut: if the mode includes the menu, writes `~/.local/share/applications/net.lutris.<slug>.desktop` and runs `update-desktop-database` (errors ignored). If the mode does not include the menu and that file exists, it is **deleted**.
-   - Desktop shortcut: if the mode includes the desktop, writes `<desktop dir>/<slug>.desktop`, makes it executable and marks it trusted with `gio` (errors ignored). It is silently skipped if the desktop folder does not exist. If the game has an `extras/` folder, a symlink `<Game name> Bonus` to it is (re)created next to the shortcut. A desktop shortcut is never deleted by this command, even with `-s menu` or `-s none`.
+   - Desktop shortcut: if the mode includes the desktop, writes `<desktop dir>/<slug>.desktop`, makes it executable and marks it trusted with `gio` (errors ignored). It is silently skipped if the desktop folder does not exist. If the game has an `lpm/extras/` folder, a symlink `<Game name> Bonus` to it is (re)created next to the shortcut. A desktop shortcut is never deleted by this command, even with `-s menu` or `-s none`.
    - Desktop folder auto-detection: `xdg-user-dir DESKTOP` (when it is not `$HOME`), else `~/Bureau`, else `~/Desktop`, else `$HOME`.
    - Loading-screen marker: created (`-n`) or removed (no `-n`) in the game directory.
    - Hook policy: if the game has a Lutris YAML (`configpath`), then without `-k` every line whose key is `prelaunch_command`, `prelaunch_wait` or `postexit_command` is commented out and tagged `# lpm:hook-disabled (...)`; with `-k` lines previously tagged are restored. Exception: if `prelaunch_command` ends with `/scripts/lpm-launcher.sh` (the relay installed by `lpm launcher ... on`), hooks are treated as allowed, so nothing is disabled. The `# lpm:hook-disabled` comments are kept intact by [`lpm lsfg`](lsfg.md) and [`lpm launcher`](launcher.md), which edit the YAML line by line.
@@ -87,11 +87,11 @@ Messages follow the system language (`LC_ALL`, `LC_MESSAGES`, `LANG`); use `LC_A
 - A non-existent `--desktop-dir` is silently ignored (no desktop file, still exit 0).
 - Re-running without `-n` re-enables the loading screen and re-neutralises hooks: pass the same `-n`/`-k` every time.
 - Stable output: the `Shortcut created for '<name>'.` lines (name, not slug).
-- Per-game settings of the loading screen, four small visible files at the prefix root, created at the first launch from an lpm shortcut and never overwritten (edit them by hand; they survive later launches):
-  - `lpm-extra-loading-ms` : extra milliseconds the loading screen stays after the game window appears (default `0`).
-  - `lpm-max-wait-s` : maximum seconds lpm waits for the game window before giving up (default `60`; whole seconds between 5 and 3600, anything else means 60). Raise it for a game whose window takes minutes to appear (heavy mods); the log line `no_window_detected_after_delay` in `lpm log` shows that the limit was reached.
-  - `lpm-loading-message.txt` : messages of your own shown at the bottom center of the loading screen, for example to explain a long loading. One line of the file = one message; one message is shown at a time (a long one is wrapped on up to 4 lines, 1200 characters at most in the whole file); with several, they alternate in file order with the same fades and black gap as the gamepad tips, each displayed 6 seconds. Empty by default (nothing shown); not translated; hidden while the picker is on screen.
-  - `lpm-ignore-windows.txt` : words (one per line; empty lines and lines starting with `#` are skipped) that lpm ignores when it looks for the game window. A window created at startup whose title or class contains one of these words (case-sensitive) is never taken for the game window, so a helper program that opens a real window before the game (for example `bbbridge`, the Bloodborne online bridge) no longer closes the loading screen too early. Empty by default (nothing ignored).
+- Per-game settings of the loading screen, small files in `<game dir>/lpm/settings/`, created at the first launch from an lpm shortcut and never overwritten (edit them by hand; they survive later launches):
+  - `extra-loading-ms` : extra milliseconds the loading screen stays after the game window appears (default `0`).
+  - `max-wait-s` : maximum seconds lpm waits for the game window before giving up (default `60`; whole seconds between 5 and 3600, anything else means 60). Raise it for a game whose window takes minutes to appear (heavy mods); the log line `no_window_detected_after_delay` in `lpm log` shows that the limit was reached.
+  - `loading-message.txt` : messages of your own shown at the bottom center of the loading screen, for example to explain a long loading. One line of the file = one message; one message is shown at a time (a long one is wrapped on up to 4 lines, 1200 characters at most in the whole file); with several, they alternate in file order with the same fades and black gap as the gamepad tips, each displayed 6 seconds. Empty by default (nothing shown); not translated; hidden while the picker is on screen.
+  - `ignore-windows.txt` : words (one per line; empty lines and lines starting with `#` are skipped) that lpm ignores when it looks for the game window. A window created at startup whose title or class contains one of these words (case-sensitive) is never taken for the game window, so a helper program that opens a real window before the game (for example `bbbridge`, the Bloodborne online bridge) no longer closes the loading screen too early. Empty by default (nothing ignored).
 
 ## Examples
 
@@ -107,7 +107,7 @@ LPM_LUTRIS_VERSION=native LC_ALL=C lpm shortcut --all
 ## Files and data touched
 
 - Read: Lutris `pga.db`, `system.yml`, game YAML (`~/.config/lutris/games/<configpath>.yml` native, `~/.var/app/net.lutris.Lutris/data/lutris/games/` Flatpak), runner folder.
-- Written: `~/.local/share/applications/net.lutris.<slug>.desktop`, `<desktop dir>/<slug>.desktop`, `<desktop dir>/<Name> Bonus` symlink, `<game dir>/.lpm-no-loadingscreen`, the game's Lutris YAML (hook comments, possibly `GAMEID`), `~/.local/share/lpm/lpm.log` (errors).
+- Written: `~/.local/share/applications/net.lutris.<slug>.desktop`, `<desktop dir>/<slug>.desktop`, `<desktop dir>/<Name> Bonus` symlink, `<game dir>/lpm/settings/no-loadingscreen`, the game's Lutris YAML (hook comments, possibly `GAMEID`), `~/.local/share/lpm/lpm.log` (errors).
 
 ## See also
 

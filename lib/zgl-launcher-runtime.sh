@@ -11,7 +11,7 @@
 # Usage: zgl-launcher-runtime.sh <gamedir>
 #
 # Steps, in order:
-#   1. Reads lpm-launcher.yml (the only hardcoded path: passed as argument).
+#   1. Reads lpm/launcher.yml (the only hardcoded path: passed as argument).
 #   2. If the YAML has several entries: shows the picker. A single entry: no menu, direct
 #      launch.
 #   3. Rewrites lpm-launch.bat (emptied then rewritten) with the chosen entry.
@@ -24,7 +24,7 @@
 # it never creates nor closes it. With several entries, it also writes the chosen entry label
 # on line 4 of the control file (subtitle under the game name, which stays; no subtitle if the
 # label is exactly the game name). If the control file does not exist (game not started via the lpm shortcut, or
-# loading screen disabled with ".lpm-no-loadingscreen"), the picker still works, without a
+# loading screen disabled with "lpm/settings/no-loadingscreen"), the picker still works, without a
 # background.
 #
 # This script ALWAYS returns control (exit 0), even on error (missing YAML, etc.):
@@ -92,7 +92,7 @@ for e in entries:
     workdir = str(e.get("workdir") or "").replace("\x1f", " ").replace("\n", " ")
     exe = str(e.get("exe") or "").replace("\x1f", " ").replace("\n", " ")
     # "args" (launch arguments, appended after the executable in lpm-launch.bat): optional,
-    # empty string by default, absent from older lpm-launcher.yml files.
+    # empty string by default, absent from older lpm/launcher.yml files.
     args = str(e.get("args") or "").replace("\x1f", " ").replace("\n", " ")
     if not label or not workdir or not exe:
         continue

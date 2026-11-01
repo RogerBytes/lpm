@@ -11,7 +11,7 @@ lpm splash --all
 
 ## Description
 
-The banner is saved as `<game dir>/splash/splash.png`, the image displayed full screen by lpm's loading screen while the game starts. Without a `splash.png` the loading screen is plain black. The command is independent of `lpm launcher`: it creates `splash/` if needed whether or not the launcher is enabled for the game.
+The banner is saved as `<game dir>/lpm/images/splash/splash.png`, the image displayed full screen by lpm's loading screen while the game starts. Without a `splash.png` the loading screen is plain black. The command is independent of `lpm launcher`: it creates `lpm/images/splash/` if needed whether or not the launcher is enabled for the game.
 
 It needs a personal SteamGridDB API key (see Scripting notes). Only Wine games not living in a shared store prefix are eligible. Requires `sqlite3`, `curl`, `python3`, `realpath` and ImageMagick (`magick` or `convert`).
 
@@ -34,7 +34,7 @@ It needs a personal SteamGridDB API key (see Scripting notes). Only Wine games n
 4. For each game:
    - Without `--url`: SteamGridDB autocomplete search with the Lutris name; no result = skipped; several results = numbered list and `Pick a number: ` prompt (invalid/empty answer = skipped).
    - Requests `heroes/game/<id>?types=static&mimes=image/png,image/jpeg,image/webp`; the first returned image is used. None: skipped.
-   - Creates `<game dir>/splash/`, downloads the image to a temporary file, converts it with ImageMagick to `splash.png` (overwriting any existing one), removes the temporary file.
+   - Creates `<game dir>/lpm/images/splash/`, downloads the image to a temporary file, converts it with ImageMagick to `splash.png` (overwriting any existing one), removes the temporary file.
 5. A failure on one game does not stop the others.
 
 ## Output
@@ -85,7 +85,7 @@ lpm splash my-game --url https://example.com/hero.png
 ## Files and data touched
 
 - `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read / written).
-- `<game dir>/splash/splash.png` (created or overwritten), `<game dir>/splash/.lpm-download.<ext>` (temporary).
+- `<game dir>/lpm/images/splash/splash.png` (created or overwritten), `<game dir>/lpm/images/splash/.lpm-download.<ext>` (temporary).
 - `~/.local/share/lpm/lpm.log`.
 
 ## See also

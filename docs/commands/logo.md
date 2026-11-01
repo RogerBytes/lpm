@@ -11,7 +11,7 @@ lpm logo --all
 
 ## Description
 
-The logo is saved as `<game dir>/splash/logo.png` and is displayed over everything else (black screen, picker, banner) by lpm's loading screen. Without a `logo.png`, no logo is drawn. Independent of `lpm launcher`; `splash/` is created if needed.
+The logo is saved as `<game dir>/lpm/images/splash/logo.png` and is displayed over everything else (black screen, picker, banner) by lpm's loading screen. Without a `logo.png`, no logo is drawn. Independent of `lpm launcher`; `lpm/images/splash/` is created if needed.
 
 It needs a personal SteamGridDB API key. Only Wine games not living in a shared store prefix are eligible. Requires `sqlite3`, `curl`, `python3`, `realpath` and ImageMagick (`magick` or `convert`).
 
@@ -35,7 +35,7 @@ It needs a personal SteamGridDB API key. Only Wine games not living in a shared 
    - With a SteamGridDB game: requests `logos/game/<id>?types=static&mimes=image/png,image/webp`; the first logo is used.
    - Fallback when no SteamGridDB logo was found: searches the Steam store for the Lutris name and, if the file answers (HTTP success), uses `https://cdn.cloudflare.steamstatic.com/steam/apps/<appid>/logo.png`.
    - Nothing found: skipped.
-4. Creates `<game dir>/splash/`, downloads the image to a temporary file, converts it with ImageMagick (`-background none`, to keep transparency) to `logo.png`, overwriting any existing one.
+4. Creates `<game dir>/lpm/images/splash/`, downloads the image to a temporary file, converts it with ImageMagick (`-background none`, to keep transparency) to `logo.png`, overwriting any existing one.
 5. A failure on one game does not stop the others.
 
 ## Output
@@ -84,7 +84,7 @@ lpm logo my-game --url https://example.com/logo.png
 ## Files and data touched
 
 - `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read / written).
-- `<game dir>/splash/logo.png` (created or overwritten), temporary `<game dir>/splash/.lpm-download.<ext>`.
+- `<game dir>/lpm/images/splash/logo.png` (created or overwritten), temporary `<game dir>/lpm/images/splash/.lpm-download.<ext>`.
 - `~/.local/share/lpm/lpm.log`.
 
 ## See also

@@ -107,7 +107,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-# PyYAML is used to read/write the embedded YAML (zgp-game-config.yml).
+# PyYAML is used to read/write the embedded YAML (.lpm-config.yml).
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   zgu_cli_error "$(t install_game.pyyaml_missing_cli)"
   exit 1
@@ -539,7 +539,7 @@ for name in "${games_to_install[@]}"; do
     zgu_lpm_migrate "${prefix_dir}"
 
     # The display name (.desktop shortcut, messages...) comes straight from the "name" field
-    # of the bundled zgp-game-config.yml, which is a copy of the original Lutris YAML where
+    # of the bundled .lpm-config.yml, which is a copy of the original Lutris YAML where
     # it is a root key.
     bundled_yml="${game_cfg_file:-$(zgu_lpm_find "${prefix_dir}" config)}"
     game_real_name=""
@@ -563,7 +563,7 @@ except Exception:
 ' 2>/dev/null)
     fi
 
-    # game_real_name comes from a zgp-game-config.yml possibly forged by the .zgp's creator.
+    # game_real_name comes from a .lpm-config.yml possibly forged by the .zgp's creator.
     # It is reused as-is in the generated .desktop ("Name=${game_real_name}") and in
     # bonus_dir_name: an injected newline could add an arbitrary "Exec=" key to the
     # .desktop, and a "/" or "../" could make the rm -rf of bonus_dir_name escape
@@ -670,7 +670,7 @@ try:
 
         data = update_paths(data)
 
-        # zgp-game-config.yml comes from the shared .zgp, possibly forged or hand-edited
+        # .lpm-config.yml comes from the shared .zgp, possibly forged or hand-edited
         # to add a hook. Lutris runs any command/script automatically at game launch or
         # exit (prelaunch_script/postexit_script under "game",
         # prelaunch_command/postexit_command under "system") without asking.
@@ -752,7 +752,7 @@ EOF
     # --- LPM Launcher of a package made by lpm <= 0.9.5 (old format: relay
     # "scripts/lpm-launcher.sh" run by a Lutris prelaunch command): converted to the current
     # format, where the orchestrator writes lpm-launch.bat itself before launching. Removes the
-    # relay and any prelaunch command pointing to it, aligns "bat_path" of lpm-launcher.yml on
+    # relay and any prelaunch command pointing to it, aligns "bat_path" of lpm/launcher.yml on
     # the game.exe of the config. Nothing to reconnect any more. Must run AFTER
     # zgu_write_game_shortcut and BEFORE zgu_apply_hook_policy. DO NOT REMOVE: old packages can
     # be installed years from now (see lib/zgl-launcher-legacy.sh). ---

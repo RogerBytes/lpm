@@ -45,7 +45,7 @@ For `on` / `off`:
 6. Lists Wine games. If there are none: "No Wine/Proton games found." (stderr), status 0. A game is "enabled" when `system.env.LSFGVK_ENV` is `1` in its Lutris YAML (read live each time, no separate state file).
 7. Validates every slug **before** changing anything: unknown slug -> error, status 1; `on` for an already enabled game or `off` for a non-enabled game -> error, status 1 (the command is not idempotent).
 8. For each slug:
-   - `on`: creates `<game dir>/lsfg-vk/` and copies the reference DLL there (overwriting), then sets in the YAML `system.env`: `LSFGVK_ENV: '1'`, `LSFGVK_DLL_PATH: <game dir>/lsfg-vk/lsfg-vk.dll`, and `LSFGVK_MULTIPLIER: '2'` only if that key is absent (an existing value is kept).
+   - `on`: creates `<game dir>/lpm/lsfg-vk/` and copies the reference DLL there (overwriting), then sets in the YAML `system.env`: `LSFGVK_ENV: '1'`, `LSFGVK_DLL_PATH: <game dir>/lpm/lsfg-vk/lsfg-vk.dll`, and `LSFGVK_MULTIPLIER: '2'` only if that key is absent (an existing value is kept).
    - `off`: removes `LSFGVK_ENV`, `LSFGVK_DLL_PATH` and `LSFGVK_MULTIPLIER` from `system.env`. The copied DLL is left in place.
    - The YAML is edited line by line (helper `lib/zgu-env-edit.py`, the one used by `lpm tools <slug> env`): YAML comments, including the `# lpm:hook-disabled` lines written by `lpm shortcut`, are preserved, and other keys are untouched. Only if this targeted edit is impossible does lpm fall back to rewriting the whole file with PyYAML (`yaml.dump`), which loses the comments.
    - Missing YAML or write failure: error for that game, others continue, final status 1.
@@ -120,7 +120,7 @@ lpm lsfg my-game other-game off
 ## Files and data touched
 
 - `${XDG_CONFIG_HOME:-~/.config}/lpm/lsfg-vk/lsfg-vk.dll` (reference DLL, created by `on` if missing).
-- `<game dir>/lsfg-vk/lsfg-vk.dll` (copied by `on`, never deleted).
+- `<game dir>/lpm/lsfg-vk/lsfg-vk.dll` (copied by `on`, never deleted).
 - The game's Lutris YAML (`system.env` keys `LSFGVK_ENV`, `LSFGVK_DLL_PATH`, `LSFGVK_MULTIPLIER`), edited line by line (comments kept).
 - Flatpak: `flathub` user remote and the `org.freedesktop.Platform.VulkanLayer.lsfgvk` user extension when installed by lpm.
 - `~/.local/share/lpm/lpm.log`.

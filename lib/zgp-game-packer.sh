@@ -84,7 +84,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 # PyYAML is required to clean/rewrite the Lutris YAML embedded in the .zgp. Without it, the
-# package could be created with an uncleaned zgp-game-config.yml (absolute paths, missing runner
+# package could be created with an uncleaned .lpm-config.yml (absolute paths, missing runner
 # version) and no visible error.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   zgu_cli_error "$(t pack_game.pyyaml_missing_cli)"
@@ -207,7 +207,7 @@ fi
 
 # --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
 # removes the HALF-WRITTEN .zgp of the current game (and its hash file) plus the temporary
-# "zgp-game-config.yml" copied into its prefix. Archives already completed in the batch are
+# ".lpm-config.yml" built for its archive (in a temporary folder, never in the prefix). Archives already completed in the batch are
 # never touched here (the GUI offers to delete them, see the "[EXPORTED]" lines). KNOWN
 # LIMITATION: the prefix cleanup done before archiving (symlinks, dosdevices, Temp, anonymized
 # user names...) is applied directly to the installed game, as in a normal export; a cancel
@@ -387,7 +387,7 @@ for game_real_name in "${games_to_export[@]}"; do
   done
 
   # --- NO SEPARATE META FILE FOR THE REAL GAME NAME ---
-  # The Lutris YAML embedded below (zgp-game-config.yml) already has a root "name" key with
+  # The Lutris YAML embedded below (.lpm-config.yml) already has a root "name" key with
   # the real name, and the cleanup below never removes it (only "script", "version" and "slug"
   # are removed). The installer reads "name" directly from that YAML.
 

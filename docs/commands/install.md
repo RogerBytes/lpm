@@ -33,7 +33,7 @@ Lutris is **killed** (`SIGKILL`) at the start of the command so that its databas
 | `--ignore-hash` | Does not check the sha256 sidecar file, even if one exists next to the archive. |
 | `-s <mode>`, `--shortcut <mode>`, `--shortcut=<mode>` | Which shortcuts to create: `menu`, `desktop`, `both` (default) or `none`. Any other value: error, exit 1. If the option is the very last argument with no value, the default `both` is used. |
 | `--desktop-dir=<dir>` | Folder in which to write the desktop shortcut instead of the detected desktop folder. The folder must already exist, otherwise the desktop shortcut is silently not written. Ignored when the mode is `menu` or `none`. |
-| `-n`, `--no-loadingscreen` | Disables the lpm loading screen for the game's shortcuts (creates an empty marker file `.lpm-no-loadingscreen` in the prefix). |
+| `-n`, `--no-loadingscreen` | Disables the lpm loading screen for the game's shortcuts (creates an empty marker file `lpm/settings/no-loadingscreen` in the prefix). |
 
 The compression-level options (`-0` to `-22`) and `--hash` are accepted by the router but have no effect on `install`.
 
@@ -54,8 +54,9 @@ The compression-level options (`-0` to `-22`) and `--hash` are accepted by the r
    3. If `<games folder>/<slug>` already exists: error, game skipped.
    4. The folder is moved to `<games folder>/<slug>`.
    5. In `system.reg`, `user.reg`, `userdef.reg`, `lutris.json` and the game's `goglog.ini`, the placeholder user name `anonuser` is replaced by your `$USER`.
+   5bis. **Layout migration**: if the package has the old layout (lpm files at the prefix root), they are moved into `<prefix>/lpm/` under their new names (see [Archives](archives.md)); a file already present at the new location is never overwritten, and the paths to the AntiMicroX profile and the scripts in the Lutris config are updated.
    6. `dosdevices/c:` and `pfx` links are recreated; a leftover `drive_c/users/steamuser/Local Settings` is removed; a leftover Proton `version` file (archives made by lpm 0.9.5) is removed so that Proton repairs its own files in the prefix at the first launch.
-   7. The embedded `zgp-game-config.yml` is read for the display name and rewritten as a Lutris game config `<config dir>/<slug>-<timestamp>.yml`: the `script` and `version` keys are dropped, `/home/<user>` is replaced by your home, `$GAMEDIR` by the prefix path, and `game.prefix` is set. The embedded file is then deleted. If it is absent, the error "Critical error: The zgp-game-config.yml file was not found in the archive!" is printed, but the game is still registered (without a usable config).
+   7. The embedded YAML (the archive's first member `.lpm-config.yml`, or `zgp-game-config.yml` in the prefix for an old archive) is read for the display name and rewritten as a Lutris game config `<config dir>/<slug>-<timestamp>.yml`: the `script` and `version` keys are dropped, `/home/<user>` is replaced by your home, `$GAMEDIR` by the prefix path, and `game.prefix` is set. The embedded file is then deleted. If it is absent, the error "Critical error: The .lpm-config.yml file was not found in the archive!" is printed, but the game is still registered (without a usable config).
    8. **Embedded scripts**: every key (at any depth) whose name ends in `_command`, `_script` or `_wait`, or contains `exec`, is considered a hook. If any is found, lpm prints them and asks `Keep it and allow it to run automatically? ... [y/N]` (accepts `y`, `Y`, `o`, `O`), unless `--allow-scripts` is given. If not allowed, the hook lines are **commented out** in the YAML (marked `lpm:hook-disabled`), never deleted. A value written on several lines is commented as a whole (joined on one line); a file left invalid by lpm 0.9.5 (first line commented, next line still active) is repaired the same way. A package made by lpm 0.9.5 or earlier that ships the old LPM Launcher relay `scripts/lpm-launcher.sh` is converted: the relay and any prelaunch command pointing to it are removed (the launcher then works without them, see [`lpm launcher`](launcher.md)).
    9. Database: any row with the same slug is deleted, then a row is inserted in `games` (name, slug, `installer_slug`=slug, runner `wine`, executable, directory, `configpath`, `installed`=1, timestamps).
    10. Shortcuts are written according to `-s` (see Files).
@@ -152,8 +153,8 @@ lpm install -y --ignore-hash game.zgp
 ## Files and data touched
 
 - Reads: the `.zgp`, its sidecar `hash/<archive>.sha256` or `<archive>.sha256`, Lutris `system.yml`.
-- Creates: `<games folder>/<slug>/` (the prefix), temporary `<games folder>/.zgp-extract-*` (removed afterwards), `<Lutris games config dir>/<slug>-<timestamp>.yml`, optional `<games folder>/<slug>/.lpm-no-loadingscreen`.
-- Shortcuts: menu `~/.local/share/applications/net.lutris.<slug>.desktop` (then `update-desktop-database`); desktop `<desktop dir>/<slug>.desktop` (marked trusted with `gio`), plus, if the prefix has an `extras/` folder, a symlink `<desktop dir>/<Game name> Bonus` to it. The desktop dir is `xdg-user-dir DESKTOP`, else `~/Bureau`, else `~/Desktop`, else `~`, unless `--desktop-dir` is given.
+- Creates: `<games folder>/<slug>/` (the prefix), temporary `<games folder>/.zgp-extract-*` (removed afterwards), `<Lutris games config dir>/<slug>-<timestamp>.yml`, optional `<games folder>/<slug>/lpm/settings/no-loadingscreen`.
+- Shortcuts: menu `~/.local/share/applications/net.lutris.<slug>.desktop` (then `update-desktop-database`); desktop `<desktop dir>/<slug>.desktop` (marked trusted with `gio`), plus, if the prefix has an `lpm/extras/` folder, a symlink `<desktop dir>/<Game name> Bonus` to it. The desktop dir is `xdg-user-dir DESKTOP`, else `~/Bureau`, else `~/Desktop`, else `~`, unless `--desktop-dir` is given.
 - Modifies: the Lutris database `games` table; may rewrite `~/.config/lpm/lutris-version`.
 - Writes: `~/.local/share/lpm/lpm.log`.
 - Kills: running Lutris processes.

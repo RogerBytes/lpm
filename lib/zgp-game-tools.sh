@@ -220,7 +220,7 @@ fi
 # --- Gamepad: AntiMicroX profile for a game ---
 # Lutris itself launches AntiMicroX with a profile for the game when its YAML has
 # "system.antimicro_config: <profile file>". lpm creates a blank profile in
-# <prefix>/lpm_gamepad/ (never overwritten once it exists, so the user's settings are safe),
+# <prefix>/lpm/gamepad/ (never overwritten once it exists, so the user's settings are safe),
 # points that option to it, and can open it in AntiMicroX for editing (nothing is watched).
 # An antimicro_config that points elsewhere belongs to the user and is never replaced.
 # Actions: on | off | edit | status (default status; status prints on, off or other).

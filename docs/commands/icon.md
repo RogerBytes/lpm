@@ -11,7 +11,7 @@ lpm icon --all
 
 ## Description
 
-For each target game, `lpm icon` looks the game up on SteamGridDB by its Lutris name, picks an icon, converts it to PNG, stores it in `<game dir>/icon/` and regenerates the game's menu/desktop shortcuts if they already exist. It depends on a third-party service and needs a personal SteamGridDB API key (see Scripting notes); it is never run automatically by other commands.
+For each target game, `lpm icon` looks the game up on SteamGridDB by its Lutris name, picks an icon, converts it to PNG, stores it in `<game dir>/lpm/images/icon/` and regenerates the game's menu/desktop shortcuts if they already exist. It depends on a third-party service and needs a personal SteamGridDB API key (see Scripting notes); it is never run automatically by other commands.
 
 Only Wine games (`runner='wine'`) not living in a shared store prefix are eligible.
 
@@ -38,7 +38,7 @@ The generic options of `bin/lpm` (`-y`, ...) have no effect here.
 4. For each game:
    - Without `--url`: searches SteamGridDB (autocomplete) with the game's Lutris name. No result: skipped. Several results: lists them numbered and asks `Pick a number: `; an invalid or empty answer skips the game. One result: used directly.
    - Gathers candidate icons: SteamGridDB icons for the game (default and `styles=official`) plus, via the Steam store search and `api.steamcmd.net`, the Steam "client icon" (`.ico`) or, failing that, the small Steam icon. Candidates are listed in that order and the first one is used: so the first SteamGridDB icon when the game has any, and the Steam client icon only when SteamGridDB has none.
-   - Deletes the existing `*.png`, `*.ico`, `*.svg`, `*.xpm` in `<game dir>/icon/`, downloads the chosen image there, converts `.ico` to `icon.png` (largest frame via ImageMagick), or keeps other formats as `icon.<ext>`.
+   - Deletes the existing `*.png`, `*.ico`, `*.svg`, `*.xpm` in `<game dir>/lpm/images/icon/`, downloads the chosen image there, converts `.ico` to `icon.png` (largest frame via ImageMagick), or keeps other formats as `icon.<ext>`.
    - If the menu shortcut (`~/.local/share/applications/net.lutris.<slug>.desktop`) and/or the desktop shortcut (`<desktop dir>/<slug>.desktop`) already exist, rewrites them to use the new icon. No new shortcut is created.
    - Logs the result in `lpm.log` and prints `Icon set for <name>.`
 5. Failures on one game do not stop the others; the final status is 1 if any game failed.
@@ -97,7 +97,7 @@ lpm icon my-game --url https://example.com/icon.png
 ## Files and data touched
 
 - `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read; written when a new key is accepted).
-- `<game dir>/icon/icon.png` (or `icon.<ext>`), temporary `.lpm-download.<ext>`.
+- `<game dir>/lpm/images/icon/icon.png` (or `icon.<ext>`), temporary `.lpm-download.<ext>`.
 - Existing shortcuts: `~/.local/share/applications/net.lutris.<slug>.desktop`, `<desktop dir>/<slug>.desktop`.
 - Lutris `pga.db` (read), `~/.local/share/lpm/lpm.log`.
 

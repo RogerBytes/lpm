@@ -8,23 +8,23 @@
 #   1. "on" asks NO single/multi choice: the number of entries actually used is re-read from
 #      the YAML at every game launch (see zgl-launcher-runtime.sh). "on" always writes the
 #      same thing: a first entry auto-filled from the game.exe/working_dir already set in
-#      Lutris, PLUS a second commented example entry in lpm-launcher.yml, to uncomment/adapt
+#      Lutris, PLUS a second commented example entry in lpm/launcher.yml, to uncomment/adapt
 #      by hand if the game has several executables (episodes, DLC, campaigns...).
 #   2. "Already active" detection: a game has the launcher if its game.exe points to
 #      lpm-launch.bat, re-read from the YAML on each run (no separate tracking file).
 #   3. Enable: saves the original exe/working_dir ("original_exe" key of the new
-#      lpm-launcher.yml), converts native Linux paths to Windows paths (C:\...) via
+#      lpm/launcher.yml), converts native Linux paths to Windows paths (C:\...) via
 #      text replacement for drive_c paths (winepath only as a fallback outside drive_c; users
 #      type Windows paths for entries added by hand). NO relay and NO Lutris prelaunch command:
 #      the orchestrator writes lpm-launch.bat before launching (the old relay of lpm <= 0.9.5
 #      is removed, see zgl-launcher-legacy.sh). NO default splash image is copied: a missing
-#      $GAMEDIR/splash/splash.png means "plain black loading screen" for the orchestrator
+#      $GAMEDIR/lpm/images/splash/splash.png means "plain black loading screen" for the orchestrator
 #      (see lib/zgl-launcher-orchestrator.sh); an existing splash.png is never touched.
 #      Points game.exe to lpm-launch.bat.
 #   4. Disable: restores the original exe from "original_exe" (fallback: the exe of the first
 #      entry), removes system.prelaunch_command (only if it references the old relay
 #      script), then DELETES the
-#      files the launcher added: lpm-launcher.yml (so the entries are gone too),
+#      files the launcher added: lpm/launcher.yml (so the entries are gone too),
 #      scripts/lpm-launcher.sh, every lpm-launch.bat. Never touches splash/, the other files
 #      of scripts/ (loading screen), nor any game/Windows file.
 #   5. Wine/Proton games only (runner='wine'), shared prefixes included (non-destructive,
@@ -342,7 +342,7 @@ with open(os.environ["YML_PATH"], "w") as f:
 # launcher_yml. Returns 1 on failure.
 zgp_launcher_update_launcher_yml() {
   local slug="$1" launcher_yml_on="$2"
-  # lpm-launcher.yml already exists (hand-written, restored from a .zgp, or left by an
+  # lpm/launcher.yml already exists (hand-written, restored from a .zgp, or left by an
   # earlier "off"). Its entries are kept, but the two keys lpm itself relies on are brought
   # up to date:
   #  - "bat_path": where Lutris REALLY runs lpm-launch.bat (the one just written above). Both
@@ -393,7 +393,7 @@ if changed:
 # Creates or updates lpm/launcher.yml. Args: slug game_dir.
 zgp_launcher_write_launcher_yml() {
   local slug="$1" game_dir="$2"
-  # --- Write lpm-launcher.yml (auto-filled entry + commented example) --
+  # --- Write lpm/launcher.yml (auto-filled entry + commented example) --
   # ONLY if it does not exist yet. "off" deletes it (item 4 of the file header), so a file
   # that exists here comes from a hand edit or a restored .zgp; overwriting it on "on" would
   # lose that customization, including on a repair re-enable after a reinstall that dropped
@@ -415,7 +415,7 @@ zgp_launcher_wire_lutris_yml() {
   #
   # No relay script, no system.prelaunch_command: the orchestrator (entry point of every lpm
   # shortcut) writes lpm-launch.bat itself, on the host, before Lutris starts. No splash image is
-  # copied either: a missing "${game_dir}/splash/splash.png" means "plain black loading screen",
+  # copied either: a missing "${game_dir}/lpm/images/splash/splash.png" means "plain black loading screen",
   # and an existing one is never touched.
   #
   # Line-based text editing (zgu-yaml-edit.py): yaml.dump would destroy the Lutris YAML comments,
@@ -465,12 +465,12 @@ zgp_launcher_apply_on() {
   zgp_launcher_wire_lutris_yml "${slug}" "${yml_file}" || return 1
 
   # A relay of the old format (lpm <= 0.9.5) left in this game is removed (and bat_path of
-  # lpm-launcher.yml aligned on game.exe).
+  # lpm/launcher.yml aligned on game.exe).
   bash "${script_dir}/zgl-launcher-legacy.sh" "${yml_file}" "${game_dir}" >/dev/null 2>&1
 
   zgu_log "launcher" "OK" "slug=${slug} action=on"
 
-  # The path of lpm-launcher.yml to edit by hand is already given by zgu_cli_ok in the calling
+  # The path of lpm/launcher.yml to edit by hand is already given by zgu_cli_ok in the calling
   # loop; no folder-opening offer via Zenity here (bin/lpm has no interactive entry point).
 
   return 0

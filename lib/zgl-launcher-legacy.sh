@@ -90,7 +90,7 @@ if ! relay_in_yml && [[ -n "${game_dir}" ]]; then
   rmdir "${game_dir}/lpm/scripts" 2>/dev/null
 fi
 
-# --- 3. bat_path of lpm-launcher.yml, from the game.exe Lutris really runs ---
+# --- 3. bat_path of lpm/launcher.yml, from the game.exe Lutris really runs ---
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgu-lpm-paths.sh
 source "${script_dir}/zgu-lpm-paths.sh"

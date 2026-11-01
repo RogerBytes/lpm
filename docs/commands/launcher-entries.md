@@ -1,6 +1,6 @@
 # lpm launcher-entries
 
-Prints or replaces the picker entries (title, prompt, executables) stored in a game's `lpm-launcher.yml`, as JSON.
+Prints or replaces the picker entries (title, prompt, executables) stored in a game's `lpm/launcher.yml`, as JSON.
 
 ## Synopsis
 
@@ -11,7 +11,7 @@ lpm launcher-entries <slug> set <file.json>
 
 ## Description
 
-The counterpart of editing `lpm-launcher.yml` by hand: `get` exports the picker configuration as a JSON document, `set` replaces it from a JSON document of the same shape. It never enables or disables the LPM Launcher (use `lpm launcher`). Works on Wine/Proton games only; the game needs a Lutris configuration file.
+The counterpart of editing `lpm/launcher.yml` by hand: `get` exports the picker configuration as a JSON document, `set` replaces it from a JSON document of the same shape. It never enables or disables the LPM Launcher (use `lpm launcher`). Works on Wine/Proton games only; the game needs a Lutris configuration file.
 
 ## Arguments
 
@@ -25,15 +25,15 @@ None.
 
 ## Behavior
 
-Common: needs `python3`, `sqlite3`, PyYAML; resolves Lutris (Flatpak or native); finds the game (`runner='wine'`, unknown slug = error); needs its Lutris YAML; reads `game.prefix` from it (default: the game dir) to locate `<prefix>/drive_c`. The file handled is `<game dir>/lpm-launcher.yml`.
+Common: needs `python3`, `sqlite3`, PyYAML; resolves Lutris (Flatpak or native); finds the game (`runner='wine'`, unknown slug = error); needs its Lutris YAML; reads `game.prefix` from it (default: the game dir) to locate `<prefix>/drive_c`. The file handled is `<game dir>/lpm/launcher.yml`.
 
 `get`:
-- Prints one line of JSON (see Output). A missing or unreadable `lpm-launcher.yml` yields empty `title`/`prompt` and an empty `entries` list, not an error.
+- Prints one line of JSON (see Output). A missing or unreadable `lpm/launcher.yml` yields empty `title`/`prompt` and an empty `entries` list, not an error.
 - `exe_linux` / `workdir_linux` are computed by plain text replacement of `C:\` by `<prefix>/drive_c/`; no Wine process is started. Any other drive letter gives an empty string.
 
 `set`:
 - Reads the JSON file; the top level must be an object and `entries` a list (otherwise "could not write").
-- Replaces `title`, `prompt` and `entries` in `lpm-launcher.yml`, keeping other existing keys (notably `original_exe` and `bat_path`). Creates the file (and the game dir) if missing. The file is re-dumped with PyYAML, so comments of the YAML (such as the commented example entry) are lost.
+- Replaces `title`, `prompt` and `entries` in `lpm/launcher.yml`, keeping other existing keys (notably `original_exe` and `bat_path`). Creates the file (and the game dir) if missing. The file is re-dumped with PyYAML, so comments of the YAML (such as the commented example entry) are lost.
 - Entry rules: an entry needs a non-empty `label` and an executable (`exe_win` or `exe_linux`), otherwise it is silently dropped. Per entry:
   - executable: `exe_win` if given (literal Windows path), else `exe_linux` converted to `C:\...` when it is under `<prefix>/drive_c` (a Linux path outside it is stored unchanged);
   - working directory: `workdir_win` if given, else `workdir_linux` converted the same way, else the folder of `exe_linux`, else the folder part of `exe_win`;
@@ -113,8 +113,8 @@ lpm launcher-entries my-game get > backup.json && lpm launcher-entries my-game s
 
 ## Files and data touched
 
-- Read: Lutris `pga.db`, the game's Lutris YAML (for `game.prefix`), `<game dir>/lpm-launcher.yml`.
-- Written by `set`: `<game dir>/lpm-launcher.yml`.
+- Read: Lutris `pga.db`, the game's Lutris YAML (for `game.prefix`), `<game dir>/lpm/launcher.yml`.
+- Written by `set`: `<game dir>/lpm/launcher.yml`.
 
 ## See also
 

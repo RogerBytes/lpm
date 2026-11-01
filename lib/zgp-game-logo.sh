@@ -4,17 +4,17 @@
 #
 # Fetches a transparent logo (SteamGridDB "Logo": the game title as a cut-out image meant to
 # be overlaid on a banner, NOT a full-screen background) for one or more installed games and
-# saves it as $GAMEDIR/splash/logo.png -- the image shown permanently on top of everything
+# saves it as $GAMEDIR/lpm/images/splash/logo.png -- the image shown permanently on top of everything
 # (black screen, picker, banner) in the LPM Launcher (see zgl-launcher-orchestrator.sh /
 # zgu-launcher-screen.py).
 #
 # Separate command, never hooked into "lpm launcher ... on": it is the only feature that
 # depends on a third-party service (network + API key), so a SteamGridDB outage or a missing
-# key must not block enabling the launcher. Without $GAMEDIR/splash/logo.png the
+# key must not block enabling the launcher. Without $GAMEDIR/lpm/images/splash/logo.png the
 # orchestrator simply draws no logo. Structure mirrors zgp-game-icon.sh and
 # zgp-game-splash.sh ("lpm icon"/"lpm splash").
 #
-# Independent of the launcher's activation state: $GAMEDIR/splash/ is created here if
+# Independent of the launcher's activation state: $GAMEDIR/lpm/images/splash/ is created here if
 # missing.
 #
 # $1, $2... = target game slugs (always non-empty in CLI), or "--all" for all eligible
