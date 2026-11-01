@@ -154,6 +154,9 @@ LABEL_ZONE_TOP_PADDING = 8
 LABEL_SHIFT_DOWN = 48
 # The logo goes down this much MORE than the label, to bring them closer (gap about halved).
 LOGO_EXTRA_DOWN = 24
+# Logo and label go down TOGETHER by this fraction of the screen height (picker AND loading
+# screen), to sit right above the banner. A fraction, not pixels: same look at any resolution.
+BLOCK_EXTRA_DOWN_FRACTION = 0.05
 
 CURSOR_IDLE_S = 1.0
 
@@ -471,6 +474,7 @@ class ScreenWindow(Gtk.Window):
             max_draw_y = top_zone_bottom - self.logo_draw_h - TOP_ZONE_MIN_MARGIN
             self.logo_draw_y = max(TOP_ZONE_MIN_MARGIN, min(draw_y, max_draw_y))
 
+        self.block_extra_down = 0 if NO_LABEL else geom.height * BLOCK_EXTRA_DOWN_FRACTION
         self.title_zone_bottom = top_zone_bottom
         self.title_centered = NO_LABEL
 
@@ -982,7 +986,7 @@ class ScreenWindow(Gtk.Window):
         extents = cr.text_extents(entry_label_text[0])
 
         label_x = (width - extents.width) / 2
-        label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + extents.height
+        label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + self.block_extra_down + extents.height
 
         cr.set_source_rgba(1, 1, 1, 1)
         cr.move_to(label_x, label_baseline_y)
@@ -994,7 +998,7 @@ class ScreenWindow(Gtk.Window):
         scale = self.logo_draw_w / img_w
         cr.save()
         shift = 0 if NO_LABEL else (LABEL_SHIFT_DOWN + LOGO_EXTRA_DOWN)
-        cr.translate(self.logo_draw_x, self.logo_draw_y + shift)
+        cr.translate(self.logo_draw_x, self.logo_draw_y + shift + self.block_extra_down)
         cr.scale(scale, scale)
         cr.set_source_surface(self.logo_surface, 0, 0)
         cr.paint()
