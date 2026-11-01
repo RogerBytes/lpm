@@ -223,7 +223,7 @@ class SgdbPickerWindow(Adw.Window):
     download starts in the background (_launch_download, reusing all the existing
     download/convert/apply/shortcut-regeneration code) and the window IMMEDIATELY advances to
     the next item. Several downloads may run at once (no file conflict possible: a slug
-    writes <prefix>/icon for the icon and <game>/splash/{splash,logo}.png for splash/logo,
+    writes <prefix>/lpm/images/icon for the icon and <game>/lpm/images/splash/{splash,logo}.png for splash/logo,
     never the same file). The window closes and shows the final result only once ALL items
     are processed AND ALL in-flight downloads are done (see "_pending_downloads"/
     "_all_choices_done" and _maybe_finish_after_downloads), so it never closes on a

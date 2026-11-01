@@ -29,6 +29,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 
 # --- Arguments ---
 # $1 = target slug (required)
@@ -256,7 +258,8 @@ fi
 # Actions: on | off | edit | status (default status; status prints on, off or other).
 run_gamepad() {
   local action="${1:-status}" yml_file="${lutris_config_dir}/${target_configpath}.yml"
-  local profile_dir="${prefix_dir}/lpm_gamepad"
+  local profile_dir
+  profile_dir="$(zgu_lpm_find "${prefix_dir}" gamepad)"
   local profile_file="${profile_dir}/lpm-gamepad.gamecontroller.amgp"
   local current
   case "${action}" in

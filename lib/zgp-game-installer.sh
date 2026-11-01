@@ -11,6 +11,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
@@ -285,6 +287,50 @@ if [[ ${#games_to_install[@]} -gt 1 ]]; then
   fi
 fi
 
+# --- Automatic launch scripts of the WHOLE batch: ONE question, before anything is extracted ---
+# The game's YAML is read from the very start of each archive (first member, nothing is
+# extracted). Each game is only offered what its own first-member YAML contains, and that same
+# YAML is the one used for the install, so what is shown here is exactly what is applied.
+# "no" (neutralized, never deleted: they can be re-authorized later) unless --allow-scripts or
+# an explicit yes below. Not -y: -y skips the install confirmation, not this authorization.
+batch_hooks_decision="no"
+[[ "${allow_scripts_flag}" = "yes" ]] && batch_hooks_decision="yes"
+if [[ "${batch_hooks_decision}" != "yes" ]]; then
+  batch_hook_games=0
+  batch_hook_report=""
+  for name in "${games_to_install[@]}"; do
+    batch_cfg=$(zgu_archive_config "${filepath_by_name[${name}]}") || continue
+    batch_hooks=$(printf '%s\n' "${batch_cfg}" | zgu_yaml_hooks)
+    [[ -n "${batch_hooks}" ]] || continue
+    batch_name=$(printf '%s\n' "${batch_cfg}" | python3 -c '
+import sys, yaml
+try:
+    print((yaml.safe_load(sys.stdin.read()) or {}).get("name", "") or "")
+except Exception:
+    pass
+' 2>/dev/null)
+    batch_name="${batch_name//[$'\n\r']/ }"
+    [[ -z "${batch_name}" ]] && batch_name="${name}"
+    batch_hook_games=$((batch_hook_games + 1))
+    batch_hook_report+="$(t install_game.hooks_confirm_header_cli "${batch_name}")"$'\n'
+    while IFS=$'\x1f' read -r hook_path hook_value; do
+      [[ -z "${hook_path}" ]] && continue
+      hook_value="${hook_value//[$'\n\r']/ }"
+      batch_hook_report+="$(t install_game.hooks_list_item_cli "${hook_path}" "${hook_value}")"$'\n'
+    done <<< "${batch_hooks}"
+  done
+  if [[ "${batch_hook_games}" -gt 0 ]]; then
+    t install_game.hooks_batch_summary_cli "${batch_hook_games}" "${#games_to_install[@]}"
+    printf '%s' "${batch_hook_report}"
+    read -r -p "$(t install_game.hooks_batch_prompt_cli)" hooks_response
+    case "${hooks_response}" in
+      [oOyY]) batch_hooks_decision="yes" ;;
+      *) batch_hooks_decision="no" ;;
+    esac
+    zgu_log "install" "INFO" "reason=batch_hooks_decision games_with_hooks=${batch_hook_games} total=${#games_to_install[@]} decision=${batch_hooks_decision}"
+  fi
+fi
+
 # ---------------------------------------------------------------------------------------------
 
 install_idx=0
@@ -307,6 +353,7 @@ temp_extract_dir=""
 
 lpm_cancel_cleanup() {
   trap '' TERM INT
+  [[ -n "${game_cfg_file:-}" ]] && rm -f -- "${game_cfg_file}"
   if [[ -n "${temp_extract_dir}" ]] && [[ "${temp_extract_dir}" == "${games_dir}/.zgp-extract-"* ]]; then
     rm -rf "${temp_extract_dir}"
   fi
@@ -340,7 +387,9 @@ trap lpm_cancel_cleanup TERM INT HUP
 # Whatever the way the script ends (normal end, "exit" after an error...), never leave its
 # temporary extraction folder behind. Only the temp folder is removed here, never a finished
 # prefix (completed games are not touched, see lpm_cancel_cleanup for the in-progress one).
+game_cfg_file=""
 lpm_exit_cleanup() {
+  [[ -n "${game_cfg_file}" ]] && rm -f -- "${game_cfg_file}"
   if [[ -n "${temp_extract_dir}" ]] && [[ "${temp_extract_dir}" == "${games_dir}/.zgp-extract-"* ]]; then
     rm -rf "${temp_extract_dir}"
   fi
@@ -366,6 +415,18 @@ for name in "${games_to_install[@]}"; do
     zgu_cli_error "$(t install_game.not_enough_space_precheck "${name}" "$(zgu_human_size "${needed_bytes}")" "$(zgu_human_size "${free_bytes}")" "${games_dir}")"
     zgu_log "install" "ERROR" "file=${name} reason=not_enough_space needed=${needed_bytes} free=${free_bytes} size_source=${size_source}"
     continue
+  fi
+
+  # 0bis. The game's YAML, read from the first member of the archive (new format): kept in a
+  # temporary file and used for the whole install. The copy of it inside the archive is never
+  # extracted (see --exclude below), so a second one planted in the archive can change nothing.
+  # Older archives have no such member: their YAML is read from the extracted prefix (see
+  # run_post_install).
+  [[ -n "${game_cfg_file}" ]] && rm -f -- "${game_cfg_file}"
+  game_cfg_file=""
+  if game_cfg_text=$(zgu_archive_config "${filepath}"); then
+    game_cfg_file=$(mktemp 2>/dev/null) || game_cfg_file=""
+    [[ -n "${game_cfg_file}" ]] && printf '%s\n' "${game_cfg_text}" > "${game_cfg_file}"
   fi
 
   # 1. Extract into a temp folder directly inside $games_dir (guarantees an instant rename)
@@ -401,7 +462,7 @@ for name in "${games_to_install[@]}"; do
   # in zgr-runner-installer.sh.
   pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _lpm_pct; do
     printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
-  done) | env "${bsdtar_env[@]}" bsdtar -xf - -C "${temp_extract_dir}" --exclude .lpm-size 2> "${extract_err_file}"
+  done) | env "${bsdtar_env[@]}" bsdtar -xf - -C "${temp_extract_dir}" --exclude .lpm-size --exclude .lpm-config.yml 2> "${extract_err_file}"
   # PIPESTATUS[1] = bsdtar's exit code (only "pv" and "bsdtar" are in the "|" pipe; the
   # process substitution on stderr is not).
   tar_exit="${PIPESTATUS[1]}"
@@ -517,7 +578,7 @@ for name in "${games_to_install[@]}"; do
     # The display name (.desktop shortcut, messages...) comes straight from the "name" field
     # of the bundled zgp-game-config.yml, which is a copy of the original Lutris YAML where
     # it is a root key.
-    bundled_yml="${prefix_dir}/zgp-game-config.yml"
+    bundled_yml="${game_cfg_file:-$(zgu_lpm_find "${prefix_dir}" config)}"
     game_real_name=""
 
     if [[ -f "${bundled_yml}" ]]; then
@@ -609,57 +670,18 @@ except Exception:
       # strip_exec_hooks below). A .zgp may come from an untrusted third party or from the
       # user's own "lpm pack"; lpm cannot tell which, so rather than silently stripping
       # these hooks it informs the user and asks (see the confirmation below).
-      detected_hooks=$(BUN_YML="${bundled_yml}" python3 -c '
-import os, yaml
+      detected_hooks=$(zgu_yaml_hooks < "${bundled_yml}")
 
-def find_hooks(obj, path=""):
-    found = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            kl = k.lower() if isinstance(k, str) else ""
-            cur_path = f"{path}.{k}" if path else str(k)
-            if kl.endswith("_command") or kl.endswith("_script") or kl.endswith("_wait") or "exec" in kl:
-                found.append((cur_path, v))
-                continue
-            found.extend(find_hooks(v, cur_path))
-    elif isinstance(obj, list):
-        for i, item in enumerate(obj):
-            found.extend(find_hooks(item, f"{path}[{i}]"))
-    return found
-
-try:
-    with open(os.environ["BUN_YML"], "r") as f:
-        data = yaml.safe_load(f)
-    for hook_path, hook_value in find_hooks(data):
-        print(f"{hook_path}\x1f{hook_value}")
-except Exception:
-    pass
-' 2>/dev/null)
-
-      # Strip by default (safe): keep_hooks becomes "yes" only if explicitly confirmed
-      # below, by an interactive answer or the --allow-scripts flag (see bin/lpm). It is
-      # separate from -y: -y skips the general install confirmation, not the authorization
-      # to run a script at every game launch; these are different risks.
+      # Strip by default (safe): keep_hooks becomes "yes" only if authorized for the batch
+      # (the single question above, or --allow-scripts, see bin/lpm). It is separate from -y: -y
+      # skips the general install confirmation, not the authorization to run a script at every
+      # game launch; these are different risks.
       keep_hooks="no"
-      if [[ -n "${detected_hooks}" ]]; then
-        if [[ "${allow_scripts_flag}" = "yes" ]]; then
-          keep_hooks="yes"
-          # Shown on every path (CLI writes to the terminal, GUI writes to the
-          # progress stream), same convention as the other "t install_game.*" calls
-          # from run_post_install, e.g. "install_game.finalizing" below.
-          t install_game.hooks_auto_allowed_cli "${game_real_name}"
-        else
-          t install_game.hooks_confirm_header_cli "${game_real_name}"
-          while IFS=$'\x1f' read -r hook_path hook_value; do
-            [[ -z "${hook_path}" ]] && continue
-            t install_game.hooks_list_item_cli "${hook_path}" "${hook_value}"
-          done <<< "${detected_hooks}"
-          read -r -p "$(t install_game.hooks_confirm_prompt_cli)" hooks_response
-          case "${hooks_response}" in
-            [oOyY]) keep_hooks="yes" ;;
-            *) keep_hooks="no" ;;
-          esac
-        fi
+      if [[ -n "${detected_hooks}" ]] && [[ "${batch_hooks_decision}" = "yes" ]]; then
+        keep_hooks="yes"
+        # Shown on every path (CLI writes to the terminal, GUI writes to the progress stream),
+        # same convention as the other "t install_game.*" calls from run_post_install.
+        t install_game.hooks_auto_allowed_cli "${game_real_name}"
       fi
 
       BUN_YML="${bundled_yml}" YML_OUT="${yml_config_file}" PFX_DIR="${prefix_dir}" USER_HOME="${HOME}" ERR_YAML_LABEL="$(t install_game.yaml_processing_error)" python3 -c '
@@ -670,6 +692,7 @@ try:
     if isinstance(data, dict):
         data.pop("script", None)
         data.pop("version", None)
+        data.pop("lpm_archive", None)
 
         def update_paths(obj):
             if isinstance(obj, dict):
@@ -788,7 +811,8 @@ EOF
     # as zgp-game-shortcutter.sh: created if unchecked, absent (screen active) otherwise,
     # which is the default for a freshly extracted game folder.
     if [[ "${loadingscreen_enabled}" = false ]]; then
-      : > "${prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
+      mkdir -p "$(dirname "$(zgu_lpm_path "${prefix_dir}" no_loadingscreen)")" 2>/dev/null
+      : > "$(zgu_lpm_path "${prefix_dir}" no_loadingscreen)" 2>/dev/null
     fi
 
     zgu_log "install" "OK" "slug=${slug} name=${game_real_name}"

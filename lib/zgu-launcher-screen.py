@@ -13,7 +13,7 @@
 #
 # zgu-launcher-picker.py still exists separately as the fallback picker of
 # zgl-launcher-runtime.sh, used ONLY when this script (the loading screen) did not run at
-# all (loading screen disabled for this game via ".lpm-no-loadingscreen", or lpm shortcut
+# all (loading screen disabled for this game via "lpm/settings/no-loadingscreen", or lpm shortcut
 # bypassed). With no background behind it, it is shown as a normal DECORATED window. Both
 # share the same interaction (keyboard/gamepad/mouse, Validate/Cancel) but stay two files:
 # lib/*.py scripts are self-contained with no cross-imports, so the list/button building
@@ -98,7 +98,7 @@ HELP_QUIT_TEXT = os.environ.get("LPM_HELP_QUIT", "").strip()
 HELP_F4_TEXT = os.environ.get("LPM_HELP_F4", "").strip()
 HELP_ALTENTER_TEXT = os.environ.get("LPM_HELP_ALTENTER", "").strip()
 HELP_F11_TEXT = os.environ.get("LPM_HELP_F11", "").strip()
-# --- Per-game messages at the bottom center (text of <game dir>/lpm-loading-message.txt, passed
+# --- Per-game messages at the bottom center (text of <game dir>/lpm/settings/loading-message.txt, passed
 # by the orchestrator in LPM_LOADING_MESSAGE): explain a long loading (mods, shaders...). One
 # line of the file = one message; ONE message at a time (a long one is wrapped on up to
 # LOADING_MESSAGE_MAX_LINES lines); several messages alternate in file order with the same

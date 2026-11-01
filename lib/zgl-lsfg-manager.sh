@@ -51,6 +51,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-lsfg-utils.sh
@@ -380,8 +382,8 @@ zgp_lsfg_apply_one() {
   fi
 
   if [[ "${mode}" = "on" ]]; then
-    mkdir -p "${prefix_dir}/lsfg-vk"
-    if ! cp -f -- "${lsfg_dll_master}" "${prefix_dir}/lsfg-vk/lsfg-vk.dll"; then
+    mkdir -p "$(zgu_lpm_path "${prefix_dir}" lsfg)"
+    if ! cp -f -- "${lsfg_dll_master}" "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll"; then
       zgp_lsfg_report_error_early "$(t lsfg.dll_copy_failed_for "${slug}")"
       zgu_log "lsfg" "ERROR" "slug=${slug} reason=dll_copy_failed"
       return 1
@@ -395,7 +397,7 @@ if {
   edit_py="${script_dir}/zgu-env-edit.py"
   if [[ "${mode}" = "on" ]]; then
     python3 "${edit_py}" "${yml_file}" set LSFGVK_ENV 1 &&
-    python3 "${edit_py}" "${yml_file}" set LSFGVK_DLL_PATH "${prefix_dir}/lsfg-vk/lsfg-vk.dll" &&
+    python3 "${edit_py}" "${yml_file}" set LSFGVK_DLL_PATH "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" &&
     { python3 "${edit_py}" "${yml_file}" list | grep -q '^LSFGVK_MULTIPLIER=' ||
       python3 "${edit_py}" "${yml_file}" set LSFGVK_MULTIPLIER 2; }
   else
@@ -406,7 +408,7 @@ if {
 } >/dev/null 2>&1; then
   :
 else
-  YML_PATH="${yml_file}" DLL_PATH="${prefix_dir}/lsfg-vk/lsfg-vk.dll" LSFG_MODE="${mode}" python3 -c '
+  YML_PATH="${yml_file}" DLL_PATH="$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" LSFG_MODE="${mode}" python3 -c '
 import os, yaml
 
 yml_path = os.environ["YML_PATH"]

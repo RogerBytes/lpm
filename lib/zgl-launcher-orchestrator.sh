@@ -48,6 +48,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 
 # --- Final Lutris command: the same as the one used in Exec= before the orchestrator ---
 launch_lutris() {
@@ -175,7 +177,7 @@ except Exception:
 
 launcher_active=false
 legacy_relay_present=false
-if [[ -d "${game_dir}" ]] && [[ -f "${game_dir}/lpm-launcher.yml" ]] \
+if [[ -d "${game_dir}" ]] && [[ -f "$(zgu_lpm_find "${game_dir}" launcher)" ]] \
     && [[ -n "${lutris_game_yml}" ]] && [[ -f "${lutris_game_yml}" ]] \
     && lutris_exe_is_launch_bat "${lutris_game_yml}"; then
   launcher_active=true
@@ -184,7 +186,7 @@ fi
 
 # --- Loading screen disabled for this game, or folder not found: no loading screen, but the
 # LPM Launcher still works (its own picker window, then lpm-launch.bat), then direct launch. ---
-if [[ ! -d "${game_dir}" ]] || [[ -f "${game_dir}/.lpm-no-loadingscreen" ]]; then
+if [[ ! -d "${game_dir}" ]] || [[ -e "$(zgu_lpm_find "${game_dir}" no_loadingscreen)" ]]; then
   if [[ "${launcher_active}" = true ]] && [[ "${legacy_relay_present}" = false ]]; then
     bash "${script_dir}/zgl-launcher-runtime.sh" "${game_dir}"
   fi
@@ -200,12 +202,13 @@ fi
 # display, only to know whether a picker will be shown (the gamepad is not started yet). It
 # decides the INITIAL background: if a picker follows, the splash must only appear AFTER the
 # choice, never before only to vanish at once (flicker). ---
-launcher_yml="${game_dir}/lpm-launcher.yml"
+launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
 # NOT under /tmp: the /tmp of the Flatpak Lutris sandbox is invisible from the host, so
 # zgl-launcher-runtime.sh (running INSIDE it for Flatpak Lutris) would never find a file
 # written HERE on the host. "${game_dir}" is visible from both sides.
-launcher_choice_file="${game_dir}/.lpm-launcher-choice"
-rm -f "${launcher_choice_file}" 2>/dev/null
+launcher_choice_file="$(zgu_lpm_path "${game_dir}" launcher_choice)"
+rm -f "${launcher_choice_file}" "$(zgu_lpm_legacy_path "${game_dir}" launcher_choice)" 2>/dev/null
+mkdir -p "$(dirname "${launcher_choice_file}")" 2>/dev/null
 
 # Protocol of the picker embedded in the single window (see zgu-launcher-screen.py, file
 # header): two fixed-path files derived from "control_file", never mixed into its 4 lines.
@@ -263,7 +266,7 @@ fi
 
 # --- Background: splash image if present, else plain black, EXCEPT when a picker will be
 # shown: then NONE until the choice (see block above). ---
-splash_image="${game_dir}/splash/splash.png"
+splash_image="$(zgu_lpm_find "${game_dir}" splash)/splash.png"
 bg_state="NONE"
 if [[ "${will_show_picker}" = false ]] && [[ -f "${splash_image}" ]]; then
   bg_state="${splash_image}"
@@ -274,7 +277,7 @@ fi
 # (top of the screen, above its always-centered frame), so no "always on top" window is
 # needed. If absent, zgu-launcher-screen.py shows the title there instead; passed even if
 # missing, the existence check is done on the Python side.
-logo_image="${game_dir}/splash/logo.png"
+logo_image="$(zgu_lpm_find "${game_dir}" splash)/logo.png"
 
 # Known in advance (see YAML block above, "will_show_picker"): "1" if this game has a single
 # entry (or none), so no label is ever shown on the loading screen; see <no_label> in the
@@ -321,13 +324,16 @@ if [[ -f "${shortcut_file}" ]]; then
   screen_wm_class="${screen_wm_class//[$'\n\r\t']/}"
 fi
 keep_focus_env=0
-[[ -f "${game_dir}/.lpm-keep-focus" ]] && keep_focus_env=1
+[[ -e "$(zgu_lpm_find "${game_dir}" keep_focus)" ]] && keep_focus_env=1
 # Per-game message shown at the bottom center of the loading screen (explains a long loading).
 # VISIBLE file at the prefix root, created empty if missing, never overwritten; an empty file
 # shows nothing. One line of the file = one message (the screen shows one at a time, wraps a long
 # one, and alternates when there are several); 1200 characters at most, CR and tabs become spaces.
-loading_message_file="${game_dir}/lpm-loading-message.txt"
-[[ -e "${loading_message_file}" ]] || : > "${loading_message_file}" 2>/dev/null
+loading_message_file="$(zgu_lpm_find "${game_dir}" loading_message)"
+if [[ ! -e "${loading_message_file}" ]]; then
+  mkdir -p "$(dirname "${loading_message_file}")" 2>/dev/null
+  : > "${loading_message_file}" 2>/dev/null
+fi
 loading_message=$(head -c 1200 "${loading_message_file}" 2>/dev/null | tr '\r\t' '  ')
 LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
@@ -471,10 +477,13 @@ fi
 # sandbox (see "launcher_choice_file"), containing all the logic (a few lines). Portable in
 # a .zgp export: no absolute path specific to this machine or install mode (.deb vs
 # install.sh); the relay is regenerated at every launch anyway.
-winetrace_scripts_dir="${game_dir}/scripts"
+winetrace_scripts_dir="$(zgu_lpm_path "${game_dir}" scripts)"
 winetrace_wrapper="${winetrace_scripts_dir}/lpm-winetrace.sh"
 trace_file="${winetrace_scripts_dir}/lpm-winetrace.log"
 rm -f "${trace_file}" 2>/dev/null
+# Old layout (scripts/ at the prefix root): its relay and trace are replaced by the ones in lpm/scripts.
+rm -f "$(zgu_lpm_legacy_path "${game_dir}" scripts)/lpm-winetrace.sh" "$(zgu_lpm_legacy_path "${game_dir}" scripts)/lpm-winetrace.log" 2>/dev/null
+rmdir "$(zgu_lpm_legacy_path "${game_dir}" scripts)" 2>/dev/null
 
 use_winetrace=false
 
@@ -539,10 +548,13 @@ if not isinstance(system_cfg, dict):
 # strip the user-specific tail and rebuild it behind the up-to-date wrapper (the trace path
 # is normally identical, so this usually changes nothing).
 current = str(system_cfg.get("prefix_command") or "")
+import re
+
 if current.startswith(wanted_prefix):
     user_tail = current[len(wanted_prefix):].lstrip()
 else:
-    user_tail = current
+    # Wrapper of the old layout (<prefix>/scripts/...): replaced, never stacked.
+    user_tail = re.sub(r"^\s*\S*/scripts/lpm-winetrace\.sh\s+\S*lpm-winetrace\.log\s*", "", current)
 new_value = wanted_prefix if not user_tail else f"{wanted_prefix} {user_tail}"
 
 if new_value == current:
@@ -612,8 +624,11 @@ WIN_IGNORED_CLASSES=(Shell_TrayWnd IPTip_Main_Window WineAppBar SDLHelperWindowI
 # game with a real window (e.g. "bbbridge", the Bloodborne online bridge, which ignores a
 # hidden start) is never taken for the game window. Empty lines and "#" comments are skipped.
 WIN_IGNORED_WORDS=()
-ignored_windows_file="${game_dir:+${game_dir}/lpm-ignore-windows.txt}"
-[[ -z "${ignored_windows_file}" ]] || [[ -e "${ignored_windows_file}" ]] || : > "${ignored_windows_file}" 2>/dev/null
+ignored_windows_file="${game_dir:+$(zgu_lpm_find "${game_dir}" ignore_windows)}"
+if [[ -n "${ignored_windows_file}" ]] && [[ ! -e "${ignored_windows_file}" ]]; then
+  mkdir -p "$(dirname "${ignored_windows_file}")" 2>/dev/null
+  : > "${ignored_windows_file}" 2>/dev/null
+fi
 if [[ -n "${ignored_windows_file}" ]] && [[ -r "${ignored_windows_file}" ]]; then
   while IFS= read -r ignored_word || [[ -n "${ignored_word}" ]]; do
     ignored_word="${ignored_word//$'\r'/}"
@@ -656,8 +671,11 @@ POST_WINDOW_GRACE_MS=1000
   # Maximum wait for the game window: VISIBLE file at the prefix root, created with 60 if
   # missing, never overwritten, so a user-edited value survives. For a game whose window takes
   # minutes to appear (heavy mods...). Only whole seconds between 5 and 3600 are accepted.
-  max_wait_file="${game_dir}/lpm-max-wait-s"
-  [[ -f "${max_wait_file}" ]] || printf '60' > "${max_wait_file}" 2>/dev/null
+  max_wait_file="$(zgu_lpm_find "${game_dir}" max_wait)"
+  if [[ ! -f "${max_wait_file}" ]]; then
+    mkdir -p "$(dirname "${max_wait_file}")" 2>/dev/null
+    printf '60' > "${max_wait_file}" 2>/dev/null
+  fi
   max_wait_s=$(tr -cd '0-9' < "${max_wait_file}" 2>/dev/null)
   [[ -n "${max_wait_s}" ]] && max_wait_s=$(( 10#${max_wait_s} ))  # "060" is not octal
   if [[ -z "${max_wait_s}" ]] || [[ "${max_wait_s}" -lt 5 ]] || [[ "${max_wait_s}" -gt 3600 ]]; then
@@ -670,8 +688,11 @@ POST_WINDOW_GRACE_MS=1000
   # if missing, never overwritten, so a user-edited value survives all later launches. Added to
   # POST_WINDOW_GRACE_MS above; useful for a game whose window appears before it is really
   # playable (e.g. shader compilation right after the window appears).
-  extra_ms_file="${game_dir}/lpm-extra-loading-ms"
-  [[ -f "${extra_ms_file}" ]] || printf '0' > "${extra_ms_file}" 2>/dev/null
+  extra_ms_file="$(zgu_lpm_find "${game_dir}" extra_loading)"
+  if [[ ! -f "${extra_ms_file}" ]]; then
+    mkdir -p "$(dirname "${extra_ms_file}")" 2>/dev/null
+    printf '0' > "${extra_ms_file}" 2>/dev/null
+  fi
   extra_ms=$(tr -cd '0-9' < "${extra_ms_file}" 2>/dev/null)
   [[ -z "${extra_ms}" ]] && extra_ms=0
 

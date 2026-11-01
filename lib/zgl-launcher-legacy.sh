@@ -88,7 +88,10 @@ if ! relay_in_yml && [[ -n "${game_dir}" ]]; then
 fi
 
 # --- 3. bat_path of lpm-launcher.yml, from the game.exe Lutris really runs ---
-launcher_yml="${game_dir}/lpm-launcher.yml"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
+launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
 if [[ -n "${game_dir}" ]] && [[ -f "${launcher_yml}" ]]; then
   YML_PATH="${yml}" LAUNCHER_YML="${launcher_yml}" python3 -c '
 import os, yaml

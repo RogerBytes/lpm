@@ -85,7 +85,7 @@ check "uninstall-runner: unknown" 1 'could not be found' uninstall-runner -y nos
 
 # --- Launcher and tools (Lutris YAML editing)
 check "launcher on" 0 'enabled' launcher mario on
-expect "launcher on: file created" test -f "${HOME}/Games/mario/lpm-launcher.yml"
+expect "launcher on: file created" test -f "${HOME}/Games/mario/lpm/launcher.yml"
 check "launcher off" 0 'disabled' launcher mario off
 # Exe inside drive_c: the Windows paths are computed as text, Wine (winepath) is NOT started.
 mkdir -p "${HOME}/Games/mario/drive_c/Games/Mario/sub"
@@ -95,10 +95,10 @@ for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin";
   mv "${dir}/winepath" "${dir}/winepath.real"
   printf '#!/bin/sh\ntouch "%s/winepath-called"\nexit 1\n' "${HOME}" > "${dir}/winepath"; chmod +x "${dir}/winepath"
 done
-rm -f "${HOME}/Games/mario/lpm-launcher.yml"
+rm -f "${HOME}/Games/mario/lpm/launcher.yml"
 check "launcher on: exe in drive_c" 0 'enabled' launcher mario on
 expect "launcher on: winepath not called" test ! -e "${HOME}/winepath-called"
-expect "launcher on: Windows path computed" grep -qF 'C:\Games\Mario\sub\m.exe' "${HOME}/Games/mario/lpm-launcher.yml"
+expect "launcher on: Windows path computed" grep -qF 'C:\Games\Mario\sub\m.exe' "${HOME}/Games/mario/lpm/launcher.yml"
 expect "launcher on: bat has the path" grep -qF 'start "" "C:\Games\Mario\sub\m.exe"' "${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat"
 for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin"; do
   mv -f "${dir}/winepath.real" "${dir}/winepath"
@@ -107,27 +107,28 @@ check "launcher off (2)" 0 'disabled' launcher mario off
 # Existing lpm-launcher.yml WITHOUT bat_path/original_exe (hand-written or restored from a .zgp):
 # "on" keeps the entries and comments, and adds the two keys (otherwise the runtime writes a
 # lpm-launch.bat that Lutris never runs and the picker choice is ignored).
-printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\one.exe\n- label: Two\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\two.exe\n# my comment\n' > "${HOME}/Games/mario/lpm-launcher.yml"
+mkdir -p "${HOME}/Games/mario/lpm"
+printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\one.exe\n- label: Two\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\two.exe\n# my comment\n' > "${HOME}/Games/mario/lpm/launcher.yml"
 check "launcher on: existing yml without bat_path" 0 'enabled' launcher mario on
-expect "existing yml: bat_path added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if d.get('bat_path')=='${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat' else 1)"
-expect "existing yml: original_exe added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
-expect "existing yml: entries kept" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if [e['label'] for e in d['entries']]==['One','Two'] else 1)"
-expect "existing yml: comment kept" grep -q '# my comment' "${HOME}/Games/mario/lpm-launcher.yml"
+expect "existing yml: bat_path added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if d.get('bat_path')=='${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat' else 1)"
+expect "existing yml: original_exe added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+expect "existing yml: entries kept" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if [e['label'] for e in d['entries']]==['One','Two'] else 1)"
+expect "existing yml: comment kept" grep -q '# my comment' "${HOME}/Games/mario/lpm/launcher.yml"
 check "launcher on again: refused" 1 'already enabled' launcher mario on
-expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
 mkdir -p "${HOME}/Games/mario/splash"
 echo img > "${HOME}/Games/mario/splash/splash.png"
 mkdir -p "${HOME}/Games/mario/scripts"
 echo trace > "${HOME}/Games/mario/scripts/lpm-winetrace.sh"
 echo data > "${HOME}/Games/mario/drive_c/Games/Mario/game-data.txt"
-expect "launcher on: bat and yml exist, NO relay" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/lpm-launcher.yml" ]]' _ "${HOME}/Games/mario"
+expect "launcher on: bat and yml exist, NO relay" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/lpm/launcher.yml" ]]' _ "${HOME}/Games/mario"
 expect "launcher on: Lutris config has game.exe on the bat and NO prelaunch command" bash -c 'grep -q "lpm-launch.bat" "$1" && ! grep -q "prelaunch" "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
 check "launcher off (3)" 0 'disabled' launcher mario off
-expect "launcher off: yml and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/lpm-launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
+expect "launcher off: yml and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/lpm/launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
 expect "launcher off: splash, loading-screen script and game files kept" bash -c '[[ -f "$1/splash/splash.png" && -f "$1/scripts/lpm-winetrace.sh" && -f "$1/drive_c/Games/Mario/game-data.txt" ]]' _ "${HOME}/Games/mario"
 expect "launcher off: Lutris exe restored" grep -q 'm.exe' "${HOME}/.config/lutris/games/mario-1.yml"
 check "launcher on after off: fresh yml" 0 'enabled' launcher mario on
-expect "launcher on after off: only the default entry (old entries gone)" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm-launcher.yml')); sys.exit(0 if len(d['entries'])==1 else 1)"
+expect "launcher on after off: only the default entry (old entries gone)" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if len(d['entries'])==1 else 1)"
 check "launcher off (4)" 0 'disabled' launcher mario off
 # Runtime with a YAML WITHOUT bat_path (picker choice already made): the choice must reach the
 # lpm-launch.bat of drive_c that Lutris runs, not only a file at the root of the game folder.
@@ -135,7 +136,7 @@ rt_game="${HOME}/Games/rtgame"
 mkdir -p "${rt_game}/drive_c/Games/Rt"
 printf '@echo off\r\nstart "" "C:\\Games\\Rt\\first.exe"\r\n' > "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
 printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Rt\n  exe: C:\\Games\\Rt\\first.exe\n- label: Two\n  workdir: C:\\Games\\Rt\n  exe: C:\\Games\\Rt\\second.exe\n' > "${rt_game}/lpm-launcher.yml"
-printf 'Two' > "${rt_game}/.lpm-launcher-choice"
+mkdir -p "${rt_game}/lpm"; printf 'Two' > "${rt_game}/lpm/.launcher-choice"
 expect "runtime without bat_path: runs" bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "runtime without bat_path: drive_c bat gets the choice" grep -q 'second.exe' "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
 # Loading-screen subtitle: the title (line 3) never changes; line 4 = chosen label, empty if the
@@ -143,20 +144,20 @@ expect "runtime without bat_path: drive_c bat gets the choice" grep -q 'second.e
 rt_key=$(printf '%s' "${rt_game}" | sha256sum | cut -c1-24)
 rt_ctrl="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${rt_key}"
 printf 'NONE\nIND_SHOW\nRt Game\n\n' > "${rt_ctrl}"
-printf 'Two' > "${rt_game}/.lpm-launcher-choice"
+mkdir -p "${rt_game}/lpm"; printf 'Two' > "${rt_game}/lpm/.launcher-choice"
 bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "subtitle: title kept, label on line 4" bash -c '[[ "$(sed -n 3p "$1")" = "Rt Game" && "$(sed -n 4p "$1")" = "Two" ]]' _ "${rt_ctrl}"
 printf 'NONE\nIND_SHOW\nOne\n\n' > "${rt_ctrl}"
-printf 'One' > "${rt_game}/.lpm-launcher-choice"
+mkdir -p "${rt_game}/lpm"; printf 'One' > "${rt_game}/lpm/.launcher-choice"
 bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "subtitle: label equal to the game name -> no subtitle" bash -c '[[ "$(sed -n 3p "$1")" = "One" && -z "$(sed -n 4p "$1")" ]]' _ "${rt_ctrl}"
 printf 'NONE\nIND_SHOW\nOne Two\n\n' > "${rt_ctrl}"
-printf 'One' > "${rt_game}/.lpm-launcher-choice"
+mkdir -p "${rt_game}/lpm"; printf 'One' > "${rt_game}/lpm/.launcher-choice"
 bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "subtitle: similar but different name -> subtitle kept" bash -c '[[ "$(sed -n 4p "$1")" = "One" ]]' _ "${rt_ctrl}"
 rm -f "${rt_ctrl}"
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
-rm -f "${HOME}/Games/mario/lpm-launcher.yml"
+rm -f "${HOME}/Games/mario/lpm/launcher.yml"
 check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
 check "tools env set empty" 0 '' tools mario env set FOO ""
@@ -172,9 +173,9 @@ expect "tools mangohud off: key removed" bash -c '! grep -q mangohud "$1"' _ "${
 check "tools mangohud off when already off" 0 'MangoHud disabled' tools mario mangohud off
 check "tools mangohud: invalid action" 1 'unknown MangoHud action' tools mario mangohud maybe
 
-# Gamepad: Lutris option system.antimicro_config -> profile in <prefix>/lpm_gamepad/
+# Gamepad: Lutris option system.antimicro_config -> profile in <prefix>/lpm/gamepad/
 gp_yml="${HOME}/.config/lutris/games/mario-1.yml"
-gp_prof="${HOME}/Games/mario/lpm_gamepad/lpm-gamepad.gamecontroller.amgp"
+gp_prof="${HOME}/Games/mario/lpm/gamepad/lpm-gamepad.gamecontroller.amgp"
 check "tools gamepad status (default off)" 0 '^off$' tools mario gamepad
 check "tools gamepad on" 0 'Gamepad profile enabled' tools mario gamepad on
 expect "tools gamepad on: profile created" test -f "${gp_prof}"
@@ -193,7 +194,7 @@ check "tools gamepad off leaves the user's profile" 1 'another AntiMicroX profil
 expect "tools gamepad: user's profile still referenced" grep -q 'mine.amgp' "${gp_yml}"
 check "tools gamepad: invalid action" 1 'unknown gamepad action' tools mario gamepad maybe
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${gp_yml}"
-rm -rf "${HOME}/Games/mario/lpm_gamepad"
+rm -rf "${HOME}/Games/mario/lpm/gamepad"
 expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
 
 # --- Legacy launcher (format of lpm <= 0.9.5: relay + Lutris prelaunch command). Packages made then
@@ -371,7 +372,7 @@ expect "window detection: empty window with a title bar ignored" bash -c "${load
 expect "window detection: small window without a title bar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Whatever 80000000 100x100)"
 expect "window detection: Wine taskbar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 166x52)"
 expect "window detection: Wine taskbar ignored even when big" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 1920x1080)"
-expect "window detection: per-game ignored word (lpm-ignore-windows.txt)" bash -c 'd=$(mktemp -d); printf "# helper\nbbbridge\n" > "${d}/lpm-ignore-windows.txt"; game_dir="${d}"; '"${load_detection}"'; rc=0; zgl_trace_line_is_game_window "$2" && rc=1; rm -rf "${d}"; exit "${rc}"' _ "${repo}" "$(trace_line bbbridge 16cf0000 1280x800)"
+expect "window detection: per-game ignored word (lpm-ignore-windows.txt)" bash -c 'd=$(mktemp -d); mkdir -p "${d}/lpm/settings"; printf "# helper\nbbbridge\n" > "${d}/lpm/settings/ignore-windows.txt"; game_dir="${d}"; source "$1/lib/zgu-lpm-paths.sh"; '"${load_detection}"'; rc=0; zgl_trace_line_is_game_window "$3" && rc=1; rm -rf "${d}"; exit "${rc}"' _ "${repo}" "${repo}" "$(trace_line bbbridge 16cf0000 1280x800)"
 
 # --- Pack safety: links pointing outside the game folder or to themselves are never copied
 mkdir -p "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z"
@@ -395,7 +396,26 @@ rm -f "${HOME}/Zelda.zgp"
 # --- Pack: lpm's own window-detection relay is not exported, a command of the user stays
 printf 'game:\n  exe: /y.exe\nsystem:\n  prefix_command: %s/Games/zelda/scripts/lpm-winetrace.sh %s/Games/zelda/scripts/lpm-winetrace.log gamemoderun\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/zelda-1.yml"
 check "pack: relay + user command" 0 '\[EXPORTED\]' pack -3 zelda
-expect "pack: relay removed, user command kept" bash -c 'zstd -dc "$1" | tar -xO "$(zstd -dc "$1" | tar -t | grep -m1 "zgp-game-config.yml$")" | python3 -c "import sys,yaml; d=yaml.safe_load(sys.stdin); assert d[\"system\"][\"prefix_command\"]==\"gamemoderun\", d"' _ "${HOME}/Zelda.zgp"
+expect "pack: relay removed, user command kept" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; d=yaml.safe_load(sys.stdin); assert d[\"system\"][\"prefix_command\"]==\"gamemoderun\", d"' _ "${HOME}/Zelda.zgp"
+# --- Pack: a pre-launch script of the game is copied into lpm/scripts, YAML points to the copy
+mkdir -p "${HOME}/hooks"; printf '#!/bin/bash\necho hi\n' > "${HOME}/hooks/before.sh"
+printf 'game:\n  exe: /y.exe\nsystem:\n  prelaunch_command: %s/hooks/before.sh\nwine:\n  version: GE-Test\n' "${HOME}" > "${HOME}/.config/lutris/games/zelda-1.yml"
+rm -f "${HOME}/Zelda.zgp"
+check "pack: game with a pre-launch script" 0 '\[EXPORTED\]' pack -3 zelda
+expect "pack: script copied to lpm/scripts in the archive" bash -c 'zstd -dc "$1" | tar -t | grep -q "/lpm/scripts/before.sh$"' _ "${HOME}/Zelda.zgp"
+expect "pack: YAML points to the copied script" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | grep -q "GAMEDIR\|lpm/scripts/before.sh"' _ "${HOME}/Zelda.zgp"
+# Install: the script travels in the archive; without --allow-scripts the hook is neutralized,
+# with it the hook points to the copy in the new lpm/scripts.
+mkdir -p "${HOME}/hookdir"; cp "${HOME}/Zelda.zgp" "${HOME}/hookdir/Zelda.zgp"
+check "uninstall zelda (hook test)" 0 '\[REMOVED\] zelda' uninstall -y zelda
+check "install: archive with a script, no --allow-scripts" 0 '\[INSTALLED\] zelda' install -y "${HOME}/hookdir/Zelda.zgp"
+expect "install: script restored in lpm/scripts" test -f "${HOME}/Games/zelda/lpm/scripts/before.sh"
+expect "install: script hook neutralized by default" bash -c '! grep -hE "^[[:space:]]*prelaunch_command:" $1' _ "${HOME}/.config/lutris/games/zelda-*.yml"
+check "uninstall zelda (hook test 2)" 0 '\[REMOVED\] zelda' uninstall -y zelda
+check "install: archive with a script, --allow-scripts" 0 '\[INSTALLED\] zelda' install -y --allow-scripts "${HOME}/hookdir/Zelda.zgp"
+expect "install: --allow-scripts keeps the hook on the copy" bash -c 'grep -hE "^[[:space:]]*prelaunch_command:.*/lpm/scripts/before.sh" $1' _ "${HOME}/.config/lutris/games/zelda-*.yml"
+rm -rf "${HOME}/hookdir"
+rm -f "${HOME}/Zelda.zgp"
 rm -f "${HOME}/Zelda.zgp"
 printf 'game:\n  exe: /x.exe\nsystem:\n  prefix_command: %s/Games/mario/scripts/lpm-winetrace.sh %s/Games/mario/scripts/lpm-winetrace.log\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/mario-1.yml"
 
@@ -425,21 +445,25 @@ rm -rf "${pshim}"
 
 # --- Full round trip: pack, uninstall, reinstall
 check "pack" 0 '\[EXPORTED\]' pack -3 mario
-expect "pack: relay only -> no prefix_command exported" bash -c '! zstd -dc "$1" | tar -xO "$(zstd -dc "$1" | tar -t | grep -m1 "zgp-game-config.yml$")" | grep -q prefix_command' _ "${HOME}/Mario.zgp"
+expect "pack: relay only -> no prefix_command exported" bash -c '! bsdtar -xOqf "$1" .lpm-config.yml | grep -q prefix_command' _ "${HOME}/Mario.zgp"
 expect "pack: .zgp created" test -s "${HOME}/Mario.zgp"
-expect "pack: .lpm-size is the first member of the archive" bash -c 'zstd -dc "$1" | head -c 100 | tr -d "\0" | grep -qx ".lpm-size"' _ "${HOME}/Mario.zgp"
-expect "pack: .lpm-size holds a size" bash -c 'bsdtar -xOqf "$1" .lpm-size | grep -Eq "^size=[1-9][0-9]*$"' _ "${HOME}/Mario.zgp"
+expect "pack: .lpm-config.yml is the first member of the archive" bash -c 'zstd -dc "$1" | head -c 100 | tr -d "\0" | grep -qx ".lpm-config.yml"' _ "${HOME}/Mario.zgp"
+expect "pack: first-member YAML holds the exact size" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"lpm_archive\"][\"size\"] > 0"' _ "${HOME}/Mario.zgp"
+expect "pack: no .lpm-size and no zgp-game-config.yml left in the archive" bash -c '! zstd -dc "$1" | tar -t | grep -qE "(^|/)(\.lpm-size|zgp-game-config\.yml)$"' _ "${HOME}/Mario.zgp"
+expect "pack: the prefix itself is untouched (no config file left in it)" bash -c '[ ! -e "$1/zgp-game-config.yml" ] && [ ! -e "$1/lpm/config.yml" ]' _ "${HOME}/Games/mario"
 check "uninstall" 0 '\[REMOVED\] mario' uninstall -y mario
 expect "uninstall: removed from the list" bash -c "! bash '${R}' list </dev/null | grep -q '^mario '"
 expect "uninstall: folder deleted" test ! -e "${HOME}/Games/mario"
 check "install" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario.zgp"
-expect "install: .lpm-size is not extracted into the games folder" bash -c '[ ! -e "$1/.lpm-size" ] && [ ! -e "$1/mario/.lpm-size" ]' _ "${HOME}/Games"
+expect "install: first-member YAML is not extracted into the games folder" bash -c '[ ! -e "$1/.lpm-config.yml" ] && [ ! -e "$1/mario/.lpm-config.yml" ]' _ "${HOME}/Games"
 check "list after reinstall" 0 'mario +Mario' list
 
 # --- Install removes Proton's "version" file from archives made before the export did it
 mkdir -p "${HOME}/old-archive"
 zstd -dc "${HOME}/Mario.zgp" | tar -x -C "${HOME}/old-archive"
 echo "GE-Proton-test" > "${HOME}/old-archive/mario/version"
+# Previous archive format: the YAML sits INSIDE the prefix under its old name, no first member.
+cp "${HOME}/old-archive/.lpm-config.yml" "${HOME}/old-archive/mario/zgp-game-config.yml"
 # ... and with the relay of the old LPM Launcher format (lpm <= 0.9.5)
 mkdir -p "${HOME}/old-archive/mario/scripts"
 printf '#!/bin/sh\n' > "${HOME}/old-archive/mario/scripts/lpm-launcher.sh"
@@ -447,6 +471,7 @@ tar -C "${HOME}/old-archive" -cf - mario | zstd -q > "${HOME}/Mario-old.zgp"
 check "uninstall before old archive" 0 '\[REMOVED\] mario' uninstall -y mario
 check "install old archive" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario-old.zgp"
 expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/version"
+check "list after an old-format install (name read from the old YAML)" 0 'mario +Mario' list
 expect "install: relay of the old LPM Launcher format removed (legacy)" test ! -e "${HOME}/Games/mario/scripts/lpm-launcher.sh"
 rm -rf "${HOME}/old-archive" "${HOME}/Mario-old.zgp"
 
@@ -480,16 +505,19 @@ rm -f "${shim}/bsdtar"
 # without ".lpm-size" falls back to the archive's size.
 mkdir -p "${HOME}/exactgame" "${HOME}/exactmeta"
 head -c 2097152 /dev/zero > "${HOME}/exactgame/zeros.bin"
+printf 'name: Exact\nlpm_archive:\n  format: 2\n  size: 2097152\n' > "${HOME}/exactmeta/.lpm-config.yml"
+tar -cf - -C "${HOME}/exactmeta" .lpm-config.yml -C "${HOME}" exactgame | zstd -q > "${HOME}/Exact.zgp"
 printf 'size=2097152\n' > "${HOME}/exactmeta/.lpm-size"
-tar -cf - -C "${HOME}/exactmeta" .lpm-size -C "${HOME}" exactgame | zstd -q > "${HOME}/Exact.zgp"
+tar -cf - -C "${HOME}/exactmeta" .lpm-size -C "${HOME}" exactgame | zstd -q > "${HOME}/ExactLegacy.zgp"
 tar -cf - -C "${HOME}" exactgame | zstd -q > "${HOME}/ExactOld.zgp"
 printf '#!/bin/sh\nprintf "Filesystem 1024-blocks Used Available Capacity Mounted\\nx 100000 99000 1000 99%% /\\n"\n' > "${shim}/df"
 chmod +x "${shim}/df"
 PATH="${shim}:${PATH}" check "install: exact size refused (archive itself would fit)" 1 'at least 2\.0MiB' install -y "${HOME}/Exact.zgp"
 expect "exact size: read from a new archive" bash -c 'source "$1/lib/zgu-cli-utils.sh"; [ "$(zgu_archive_exact_size "$2")" = "2097152" ]' _ "${work}/repo" "${HOME}/Exact.zgp"
+expect "exact size: still read from the previous .lpm-size format" bash -c 'source "$1/lib/zgu-cli-utils.sh"; [ "$(zgu_archive_exact_size "$2")" = "2097152" ]' _ "${work}/repo" "${HOME}/ExactLegacy.zgp"
 expect "exact size: absent from an old archive" bash -c 'source "$1/lib/zgu-cli-utils.sh"; ! zgu_archive_exact_size "$2" >/dev/null' _ "${work}/repo" "${HOME}/ExactOld.zgp"
 rm -f "${shim}/df"
-rm -rf "${HOME}/exactgame" "${HOME}/exactmeta" "${HOME}/Exact.zgp" "${HOME}/ExactOld.zgp"
+rm -rf "${HOME}/exactgame" "${HOME}/exactmeta" "${HOME}/Exact.zgp" "${HOME}/ExactLegacy.zgp" "${HOME}/ExactOld.zgp"
 rm -rf "${shim}" "${HOME}/Space.zgp" "${HOME}/Space2.zgp"
 
 # --- Completion: every documented command is offered (except advanced commands
@@ -539,6 +567,17 @@ check "log" 0 'ERROR' log
 
 # --- Uninstalling a game and a runner
 check "uninstall zelda" 0 '\[REMOVED\] zelda' uninstall -y zelda
+# --- Runner install from a local .zgr: normal, then refused when the disk has no room
+mkdir -p "${HOME}/zgrsrc/GE-Fake/bin"; echo x > "${HOME}/zgrsrc/GE-Fake/bin/wine"
+tar -cf - -C "${HOME}/zgrsrc" GE-Fake | zstd -q > "${HOME}/GE-Fake.zgr"
+pshim="${work}/pshim"; mkdir -p "${pshim}"
+printf '#!/bin/sh\nprintf "Filesystem 1024-blocks Used Available Capacity Mounted\\nx 100 100 0 100%% /\\n"\n' > "${pshim}/df"; chmod +x "${pshim}/df"
+PATH="${pshim}:${PATH}" check "install-runner: not enough space is refused before extracting" 1 'not enough free disk space' install-runner -y "${HOME}/GE-Fake.zgr"
+expect "install-runner: nothing extracted when refused" test ! -e "${HOME}/.local/share/lutris/runners/wine/GE-Fake"
+rm -rf "${pshim}"
+check "install-runner: local .zgr" 0 '\[INSTALLED\] GE-Fake' install-runner -y "${HOME}/GE-Fake.zgr"
+expect "install-runner: runner files present" test -f "${HOME}/.local/share/lutris/runners/wine/GE-Fake/bin/wine"
+rm -rf "${HOME}/.local/share/lutris/runners/wine/GE-Fake" "${HOME}/GE-Fake.zgr" "${HOME}/zgrsrc"
 check "uninstall-runner" 0 '\[REMOVED\] GE-Test' uninstall-runner -y GE-Test
 check "list-runner empty" 0 'No runner' list-runner
 

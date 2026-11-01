@@ -40,6 +40,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
@@ -366,11 +368,13 @@ zgp_splash_process_one() {
   fi
 
   # --- Download + systematic conversion to PNG ---
-  mkdir -p "${game_dir}/splash"
+  local splash_dir
+  splash_dir="$(zgu_lpm_path "${game_dir}" splash)"
+  mkdir -p "${splash_dir}"
 
   local ext="${chosen_url##*.}"
   ext="${ext,,}"
-  local raw_file="${game_dir}/splash/.lpm-download.${ext}"
+  local raw_file="${splash_dir}/.lpm-download.${ext}"
 
   if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
     zgp_splash_report_skip "$(t splash.download_failed "${g_name}")"
@@ -379,7 +383,7 @@ zgp_splash_process_one() {
     return 1
   fi
 
-  if ! "${convert_bin[@]}" "${raw_file}" "${game_dir}/splash/splash.png" 2>/dev/null; then
+  if ! "${convert_bin[@]}" "${raw_file}" "${splash_dir}/splash.png" 2>/dev/null; then
     zgp_splash_report_skip "$(t splash.convert_failed "${g_name}")"
     zgu_log "splash" "ERROR" "slug=${slug} reason=conversion_failed"
     rm -f "${raw_file}"

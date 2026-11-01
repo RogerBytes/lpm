@@ -43,6 +43,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 
 bail() {
   local msg="$1"
@@ -55,7 +57,7 @@ bail() {
 [[ -n "${gamedir}" ]] || bail "gamedir_manquant"
 [[ -d "${gamedir}" ]] || bail "gamedir_introuvable"
 
-yaml_path="${gamedir}/lpm-launcher.yml"
+yaml_path="$(zgu_lpm_find "${gamedir}" launcher)"
 [[ -f "${yaml_path}" ]] || bail "yaml_introuvable"
 
 # --- 1. Read the YAML (title, prompt, active entries; entries commented with "#" are
@@ -118,21 +120,21 @@ done <<< "${parsed}"
 
 [[ ${#entry_labels[@]} -eq 0 ]] && bail "aucune_entree_valide"
 
-# Fallback for a lpm-launcher.yml generated before the "bat_path" key existed: old
-# location, at the root of $gamedir.
-bat_path="${bat_path_yaml:-${gamedir}/lpm-launch.bat}"
-
-# Every lpm-launch.bat to write. Normally only "bat_path". When the YAML has no "bat_path"
-# (hand-written file, or restored from a .zgp), the .bat Lutris really runs is unknown here, so
-# the ones that already exist in the game's prefix ("drive_c/Games/<folder>/lpm-launch.bat",
-# created by "lpm launcher ... on") are written too: otherwise the choice would go to a file
-# Lutris never runs and the first entry would always start.
-bat_targets=("${bat_path}")
-if [[ -z "${bat_path_yaml}" ]]; then
+# Every lpm-launch.bat to write. Normally only "bat_path" (the .bat Lutris really runs). When
+# the YAML has no "bat_path" (hand-written file, or restored from a .zgp), the ones that
+# already exist in the game's prefix ("drive_c/Games/<folder>/lpm-launch.bat", created by
+# "lpm launcher ... on") are written instead: otherwise the choice would go to a file Lutris
+# never runs and the first entry would always start. NEVER at the root of the prefix: Wine only
+# reaches files inside "drive_c".
+bat_targets=()
+if [[ -n "${bat_path_yaml}" ]]; then
+  bat_targets+=("${bat_path_yaml}")
+else
   for found_bat in "${gamedir}"/drive_c/Games/*/lpm-launch.bat; do
     [[ -f "${found_bat}" ]] && bat_targets+=("${found_bat}")
   done
 fi
+[[ ${#bat_targets[@]} -eq 0 ]] && bail "bat_introuvable"
 
 # --- Orchestrator control file (may or may not be open; see file header). Same EXACT
 # derivation as lib/zgl-launcher-orchestrator.sh: sha256sum of gamedir, fixed path, no
@@ -213,7 +215,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
   # vice versa (and "/run/host/tmp" does not exist, unlike "/run/host/usr"). The choice file
   # must live in "${gamedir}", visible from both sides: Lutris must read/write there to launch
   # the game, with or without Flatpak.
-  choice_file="${gamedir}/.lpm-launcher-choice"
+  choice_file="$(zgu_lpm_path "${gamedir}" launcher_choice)"
 
   if [[ -f "${choice_file}" ]]; then
     selection=$(cat "${choice_file}" 2>/dev/null)

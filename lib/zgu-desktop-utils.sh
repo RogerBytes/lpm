@@ -11,6 +11,9 @@
 # Fallback to the Desktop/Bureau heuristic if xdg-user-dir is missing or returns nothing usable. If
 # neither "~/Bureau" nor "~/Desktop" exists on disk, return "$HOME" rather than a nonexistent
 # "~/Desktop" (zgu_write_game_shortcut checks the folder exists before writing).
+# shellcheck source=./zgu-lpm-paths.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zgu-lpm-paths.sh"
+
 zgu_get_desktop_dir() {
   if command -v xdg-user-dir >/dev/null 2>&1; then
     local xdg_desktop
@@ -103,9 +106,11 @@ zgu_write_game_shortcut() {
   local desktop_dir_override="${12:-}"
 
   local icon_path="lpm-game-generic"
-  if [[ -d "${prefix_dir}/icon" ]]; then
+  local icon_src_dir
+  icon_src_dir="$(zgu_lpm_find "${prefix_dir}" icon)"
+  if [[ -d "${icon_src_dir}" ]]; then
     local icon_file
-    icon_file=$(find "${prefix_dir}/icon" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -print -quit 2>/dev/null)
+    icon_file=$(find "${icon_src_dir}" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -print -quit 2>/dev/null)
     # icon_file is a real file name possibly forged by a third party (shared .zgp package) and injected
     # as-is into "Icon=${icon_path}" of the generated .desktop: a newline in the name could add an
     # arbitrary "Exec=" line (silent execution on double-click, since the .desktop is marked
@@ -302,12 +307,14 @@ StartupWMClass=${wm_class}"
       chmod +x "${desktop_dir}/${slug}.desktop"
       gio set "${desktop_dir}/${slug}.desktop" metadata::trusted true 2>/dev/null || true
 
-      if [[ -d "${prefix_dir}/extras" ]]; then
+      local extras_src_dir
+      extras_src_dir="$(zgu_lpm_find "${prefix_dir}" extras)"
+      if [[ -d "${extras_src_dir}" ]]; then
         local bonus_dir_name bonus_suffix
         bonus_suffix="$(t install_game.bonus_folder_suffix)"
         bonus_dir_name="${game_real_name} ${bonus_suffix}"
         rm -rf "${desktop_dir}/${bonus_dir_name:?}"
-        ln -s "${prefix_dir}/extras" "${desktop_dir}/${bonus_dir_name}"
+        ln -s "${extras_src_dir}" "${desktop_dir}/${bonus_dir_name}"
       fi
     fi
   fi

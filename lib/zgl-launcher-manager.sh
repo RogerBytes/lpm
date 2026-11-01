@@ -62,6 +62,8 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 
 # --- 0. CLI syntax validation (bin/lpm has no interactive entry point: no menu/Zenity
 # selection, only this explicit terminal command) ---
@@ -386,11 +388,14 @@ print(version)
   # that exists here comes from a hand edit or a restored .zgp; overwriting it on "on" would
   # lose that customization, including on a repair re-enable after a reinstall that dropped
   # system.prelaunch_command (see zgp_launcher_is_active above). ---
-  if [[ ! -f "${game_dir}/lpm-launcher.yml" ]]; then
+  local launcher_yml_on
+  launcher_yml_on="$(zgu_lpm_find "${game_dir}" launcher)"
+  if [[ ! -f "${launcher_yml_on}" ]]; then
+    mkdir -p "$(dirname "${launcher_yml_on}")" 2>/dev/null
     local default_label
     default_label="$(t launcher.default_entry_label)"
 
-    YML_PATH="${game_dir}/lpm-launcher.yml" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
+    YML_PATH="${launcher_yml_on}" TITLE="${name_by_slug[${slug}]}" PROMPT="$(t launcher.default_prompt)" \
       LABEL="${default_label}" WORKDIR="${win_workdir}" EXE="${win_exe}" ORIGINAL_EXE="${current_exe}" \
       BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
 import os, yaml
@@ -418,7 +423,7 @@ with open(os.environ["YML_PATH"], "w") as f:
       echo "#  - label: \"$(t launcher.example_entry_label)\""
       echo "#    workdir: \"C:\\\\Games\\\\...\""
       echo "#    exe: \"C:\\\\Games\\\\...\\\\game.exe\""
-    } >> "${game_dir}/lpm-launcher.yml"
+    } >> "${launcher_yml_on}"
   else
     # lpm-launcher.yml already exists (hand-written, restored from a .zgp, or left by an
     # earlier "off"). Its entries are kept, but the two keys lpm itself relies on are brought
@@ -432,7 +437,7 @@ with open(os.environ["YML_PATH"], "w") as f:
     #    point to an lpm-launch.bat (then the real original exe is unknown and an existing
     #    value is never overwritten with the .bat).
     # Comment lines at the end of the file are kept.
-    YML_PATH="${game_dir}/lpm-launcher.yml" ORIGINAL_EXE="${current_exe}" \
+    YML_PATH="${launcher_yml_on}" ORIGINAL_EXE="${current_exe}" \
       BAT_PATH_LINUX="${bat_path_linux}" python3 -c '
 import os, yaml
 
@@ -517,7 +522,8 @@ with open(yml_path, "w") as f:
 zgp_launcher_apply_off() {
   local slug="$1" game_dir="$2" configpath="$3"
   local yml_file="${lutris_config_dir}/${configpath}.yml"
-  local launcher_yml="${game_dir}/lpm-launcher.yml"
+  local launcher_yml
+  launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
 
   if [[ ! -f "${launcher_yml}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.launcher_yml_missing "${slug}")"
@@ -641,8 +647,11 @@ print(data.get("bat_path") or "")
     [[ "$(basename "${bat_file}")" = "lpm-launch.bat" ]] || continue
     [[ -f "${bat_file}" ]] && rm -f -- "${bat_file}"
   done
-  rm -f -- "${game_dir}/scripts/lpm-launcher.sh" "${game_dir}/.lpm-launcher-choice" "${launcher_yml}"
+  rm -f -- "${game_dir}/scripts/lpm-launcher.sh" 2>/dev/null
+  zgu_lpm_remove "${game_dir}" launcher
+  zgu_lpm_remove "${game_dir}" launcher_choice
   rmdir "${game_dir}/scripts" 2>/dev/null
+  zgu_lpm_prune "${game_dir}"
 
   zgu_log "launcher" "OK" "slug=${slug} action=off"
   return 0
@@ -654,7 +663,7 @@ for target_slug in "${targets[@]}"; do
   if [[ "${action}" = "on" ]]; then
     if zgp_launcher_apply_on "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}"; then
       n_ok=$(( n_ok + 1 ))
-      zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "${dir_by_slug[${target_slug}]}/lpm-launcher.yml")"
+      zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "$(zgu_lpm_find "${dir_by_slug[${target_slug}]}" launcher)")"
     else
       exit_code=1
     fi

@@ -36,6 +36,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
@@ -485,14 +487,16 @@ zgp_icon_process_one() {
   fi
 
   # --- Download + .ico -> .png conversion if needed ---
-  mkdir -p "${prefix_dir}/icon"
+  local icon_dir
+  icon_dir="$(zgu_lpm_path "${prefix_dir}" icon)"
+  mkdir -p "${icon_dir}"
   # Purge old icons (same filter as zgu_write_game_shortcut above; nothing else in this
   # folder, e.g. extras packed in a .zgp do not live here).
-  find "${prefix_dir}/icon" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -delete 2>/dev/null
+  find "${icon_dir}" "$(zgu_lpm_legacy_path "${prefix_dir}" icon)" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -delete 2>/dev/null
 
   local ext="${chosen_url##*.}"
   ext="${ext,,}"
-  local raw_file="${prefix_dir}/icon/.lpm-download.${ext}"
+  local raw_file="${icon_dir}/.lpm-download.${ext}"
 
   if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
     zgp_icon_report_skip "$(t icon.download_failed "${g_name}")"
@@ -508,7 +512,7 @@ zgp_icon_process_one() {
     local biggest
     biggest=$("${identify_bin[@]}" "${raw_file}" 2>/dev/null | sort -n -k3 | tail -n1 | grep -oP '\[\K[^\]]+')
     [[ -z "${biggest}" ]] && biggest=0
-    if ! "${convert_bin[@]}" "${raw_file}[${biggest}]" "${prefix_dir}/icon/icon.png" 2>/dev/null; then
+    if ! "${convert_bin[@]}" "${raw_file}[${biggest}]" "${icon_dir}/icon.png" 2>/dev/null; then
       zgp_icon_report_skip "$(t icon.convert_failed "${g_name}")"
       zgu_log "icon" "ERROR" "slug=${slug} reason=ico_conversion_failed"
       rm -f "${raw_file}"
@@ -516,7 +520,7 @@ zgp_icon_process_one() {
     fi
     rm -f "${raw_file}"
   else
-    mv "${raw_file}" "${prefix_dir}/icon/icon.${ext}"
+    mv "${raw_file}" "${icon_dir}/icon.${ext}"
   fi
 
   # --- Regenerate existing shortcuts (never creates new ones: only those already present for

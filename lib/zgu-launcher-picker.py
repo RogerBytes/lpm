@@ -11,7 +11,7 @@
 #   1 -- error (GTK unavailable...) -- nothing on stdout
 #
 # Only used by zgl-launcher-runtime.sh in its fallback case (loading screen disabled for
-# this game via ".lpm-no-loadingscreen", or lpm shortcut bypassed). zgl-launcher-orchestrator.sh
+# this game via "lpm/settings/no-loadingscreen", or lpm shortcut bypassed). zgl-launcher-orchestrator.sh
 # shows the same picker EMBEDDED in its single window (see zgu-launcher-screen.py,
 # "Gtk.Overlay"); GTK4 removed "set_keep_above" with no portable equivalent, so a
 # separate window cannot be kept on top.

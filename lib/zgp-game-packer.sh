@@ -20,6 +20,8 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
@@ -283,8 +285,10 @@ trap lpm_cancel_cleanup TERM INT
 # Descriptor 3 = real script stdout (see zgp-game-installer.sh for details): needed to emit
 # "[PROGRESS] <pct>" from inside the tar | pv | zstd pipe.
 exec 3>&1
-# Tiny ".lpm-size" file (exact extracted size) placed FIRST in each archive, so the installer can
-# check the free space exactly by reading only the start of the archive. Temporary folder removed
+# ".lpm-config.yml" (the cleaned Lutris YAML of the game + its exact extracted size under the
+# "lpm_archive" key) is placed FIRST in each archive, so the installer reads the game name, the
+# needed space and the launch hooks from the start of the archive without extracting anything.
+# It is built in this temporary folder, never inside the game's prefix. Temporary folder removed
 # on any exit (including cancellation, which ends with "exit 130").
 lpm_meta_dir=$(mktemp -d)
 trap 'rm -rf -- "${lpm_meta_dir}"' EXIT
@@ -440,8 +444,77 @@ for game_real_name in "${games_to_export[@]}"; do
 
   # --- CLEAN EMBEDDING OF THE LUTRIS YAML (if available) ---
   if [[ -n "${configpath}" ]] && [[ -f "${lutris_config_dir}/${configpath}.yml" ]]; then
-    inprogress_yml="${WINEPREFIX_DIR}/zgp-game-config.yml"
-    cp "${lutris_config_dir}/${configpath}.yml" "${WINEPREFIX_DIR}/zgp-game-config.yml"
+    inprogress_yml="${lpm_meta_dir}/.lpm-config.yml"
+    cp "${lutris_config_dir}/${configpath}.yml" "${inprogress_yml}"
+
+    # Hook scripts are copied BEFORE the cleanup below: the cleanup anonymizes /home/<name>/
+    # paths, after which the script files could no longer be found.
+YML_PATH="${lpm_meta_dir}/.lpm-config.yml" PFX="${WINEPREFIX_DIR}" SCRIPTS_DIR="$(zgu_lpm_path "${WINEPREFIX_DIR}" scripts)" python3 -c '
+import os, shlex, shutil, sys, yaml
+
+yml_path = os.environ["YML_PATH"]
+pfx = os.path.realpath(os.environ["PFX"])
+scripts_dir = os.environ["SCRIPTS_DIR"]
+SYSTEM = ("/usr/", "/bin/", "/sbin/", "/lib", "/opt/", "/etc/", "/proc/", "/sys/", "/dev/")
+
+try:
+    with open(yml_path, "r") as f:
+        data = yaml.safe_load(f)
+except Exception:
+    sys.exit(0)
+if not isinstance(data, dict):
+    sys.exit(0)
+
+used = set()
+changed = False
+
+
+def relocate(value):
+    global changed
+    try:
+        words = shlex.split(value)
+    except ValueError:
+        return value
+    if not words:
+        return value
+    src = os.path.realpath(os.path.expanduser(words[0]))
+    if not os.path.isfile(src) or src.startswith(pfx + os.sep) or src.startswith(SYSTEM):
+        return value
+    name = os.path.basename(src)
+    base, ext = os.path.splitext(name)
+    n = 1
+    while name in used:
+        n += 1
+        name = f"{base}-{n}{ext}"
+    used.add(name)
+    try:
+        os.makedirs(scripts_dir, exist_ok=True)
+        shutil.copy2(src, os.path.join(scripts_dir, name))
+    except OSError:
+        return value
+    words[0] = "$GAMEDIR/lpm/scripts/" + name
+    changed = True
+    return " ".join(shlex.quote(w) if w != words[0] else w for w in words)
+
+
+def walk(obj):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            kl = k.lower() if isinstance(k, str) else ""
+            if isinstance(v, str) and kl != "prefix_command" and (kl.endswith("_command") or kl.endswith("_script")):
+                obj[k] = relocate(v)
+            else:
+                walk(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            walk(item)
+
+
+walk(data)
+if changed:
+    with open(yml_path, "w") as f:
+        yaml.dump(data, f, sort_keys=False)
+' 2>/dev/null
 
     # The absolute wineprefix path (e.g. /home/user/Games/mariovania) is replaced by Lutris'
     # native "$GAMEDIR" placeholder in all paths of the embedded YAML, resolved at install
@@ -449,7 +522,7 @@ for game_real_name in "${games_to_export[@]}"; do
     # The replacement must cover the whole path (not only the "/home/<name>/" segment):
     # otherwise a custom games folder, or one different from the packaging machine, stays
     # frozen in the YAML and breaks the install.
-    YML_PATH="${WINEPREFIX_DIR}/zgp-game-config.yml" WINEPREFIX_DIR_ENV="${WINEPREFIX_DIR}" DEFAULT_RUNNER="${default_runner}" ERR_YAML_LABEL="$(t pack_game.yaml_cleanup_error)" python3 -c '
+    YML_PATH="${inprogress_yml}" WINEPREFIX_DIR_ENV="${WINEPREFIX_DIR}" DEFAULT_RUNNER="${default_runner}" ERR_YAML_LABEL="$(t pack_game.yaml_cleanup_error)" python3 -c '
 import yaml, re, os
 
 yml_path = os.environ["YML_PATH"]
@@ -526,6 +599,13 @@ except Exception as e:
   fi
   # ---------------------------------------------------------
 
+  # --- HOOK SCRIPTS: the game's own pre/post-launch script files are copied INTO the prefix
+  # ("lpm/scripts/") and their path in the archived YAML points there ("$GAMEDIR/lpm/scripts/..."),
+  # so the archive carries them. Only existing regular files outside the prefix and outside
+  # system folders are copied (a system program such as gamemoderun stays as it is). ---
+  rm -f -- "${lpm_meta_dir}/.lpm-config.yml.new"
+  [[ -f "${lpm_meta_dir}/.lpm-config.yml" ]] || printf '{}\n' > "${lpm_meta_dir}/.lpm-config.yml"
+
   # Array (not a single string): "zstd '--ultra -22'" passed ONE argument "--ultra -22" to
   # zstd, which rejected it ("Incorrect parameters"), so levels 20 to 22 always failed.
   if [[ "${LEVEL}" -gt 19 ]]; then
@@ -540,11 +620,23 @@ except Exception as e:
   inprogress_archive="${archive_path}"
   source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
   [[ -z "${source_size}" ]] && source_size=0
-  printf 'size=%s\n' "${source_size}" > "${lpm_meta_dir}/.lpm-size"
+  # The exact size goes INTO the first-member YAML ("lpm_archive: size").
+  LPM_SIZE="${source_size}" YML_PATH="${lpm_meta_dir}/.lpm-config.yml" python3 -c '
+import os, yaml
+
+path = os.environ["YML_PATH"]
+with open(path, "r") as f:
+    data = yaml.safe_load(f)
+if not isinstance(data, dict):
+    data = {}
+data["lpm_archive"] = {"format": 2, "size": int(os.environ["LPM_SIZE"])}
+with open(path, "w") as f:
+    yaml.dump(data, f, sort_keys=False)
+' 2>/dev/null
   # Absolute path: the second -C below is relative to the previous one.
   parent_abs=$(realpath -- "${PARENT_DIR}")
   if command -v pv >/dev/null 2>&1; then
-    tar -cf - -C "${lpm_meta_dir}" .lpm-size -C "${parent_abs}" "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
+    tar -cf - -C "${lpm_meta_dir}" .lpm-config.yml -C "${parent_abs}" --exclude="${WINEPREFIX_NAME}/lpm/.launcher-choice" --exclude="${WINEPREFIX_NAME}/.lpm-config.yml" "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
       # tar adds its headers: the stream may exceed the folder size -> capped at 100.
       [[ "${_lpm_pct}" =~ ^[0-9]+$ ]] || continue
       (( _lpm_pct > 100 )) && _lpm_pct=100
@@ -552,7 +644,7 @@ except Exception as e:
     done) | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   else
-    tar -cf - -C "${lpm_meta_dir}" .lpm-size -C "${parent_abs}" "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
+    tar -cf - -C "${lpm_meta_dir}" .lpm-config.yml -C "${parent_abs}" --exclude="${WINEPREFIX_NAME}/lpm/.launcher-choice" --exclude="${WINEPREFIX_NAME}/.lpm-config.yml" "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   fi
 
@@ -589,8 +681,8 @@ except Exception as e:
 
   zgu_cli_ok "$(t pack_game.done_cli "${archive_path}")"
 
-  # Clean up the embedded temporary files before finishing
-  rm -f "${WINEPREFIX_DIR}/zgp-game-config.yml"
+  # Clean up the temporary first-member YAML before finishing (never inside the prefix)
+  rm -f -- "${lpm_meta_dir}/.lpm-config.yml"
   inprogress_yml=""
 
 done

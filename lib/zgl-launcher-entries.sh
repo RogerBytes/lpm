@@ -35,6 +35,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 
 if [[ -z "${slug}" ]] || { [[ "${action}" != "get" ]] && [[ "${action}" != "set" ]]; }; then
   zgu_cli_error "$(t launcher_entries.cli_usage)"
@@ -110,7 +112,7 @@ if [[ ! -f "${yml_path}" ]]; then
   exit 1
 fi
 
-launcher_yml="${game_dir}/lpm-launcher.yml"
+launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
 
 # --- WINEPREFIX resolution (for "drive_c" only; no Wine version/binary resolution needed) ---
 current_prefix=$(YML_PATH="${yml_path}" python3 -c '
@@ -194,7 +196,7 @@ if [[ ! -f "${json_file}" ]]; then
   exit 1
 fi
 
-mkdir -p "${game_dir}" 2>/dev/null
+mkdir -p "$(dirname "${launcher_yml}")" 2>/dev/null
 
 result=$(YML_PATH="${launcher_yml}" JSON_PATH="${json_file}" DRIVE_C="${drive_c}" python3 -c '
 import json

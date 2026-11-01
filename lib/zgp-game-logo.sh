@@ -40,6 +40,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
@@ -321,11 +323,13 @@ zgp_logo_report_skip() {
 zgp_logo_save_from_url() {
   local slug="$1" game_dir="$2" chosen_url="$3"
 
-  mkdir -p "${game_dir}/splash"
+  local splash_dir
+  splash_dir="$(zgu_lpm_path "${game_dir}" splash)"
+  mkdir -p "${splash_dir}"
 
   local ext="${chosen_url##*.}"
   ext="${ext,,}"
-  local raw_file="${game_dir}/splash/.lpm-download.${ext}"
+  local raw_file="${splash_dir}/.lpm-download.${ext}"
 
   if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
     rm -f "${raw_file}"
@@ -335,7 +339,7 @@ zgp_logo_save_from_url() {
   # "-background none" keeps the logo's original transparency instead of replacing it with a
   # background (unlike zgp-game-splash.sh: a full-screen banner is always opaque, a logo is
   # not).
-  if ! "${convert_bin[@]}" "${raw_file}" -background none "${game_dir}/splash/logo.png" 2>/dev/null; then
+  if ! "${convert_bin[@]}" "${raw_file}" -background none "${splash_dir}/logo.png" 2>/dev/null; then
     rm -f "${raw_file}"
     return 1
   fi

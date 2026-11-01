@@ -69,18 +69,79 @@ zgu_free_bytes() {
   echo $((free_kb * 1024))
 }
 
-# zgu_archive_exact_size <archive.zgp>: prints the exact extracted size (bytes) recorded by
-# "lpm pack" in the small ".lpm-size" file placed FIRST in the archive; prints nothing (return 1)
-# for an archive without it (made by an older version) or if it cannot be read.
+# zgu_archive_config <archive.zgp>: prints the game's YAML, stored by "lpm pack" as the FIRST
+# member of the archive (".lpm-config.yml": the cleaned Lutris YAML plus the "lpm_archive" key
+# with the exact extracted size). Returns 1, printing nothing, for an archive without it (made
+# by an older version) or if it cannot be read.
 # Only the very beginning of the archive is read, whatever its size: the first tar header is
 # checked through "zstd -dc | head -c" (stops at once, SIGPIPE) BEFORE asking bsdtar for the
-# member -- asking bsdtar for a member that does not exist makes it scan the WHOLE archive.
+# member -- asking bsdtar for a member that does not exist makes it scan the WHOLE archive. "-q"
+# stops at the first match, so a second ".lpm-config.yml" planted later in the archive is never
+# read: the first one is the only one that counts.
+zgu_archive_config() {
+  command -v zstd >/dev/null 2>&1 || return 1
+  local first cfg
+  first=$(zstd -dc -- "$1" 2>/dev/null | head -c 100 | tr -d '\0')
+  [[ "${first}" = ".lpm-config.yml" ]] || return 1
+  cfg=$(bsdtar -xOqf "$1" .lpm-config.yml 2>/dev/null | head -c 1048576)
+  [[ -n "${cfg}" ]] || return 1
+  printf '%s\n' "${cfg}"
+}
+
+# zgu_archive_exact_size <archive.zgp>: prints the exact extracted size (bytes) recorded by
+# "lpm pack"; prints nothing (return 1) for an archive without it or if it cannot be read. Reads
+# the "lpm_archive: size" of the first-member YAML (see zgu_archive_config); archives of the
+# previous format carry it in a tiny ".lpm-size" first member instead, still understood.
 zgu_archive_exact_size() {
   command -v zstd >/dev/null 2>&1 || return 1
-  local first meta
+  local first meta size
   first=$(zstd -dc -- "$1" 2>/dev/null | head -c 100 | tr -d '\0')
+  if [[ "${first}" = ".lpm-config.yml" ]]; then
+    size=$(zgu_archive_config "$1" | python3 -c '
+import sys, yaml
+try:
+    d = yaml.safe_load(sys.stdin.read()) or {}
+    print(int(d["lpm_archive"]["size"]))
+except Exception:
+    pass
+' 2>/dev/null)
+    [[ "${size}" =~ ^[0-9]+$ ]] || return 1
+    echo "${size}"
+    return 0
+  fi
   [[ "${first}" = ".lpm-size" ]] || return 1
   meta=$(bsdtar -xOqf "$1" .lpm-size 2>/dev/null | head -c 64)
   [[ "${meta}" =~ ^size=([0-9]+)$ ]] || return 1
   echo "${BASH_REMATCH[1]}"
+}
+
+# zgu_yaml_hooks: reads a game YAML on STDIN and prints, one per line, the automatic launch/close
+# hooks it contains ("<key path>\x1f<value>"): the keys Lutris runs by itself at every launch or
+# exit (..._command, ..._script and the like). Nothing printed when there is none.
+zgu_yaml_hooks() {
+  python3 -c '
+import sys, yaml
+
+def find_hooks(obj, path=""):
+    found = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            kl = k.lower() if isinstance(k, str) else ""
+            cur_path = f"{path}.{k}" if path else str(k)
+            if kl.endswith("_command") or kl.endswith("_script") or kl.endswith("_wait") or "exec" in kl:
+                found.append((cur_path, v))
+                continue
+            found.extend(find_hooks(v, cur_path))
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            found.extend(find_hooks(item, f"{path}[{i}]"))
+    return found
+
+try:
+    data = yaml.safe_load(sys.stdin.read())
+    for hook_path, hook_value in find_hooks(data):
+        print(f"{hook_path}\x1f{hook_value}")
+except Exception:
+    pass
+' 2>/dev/null
 }

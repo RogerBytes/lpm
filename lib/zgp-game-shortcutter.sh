@@ -14,6 +14,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-lpm-paths.sh
+source "${script_dir}/zgu-lpm-paths.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
 
@@ -258,10 +260,12 @@ for game_name in "${games_to_process[@]}"; do
   # creation and regeneration -- created when the loading screen is unchecked, removed when
   # checked, whatever the previous state.
   if [[ "${loadingscreen_enabled}" = true ]]; then
-    rm -f "${game_prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
+    zgu_lpm_remove "${game_prefix_dir}" no_loadingscreen
+    zgu_lpm_prune "${game_prefix_dir}"
   else
-    mkdir -p "${game_prefix_dir}" 2>/dev/null
-    : > "${game_prefix_dir}/.lpm-no-loadingscreen" 2>/dev/null
+    zgu_lpm_remove "${game_prefix_dir}" no_loadingscreen
+    mkdir -p "$(dirname "$(zgu_lpm_path "${game_prefix_dir}" no_loadingscreen)")" 2>/dev/null
+    : > "$(zgu_lpm_path "${game_prefix_dir}" no_loadingscreen)" 2>/dev/null
   fi
 
   # Disable/restore the Lutris launch hooks (see zgu_apply_hook_policy in
