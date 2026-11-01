@@ -221,7 +221,7 @@ CSS = b"""
     color: #ffffff;
     border: 2px solid #2f2f2f;
     border-radius: 10px;
-    padding: 46px;
+    padding: 69px 46px 23px 46px;
 }
 """ + PICKER_TEXT_CSS + b"""
 /* Noeud CSS "list", PAS "listbox" -- le widget est "Gtk.ListBox" mais son noeud CSS en
