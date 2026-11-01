@@ -574,6 +574,7 @@ class ScreenWindow(Gtk.Window):
         # Escape, handled at WINDOW level (whatever widget has focus) -- cancels the picker
         # if shown, otherwise ignored (the background has nothing to cancel).
         key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)  # sees keys the list consumes (arrows)
         key_ctrl.connect("key-pressed", self.on_key_pressed)
         self.add_controller(key_ctrl)
 
