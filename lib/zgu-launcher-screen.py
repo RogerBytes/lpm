@@ -161,12 +161,18 @@ BLOCK_EXTRA_DOWN_FRACTION = 0.05
 
 CURSOR_IDLE_S = 1.0
 
+# A selected entry too long for the card scrolls sideways so it can be read: it starts
+# MARQUEE_START_DELAY_S after the selection, moves at MARQUEE_SPEED_PX_S, waits
+# MARQUEE_END_PAUSE_S at the end, goes back to the start and loops.
+MARQUEE_START_DELAY_S = 0.9
+MARQUEE_SPEED_PX_S = 90.0
+MARQUEE_END_PAUSE_S = 1.2
+MARQUEE_TICK_MS = 16
+
 # Held direction (d-pad or left stick) on the picker list: first move on press, then after
 # GAMEPAD_REPEAT_DELAY_S one move every GAMEPAD_REPEAT_INTERVAL_S while it stays held.
 GAMEPAD_REPEAT_DELAY_S = 0.4
 GAMEPAD_REPEAT_INTERVAL_S = 0.07
-# Height of the dark fade at the bottom of the list while rows are hidden below.
-PICKER_FADE_HEIGHT = 56
 
 MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30
@@ -202,7 +208,7 @@ CSS = b"""
     color: #ffffff;
     border: 2px solid #2f2f2f;
     border-radius: 10px;
-    padding: 66px 46px 46px 46px;
+    padding: 46px;
 }
 .lpm-picker-title {
     font-weight: bold;
@@ -259,12 +265,6 @@ CSS = b"""
     min-width: 10px;
     min-height: 48px;
     border-radius: 5px;
-}
-.lpm-picker-fade {
-    background-image: linear-gradient(to top, #1a1a1a, rgba(26, 26, 26, 0));
-}
-.lpm-picker-fade-top {
-    background-image: linear-gradient(to bottom, #1a1a1a, rgba(26, 26, 26, 0));
 }
 .lpm-picker-button.lpm-pad-flat,
 .lpm-picker-button.lpm-pad-flat:hover {
@@ -489,6 +489,10 @@ class ScreenWindow(Gtk.Window):
         # --- Picker (see file header): built once here, hidden by default -- a centered
         # "card" over the background, never a second window. ---
         self.picker_visible = False
+        self.marquee_row = None
+        self.marquee_source = 0
+        self.marquee_pending = 0
+        self.marquee_state = {}
         self.pad_mode = False
         self.picker_scrollable = False
         self.last_pointer_pos = None
@@ -623,32 +627,14 @@ class ScreenWindow(Gtk.Window):
         scroll_overlay = Gtk.Overlay()
         scroll_overlay.set_vexpand(True)
         scroll_overlay.set_child(scroll)
-        self.picker_fade = Gtk.Box()
-        self.picker_fade.add_css_class("lpm-picker-fade")
-        self.picker_fade.set_valign(Gtk.Align.END)
-        self.picker_fade.set_halign(Gtk.Align.FILL)
-        self.picker_fade.set_size_request(-1, PICKER_FADE_HEIGHT)
-        self.picker_fade.set_margin_end(18)
-        self.picker_fade.set_can_target(False)
-        self.picker_fade.set_visible(False)
-        scroll_overlay.add_overlay(self.picker_fade)
-        self.picker_fade_top = Gtk.Box()
-        self.picker_fade_top.add_css_class("lpm-picker-fade-top")
-        self.picker_fade_top.set_valign(Gtk.Align.START)
-        self.picker_fade_top.set_halign(Gtk.Align.FILL)
-        self.picker_fade_top.set_size_request(-1, PICKER_FADE_HEIGHT)
-        self.picker_fade_top.set_margin_end(18)
-        self.picker_fade_top.set_can_target(False)
-        self.picker_fade_top.set_visible(False)
-        scroll_overlay.add_overlay(self.picker_fade_top)
         self.picker_scroll = scroll
         adj = scroll.get_vadjustment()
-        for sig in ("changed", "value-changed"):
-            adj.connect(sig, self._update_picker_fade)
+        adj.connect("changed", self._update_picker_fade)
         card.append(scroll_overlay)
 
         self.picker_listbox = Gtk.ListBox()
         self.picker_listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
+        self.picker_listbox.connect("row-selected", self._on_row_selected)
         # "row-activated" is NOT connected -- a click (single or double) only selects,
         # never validates directly.
         listbox_key_ctrl = Gtk.EventControllerKey()
@@ -703,9 +689,6 @@ class ScreenWindow(Gtk.Window):
 
     def _update_picker_fade(self, *_args):
         adj = self.picker_scroll.get_vadjustment()
-        hidden_below = adj.get_value() + adj.get_page_size() < adj.get_upper() - 1
-        self.picker_fade.set_visible(hidden_below)
-        self.picker_fade_top.set_visible(adj.get_value() > 1)
         # With a scrollbar, the rows stop before it so the selection's right rounding shows.
         scrollable = adj.get_upper() > adj.get_page_size() + 1
         if scrollable != self.picker_scrollable:
@@ -758,6 +741,8 @@ class ScreenWindow(Gtk.Window):
             label.set_ellipsize(Pango.EllipsizeMode.END)
             label.set_markup(_entry_markup(entry))
             row.set_child(label)
+            row.lpm_label = label
+            row.lpm_scroller = None
             self.picker_listbox.append(row)
             if first_row is None:
                 first_row = row
@@ -768,9 +753,85 @@ class ScreenWindow(Gtk.Window):
         self.picker_visible = True
         self.picker_card.set_visible(True)
         GLib.idle_add(self._update_picker_fade)
+        GLib.idle_add(self._on_row_selected)
         self.picker_listbox.grab_focus()
 
+    # --- Marquee of the selected entry (see MARQUEE_* above) ---
+    def _marquee_stop(self):
+        if self.marquee_source:
+            GLib.source_remove(self.marquee_source)
+            self.marquee_source = 0
+        row = self.marquee_row
+        self.marquee_row = None
+        if row is not None and row.lpm_scroller is not None:
+            row.lpm_scroller.set_child(None)
+            row.lpm_label.set_ellipsize(Pango.EllipsizeMode.END)
+            row.set_child(row.lpm_label)
+            row.lpm_scroller = None
+
+    def _on_row_selected(self, *_args):
+        self._marquee_stop()
+        if self.marquee_pending:
+            GLib.source_remove(self.marquee_pending)
+            self.marquee_pending = 0
+        if not self.picker_visible:
+            return
+        row = self.picker_listbox.get_selected_row()
+        if row is None:
+            return
+        self.marquee_pending = GLib.timeout_add(int(MARQUEE_START_DELAY_S * 1000), self._marquee_begin, row)
+
+    def _marquee_begin(self, row):
+        self.marquee_pending = 0
+        if (not self.picker_visible or row is not self.picker_listbox.get_selected_row()
+                or self.marquee_row is not None):
+            return False
+        label = row.lpm_label
+        if not label.get_layout().is_ellipsized():
+            return False
+        scroller = Gtk.ScrolledWindow()
+        scroller.set_policy(Gtk.PolicyType.EXTERNAL, Gtk.PolicyType.NEVER)
+        scroller.set_can_target(False)
+        row.set_child(None)
+        label.set_ellipsize(Pango.EllipsizeMode.NONE)
+        scroller.set_child(label)
+        row.set_child(scroller)
+        row.lpm_scroller = scroller
+        self.marquee_row = row
+        self.marquee_state = {"phase": "wait_start", "t0": time.monotonic(), "x": 0.0}
+        self.marquee_source = GLib.timeout_add(MARQUEE_TICK_MS, self._marquee_tick)
+        return False
+
+    def _marquee_tick(self):
+        row = self.marquee_row
+        if row is None or row.lpm_scroller is None:
+            self.marquee_source = 0
+            return False
+        adj = row.lpm_scroller.get_hadjustment()
+        end_x = max(0.0, adj.get_upper() - adj.get_page_size())
+        st = self.marquee_state
+        now = time.monotonic()
+        if st["phase"] == "wait_start":
+            if now - st["t0"] >= 0.3:
+                st["phase"], st["t0"], st["last"] = "run", now, now
+        elif st["phase"] == "run":
+            st["x"] = min(end_x, st["x"] + MARQUEE_SPEED_PX_S * (now - st["last"]))
+            st["last"] = now
+            adj.set_value(st["x"])
+            if st["x"] >= end_x:
+                st["phase"], st["t0"] = "wait_end", now
+        elif st["phase"] == "wait_end":
+            if now - st["t0"] >= MARQUEE_END_PAUSE_S:
+                st["x"] = 0.0
+                adj.set_value(0.0)
+                st["phase"], st["t0"] = "wait_start", now
+        return True
+
     def hide_picker(self):
+        self._marquee_stop()
+        if self.marquee_pending:
+            GLib.source_remove(self.marquee_pending)
+            self.marquee_pending = 0
         self.picker_visible = False
         self.picker_card.set_visible(False)
 
@@ -798,7 +859,7 @@ class ScreenWindow(Gtk.Window):
         # "get_text()", NEVER "get_label()" -- "get_label()" would return the raw Pango
         # markup ("<span size=...>...</span>"); "get_text()" returns the displayed text
         # with the markup stripped.
-        label_widget = row.get_child()
+        label_widget = row.lpm_label
         self._write_picker_result(True, label_widget.get_text())
 
     # --- Gamepad navigation (see init_gamepad()/tick_gamepad() above): direct actions
