@@ -464,6 +464,13 @@ zstd -dc "${HOME}/Mario.zgp" | tar -x -C "${HOME}/old-archive"
 echo "GE-Proton-test" > "${HOME}/old-archive/mario/version"
 # Previous archive format: the YAML sits INSIDE the prefix under its old name, no first member.
 cp "${HOME}/old-archive/.lpm-config.yml" "${HOME}/old-archive/mario/zgp-game-config.yml"
+python3 - "${HOME}/old-archive/mario/zgp-game-config.yml" <<'PYEOF'
+import sys, yaml
+p = sys.argv[1]
+d = yaml.safe_load(open(p)) or {}
+d.setdefault("system", {})["antimicro_config"] = "$GAMEDIR/lpm_gamepad/lpm-gamepad.gamecontroller.amgp"
+yaml.dump(d, open(p, "w"), sort_keys=False)
+PYEOF
 # ... and with the relay of the old LPM Launcher format (lpm <= 0.9.5)
 mkdir -p "${HOME}/old-archive/mario/scripts"
 printf '#!/bin/sh\n' > "${HOME}/old-archive/mario/scripts/lpm-launcher.sh"
@@ -479,6 +486,8 @@ check "uninstall before old archive" 0 '\[REMOVED\] mario' uninstall -y mario
 check "install old archive" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario-old.zgp"
 expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/version"
 expect "migration: every old file moved into lpm/" bash -c 'g="$1"; test -f "$g/lpm/extras/Manual/readme.txt" && test -f "$g/lpm/images/splash/splash.png" && test -f "$g/lpm/gamepad/profile.amgp" && test -f "$g/lpm/images/icon" && test -f "$g/lpm/settings/ignore-windows.txt" && test -e "$g/lpm/settings/no-loadingscreen" && test -f "$g/lpm/launcher.yml" && test -f "$g/lpm/scripts/hook.sh"' _ "${HOME}/Games/mario"
+expect "migration: Lutris YAML points to the moved gamepad profile" bash -c 'grep -hq "antimicro_config: .*/mario/lpm/gamepad/lpm-gamepad.gamecontroller.amgp" $1 && ! grep -hq "lpm_gamepad" $1' _ "${HOME}/.config/lutris/games/mario-*.yml"
+expect "migration: absolute old paths in a Lutris YAML are rewritten (gamepad, scripts), others untouched" bash -c 'd=$(mktemp -d); printf "system:\n  antimicro_config: %s/g/lpm_gamepad/p.amgp\n  prelaunch_command: %s/g/scripts/h.sh\n  other: /x/lpm_gamepad/keep\n" "$d" "$d" > "$d/y.yml"; source "$1/lib/zgu-lpm-paths.sh"; zgu_lpm_fix_yml_paths "$d/g" "$d/y.yml"; grep -q "g/lpm/gamepad/p.amgp" "$d/y.yml" && grep -q "g/lpm/scripts/h.sh" "$d/y.yml" && grep -q "/x/lpm_gamepad/keep" "$d/y.yml"; rc=$?; rm -rf "$d"; exit $rc' _ "${repo}"
 expect "migration: nothing lpm-owned left at the prefix root" bash -c 'g="$1"; for f in extras splash lpm_gamepad icon lpm-ignore-windows.txt .lpm-no-loadingscreen lpm-launcher.yml scripts zgp-game-config.yml; do test ! -e "$g/$f" || { echo "left: $f"; exit 1; }; done' _ "${HOME}/Games/mario"
 
 check "list after an old-format install (name read from the old YAML)" 0 'mario +Mario' list

@@ -802,6 +802,10 @@ EOF
       bash "${script_dir}/zgl-launcher-legacy.sh" "${yml_config_file}" "${prefix_dir}" >/dev/null 2>&1
     fi
 
+    # The files moved by zgu_lpm_migrate may be referenced by absolute path in the Lutris YAML
+    # (AntiMicroX profile, scripts): point those lines to the new location.
+    zgu_lpm_fix_yml_paths "${prefix_dir}" "${yml_config_file}"
+
     # Neutralize (never delete) unauthorized hooks; see the YAML handling comment above and
     # zgu_apply_hook_policy in zgu-desktop-utils.sh. keep_hooks was resolved earlier. MUST
     # run AFTER zgu_write_game_shortcut (which may rewrite ${yml_config_file} entirely),

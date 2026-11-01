@@ -139,5 +139,29 @@ zgu_lpm_migrate() {
   if [[ -f "${new}" ]] && grep -q 'GAMEDIR/scripts/' "${new}" 2>/dev/null; then
     sed -i 's|\$GAMEDIR/scripts/|$GAMEDIR/lpm/scripts/|g' "${new}" 2>/dev/null
   fi
+  if [[ -f "${new}" ]] && grep -q 'GAMEDIR/lpm_gamepad/' "${new}" 2>/dev/null; then
+    sed -i 's|\$GAMEDIR/lpm_gamepad/|$GAMEDIR/lpm/gamepad/|g' "${new}" 2>/dev/null
+  fi
+  return 0
+}
+
+# zgu_lpm_fix_yml_paths <prefix> <lutris yml>: after a migration, rewrites in the Lutris YAML the
+# absolute paths that pointed to an old location of a moved item (the AntiMicroX profile
+# "system.antimicro_config" and the pre/post-launch scripts). Only exact "<prefix>/<old>/" starts
+# are changed, so a path outside the prefix is never touched. No-op if nothing matches.
+zgu_lpm_fix_yml_paths() {
+  local prefix="${1%/}" yml="$2" old_gp old_sc esc
+  [[ -f "${yml}" ]] || return 0
+  old_gp="${prefix}/$(zgu_lpm_rel gamepad legacy)/"
+  old_sc="${prefix}/$(zgu_lpm_rel scripts legacy)/"
+  # "|" is the sed delimiter and "&" / "\" are special in the replacement: escape the prefix.
+  esc="$(printf '%s' "${prefix}" | sed -e 's/[\\&|]/\\&/g')"
+  local pat_gp pat_sc
+  pat_gp="$(printf '%s' "${old_gp}" | sed -e 's/[][\\.*^$|]/\\&/g')"
+  pat_sc="$(printf '%s' "${old_sc}" | sed -e 's/[][\\.*^$|]/\\&/g')"
+  sed -i \
+    -e "s|${pat_gp}|${esc}/${ZGU_LPM_DIRNAME}/$(zgu_lpm_rel gamepad new)/|g" \
+    -e "s|${pat_sc}|${esc}/${ZGU_LPM_DIRNAME}/$(zgu_lpm_rel scripts new)/|g" \
+    "${yml}" 2>/dev/null
   return 0
 }
