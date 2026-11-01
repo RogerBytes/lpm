@@ -202,7 +202,7 @@ CSS = b"""
     color: #ffffff;
     border: 2px solid #2f2f2f;
     border-radius: 10px;
-    padding: 16px;
+    padding: 36px;
 }
 .lpm-picker-title {
     font-weight: bold;
@@ -694,7 +694,7 @@ class ScreenWindow(Gtk.Window):
         scrollable = adj.get_upper() > adj.get_page_size() + 1
         if scrollable != self.picker_scrollable:
             self.picker_scrollable = scrollable
-            self.picker_listbox.set_margin_end(12 if scrollable else 0)
+            self.picker_listbox.set_margin_end(26 if scrollable else 0)
 
     def set_pad_mode(self, on):
         """Gamepad mode: the buttons show a green "A" / red "B" icon and the gamepad texts;
@@ -716,10 +716,10 @@ class ScreenWindow(Gtk.Window):
         self.picker_cancel_text.set_label(self.pad_cancel_label if on else self.cancel_label)
 
     def show_picker(self, title, prompt, validate_label, cancel_label, pad_validate_label, pad_cancel_label, entries):
-        self.picker_title_label.set_label(title)
-        self.picker_title_label.set_visible(bool(title))
-        self.picker_prompt_label.set_label(prompt)
-        self.picker_prompt_label.set_visible(bool(prompt))
+        # The picker shows ONLY the list and the two buttons: the title and prompt lines
+        # (still received in the request file) are never displayed.
+        self.picker_title_label.set_visible(False)
+        self.picker_prompt_label.set_visible(False)
         self.validate_label = validate_label
         self.cancel_label = cancel_label
         self.pad_validate_label = pad_validate_label
