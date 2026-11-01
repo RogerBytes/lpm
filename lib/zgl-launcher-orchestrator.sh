@@ -367,8 +367,8 @@ if [[ "${will_show_picker}" = true ]]; then
       printf '%s\n' "${picker_prompt}"
       printf '%s\n' "$(t launcher.picker_validate_button)"
       printf '%s\n' "$(t launcher.picker_cancel_button)"
-      printf '%s\n' "$(t launcher.picker_pad_validate)"
-      printf '%s\n' "$(t launcher.picker_pad_cancel)"
+      printf '%s\n' "$(t launcher.picker_validate_button)"
+      printf '%s\n' "$(t launcher.picker_cancel_button)"
       for entry in "${entry_labels[@]}"; do
         printf '%s\n' "${entry}"
       done

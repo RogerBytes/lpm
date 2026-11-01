@@ -220,7 +220,7 @@ CSS = b"""
     background-color: transparent;
 }
 .lpm-picker-card list row {
-    padding: 14px 22px;
+    padding: 20px 32px 22px 32px;
     background-color: transparent;
     color: #ffffff;
 }
@@ -486,6 +486,7 @@ class ScreenWindow(Gtk.Window):
         # "card" over the background, never a second window. ---
         self.picker_visible = False
         self.pad_mode = False
+        self.picker_scrollable = False
         self.last_pointer_pos = None
         self.validate_label = self.cancel_label = ""
         self.pad_validate_label = self.pad_cancel_label = ""
@@ -689,6 +690,11 @@ class ScreenWindow(Gtk.Window):
         adj = self.picker_scroll.get_vadjustment()
         hidden_below = adj.get_value() + adj.get_page_size() < adj.get_upper() - 1
         self.picker_fade.set_visible(hidden_below)
+        # With a scrollbar, the rows stop before it so the selection's right rounding shows.
+        scrollable = adj.get_upper() > adj.get_page_size() + 1
+        if scrollable != self.picker_scrollable:
+            self.picker_scrollable = scrollable
+            self.picker_listbox.set_margin_end(12 if scrollable else 0)
 
     def set_pad_mode(self, on):
         """Gamepad mode: the buttons show a green "A" / red "B" icon and the gamepad texts;
