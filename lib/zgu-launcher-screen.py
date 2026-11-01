@@ -528,7 +528,10 @@ class ScreenWindow(Gtk.Window):
         card.add_css_class("lpm-picker-card")
         card.set_halign(Gtk.Align.CENTER)
         card.set_valign(Gtk.Align.CENTER)
-        card.set_margin_top(PICKER_VERTICAL_OFFSET)
+        # The card is centered: moving it down by N takes a margin 2N bigger. Same N as the
+        # logo/label block (BLOCK_EXTRA_DOWN_FRACTION), so the card never covers the logo.
+        extra_down = 0 if NO_LABEL else self.monitor_geom.height * BLOCK_EXTRA_DOWN_FRACTION
+        card.set_margin_top(PICKER_VERTICAL_OFFSET + int(2 * extra_down))
         card.set_size_request(PICKER_BOX_WIDTH, PICKER_CARD_HEIGHT)
 
         self.picker_title_label = Gtk.Label(xalign=0, visible=False)
