@@ -292,3 +292,24 @@ zgu_get_wine_binary() {
   done
   return 1
 }
+
+# zgu_resolve_prefix_dir_by_slug <slug> <pga.db> <games folder>: real path of the prefix of a wine
+# game, from its "directory" in pga.db. The slug is SQL-escaped here. "directory" may come from
+# ANY wine game in pga.db, not only those managed by lpm: the resolved path must remain a real
+# subfolder of the games folder (anti-escape guard, same as zgp-game-uninstaller.sh), otherwise
+# an intermediate folder (e.g. "gog/") shared by several games could be packed wholesale or a
+# forged entry could point elsewhere.
+# Output: real path on stdout, nothing if not found/unsafe (return code 1).
+zgu_resolve_prefix_dir_by_slug() {
+  local slug="$1" db="$2" games_root="$3" safe_slug raw_dir real_dir real_games_dir
+  safe_slug="${slug//\'/\'\'}"
+  raw_dir=$(sqlite3 "${db}" "SELECT directory FROM games WHERE slug='${safe_slug}' AND runner='wine' LIMIT 1;" 2>/dev/null)
+  [[ -z "${raw_dir}" ]] && return 1
+
+  real_dir=$(realpath -e "${raw_dir}" 2>/dev/null)
+  real_games_dir=$(realpath -e "${games_root}" 2>/dev/null)
+  if [[ -z "${real_dir}" ]] || [[ -z "${real_games_dir}" ]] || [[ "${real_dir}" != "${real_games_dir}/"* ]]; then
+    return 1
+  fi
+  echo "${real_dir}"
+}

@@ -15,20 +15,14 @@
 # (it then ends at the next game launch, see the "pkill" in zgl-launcher-orchestrator.sh).
 import os
 import time
+import sys
+# lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zgu_common import env_value
 
 CHECK_INTERVAL_SECONDS = 1.0
 GONE_GRACE_SECONDS = 4.0
 
-
-def _env_value(pid, name):
-    try:
-        with open("/proc/%d/environ" % pid, "rb") as f:
-            for entry in f.read().split(b"\0"):
-                if entry.startswith(name + b"="):
-                    return entry[len(name) + 1:].decode("utf-8", "replace")
-    except OSError:
-        pass
-    return None
 
 
 def _in_prefix(path, prefix_dir):
@@ -50,8 +44,8 @@ def prefix_alive(prefix_dir):
                     continue
         except OSError:
             continue
-        if (_in_prefix(_env_value(pid, b"WINEPREFIX"), prefix_dir)
-                or _in_prefix(_env_value(pid, b"STEAM_COMPAT_DATA_PATH"), prefix_dir)):
+        if (_in_prefix(env_value(pid, b"WINEPREFIX"), prefix_dir)
+                or _in_prefix(env_value(pid, b"STEAM_COMPAT_DATA_PATH"), prefix_dir)):
             return True
     return False
 

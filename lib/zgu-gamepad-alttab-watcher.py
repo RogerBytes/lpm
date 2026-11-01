@@ -37,6 +37,9 @@ import shutil
 import time
 import ctypes
 import ctypes.util
+# lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zgu_common import find_controllers, load_sdl2
 
 if len(sys.argv) < 2 or sys.argv[1] not in ("x11", "wayland"):
     sys.stderr.write("Usage: zgu-gamepad-alttab-watcher.py <x11|wayland> [<prefix_folder>]\n")
@@ -69,22 +72,8 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 
 
-# --- Loading libSDL2 (same as zgu-gamepad-exit-watcher.py) ---------------------------
-def _load_sdl2():
-    names = []
-    found = ctypes.util.find_library("SDL2")
-    if found:
-        names.append(found)
-    names += ["libSDL2-2.0.so.0", "libSDL2-2.0.so", "SDL2"]
-    for name in names:
-        try:
-            return ctypes.CDLL(name)
-        except OSError:
-            continue
-    return None
 
-
-sdl = _load_sdl2()
+sdl = load_sdl2()
 if sdl is None:
     sys.stderr.write(
         "zgu-gamepad-alttab-watcher: libSDL2 not found "
@@ -293,19 +282,10 @@ POLL_INTERVAL_SECONDS = 0.05
 RESCAN_INTERVAL_LOOPS = max(1, round(1.0 / POLL_INTERVAL_SECONDS))
 
 
-def find_controllers():
-    pads = []
-    for i in range(sdl.SDL_NumJoysticks()):
-        if sdl.SDL_IsGameController(i):
-            handle = sdl.SDL_GameControllerOpen(i)
-            if handle:
-                pads.append(handle)
-    return pads
-
 
 def count_available_controllers():
     """Count the gamepads SDL2 recognizes WITHOUT opening them, only to detect a change
-    before calling find_controllers() again (see main())."""
+    before calling find_controllers(sdl) again (see main())."""
     return sum(1 for i in range(sdl.SDL_NumJoysticks()) if sdl.SDL_IsGameController(i))
 
 
@@ -350,7 +330,7 @@ def main():
     # zgu-gamepad-exit-watcher.py, see its main()): keep running even with no gamepad at
     # start, and re-scan periodically (RESCAN_INTERVAL_LOOPS, ~1x/s) to catch a pad that
     # appears later or reconnects mid-game.
-    pads = find_controllers()
+    pads = find_controllers(sdl)
     loops_since_rescan = 0
 
     alt_is_held = False
@@ -375,7 +355,7 @@ def main():
                             sdl.SDL_GameControllerClose(pad)
                         except Exception:
                             pass
-                    pads = find_controllers()
+                    pads = find_controllers(sdl)
 
             active = hold_active(pads)
 

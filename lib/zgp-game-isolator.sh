@@ -116,7 +116,7 @@ fi
 # dashes). Only used for the EA App rename suffix (spec decision #3: the slug "ea-app" is shared
 # between the launcher and each EA game, so it is renamed to "ea-app-<suffix>" at isolation
 # instead of being targeted by rowid).
-zgp_slugify() {
+zgp_ascii_suffix() {
   local s="$1"
   s="${s,,}"
   s=$(printf '%s' "${s}" | tr -c 'a-z0-9' '-')
@@ -402,7 +402,7 @@ zgp_isolate_one() {
   local safe_slug="${slug//\'/\'\'}"
 
   # Security: giga_dir comes from the Lutris database, possibly hand-edited or from a game
-  # added outside lpm. Same guard as resolve_prefix_dir_by_slug (zgp-game-packer.sh) and
+  # added outside lpm. Same guard as zgu_resolve_prefix_dir_by_slug (zgu-lutris-utils.sh) and
   # safe_delete_prefix_dir (zgp-game-uninstaller.sh): the real path must stay a subfolder of
   # games_dir.
   local real_giga_dir
@@ -491,7 +491,7 @@ except Exception:
   local new_slug="${slug}"
   if [[ "${store}" = "ea" ]]; then
     local suffix
-    suffix=$(zgp_slugify "${game_name}")
+    suffix=$(zgp_ascii_suffix "${game_name}")
     new_slug="${slug}-${suffix}"
     local n=2
     while [[ -d "${games_dir}/${new_slug}" ]] || [[ -n "$(sqlite3 "${lutris_db}" "SELECT 1 FROM games WHERE slug='${new_slug//\'/\'\'}' LIMIT 1;" 2>/dev/null)" ]]; do

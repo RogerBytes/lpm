@@ -54,6 +54,9 @@ import os
 import time
 import ctypes
 import ctypes.util
+# lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zgu_common import load_sdl2
 
 try:
     import gi
@@ -363,19 +366,6 @@ _gamepad_prev_stick_y = {}
 _gamepad_next_repeat = {}
 
 
-def _load_sdl2():
-    names = []
-    found = ctypes.util.find_library("SDL2")
-    if found:
-        names.append(found)
-    names += ["libSDL2-2.0.so.0", "libSDL2-2.0.so", "SDL2"]
-    for name in names:
-        try:
-            return ctypes.CDLL(name)
-        except OSError:
-            continue
-    return None
-
 
 def init_gamepad():
     """Fully best-effort: a missing libSDL2 or no detected gamepad must NEVER prevent the
@@ -383,7 +373,7 @@ def init_gamepad():
     the window itself, so it cannot simply exit like a dedicated script could."""
     global _sdl
     try:
-        sdl = _load_sdl2()
+        sdl = load_sdl2()
         if sdl is None:
             return
         os.environ.setdefault("SDL_VIDEODRIVER", "dummy")

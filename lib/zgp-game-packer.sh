@@ -140,29 +140,6 @@ if command -v sqlite3 >/dev/null 2>&1 && [[ -f "${lutris_db_path}" ]]; then
   done < <(zgu_get_blacklisted_slugs "${lutris_db_path}")
 fi
 
-# Resolves a Lutris slug (runner='wine' game) to the real, safe path of its prefix.
-# Discovery goes through pga.db (column "directory") rather than scanning GAMES_DIR/*/ one level
-# deep: a one-level scan would miss games nested deeper (e.g. gog/<game>/, like Lutris GOG
-# games) and would pack an intermediate folder (e.g. "gog/") wholesale if several games lived
-# there, mixing their prefixes in one archive.
-# "directory" may come from ANY wine game in pga.db, not only those managed by lpm: same
-# anti-escape guard as zgp-game-uninstaller.sh (the resolved path must remain a real subfolder
-# of GAMES_DIR).
-# Output: real path on stdout, nothing if not found/unsafe (return code 1).
-resolve_prefix_dir_by_slug() {
-  local slug="$1" safe_slug raw_dir real_dir real_games_dir
-  safe_slug="${slug//\'/\'\'}"
-  raw_dir=$(sqlite3 "${lutris_db_path}" "SELECT directory FROM games WHERE slug='${safe_slug}' AND runner='wine' LIMIT 1;" 2>/dev/null)
-  [[ -z "${raw_dir}" ]] && return 1
-
-  real_dir=$(realpath -e "${raw_dir}" 2>/dev/null)
-  real_games_dir=$(realpath -e "${GAMES_DIR}" 2>/dev/null)
-  if [[ -z "${real_dir}" ]] || [[ -z "${real_games_dir}" ]] || [[ "${real_dir}" != "${real_games_dir}/"* ]]; then
-    return 1
-  fi
-  echo "${real_dir}"
-}
-
 # --all (CLI only): replaces the lone "--all" argument with the sorted list of all
 # non-blacklisted wine game slugs from pga.db, so the CLI loop below processes each slug as if
 # typed by the user.
@@ -205,7 +182,7 @@ for target_slug_raw in "${cli_games[@]}"; do
     exit 1
   fi
 
-  resolved_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
+  resolved_dir=$(zgu_resolve_prefix_dir_by_slug "${target_slug}" "${lutris_db_path}" "${GAMES_DIR}")
   if [[ -z "${resolved_dir}" ]]; then
     zgu_cli_error "$(t pack_game.folder_not_found_cli "${target_slug_raw}" "${GAMES_DIR}")"
     # With --all, a game whose folder is missing must not prevent packing the others: it is

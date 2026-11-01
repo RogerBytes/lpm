@@ -48,6 +48,9 @@ import signal
 import time
 import ctypes
 import ctypes.util
+# lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zgu_common import env_value, find_controllers, load_sdl2
 
 if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]:
     sys.stderr.write("Usage: zgu-gamepad-exit-watcher.py <x11|wayland> <prefix_folder>\n")
@@ -80,22 +83,8 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 
 
-# --- Loading libSDL2 -----------------------------------------------------------------
-def _load_sdl2():
-    names = []
-    found = ctypes.util.find_library("SDL2")
-    if found:
-        names.append(found)
-    names += ["libSDL2-2.0.so.0", "libSDL2-2.0.so", "SDL2"]
-    for name in names:
-        try:
-            return ctypes.CDLL(name)
-        except OSError:
-            continue
-    return None
 
-
-sdl = _load_sdl2()
+sdl = load_sdl2()
 if sdl is None:
     sys.stderr.write(
         "zgu-gamepad-exit-watcher: libSDL2 not found "
@@ -159,16 +148,6 @@ elif _add_mappings_from_file is None:
     )
 
 
-def _env_value(pid, name):
-    try:
-        with open("/proc/%d/environ" % pid, "rb") as f:
-            for entry in f.read().split(b"\0"):
-                if entry.startswith(name + b"="):
-                    return entry[len(name) + 1:].decode("utf-8", "replace")
-    except OSError:
-        pass
-    return None
-
 
 def _in_prefix(path):
     if not path:
@@ -194,8 +173,8 @@ def close_game():
             continue
         if comm != "wineserver":
             continue
-        if not (_in_prefix(_env_value(pid, b"WINEPREFIX"))
-                or _in_prefix(_env_value(pid, b"STEAM_COMPAT_DATA_PATH"))):
+        if not (_in_prefix(env_value(pid, b"WINEPREFIX"))
+                or _in_prefix(env_value(pid, b"STEAM_COMPAT_DATA_PATH"))):
             continue
         try:
             os.kill(pid, signal.SIGINT)
@@ -227,19 +206,10 @@ POLL_INTERVAL_SECONDS = 0.05
 RESCAN_INTERVAL_LOOPS = max(1, round(1.0 / POLL_INTERVAL_SECONDS))
 
 
-def find_controllers():
-    pads = []
-    for i in range(sdl.SDL_NumJoysticks()):
-        if sdl.SDL_IsGameController(i):
-            handle = sdl.SDL_GameControllerOpen(i)
-            if handle:
-                pads.append(handle)
-    return pads
-
 
 def count_available_controllers():
     """Count the gamepads SDL2 recognizes WITHOUT opening them, only to detect a change
-    before calling find_controllers() again (see main())."""
+    before calling find_controllers(sdl) again (see main())."""
     return sum(1 for i in range(sdl.SDL_NumJoysticks()) if sdl.SDL_IsGameController(i))
 
 
@@ -265,7 +235,7 @@ def main():
     # periodically (RESCAN_INTERVAL_LOOPS, ~1x/s). This also covers a pad that disconnects
     # and reconnects mid-game. The comparison is deliberately simple (number of recognized
     # gamepads, not a per-GUID match); enough since lpm assumes one player/one gamepad.
-    pads = find_controllers()
+    pads = find_controllers(sdl)
     loops_since_rescan = 0
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
 
@@ -284,7 +254,7 @@ def main():
                             sdl.SDL_GameControllerClose(pad)
                         except Exception:
                             pass
-                    pads = find_controllers()
+                    pads = find_controllers(sdl)
 
             if pads and combo_complete(pads):
                 close_game()

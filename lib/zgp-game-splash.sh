@@ -38,6 +38,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-cli-utils.sh
 source "${script_dir}/zgu-cli-utils.sh"
+# shellcheck source=./zgu-sgdb.sh
+source "${script_dir}/zgu-sgdb.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-lpm-paths.sh
@@ -47,8 +49,6 @@ source "${script_dir}/zgu-log-utils.sh"
 
 # Same as zgp-game-icon.sh: strictly personal key, never shared or bundled with lpm; uses
 # the SAME key file as "lpm icon", so one SteamGridDB account covers both commands.
-sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
-sgdb_api="https://www.steamgriddb.com/api/v2"
 sgdb_key=""
 
 # --- 1. Dependency check ---
@@ -186,107 +186,6 @@ if [[ -n "${forced_url}" ]] && [[ ${#targets[@]} -ne 1 ]]; then
   exit 1
 fi
 
-# --- 5. SteamGridDB API key (same as zgp-game-icon.sh: same key file, same validation
-# before storing) ---
-zgp_sgdb_read_key() {
-  [[ -f "${sgdb_key_file}" ]] || return 1
-  head -n1 "${sgdb_key_file}" 2>/dev/null | tr -d '[:space:]'
-}
-
-zgp_sgdb_save_key() {
-  local key="$1"
-  mkdir -p "$(dirname "${sgdb_key_file}")"
-  printf '%s\n' "${key}" > "${sgdb_key_file}"
-  chmod 600 "${sgdb_key_file}"
-}
-
-zgp_sgdb_key_valid() {
-  local key="$1" code
-  [[ -z "${key}" ]] && return 1
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorization: Bearer ${key}" "${sgdb_api}/search/autocomplete/a" 2>/dev/null)
-  [[ "${code}" = "200" ]]
-}
-
-zgp_sgdb_ensure_key() {
-  sgdb_key=$(zgp_sgdb_read_key)
-  if [[ -n "${sgdb_key}" ]] && zgp_sgdb_key_valid "${sgdb_key}"; then
-    return 0
-  fi
-
-  local candidate first_try=true
-  while true; do
-    [[ "${first_try}" = false ]] && t splash.key_invalid >&2
-    t splash.key_text_cli
-    read -r -p "$(t splash.key_prompt_cli)" candidate
-    first_try=false
-
-    [[ -z "${candidate}" ]] && return 1
-
-    candidate="${candidate//[$'\n\r\t ']/}"
-
-    if zgp_sgdb_key_valid "${candidate}"; then
-      zgp_sgdb_save_key "${candidate}"
-      sgdb_key="${candidate}"
-      return 0
-    fi
-  done
-}
-
-# --- 6. SteamGridDB calls ---
-zgp_sgdb_search() {
-  local term="$1" encoded
-  encoded=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${term}" 2>/dev/null)
-  [[ -z "${encoded}" ]] && return 1
-  curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${sgdb_api}/search/autocomplete/${encoded}" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if not isinstance(data, dict) or not data.get("success"):
-    sys.exit(0)
-for g in data.get("data", []) or []:
-    gid = g.get("id")
-    name = g.get("name", "")
-    if gid is None:
-        continue
-    name = str(name).replace("\t", " ").replace("\n", " ").replace("\r", " ")
-    print(f"{gid}\t{name}")
-'
-}
-
-# Output: one line per candidate banner, "full_res_url<TAB>thumbnail_url".
-# Uses "/heroes/..." (not grids/icons): the SteamGridDB name for wide wallpaper/backdrop
-# images (common sizes 1920x620, 3840x1240), unlike "Grids" (library thumbnails, mostly
-# vertical) and "Icons" (used by "lpm icon"). "types=static" excludes animated (webm)
-# Heroes, which ImageMagick/Cairo cannot use as-is (and a loading splash does not need
-# animation). "mimes=image/png,image/jpeg,image/webp": the three static formats the API
-# actually serves, all read by ImageMagick and re-encoded to PNG (see below).
-#
-# No "Steam Client Hero" fallback like zgp-game-icon.sh (Client Icon): SteamGridDB has
-# Heroes for the vast majority of games (far more densely populated than Icons), so a second
-# lookup via the Steam AppID is not worth the complexity.
-zgp_sgdb_heroes() {
-  local game_id="$1"
-  curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" \
-    "${sgdb_api}/heroes/game/${game_id}?types=static&mimes=image/png,image/jpeg,image/webp" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    obj = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if not isinstance(obj, dict) or not obj.get("success"):
-    sys.exit(0)
-seen = set()
-for h in obj.get("data", []) or []:
-    url = h.get("url", "")
-    thumb = h.get("thumb") or url
-    if url and url not in seen:
-        seen.add(url)
-        print(f"{url}\t{thumb}")
-'
-}
-
 # --- 7. Process one game ---
 #
 # Returns 0 if a banner was saved, 1 otherwise (game not found on SteamGridDB, no banner
@@ -397,7 +296,7 @@ zgp_splash_process_one() {
 }
 
 # --- 8. Execution ---
-zgp_sgdb_ensure_key || { zgp_splash_report_error_early "$(t splash.no_key_cancelled)"; exit 1; }
+zgp_sgdb_ensure_key splash || { zgp_splash_report_error_early "$(t splash.no_key_cancelled)"; exit 1; }
 
 exit_code=0
 for target_slug in "${targets[@]}"; do

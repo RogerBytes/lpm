@@ -7,6 +7,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-prefix-common.sh
+source "${script_dir}/zgu-prefix-common.sh"
 
 # --- lpm create-prefix: create one or more blank wineprefixes registered in Lutris, without the
 # install wizard (no script, no executable to run) ---
@@ -132,83 +134,6 @@ if [[ ! -d "${runner_dir}" ]]; then
   exit 1
 fi
 
-# --- Runner type detection: "wine" (bin/wine present: classic Wine runner, initialized via
-# wineboot), "proton" (toolmanifest.vdf present, no bin/ at the root: initialized via umu-run
-# createprefix) or "unknown" (incomplete/corrupt folder, ignored). Verified on real runners:
-# bin/wine+bin/wineboot for classic Wine-GE/Wine-Staging, toolmanifest.vdf for
-# GE-Proton/proton-cachyos; umu-run itself validates PROTONPATH by looking for that same
-# toolmanifest.vdf (confirmed by its exact error message when the file is absent). ---
-zgp_detect_runner_type() {
-  local r_dir="$1"
-  if [[ -x "${r_dir}/bin/wine" ]]; then
-    echo "wine"
-  elif [[ -f "${r_dir}/toolmanifest.vdf" ]]; then
-    echo "proton"
-  else
-    echo "unknown"
-  fi
-}
-
-# Installed runners whose type is recognized (wine or proton), one per line. "unknown"
-# (incomplete) folders are silently excluded from the offered choice rather than risk a prefix
-# creation failing midway.
-zgp_list_usable_runners() {
-  local entry r_type
-  for entry in "${runner_dir}"/*/; do
-    [[ -d "${entry}" ]] || continue
-    entry="${entry%/}"
-    r_type=$(zgp_detect_runner_type "${entry}")
-    [[ "${r_type}" = "unknown" ]] && continue
-    echo "$(basename "${entry}")"
-  done
-}
-
-# Looks for umu-run, in order: standard PATH, known locations from the Lutris source
-# (lutris/util/wine/proton.py::get_umu_path), then as a last resort the real location confirmed
-# on a Lutris install (Flatpak or native per the "${version}" detected above). Prints the path
-# on stdout, or nothing (code 1) if not found.
-zgp_find_umu_run() {
-  if command -v umu-run >/dev/null 2>&1; then
-    command -v umu-run
-    return 0
-  fi
-  local candidate
-  for candidate in \
-    "/usr/local/share/umu/umu-run" \
-    "/usr/share/umu/umu-run" \
-    "/opt/umu/umu-run" \
-    "${lutris_umu}"; do
-    if [[ -x "${candidate}" ]]; then
-      echo "${candidate}"
-      return 0
-    fi
-  done
-  return 1
-}
-
-# --- Slugification: reproduces Lutris's algorithm exactly (lutris/util/strings.py::slugify):
-# Unicode NFD normalization + ASCII encoding (strips accents), lowercase, removal of everything
-# that is not a letter/digit/space/dash, consecutive spaces/dashes collapsed to a single dash.
-# If the result is empty (name entirely in non-Latin characters), falls back to a deterministic
-# UUID (uuid5 on the URL namespace), as Lutris does.
-#
-# The input value goes through the environment rather than direct interpolation into the Python
-# code: a game name (or hand-typed slug) containing an apostrophe or any other special character
-# must not be able to break the string literal or inject arbitrary Python code.
-zgp_slugify() {
-  SLUG_INPUT="$1" python3 -c '
-import os, re, unicodedata, uuid
-
-value = os.environ.get("SLUG_INPUT", "")
-v = unicodedata.normalize("NFD", value).encode("ascii", "ignore").decode("utf-8")
-v = re.sub(r"[^\w\s-]", "", v).strip().lower()
-slug = re.sub(r"[-\s]+", "-", v)
-if not slug:
-    slug = str(uuid.uuid5(uuid.NAMESPACE_URL, str(value)))
-print(slug)
-'
-}
-
 # 4. Runner and architecture choice
 #
 # The runner/architecture can only come from -r/--runner and -a/--arch (or Lutris default runner
@@ -314,37 +239,6 @@ fi
 # background without waiting for their exit code: Lutris itself does not rely on it (umu-run
 # exits 0 even when PROTONPATH is invalid) but polls for the 3 registry files to confirm
 # success. Reproduced exactly here.
-ZGP_REG_TIMEOUT_TICKS=360 # 360 x 0.5s = 180s max per prefix
-
-zgp_wait_for_prefix() {
-  local p_dir="$1"
-  local ticks=0
-  while [[ "${ticks}" -lt "${ZGP_REG_TIMEOUT_TICKS}" ]]; do
-    if [[ -f "${p_dir}/user.reg" ]] && [[ -f "${p_dir}/userdef.reg" ]] && [[ -f "${p_dir}/system.reg" ]]; then
-      return 0
-    fi
-    sleep 0.5
-    ticks=$(( ticks + 1 ))
-  done
-  [[ -f "${p_dir}/user.reg" ]] && [[ -f "${p_dir}/system.reg" ]]
-}
-
-zgp_write_config_yml() {
-  local yml_path="$1" p_dir="$2" p_slug="$3" p_name="$4" p_runner="$5"
-  YML_PATH="${yml_path}" P_DIR="${p_dir}" P_SLUG="${p_slug}" P_NAME="${p_name}" P_RUNNER="${p_runner}" python3 -c '
-import os, yaml
-
-data = {
-    "game": {"exe": "", "prefix": os.environ["P_DIR"]},
-    "game_slug": os.environ["P_SLUG"],
-    "name": os.environ["P_NAME"],
-    "system": {"env": {"LC_ALL": ""}},
-    "wine": {"version": os.environ["P_RUNNER"]},
-}
-with open(os.environ["YML_PATH"], "w") as f:
-    yaml.dump(data, f, sort_keys=False)
-' 2>/dev/null
-}
 
 total="${#batch_names[@]}"
 

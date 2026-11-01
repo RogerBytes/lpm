@@ -107,22 +107,6 @@ if ! command -v sqlite3 >/dev/null 2>&1 || [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# Resolves the real, safe prefix path of a slug (same anti-escape guard as zgp-game-packer.sh:
-# the path must stay a real subfolder of games_dir).
-resolve_prefix_dir_by_slug() {
-  local slug="$1" safe_slug raw_dir real_dir real_games_dir
-  safe_slug="${slug//\'/\'\'}"
-  raw_dir=$(sqlite3 "${lutris_db}" "SELECT directory FROM games WHERE slug='${safe_slug}' AND runner='wine' LIMIT 1;" 2>/dev/null)
-  [[ -z "${raw_dir}" ]] && return 1
-
-  real_dir=$(realpath -e "${raw_dir}" 2>/dev/null)
-  real_games_dir=$(realpath -e "${games_dir}" 2>/dev/null)
-  if [[ -z "${real_dir}" ]] || [[ -z "${real_games_dir}" ]] || [[ "${real_dir}" != "${real_games_dir}/"* ]]; then
-    return 1
-  fi
-  echo "${real_dir}"
-}
-
 # --- 1. Game selection (CLI slug only) ---
 #
 # No exclusion of games in shared prefixes (Epic/EA/Ubisoft...) here: unlike pack (export) or
@@ -243,7 +227,7 @@ if [[ "${cli_tool}" = "mangohud" ]]; then
   exit $?
 fi
 
-prefix_dir=$(resolve_prefix_dir_by_slug "${target_slug}")
+prefix_dir=$(zgu_resolve_prefix_dir_by_slug "${target_slug}" "${lutris_db}" "${games_dir}")
 if [[ -z "${prefix_dir}" ]]; then
   zgu_cli_error "$(t game_tools.prefix_not_found_cli "${target_name}")"
   exit 1
@@ -544,7 +528,7 @@ run_console() {
   local console_start_dir="${prefix_dir}/drive_c"
   [[ -d "${console_start_dir}" ]] || console_start_dir="${prefix_dir}"
   (
-    # prefix_dir exists (checked by resolve_prefix_dir_by_slug); if both cd still failed,
+    # prefix_dir exists (checked by zgu_resolve_prefix_dir_by_slug); if both cd still failed,
     # the console would simply open in the current folder, harmlessly.
     # shellcheck disable=SC2164
     cd "${console_start_dir}" 2>/dev/null || cd "${prefix_dir}"

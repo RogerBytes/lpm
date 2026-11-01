@@ -20,23 +20,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-cli-utils.sh
 source "${script_dir}/zgu-cli-utils.sh"
+# shellcheck source=./zgu-sgdb.sh
+source "${script_dir}/zgu-sgdb.sh"
 
 # Same file as lib/zgp-game-icon.sh/zgp-game-splash.sh/zgp-game-logo.sh (sgdb_key_file):
 # single source of truth, read/written identically on both sides.
-sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
-sgdb_api="https://www.steamgriddb.com/api/v2"
-
-zgp_sgdb_read_key() {
-  [[ -f "${sgdb_key_file}" ]] || return 1
-  head -n1 "${sgdb_key_file}" 2>/dev/null | tr -d '[:space:]'
-}
-
-zgp_sgdb_key_valid() {
-  local key="$1" code
-  [[ -z "${key}" ]] && return 1
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Authorization: Bearer ${key}" "${sgdb_api}/search/autocomplete/a" 2>/dev/null)
-  [[ "${code}" = "200" ]]
-}
 
 action="${1:-}"
 

@@ -7,6 +7,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-prefix-common.sh
+source "${script_dir}/zgu-prefix-common.sh"
 
 # --- lpm exe-install: create a prefix (like "blank prefix"), then run a Windows
 # installer (.exe/.msi/.bat/.cmd) inside it, in the foreground and waiting for it to
@@ -161,63 +163,6 @@ if [[ ! -d "${runner_dir}" ]]; then
   exit 1
 fi
 
-# --- Runner type detection / usable runners list / umu-run lookup / slugification: same as
-# zgp-prefix-creator.sh ---
-zgp_detect_runner_type() {
-  local r_dir="$1"
-  if [[ -x "${r_dir}/bin/wine" ]]; then
-    echo "wine"
-  elif [[ -f "${r_dir}/toolmanifest.vdf" ]]; then
-    echo "proton"
-  else
-    echo "unknown"
-  fi
-}
-
-zgp_list_usable_runners() {
-  local entry r_type
-  for entry in "${runner_dir}"/*/; do
-    [[ -d "${entry}" ]] || continue
-    entry="${entry%/}"
-    r_type=$(zgp_detect_runner_type "${entry}")
-    [[ "${r_type}" = "unknown" ]] && continue
-    echo "$(basename "${entry}")"
-  done
-}
-
-zgp_find_umu_run() {
-  if command -v umu-run >/dev/null 2>&1; then
-    command -v umu-run
-    return 0
-  fi
-  local candidate
-  for candidate in \
-    "/usr/local/share/umu/umu-run" \
-    "/usr/share/umu/umu-run" \
-    "/opt/umu/umu-run" \
-    "${lutris_umu}"; do
-    if [[ -x "${candidate}" ]]; then
-      echo "${candidate}"
-      return 0
-    fi
-  done
-  return 1
-}
-
-zgp_slugify() {
-  SLUG_INPUT="$1" python3 -c '
-import os, re, unicodedata, uuid
-
-value = os.environ.get("SLUG_INPUT", "")
-v = unicodedata.normalize("NFD", value).encode("ascii", "ignore").decode("utf-8")
-v = re.sub(r"[^\w\s-]", "", v).strip().lower()
-slug = re.sub(r"[-\s]+", "-", v)
-if not slug:
-    slug = str(uuid.uuid5(uuid.NAMESPACE_URL, str(value)))
-print(slug)
-'
-}
-
 # 4. Runner and architecture choice (CLI only)
 runner_choice="${cli_runner:-$(zgu_get_default_runner)}"
 arch_choice="${cli_arch:-win64}"
@@ -316,20 +261,6 @@ if [[ "${confirm_flag}" != "yes" ]]; then
 fi
 
 # 8. Prefix initialisation (same as "blank prefix")
-ZGP_REG_TIMEOUT_TICKS=360 # 360 x 0.5s = 180s max
-
-zgp_wait_for_prefix() {
-  local p_dir="$1"
-  local ticks=0
-  while [[ "${ticks}" -lt "${ZGP_REG_TIMEOUT_TICKS}" ]]; do
-    if [[ -f "${p_dir}/user.reg" ]] && [[ -f "${p_dir}/userdef.reg" ]] && [[ -f "${p_dir}/system.reg" ]]; then
-      return 0
-    fi
-    sleep 0.5
-    ticks=$(( ticks + 1 ))
-  done
-  [[ -f "${p_dir}/user.reg" ]] && [[ -f "${p_dir}/system.reg" ]]
-}
 
 mkdir -p "${prefix_dir}"
 
@@ -389,24 +320,6 @@ else
   t exe_install.pick_exe_cli
   read -r -p "$(t exe_install.pick_exe_prompt)" final_executable
 fi
-
-# 12. Write the yml + insert into the DB (same as "blank prefix")
-zgp_write_config_yml() {
-  local yml_path="$1" p_dir="$2" p_slug="$3" p_name="$4" p_runner="$5" p_exe="$6"
-  YML_PATH="${yml_path}" P_DIR="${p_dir}" P_SLUG="${p_slug}" P_NAME="${p_name}" P_RUNNER="${p_runner}" P_EXE="${p_exe}" python3 -c '
-import os, yaml
-
-data = {
-    "game": {"exe": os.environ.get("P_EXE", ""), "prefix": os.environ["P_DIR"]},
-    "game_slug": os.environ["P_SLUG"],
-    "name": os.environ["P_NAME"],
-    "system": {"env": {"LC_ALL": ""}},
-    "wine": {"version": os.environ["P_RUNNER"]},
-}
-with open(os.environ["YML_PATH"], "w") as f:
-    yaml.dump(data, f, sort_keys=False)
-' 2>/dev/null
-}
 
 timestamp=$(date +%s%N)
 config_id="${final_slug}-${timestamp}"

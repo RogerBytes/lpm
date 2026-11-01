@@ -46,6 +46,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-cli-utils.sh
 source "${script_dir}/zgu-cli-utils.sh"
+# shellcheck source=./zgu-sgdb.sh
+source "${script_dir}/zgu-sgdb.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
@@ -128,8 +130,6 @@ fi
 # --- SteamGridDB key (already configured/validated via "lpm sgdb-key set", see
 # gui/page_images); no interactive loop here: a missing/invalid key is reported in JSON and
 # the GUI redirects to the key field of the page. ---
-sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
-sgdb_api="https://www.steamgriddb.com/api/v2"
 
 sgdb_key=""
 if [[ -f "${sgdb_key_file}" ]]; then
@@ -142,29 +142,6 @@ sgdb_key_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 -H "Authori
 if [[ "${sgdb_key_code}" != "200" ]]; then
   _zgi_json_error "no_key"
 fi
-
-# --- Game search (unless already provided by the GUI on the second call, after disambiguation) ---
-zgp_sgdb_search() {
-  local term="$1" encoded
-  encoded=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${term}" 2>/dev/null)
-  [[ -z "${encoded}" ]] && return 1
-  curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${sgdb_api}/search/autocomplete/${encoded}" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if not isinstance(data, dict) or not data.get("success"):
-    sys.exit(0)
-for g in data.get("data", []) or []:
-    gid = g.get("id")
-    name = g.get("name", "")
-    if gid is None:
-        continue
-    name = str(name).replace("\t", " ").replace("\n", " ").replace("\r", " ")
-    print(f"{gid}\t{name}")
-'
-}
 
 chosen_game_id="${given_game_id}"
 chosen_game_name="${g_name}"
@@ -201,153 +178,6 @@ if [[ "${type_arg}" = "title" ]]; then
     "${chosen_game_id}" "${chosen_game_name}"
   exit 0
 fi
-
-# --- Fetch candidates by type (same logic as the dedicated scripts) ---
-zgp_sgdb_icons() {
-  local game_id="$1" g_name="$2"
-  local endpoint="${sgdb_api}/icons/game/${game_id}"
-  local steam_appid=""
-  if [[ -n "${g_name}" ]]; then
-    local encoded_name
-    encoded_name=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${g_name}" 2>/dev/null)
-    if [[ -n "${encoded_name}" ]]; then
-      steam_appid=$(curl -s --max-time 15 "https://store.steampowered.com/api/storesearch/?term=${encoded_name}&cc=us&l=en" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    obj = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-items = obj.get("items") if isinstance(obj, dict) else None
-if items:
-    appid = items[0].get("id", "")
-    if appid:
-        print(appid)
-' 2>/dev/null)
-    fi
-  fi
-
-  {
-    curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${endpoint}" 2>/dev/null
-    echo
-    curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" "${endpoint}?styles=official" 2>/dev/null
-    echo
-    if [[ -n "${steam_appid}" ]]; then
-      curl -s --max-time 15 "https://api.steamcmd.net/v1/info/${steam_appid}" 2>/dev/null
-    fi
-  } | python3 -c '
-import sys, json
-
-buf = sys.stdin.read()
-decoder = json.JSONDecoder()
-idx = 0
-n = len(buf)
-seen = set()
-results = []
-
-def add(url, thumb=None):
-    if url and url not in seen:
-        seen.add(url)
-        results.append((url, thumb or url))
-
-while idx < n:
-    while idx < n and buf[idx] in " \t\n\r":
-        idx += 1
-    if idx >= n:
-        break
-    try:
-        obj, end = decoder.raw_decode(buf, idx)
-    except Exception:
-        break
-    idx = end
-    if not isinstance(obj, dict):
-        continue
-    ok = obj.get("success") is True or obj.get("status") == "success"
-    if not ok:
-        continue
-    data = obj.get("data")
-    if isinstance(data, list):
-        for i in data:
-            add(i.get("url", ""), i.get("thumb", ""))
-    elif isinstance(data, dict):
-        for entry in data.values():
-            if not isinstance(entry, dict):
-                continue
-            appid = entry.get("appid")
-            common = entry.get("common") or {}
-            if not appid or not isinstance(common, dict):
-                continue
-            clienticon = common.get("clienticon")
-            if clienticon:
-                add(f"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{appid}/{clienticon}.ico")
-            else:
-                icon = common.get("icon")
-                if icon:
-                    add(f"https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/{appid}/{icon}.jpg")
-
-for url, thumb in results:
-    print(f"{url}\t{thumb}")
-'
-}
-
-zgp_sgdb_heroes() {
-  local game_id="$1"
-  curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" \
-    "${sgdb_api}/heroes/game/${game_id}?types=static&mimes=image/png,image/jpeg,image/webp" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    obj = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if not isinstance(obj, dict) or not obj.get("success"):
-    sys.exit(0)
-seen = set()
-for h in obj.get("data", []) or []:
-    url = h.get("url", "")
-    thumb = h.get("thumb") or url
-    if url and url not in seen:
-        seen.add(url)
-        print(f"{url}\t{thumb}")
-'
-}
-
-zgp_sgdb_logos() {
-  local game_id="$1"
-  curl -s --max-time 15 -H "Authorization: Bearer ${sgdb_key}" \
-    "${sgdb_api}/logos/game/${game_id}?types=static&mimes=image/png,image/webp" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    obj = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-if not isinstance(obj, dict) or not obj.get("success"):
-    sys.exit(0)
-seen = set()
-for h in obj.get("data", []) or []:
-    url = h.get("url", "")
-    thumb = h.get("thumb") or url
-    if url and url not in seen:
-        seen.add(url)
-        print(f"{url}\t{thumb}")
-'
-}
-
-zgp_steam_find_appid() {
-  local term="$1" encoded
-  encoded=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "${term}" 2>/dev/null)
-  [[ -z "${encoded}" ]] && return 1
-  curl -s --max-time 15 "https://store.steampowered.com/api/storesearch/?term=${encoded}&cc=us&l=en" 2>/dev/null | python3 -c '
-import sys, json
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-items = data.get("items") or []
-if items:
-    aid = items[0].get("id")
-    if aid is not None:
-        print(aid)
-'
-}
 
 candidates=""
 case "${type_arg}" in

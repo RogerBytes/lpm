@@ -67,6 +67,48 @@ check "list-runner" 0 'GE-Test' list-runner
 check "list-isolable" 0 'No isolable|Nothing' list-isolable
 check "isolate without shared store" 0 'Nothing to isolate' isolate
 check "sgdb-key get" 0 '"key"' sgdb-key get
+# --- Prefix creation helpers (lib/zgu-prefix-common.sh), shared by exe-install and create-prefix
+expect "prefix lib: slug, runner type, registry wait, YAML with and without exe" bash -c '
+  source "$1/lib/zgu-prefix-common.sh"; d=$(mktemp -d); trap "rm -rf $d" EXIT
+  [ "$(zgp_slugify "Été du Héros!")" = "ete-du-heros" ] || exit 1
+  mkdir -p "$d/r/GE-X/bin" "$d/r/P"; : > "$d/r/GE-X/bin/wine"; chmod +x "$d/r/GE-X/bin/wine"; : > "$d/r/P/toolmanifest.vdf"
+  [ "$(zgp_detect_runner_type "$d/r/GE-X")" = wine ] && [ "$(zgp_detect_runner_type "$d/r/P")" = proton ] || exit 1
+  runner_dir="$d/r"; [ "$(zgp_list_usable_runners | sort | tr "\n" " ")" = "GE-X P " ] || exit 1
+  touch "$d/user.reg" "$d/userdef.reg" "$d/system.reg"; zgp_wait_for_prefix "$d" || exit 1
+  zgp_write_config_yml "$d/a.yml" "$d" slug Name GE-X || exit 1
+  zgp_write_config_yml "$d/b.yml" "$d" slug Name GE-X "/x/setup.exe" || exit 1
+  python3 -c "import sys,yaml; a=yaml.safe_load(open(sys.argv[1])); b=yaml.safe_load(open(sys.argv[2])); assert a[\"game\"][\"exe\"]==\"\" and b[\"game\"][\"exe\"]==\"/x/setup.exe\" and a[\"name\"]==\"Name\"" "$d/a.yml" "$d/b.yml"
+' _ "${repo}"
+expect "prefix lib: no prefix helper is defined anywhere else" bash -c '! grep -lE "^zgp_(detect_runner_type|list_usable_runners|find_umu_run|slugify|wait_for_prefix|write_config_yml)\(\) \{" "$1"/lib/*.sh | grep -v "zgu-prefix-common.sh"' _ "${repo}"
+# create-prefix / exe-install end to end with a fake wineboot (creates the registry files)
+wbdir="${HOME}/.local/share/lutris/runners/wine/GE-Test/bin"
+printf '#!/bin/sh\nmkdir -p "$WINEPREFIX"; : > "$WINEPREFIX/user.reg"; : > "$WINEPREFIX/userdef.reg"; : > "$WINEPREFIX/system.reg"\nexit 0\n' > "${wbdir}/wineboot"; chmod +x "${wbdir}/wineboot"
+check "create-prefix: prefix created" 0 'blank-demo' create-prefix -y -r GE-Test "Blank Demo"
+expect "create-prefix: folder and Lutris YAML exist" bash -c 'test -f "$1/Games/blank-demo/user.reg" && grep -q "Blank Demo" "$1"/.config/lutris/games/blank-demo-*.yml' _ "${HOME}"
+printf 'x' > "${HOME}/setup.exe"
+check "exe-install: prefix created and installer run" 0 'setup' exe-install -y "${HOME}/setup.exe" -r GE-Test -f none
+expect "exe-install: folder and Lutris YAML exist" bash -c 'test -f "$1/Games/setup/user.reg" && ls "$1"/.config/lutris/games/setup-*.yml >/dev/null' _ "${HOME}"
+rm -rf "${HOME}/Games/blank-demo" "${HOME}/Games/setup" "${HOME}/.config/lutris/games/blank-demo-"* "${HOME}/.config/lutris/games/setup-"* "${HOME}/setup.exe" "${wbdir}/wineboot"
+sqlite3 "${HOME}/.local/share/lutris/pga.db" "delete from games where slug in ('blank-demo','setup');"
+# --- No function is copy-pasted between scripts: a name defined in two files of lib/ is only allowed
+# for the per-script cancel handler and the tiny output wrappers (each script has its own).
+expect "lib: no shell function defined in two different files (except the per-script handlers)" bash -c '
+  dups=$(grep -hoE "^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{" "$1"/lib/*.sh | sort | uniq -d | grep -vE "^(lpm_cancel_cleanup|say|say_err)\(\)")
+  [ -z "$dups" ] || { echo "$dups" >&2; exit 1; }' _ "${repo}"
+# --- SteamGridDB functions: one copy (lib/zgu-sgdb.sh), working with a fake curl
+sgshim="${work}/sgshim"; mkdir -p "${sgshim}"
+cat > "${sgshim}/curl" <<'CURLEOF'
+#!/bin/bash
+case "$*" in
+  *autocomplete/a*) printf '200';;
+  *autocomplete/zelda*) echo '{"success":true,"data":[{"id":42,"name":"Zelda"}]}';;
+  *icons/game/42*) echo '{"success":true,"data":[{"url":"http://x/i.png","thumb":"http://x/t.png"}]}';;
+  *) echo '{}';;
+esac
+CURLEOF
+chmod +x "${sgshim}/curl"
+expect "sgdb lib: search, icons and key saving work (fake curl)" bash -c 'export PATH="$2:$PATH" XDG_CONFIG_HOME="$3"; t(){ :; }; source "$1/lib/zgu-sgdb.sh"; sgdb_key=k; [ "$(zgp_sgdb_search zelda)" = "$(printf "42\tZelda")" ] && zgp_sgdb_icons 42 | grep -q "http://x/i.png" && zgp_sgdb_save_key abc && [ "$(zgp_sgdb_read_key)" = abc ]' _ "${repo}" "${sgshim}" "${work}/sgcfg"
+expect "sgdb lib: no sgdb function is defined anywhere else" bash -c '! grep -lE "^zgp_(sgdb_[a-z_]+|steam_find_appid)\(\) \{" "$1"/lib/*.sh | grep -v "zgu-sgdb.sh"' _ "${repo}"
 check "lsfg status" 0 '"installed"' lsfg status
 check "self-update: invalid argument" 1 'Invalid argument' self-update bogus
 check "check: structured report" 0 '\[REPORT\] ok\|' check
