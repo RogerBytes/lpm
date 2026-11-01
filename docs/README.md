@@ -129,6 +129,8 @@ lpm install -y Mariovania.zgp "Papers, Please.zgp"
 
 Same idea for a runner: `lpm pack-runner <name>` then `lpm install-runner <file>.zgr`.
 
+New here? The one-page [getting started guide](docs/getting-started.md) covers the three common cases: moving a game to another machine, adding a game from a Windows installer, and tuning a game.
+
 ## Commands
 
 `lpm` is a terminal command that can be used in scripts: it never opens a window, and with no argument it shows the help. The graphical interface is started with `lpm-gui`. Every command has its own detailed reference page: arguments, options, behavior, exit status, scripting notes and examples. See also the [global options](docs/commands/options.md) (`-y`, `--hash`...) and the [archive formats](docs/commands/archives.md) (`.zgp` / `.zgr`).
