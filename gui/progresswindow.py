@@ -19,7 +19,7 @@ ERROR_DETAIL_MAX_LINES = 12
 class ProgressWindow(Adw.Window):
     def __init__(self, title: str, cancellable: bool, on_cancel):
         super().__init__(application=Gio.Application.get_default(), title=title,
-                         default_width=480, resizable=True)
+                         default_width=460, resizable=True)
         self._cancellable = cancellable
         self._on_cancel = on_cancel
         self._state = "running"  # running -> finished
@@ -30,17 +30,19 @@ class ProgressWindow(Adw.Window):
 
     # --- Layout ---
     def _build(self, title: str):
-        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=18,
-                           margin_bottom=18, margin_start=18, margin_end=18)
-        self.bar = Gtk.ProgressBar(show_text=True, hexpand=True)
+        self.title_text = title
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=10,
+                           margin_bottom=12, margin_start=14, margin_end=14)
+        # Bar and (small) cancel button on ONE row: the window stays low.
+        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER)
+        self.bar = Gtk.ProgressBar(show_text=True, hexpand=True, valign=Gtk.Align.CENTER)
         self.bar.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-        self.box.append(self.bar)
-        self.cancel_button = Gtk.Button(label=t("gui.install.cancel_button"), halign=Gtk.Align.END,
-                                        visible=self._cancellable)
+        row.append(self.bar)
+        self.cancel_button = Gtk.Button(label=t("gui.install.cancel_button"), visible=self._cancellable)
         self.cancel_button.add_css_class("destructive-action")
-        self.cancel_button.add_css_class("pill")
-        self.cancel_button.connect("clicked", self._request_cancel)
-        self.box.append(self.cancel_button)
+        self.cancel_button.connect("clicked", lambda *_: self._confirm_cancel())
+        row.append(self.cancel_button)
+        self.box.append(row)
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle="")))
         toolbar.set_content(self.box)
@@ -78,7 +80,19 @@ class ProgressWindow(Adw.Window):
         self.bar.set_fraction(max(0.0, min(1.0, pct / 100.0)))
 
     # --- Cancel / close ---
-    def _request_cancel(self, *_):
+    def _confirm_cancel(self):
+        """Always asks first (no mis-click): the button and the close button share this."""
+        dialog = Adw.AlertDialog(heading=t("gui.op.cancel_heading"),
+                                 body=t("gui.op.cancel_body", self.title_text))
+        dialog.add_response("keep", t("gui.op.cancel_keep"))
+        dialog.add_response("confirm", t("gui.op.cancel_confirm"))
+        dialog.set_response_appearance("confirm", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("keep")
+        dialog.set_close_response("keep")
+        dialog.connect("response", lambda _d, r: self._do_cancel() if r == "confirm" else None)
+        dialog.present(self)
+
+    def _do_cancel(self):
         self.cancel_button.set_sensitive(False)
         self._on_cancel()
 
@@ -90,14 +104,7 @@ class ProgressWindow(Adw.Window):
             dialog.add_response("ok", t("gui.op.error_close"))
             dialog.present(self)
             return True
-        dialog = Adw.AlertDialog(heading=t("gui.op.cancel_heading"), body=t("gui.op.cancel_body"))
-        dialog.add_response("keep", t("gui.op.cancel_keep"))
-        dialog.add_response("confirm", t("gui.op.cancel_confirm"))
-        dialog.set_response_appearance("confirm", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("keep")
-        dialog.set_close_response("keep")
-        dialog.connect("response", lambda _d, r: self._request_cancel() if r == "confirm" else None)
-        dialog.present(self)
+        self._confirm_cancel()
         return True
 
     # --- End of the operation ---
