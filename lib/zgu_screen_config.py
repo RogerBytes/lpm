@@ -131,6 +131,16 @@ MARQUEE_TICK_MS = 16
 GAMEPAD_REPEAT_DELAY_S = 0.4
 GAMEPAD_REPEAT_INTERVAL_S = 0.07
 
+# The logo is attached to the banner (splash image): its bottom edge sits LOGO_BANNER_GAP above
+# the banner, or SUBTITLE_BAND_HEIGHT above it on a launcher with a picker (NO_LABEL off), where
+# that band is always kept free for the label of the chosen entry (episode, chapter...).
+LOGO_BANNER_GAP = 28
+SUBTITLE_BAND_HEIGHT = 84
+# With a picker, minimum space kept between the logo and the picker card.
+LOGO_PICKER_CLEARANCE = 14
+# With a banner announced but not loaded yet, the logo waits (no jump) for at most this long.
+LOGO_WAIT_FOR_BANNER_S = 2.0
+
 MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30
 BANNER_EXTRA_LIFT_NO_LABEL = 15

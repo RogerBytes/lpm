@@ -208,6 +208,7 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
             self.set_title(window_title)
         self.monitor = monitor
         self.monitor_geom = geom
+        self.created_at = time.monotonic()
 
         self._init_picker_state()
 

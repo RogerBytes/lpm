@@ -10,6 +10,14 @@ import cairo
 
 from zgu_screen_config import (
     BANNER_EXTRA_LIFT_NO_LABEL,
+    HAS_BANNER,
+    LOGO_BANNER_GAP,
+    LOGO_WAIT_FOR_BANNER_S,
+    LOGO_PICKER_CLEARANCE,
+    PICKER_CARD_HEIGHT,
+    PICKER_VERTICAL_OFFSET,
+    SUBTITLE_BAND_HEIGHT,
+    TOP_ZONE_MIN_MARGIN,
     BANNER_VERTICAL_LIFT,
     ENTRY_LABEL_FONT_SIZE,
     FONT_SIZE,
@@ -91,20 +99,10 @@ class DrawMixin:
         messages = self.loading_messages_lines(cr, width)
         # Room kept for the TALLEST message, so the banner never jumps from one message to the next.
         message_reserved = (max(len(m) for m in messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if messages else 0
-        banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0) - message_reserved
-        if self.current_surface is not None and banner_zone_height > 0:
+        banner = self._banner_geometry(width, help_visible, message_reserved)
+        if banner is not None:
+            off_x, off_y, scale = banner
             cr.set_operator(cairo.OPERATOR_OVER)
-            img_w = self.current_surface.get_width()
-            img_h = self.current_surface.get_height()
-            scale = min(
-                1.0,
-                (width * MAX_BANNER_WIDTH_FRACTION) / img_w,
-                banner_zone_height / img_h,
-            )
-            off_x = (width - img_w * scale) / 2
-            off_y = self.banner_zone_top + (banner_zone_height - img_h * scale) / 2
-            extra_lift = BANNER_EXTRA_LIFT_NO_LABEL if NO_LABEL else 0
-            off_y = max(self.banner_zone_top, off_y - BANNER_VERTICAL_LIFT - extra_lift)
             cr.translate(off_x, off_y)
             cr.scale(scale, scale)
             cr.set_source_surface(self.current_surface, 0, 0)
@@ -124,12 +122,36 @@ class DrawMixin:
             self.draw_loading_message(cr, messages, width, height, help_visible)
 
         if entry_label_text[0]:
-            self.draw_entry_label(cr, width)
+            self.draw_entry_label(cr, width, banner)
 
         if self.logo_surface is not None:
-            self.draw_logo(cr)
+            self.draw_logo(cr, width, height, banner)
         elif title_text[0]:
             self.draw_top_title(cr, width)
+
+    def _banner_geometry(self, width, help_visible, message_reserved):
+        """(x, y, scale) of the banner (splash image), or None if there is none to draw."""
+        banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0) - message_reserved
+        if self.current_surface is None or banner_zone_height <= 0:
+            return None
+        img_w = self.current_surface.get_width()
+        img_h = self.current_surface.get_height()
+        scale = min(
+            1.0,
+            (width * MAX_BANNER_WIDTH_FRACTION) / img_w,
+            banner_zone_height / img_h,
+        )
+        off_x = (width - img_w * scale) / 2
+        off_y = self.banner_zone_top + (banner_zone_height - img_h * scale) / 2
+        extra_lift = BANNER_EXTRA_LIFT_NO_LABEL if NO_LABEL else 0
+        off_y = max(self.banner_zone_top, off_y - BANNER_VERTICAL_LIFT - extra_lift)
+        return off_x, off_y, scale
+
+    @staticmethod
+    def _banner_band():
+        """Free height between the logo and the banner: small gap, or the subtitle band on a
+        launcher with a picker (kept even while no entry is chosen yet, so nothing jumps)."""
+        return LOGO_BANNER_GAP if NO_LABEL else SUBTITLE_BAND_HEIGHT
 
     def gamepad_help_visible(self):
         if not gamepad_pads or not any((HELP_ALTTAB_TEXT, HELP_QUIT_TEXT, HELP_F4_TEXT,
@@ -377,25 +399,56 @@ class DrawMixin:
             cr.move_to((width - ext.x_advance) / 2, first_baseline + i * LOADING_MESSAGE_LINE_HEIGHT)
             cr.show_text(line)
 
-    def draw_entry_label(self, cr, width):
+    def draw_entry_label(self, cr, width, banner):
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
         cr.set_font_size(ENTRY_LABEL_FONT_SIZE)
         extents = cr.text_extents(entry_label_text[0])
 
         label_x = (width - extents.width) / 2
-        label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + self.block_extra_down + extents.height
+        if banner is not None:
+            # Centered in the band kept free between the logo and the banner.
+            label_baseline_y = banner[1] - self._banner_band() / 2 + extents.height / 2
+        else:
+            label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + self.block_extra_down + extents.height
 
         cr.set_source_rgba(1, 1, 1, 1)
         cr.move_to(label_x, label_baseline_y)
         cr.show_text(entry_label_text[0])
 
-    def draw_logo(self, cr):
-        cr.set_operator(cairo.OPERATOR_OVER)
+    def _logo_bottom_limit(self, height, banner_top):
+        """Lowest y the logo bottom may reach: right above the band of the banner, and on a
+        launcher with a picker never lower than the top of the picker card (same formula as
+        its margin in zgu_screen_picker.py), so the card can never cover the logo."""
+        limit = banner_top - self._banner_band()
+        if not NO_LABEL:
+            card_top = (height + PICKER_VERTICAL_OFFSET + int(2 * self.block_extra_down) - PICKER_CARD_HEIGHT) / 2
+            limit = min(limit, card_top - LOGO_PICKER_CLEARANCE)
+        return limit
+
+    def _logo_placement(self, width, height, banner):
+        """(x, y, scale) of the logo: right above the banner (then shrunk if the room above is
+        too small), or the fixed position of the top zone while there is no banner."""
         img_w = self.logo_surface.get_width()
+        img_h = self.logo_surface.get_height()
         scale = self.logo_draw_w / img_w
-        cr.save()
+        if banner is not None:
+            bottom = self._logo_bottom_limit(height, banner[1])
+            room = bottom - TOP_ZONE_MIN_MARGIN
+            if room > 0:
+                scale = min(scale, room / img_h)
+                return (width - img_w * scale) / 2, bottom - img_h * scale, scale
         shift = 0 if NO_LABEL else (LABEL_SHIFT_DOWN + LOGO_EXTRA_DOWN)
-        cr.translate(self.logo_draw_x, self.logo_draw_y + shift + self.block_extra_down)
+        return self.logo_draw_x, self.logo_draw_y + shift + self.block_extra_down, scale
+
+    def draw_logo(self, cr, width, height, banner):
+        # A banner is announced but not loaded yet: wait for it instead of drawing the logo at
+        # the top and moving it a moment later (but never for long, the banner may be unreadable).
+        if banner is None and HAS_BANNER and time.monotonic() - self.created_at < LOGO_WAIT_FOR_BANNER_S:
+            return
+        x, y, scale = self._logo_placement(width, height, banner)
+        cr.set_operator(cairo.OPERATOR_OVER)
+        cr.save()
+        cr.translate(x, y)
         cr.scale(scale, scale)
         cr.set_source_surface(self.logo_surface, 0, 0)
         cr.paint()
