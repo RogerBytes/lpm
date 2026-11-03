@@ -136,8 +136,8 @@ GAMEPAD_REPEAT_INTERVAL_S = 0.07
 # that band is always kept free for the label of the chosen entry (episode, chapter...).
 LOGO_BANNER_GAP = 28
 # Without a picker the banner is also moved down by this fraction of the screen height (the logo
-# stays where it is), so the logo does not look glued to it (about 2 cm on a 27" screen).
-BANNER_EXTRA_DOWN_FRACTION = 0.08
+# stays where it is), so the logo does not look glued to it (about 1 cm on a 27" screen).
+BANNER_EXTRA_DOWN_FRACTION = 0.04
 SUBTITLE_BAND_HEIGHT = 84
 # With a picker, minimum space kept between the logo and the picker card.
 LOGO_PICKER_CLEARANCE = 14
