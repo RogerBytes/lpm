@@ -16,7 +16,9 @@ from zgu_screen_config import (
     MARQUEE_TICK_MS,
     NO_LABEL,
     PICKER_BOX_WIDTH,
+    LOGO_PICKER_CLEARANCE,
     PICKER_CARD_HEIGHT,
+    PICKER_CARD_MIN_HEIGHT,
     PICKER_RESULT_FILE,
     PICKER_VERTICAL_OFFSET,
 )
@@ -44,6 +46,7 @@ class PickerMixin:
         extra_down = 0 if NO_LABEL else self.monitor_geom.height * BLOCK_EXTRA_DOWN_FRACTION
         card.set_margin_top(PICKER_VERTICAL_OFFSET + int(2 * extra_down))
         card.set_size_request(PICKER_BOX_WIDTH, PICKER_CARD_HEIGHT)
+        self.picker_card_fit = None  # (margin, height) last applied by _fit_picker_card
 
         self.picker_title_label = Gtk.Label(xalign=0, visible=False)
         self.picker_title_label.add_css_class("lpm-picker-title")
@@ -115,6 +118,23 @@ class PickerMixin:
         button_box.append(self.picker_validate_button)
 
         return button_box
+
+    def _fit_picker_card(self, height, logo_bottom):
+        """Keeps the card below the logo (which never moves): when the logo is low, the top of
+        the card goes down and its bottom edge stays put, so the card is just a bit shorter."""
+        top0 = (height + PICKER_VERTICAL_OFFSET + int(2 * self.block_extra_down) - PICKER_CARD_HEIGHT) / 2
+        bottom = top0 + PICKER_CARD_HEIGHT
+        top = max(top0, logo_bottom + LOGO_PICKER_CLEARANCE)
+        new_height = max(PICKER_CARD_MIN_HEIGHT, int(bottom - top))
+        margin = int(2 * (bottom - new_height) + new_height - height)
+        if (margin, new_height) != self.picker_card_fit:
+            self.picker_card_fit = (margin, new_height)
+            GLib.idle_add(self._apply_picker_card_fit, margin, new_height)
+
+    def _apply_picker_card_fit(self, margin, new_height):
+        self.picker_card.set_margin_top(margin)
+        self.picker_card.set_size_request(PICKER_BOX_WIDTH, new_height)
+        return False
 
     def _make_pad_icon(self, letter, css_class):
         icon = Gtk.Label(label=letter)

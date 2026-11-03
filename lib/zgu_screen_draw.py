@@ -14,9 +14,6 @@ from zgu_screen_config import (
     HAS_BANNER,
     LOGO_BANNER_GAP,
     LOGO_WAIT_FOR_BANNER_S,
-    LOGO_PICKER_CLEARANCE,
-    PICKER_CARD_HEIGHT,
-    PICKER_VERTICAL_OFFSET,
     SUBTITLE_BAND_HEIGHT,
     TOP_ZONE_MIN_MARGIN,
     BANNER_VERTICAL_LIFT,
@@ -422,16 +419,6 @@ class DrawMixin:
         cr.move_to(label_x, label_baseline_y)
         cr.show_text(entry_label_text[0])
 
-    def _logo_bottom_limit(self, height, banner_top):
-        """Lowest y the logo bottom may reach: right above the band of the banner, and on a
-        launcher with a picker never lower than the top of the picker card (same formula as
-        its margin in zgu_screen_picker.py), so the card can never cover the logo."""
-        limit = banner_top - self._banner_band()
-        if not NO_LABEL:
-            card_top = (height + PICKER_VERTICAL_OFFSET + int(2 * self.block_extra_down) - PICKER_CARD_HEIGHT) / 2
-            limit = min(limit, card_top - LOGO_PICKER_CLEARANCE)
-        return limit
-
     def _logo_placement(self, width, height, banner):
         """(x, y, scale) of the logo: right above the banner (then shrunk if the room above is
         too small), or the fixed position of the top zone while there is no banner."""
@@ -439,7 +426,7 @@ class DrawMixin:
         img_h = self.logo_surface.get_height()
         scale = self.logo_draw_w / img_w
         if banner is not None:
-            bottom = self._logo_bottom_limit(height, banner[3])
+            bottom = banner[3] - self._banner_band()
             room = bottom - TOP_ZONE_MIN_MARGIN
             if room > 0:
                 scale = min(scale, room / img_h)
@@ -453,6 +440,9 @@ class DrawMixin:
         if banner is None and HAS_BANNER and time.monotonic() - self.created_at < LOGO_WAIT_FOR_BANNER_S:
             return
         x, y, scale = self._logo_placement(width, height, banner)
+        if not NO_LABEL:
+            # The logo never moves for the picker: it is the picker card that goes below it.
+            self._fit_picker_card(height, y + self.logo_surface.get_height() * scale)
         cr.set_operator(cairo.OPERATOR_OVER)
         cr.save()
         cr.translate(x, y)

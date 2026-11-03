@@ -139,8 +139,10 @@ LOGO_BANNER_GAP = 28
 # stays where it is), so the logo does not look glued to it (about 1 cm on a 27" screen).
 BANNER_EXTRA_DOWN_FRACTION = 0.04
 SUBTITLE_BAND_HEIGHT = 84
-# With a picker, minimum space kept between the logo and the picker card.
+# With a picker, space kept between the logo and the picker card (the card goes down, its
+# bottom edge stays where it is, so it becomes shorter) and the least it may be reduced to.
 LOGO_PICKER_CLEARANCE = 14
+PICKER_CARD_MIN_HEIGHT = 360
 # With a banner announced but not loaded yet, the logo waits (no jump) for at most this long.
 LOGO_WAIT_FOR_BANNER_S = 2.0
 
