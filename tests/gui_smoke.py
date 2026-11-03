@@ -217,7 +217,6 @@ except Exception:
 # --- Progress window: the cancel question is in the window, same size, generic ------------
 try:
     import progresswindow
-    from i18n import t
     cancelled = []
     pw = progresswindow.ProgressWindow("Some operation", True, lambda: cancelled.append(1))
     pw.present()
@@ -225,7 +224,7 @@ try:
     size = (pw.get_width(), pw.get_height())
     pw.cancel_button.emit("clicked")
     pump(0.3)
-    assert pw.stack.get_visible_child_name() == "confirm" and pw.question.get_label() == t("gui.op.cancel_question")
+    assert pw.stack.get_visible_child_name() == "confirm" and not pw.notice.get_visible() and pw.confirm_button.get_visible()
     assert (pw.get_width(), pw.get_height()) == size, ((pw.get_width(), pw.get_height()), size)
     pw.keep_button.emit("clicked")
     assert pw.stack.get_visible_child_name() == "progress" and not cancelled

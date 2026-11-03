@@ -55,15 +55,16 @@ class ProgressWindow(Adw.Window):
         return row
 
     def _build_confirm_row(self) -> Gtk.Box:
-        """Generic question (same text for every operation) and its two buttons, on one line."""
-        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER)
-        self.question = Gtk.Label(label=t("gui.op.cancel_question"), xalign=0, hexpand=True,
-                                  ellipsize=Pango.EllipsizeMode.END)
-        row.append(self.question)
-        self.keep_button = Gtk.Button(label=t("gui.op.cancel_keep"))
+        """Just two buttons, half the width each: blue "Continue", red "Cancel the operation"
+        (the same for every operation). For an operation that cannot be cancelled, the same
+        row holds a sentence and one button instead (see _on_close_request)."""
+        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER, homogeneous=False)
+        self.notice = Gtk.Label(xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.END, visible=False)
+        row.append(self.notice)
+        self.keep_button = Gtk.Button(label=t("gui.op.cancel_keep"), hexpand=True)
         self.keep_button.add_css_class("suggested-action")
         self.keep_button.connect("clicked", lambda *_: self._show_progress())
-        self.confirm_button = Gtk.Button(label=t("gui.op.cancel_confirm"))
+        self.confirm_button = Gtk.Button(label=t("gui.op.cancel_confirm"), hexpand=True)
         self.confirm_button.add_css_class("destructive-action")
         self.confirm_button.connect("clicked", lambda *_: self._do_cancel())
         row.append(self.keep_button)
@@ -105,8 +106,9 @@ class ProgressWindow(Adw.Window):
     def _confirm_cancel(self):
         """Always asks first (no mis-click), in the window itself: the button and the close
         button share this. "Continue" simply goes back to the progress."""
-        self.question.set_label(t("gui.op.cancel_question"))
+        self.notice.set_visible(False)
         self.confirm_button.set_visible(True)
+        self.keep_button.set_hexpand(True)
         self.stack.set_visible_child_name("confirm")
         self.keep_button.grab_focus()
 
@@ -125,7 +127,9 @@ class ProgressWindow(Adw.Window):
             self._confirm_cancel()
         else:
             # Nothing to cancel: the same line says so, with a single button.
-            self.question.set_label(t("gui.op.cannot_cancel"))
+            self.notice.set_label(t("gui.op.cannot_cancel"))
+            self.notice.set_visible(True)
+            self.keep_button.set_hexpand(False)
             self.confirm_button.set_visible(False)
             self.stack.set_visible_child_name("confirm")
             self.keep_button.grab_focus()

@@ -1376,7 +1376,6 @@ gui.tools.gamepad_other=This game already uses another AntiMicroX profile. It is
 gui.tools.gamepad_edit_started=AntiMicroX is opening.
 gui.op.already_running=An operation is already running. Wait for it to finish or cancel it.
 gui.op.busy_heading=Operation in progress
-gui.op.cancel_question=Cancel the running operation?
 gui.op.cancel_keep=Continue
 gui.op.cancel_confirm=Cancel the operation
 gui.op.cannot_cancel=This operation cannot be cancelled. Wait for it to finish.
