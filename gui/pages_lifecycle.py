@@ -5,7 +5,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
 import backend
 from i18n import t
@@ -345,7 +345,7 @@ class InstallPage:
 
     @staticmethod
     def _parse_hooks(stdout: str) -> list[tuple[str, str, list[tuple[str, str]]]]:
-        """Output of "lpm install --list-hooks": [(game name, file name, [(key, value)])]."""
+        """Output of "lpm install --list-hooks": [(game name, file name, [(short path, full path)])]."""
         games = []
         for line in stdout.splitlines():
             kind, _, rest = line.partition("\x1f")
@@ -353,25 +353,45 @@ class InstallPage:
             if kind == "GAME" and len(fields) >= 2:
                 games.append((fields[0], fields[1], []))
             elif kind == "HOOK" and games and len(fields) >= 2:
-                value = fields[1] if len(fields[1]) <= 70 else fields[1][:67] + "..."
-                games[-1][2].append((fields[0], value))
+                full = fields[2] if len(fields) > 2 and fields[2] else fields[1]
+                short = fields[3] if len(fields) > 3 and fields[3] else full
+                games[-1][2].append((short, full))
         return games
 
     @staticmethod
-    def _hook_line(name: str, hooks) -> str:
-        """One short line: the game, then the script(s) it runs (just the path or command)."""
-        scripts = ", ".join(dict.fromkeys(value for _key, value in hooks))
-        return f"\u2022 {name}: {scripts}"
+    def _hooks_widget(games) -> Gtk.Widget:
+        """For each game, its scripts: the path inside the game's folder (selectable) and a copy
+        button that puts the FULL path, as it will be once installed, in the clipboard."""
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        for name, _filename, hooks in games[:HOOKS_DIALOG_MAX_GAMES]:
+            title = Gtk.Label(label=name, xalign=0, wrap=True)
+            title.add_css_class("heading")
+            box.append(title)
+            for short, full in dict.fromkeys(hooks):
+                row = Gtk.Box(spacing=6)
+                path = Gtk.Label(label=short, xalign=0, hexpand=True, selectable=True,
+                                 ellipsize=Pango.EllipsizeMode.MIDDLE)
+                path.add_css_class("monospace")
+                path.set_tooltip_text(full)
+                button = Gtk.Button(icon_name="edit-copy-symbolic", tooltip_text=t("gui.install.hooks_dialog_copy"))
+                button.add_css_class("flat")
+                button.connect("clicked", lambda b, text=full: b.get_clipboard().set(text))
+                row.append(path)
+                row.append(button)
+                box.append(row)
+        if len(games) > HOOKS_DIALOG_MAX_GAMES:
+            box.append(Gtk.Label(label=t("gui.install.hooks_dialog_more", len(games) - HOOKS_DIALOG_MAX_GAMES), xalign=0))
+        scroll = Gtk.ScrolledWindow(min_content_width=420, max_content_height=260, propagate_natural_height=True)
+        scroll.set_child(box)
+        return scroll
 
     def _ask_hooks(self, games, total: int, on_choice):
         """One confirmation for the whole batch, listing every package that embeds scripts.
         on_choice(None) = cancel, on_choice(False) = install without them, on_choice(True) = allow."""
-        listing = "\n".join(InstallPage._hook_line(name, hooks) for name, _filename, hooks in games[:HOOKS_DIALOG_MAX_GAMES])
-        if len(games) > HOOKS_DIALOG_MAX_GAMES:
-            listing += "\n" + t("gui.install.hooks_dialog_more", len(games) - HOOKS_DIALOG_MAX_GAMES)
         dialog = Adw.AlertDialog(
             heading=t("gui.install.hooks_dialog_heading"),
-            body=t("gui.install.hooks_dialog_body", listing))
+            body=t("gui.install.hooks_dialog_body"))
+        dialog.set_extra_child(InstallPage._hooks_widget(games))
         dialog.add_response("cancel", t("gui.common.cancel"))
         dialog.add_response("without", t("gui.install.hooks_dialog_without"))
         dialog.add_response("allow", t("gui.install.hooks_dialog_allow"))

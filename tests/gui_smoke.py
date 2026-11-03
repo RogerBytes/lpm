@@ -246,15 +246,16 @@ try:
     subprocess.run("tar -C %s --zstd -cf '%s' .lpm-config.yml hookgame" % (tmp, zgp), shell=True, check=True)
     res = backend.run_lpm(["install", "-y", "--list-hooks", zgp])
     games = pages_lifecycle.InstallPage._parse_hooks(res.stdout)
-    assert games == [("Hook Game", "Hook Game.zgp", [("system.prelaunch_command", "/bin/true")])] or \
-        (len(games) == 1 and games[0][0] == "Hook Game" and games[0][2] and "prelaunch_command" in games[0][2][0][0]), games
+    assert len(games) == 1 and games[0][0] == "Hook Game" and len(games[0][2]) == 1, games
+    short, full = games[0][2][0]
+    assert short == "/bin/true" and full == "/bin/true", games
     shown_dialogs = []
     Adw.AlertDialog.present = lambda self, parent=None: shown_dialogs.append(self)
     choices = []
     stub = types.SimpleNamespace(window=win)
     pages_lifecycle.InstallPage._ask_hooks(stub, games, 2, choices.append)
     dlg = shown_dialogs[0]
-    assert "Hook Game" in dlg.get_body() and "/bin/true" in dlg.get_body() and "prelaunch_command" not in dlg.get_body()
+    assert "prelaunch_command" not in dlg.get_body() and dlg.get_extra_child() is not None
     assert dlg.get_default_response() == "without", dlg.get_default_response()
     for response in ("without", "allow", "cancel"):
         dlg.emit("response", response)

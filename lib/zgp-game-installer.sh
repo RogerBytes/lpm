@@ -86,9 +86,10 @@ esac
 
 # Automatic launch/close scripts embedded in one archive (read from its first member, nothing is
 # extracted). Args: filepath fallback_name. Prints nothing if there are none, otherwise a
-# "GAME<US>name<US>file" line then one "HOOK<US>key<US>value" line per script (US = \x1f).
+# "GAME<US>name<US>file" line then one "HOOK<US>key<US>value<US>full path once installed<US>short path" line per
+# script (US = \x1f).
 zgp_archive_hooks() {
-  local filepath="$1" fallback_name="$2" cfg hooks game_name hook_path hook_value
+  local filepath="$1" fallback_name="$2" cfg hooks game_name hook_path hook_value hook_full hook_short slug
   cfg=$(zgu_archive_config "${filepath}") || return 0
   hooks=$(printf '%s\n' "${cfg}" | zgu_yaml_hooks)
   [[ -n "${hooks}" ]] || return 0
@@ -101,16 +102,35 @@ except Exception:
 ' 2>/dev/null)
   game_name="${game_name//[$'\n\r']/ }"
   [[ -z "${game_name}" ]] && game_name="${fallback_name}"
+  # Folder the game will have once installed (its first folder in the archive, like the install
+  # does): the full path of each script is given as it will be, "$GAMEDIR" and /home/<user>
+  # resolved the same way the install resolves them.
+  slug=$(bsdtar -tf "${filepath}" 2>/dev/null | awk -F/ 'NR > 1 && $1 != ".lpm-config.yml" && $1 != "" { print $1; exit }')
   printf 'GAME\x1f%s\x1f%s\n' "${game_name}" "$(basename "${filepath}")"
   while IFS=$'\x1f' read -r hook_path hook_value; do
     [[ -z "${hook_path}" ]] && continue
-    printf 'HOOK\x1f%s\x1f%s\n' "${hook_path}" "${hook_value//[$'\n\r']/ }"
+    hook_value="${hook_value//[$'\n\r']/ }"
+    hook_value="${hook_value//\\n/ }"
+    hook_full=$(HOOK_VALUE="${hook_value}" PFX_DIR="${games_dir}/${slug}" python3 -c '
+import os, re
+res = re.sub(r"/home/[^/]+", lambda _m: os.environ["HOME"], os.environ["HOOK_VALUE"])
+print(res.replace("$GAMEDIR", os.environ["PFX_DIR"]))
+' 2>/dev/null)
+    # Short form for display: relative to the game's folder ("lpm/scripts/a.sh").
+    hook_short="${hook_full//"${games_dir}/${slug}/"/}"
+    printf 'HOOK\x1f%s\x1f%s\x1f%s\x1f%s\n' "${hook_path}" "${hook_value}" "${hook_full}" "${hook_short}"
   done <<< "${hooks}"
 }
 
 # --list-hooks (used by the GUI before installing): lists the scripts embedded in the given
 # archives and exits. Read-only: Lutris is not touched, nothing is extracted or installed.
 if [[ "${list_hooks_only}" = true ]]; then
+  # Only to know where the games will be installed (game_path of Lutris): no Lutris is touched.
+  zgu_set_lutris_paths native
+  if [[ ! -f "${lutris_system_file}" ]]; then
+    zgu_set_lutris_paths flatpak
+    [[ -f "${lutris_system_file}" ]] || zgu_set_lutris_paths native
+  fi
   for target in "${cli_targets[@]}"; do
     [[ -f "${target}" ]] || continue
     zgp_archive_hooks "${target}" "$(basename "${target}" .zgp)"
@@ -298,7 +318,7 @@ if [[ "${batch_hooks_decision}" != "yes" ]]; then
   for name in "${games_to_install[@]}"; do
     batch_out=$(zgp_archive_hooks "${filepath_by_name[${name}]}" "${name}")
     [[ -n "${batch_out}" ]] || continue
-    while IFS=$'\x1f' read -r hook_kind hook_a hook_b; do
+    while IFS=$'\x1f' read -r hook_kind hook_a hook_b _hook_full _hook_short; do
       case "${hook_kind}" in
         GAME)
           batch_hook_games=$((batch_hook_games + 1))
