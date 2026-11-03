@@ -67,6 +67,7 @@ import cairo
 from zgu_screen_config import (
     BLOCK_EXTRA_DOWN_FRACTION,
     CONTROL_FILE,
+    PREFIX_DIR,
     CSS,
     CURSOR_IDLE_S,
     GAMEPAD_REPEAT_DELAY_S,
@@ -99,6 +100,7 @@ from zgu_common import (
     SDL_CONTROLLER_BUTTON_B,
     SDL_CONTROLLER_BUTTON_DPAD_DOWN,
     SDL_CONTROLLER_BUTTON_DPAD_UP,
+    close_prefix_game,
     init_sdl,
     load_sdl2,
 )
@@ -320,6 +322,24 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
         # limit of modern window systems (focus-stealing prevention).
         self.connect("notify::is-active", self.on_active_changed)
 
+        # Alt+F4 (the window manager asks the window to close): see on_close_request.
+        self.connect("close-request", self.on_close_request)
+
+    def on_close_request(self, _win):
+        """Alt+F4 on the loading screen stops the game launch, like the gamepad quit combo: the
+        wineserver of the game's prefix is closed (repeatedly for a while, as it may not exist
+        yet at the very start), then the screen goes away. While the picker is shown, closing
+        simply cancels it (the orchestrator sees the window gone). A second Alt+F4 closes at once."""
+        if self.picker_visible or picker_request_pending[0] or not PREFIX_DIR:
+            return False
+        if quit_state["started"]:
+            quit_state["deadline"] = 0  # second press: no more waiting
+            return True
+        quit_state["started"] = True
+        quit_state["deadline"] = time.monotonic() + QUIT_WAIT_FOR_WINE_S
+        GLib.timeout_add(QUIT_RETRY_MS, quit_tick)
+        return True  # stays black meanwhile: no flash of the desktop
+
     def _init_picker_state(self):
         # --- Picker (see file header): built once here, hidden by default -- a centered
         # "card" over the background, never a second window. ---
@@ -394,6 +414,25 @@ last_bg_state = None
 last_indicator_state = None
 last_title_state = None
 last_entry_label_state = None
+
+QUIT_RETRY_MS = 500
+QUIT_WAIT_FOR_WINE_S = 30  # how long Alt+F4 waits for the game's wineserver to exist
+quit_state = {"started": False, "deadline": 0, "killed_at": None}
+
+
+def quit_tick():
+    """Every QUIT_RETRY_MS after Alt+F4: stop the prefix's wineserver; leave once it was
+    stopped (a moment later, so Wine closes) or once the wait is over."""
+    now = time.monotonic()
+    if close_prefix_game(PREFIX_DIR) and quit_state["killed_at"] is None:
+        quit_state["killed_at"] = now
+    done = (quit_state["killed_at"] is not None and now - quit_state["killed_at"] > 1.5) or now > quit_state["deadline"]
+    if done:
+        for win in list(windows):
+            win.destroy()
+        loop.quit()
+        return False
+    return True
 
 
 def poll_control_file():

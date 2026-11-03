@@ -47,6 +47,42 @@ def env_value(pid, name):
     return None
 
 
+def close_prefix_game(prefix_dir):
+    """Stop the wineserver(s) OF THIS PREFIX with SIGINT, exactly what "wineserver -k" does:
+    Wine then closes every process of the prefix, whatever its name. Never touches a wineserver
+    of another prefix, never uses "kill -9". Returns how many wineservers were signalled."""
+    import signal
+    prefix_dir = os.path.realpath(prefix_dir) if prefix_dir else ""
+    if not prefix_dir:
+        return 0
+
+    def in_prefix(path):
+        if not path:
+            return False
+        path = os.path.realpath(path)
+        return path == prefix_dir or path.startswith(prefix_dir + os.sep)
+
+    count = 0
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit() or int(entry) == os.getpid():
+            continue
+        pid = int(entry)
+        try:
+            with open("/proc/%d/comm" % pid, "r") as f:
+                if f.read().strip() != "wineserver":
+                    continue
+        except OSError:
+            continue
+        if not (in_prefix(env_value(pid, b"WINEPREFIX")) or in_prefix(env_value(pid, b"STEAM_COMPAT_DATA_PATH"))):
+            continue
+        try:
+            os.kill(pid, signal.SIGINT)
+            count += 1
+        except OSError:
+            pass
+    return count
+
+
 # --- SDL2 game controller constants (same values in every program) ---
 GAMEPAD_POLL_MS = 20
 GAMEPAD_AXIS_THRESHOLD = int(32767 * 0.5)  # 50% of the axis travel

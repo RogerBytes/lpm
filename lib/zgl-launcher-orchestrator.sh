@@ -321,7 +321,7 @@ if [[ ! -e "${loading_message_file}" ]]; then
   : > "${loading_message_file}" 2>/dev/null
 fi
 loading_message=$(head -c 1200 "${loading_message_file}" 2>/dev/null | tr '\r\t' '  ')
-LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
+LPM_PREFIX_DIR="${game_dir}" LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 

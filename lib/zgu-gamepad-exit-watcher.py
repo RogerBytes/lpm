@@ -55,7 +55,7 @@ from zgu_common import (
     SDL_CONTROLLER_BUTTON_LEFTSTICK,
     SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
     SDL_CONTROLLER_BUTTON_RIGHTSTICK,
-    env_value,
+    close_prefix_game,
     find_controllers,
     init_sdl,
     load_sdl2,
@@ -114,37 +114,9 @@ elif getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None) is None:
 
 
 
-def _in_prefix(path):
-    if not path:
-        return False
-    path = os.path.realpath(path)
-    return path == PREFIX_DIR or path.startswith(PREFIX_DIR + os.sep)
-
-
 def close_game():
-    """Stop the wineserver OF THIS GAME'S PREFIX: SIGINT, exactly what "wineserver -k"
-    does. Wine then closes every process of the prefix, whatever its name (a game's real
-    process may be called "Main thread", not "game.exe"). Only targets wineservers whose
-    prefix is this game's."""
-    me = os.getpid()
-    for entry in os.listdir("/proc"):
-        if not entry.isdigit() or int(entry) == me:
-            continue
-        pid = int(entry)
-        try:
-            with open("/proc/%d/comm" % pid, "r") as f:
-                comm = f.read().strip()
-        except OSError:
-            continue
-        if comm != "wineserver":
-            continue
-        if not (_in_prefix(env_value(pid, b"WINEPREFIX"))
-                or _in_prefix(env_value(pid, b"STEAM_COMPAT_DATA_PATH"))):
-            continue
-        try:
-            os.kill(pid, signal.SIGINT)
-        except OSError:
-            pass
+    """Stop the wineserver OF THIS GAME'S PREFIX (see zgu_common.close_prefix_game)."""
+    close_prefix_game(PREFIX_DIR)
 
 
 # --- SDL2 standardized buttons/axes (SDL_GameControllerButton / SDL_GameControllerAxis,

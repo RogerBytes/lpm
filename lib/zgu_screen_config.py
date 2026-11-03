@@ -48,6 +48,8 @@ ENTRY_LABEL_FONT_SIZE = 30
 # zgu-gamepad-alttab-watcher.py / zgu-gamepad-exit-watcher.py, shown only if a gamepad is
 # detected and the picker is not on screen. Icons drawn in cairo (no image file).
 # Translated labels are passed by the orchestrator (env variables). ---
+# Prefix folder of the game: what Alt+F4 on the loading screen stops (see on_close_request).
+PREFIX_DIR = os.environ.get("LPM_PREFIX_DIR", "").strip()
 HELP_ALTTAB_TEXT = os.environ.get("LPM_HELP_ALTTAB", "").strip()
 HELP_QUIT_TEXT = os.environ.get("LPM_HELP_QUIT", "").strip()
 # Single-press keys during the combo hold (see zgu-gamepad-alttab-watcher.py):
