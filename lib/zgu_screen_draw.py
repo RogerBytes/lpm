@@ -95,7 +95,8 @@ class DrawMixin:
         messages = self.loading_messages_lines(cr, width)
         # Room kept for the TALLEST message, so the banner never jumps from one message to the next.
         message_reserved = (max(len(m) for m in messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if messages else 0
-        banner = self._banner_geometry(self.current_surface, width, height, help_visible, message_reserved)
+        # The help line's room is ALWAYS reserved (placeholder): the banner never moves when it appears.
+        banner = self._banner_geometry(self.current_surface, width, height, True, message_reserved)
         if banner is not None:
             off_x, off_y, scale, _base_y = banner
             cr.set_operator(cairo.OPERATOR_OVER)
@@ -115,14 +116,15 @@ class DrawMixin:
             self.draw_gamepad_help(cr, indicator_bottom_y, width)
 
         if messages:
-            self.draw_loading_message(cr, messages, width, height, help_visible)
+            self.draw_loading_message(cr, messages, width, height)
 
         # Logo and entry label are anchored to where the banner will be (its size is known in
         # advance, see banner_probe), whatever it is showing: they never move, neither when the
         # banner appears after a choice nor when the help line or a message takes some room.
-        anchor = self._banner_geometry(self.current_surface or self.banner_probe, width, height, False, 0)
+        anchor = self._banner_geometry(self.current_surface or self.banner_probe, width, height, True, message_reserved)
         if entry_label_text[0]:
-            self.draw_entry_label(cr, width, anchor)
+            shown = self._banner_geometry(self.current_surface or self.banner_probe, width, height, True, message_reserved)
+            self.draw_entry_label(cr, width, height, anchor, shown)
 
         if self.logo_surface is not None:
             self.draw_logo(cr, width, height, anchor)
@@ -376,7 +378,7 @@ class DrawMixin:
             result.append(lines)
         return result
 
-    def draw_loading_message(self, cr, messages, width, height, help_visible):
+    def draw_loading_message(self, cr, messages, width, height):
         """Draws the CURRENT message: fade in, full, fade out to black, then the next one."""
         now = time.monotonic()
         if message_start[0] is None:
@@ -398,22 +400,43 @@ class DrawMixin:
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         cr.set_font_size(LOADING_MESSAGE_FONT_SIZE)
         cr.set_source_rgba(0.91, 0.91, 0.91, 0.95 * alpha)
-        bottom = height - MARGIN_BOTTOM - ((HELP_LINE_HEIGHT + 10) if help_visible else 0)
+        bottom = height - MARGIN_BOTTOM - (HELP_LINE_HEIGHT + 10)  # help line room always reserved
         first_baseline = bottom - (len(lines) - 1) * LOADING_MESSAGE_LINE_HEIGHT
         for i, line in enumerate(lines):
             ext = cr.text_extents(line)
             cr.move_to((width - ext.x_advance) / 2, first_baseline + i * LOADING_MESSAGE_LINE_HEIGHT)
             cr.show_text(line)
 
-    def draw_entry_label(self, cr, width, banner):
+    def _logo_ink_bottom(self, width, height, anchor):
+        """y of the lowest visible pixel of the logo (its PNG may have transparent padding)."""
+        x, y, scale = self._logo_placement(width, height, anchor)
+        pad = getattr(self, "_logo_pad_bottom", None)
+        if pad is None:
+            surf = self.logo_surface
+            w, h = surf.get_width(), surf.get_height()
+            data = surf.get_data()
+            stride = surf.get_stride()
+            pad = h
+            for row in range(h - 1, -1, -1):
+                if any(data[row * stride + 4 * c + 3] for c in range(0, w, 2)):
+                    pad = h - 1 - row
+                    break
+            self._logo_pad_bottom = pad
+        return y + (self.logo_surface.get_height() - pad) * scale
+
+    def draw_entry_label(self, cr, width, height, anchor, shown):
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
         cr.set_font_size(ENTRY_LABEL_FONT_SIZE)
         extents = cr.text_extents(entry_label_text[0])
 
         label_x = (width - extents.width) / 2
-        if banner is not None:
-            # Centered in the band kept free between the logo and the banner.
-            label_baseline_y = banner[3] - self._banner_band() / 2 + extents.height / 2
+        if anchor is not None and shown is not None and self.logo_surface is not None:
+            # Centered between the visible bottom of the logo and the top of the banner.
+            top = self._logo_ink_bottom(width, height, anchor)
+            mid = (top + shown[1]) / 2
+            label_baseline_y = mid + extents.height / 2
+        elif anchor is not None:
+            label_baseline_y = anchor[3] - self._banner_band() / 2 + extents.height / 2
         else:
             label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + self.block_extra_down + extents.height
 
