@@ -19,7 +19,7 @@ ERROR_DETAIL_MAX_LINES = 12
 class ProgressWindow(Adw.Window):
     def __init__(self, title: str, cancellable: bool, on_cancel):
         super().__init__(application=Gio.Application.get_default(), title=title,
-                         default_width=460, resizable=True)
+                         default_width=560, resizable=True)
         self._cancellable = cancellable
         self._on_cancel = on_cancel
         self._state = "running"  # running -> finished
@@ -30,10 +30,20 @@ class ProgressWindow(Adw.Window):
 
     # --- Layout ---
     def _build(self, title: str):
-        self.title_text = title
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=10,
                            margin_bottom=12, margin_start=14, margin_end=14)
-        # Bar and (small) cancel button on ONE row: the window stays low.
+        # Two views in the SAME place (a homogeneous stack is as big as the biggest one, so the
+        # window never changes size): the progress, and the "cancel?" question.
+        self.stack = Gtk.Stack(hhomogeneous=True, vhomogeneous=True)
+        self.stack.add_named(self._build_progress_row(), "progress")
+        self.stack.add_named(self._build_confirm_row(), "confirm")
+        self.box.append(self.stack)
+        toolbar = Adw.ToolbarView()
+        toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle="")))
+        toolbar.set_content(self.box)
+        self.set_content(toolbar)
+
+    def _build_progress_row(self) -> Gtk.Box:
         row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER)
         self.bar = Gtk.ProgressBar(show_text=True, hexpand=True, valign=Gtk.Align.CENTER)
         self.bar.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
@@ -42,11 +52,23 @@ class ProgressWindow(Adw.Window):
         self.cancel_button.add_css_class("destructive-action")
         self.cancel_button.connect("clicked", lambda *_: self._confirm_cancel())
         row.append(self.cancel_button)
-        self.box.append(row)
-        toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle="")))
-        toolbar.set_content(self.box)
-        self.set_content(toolbar)
+        return row
+
+    def _build_confirm_row(self) -> Gtk.Box:
+        """Generic question (same text for every operation) and its two buttons, on one line."""
+        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER)
+        self.question = Gtk.Label(label=t("gui.op.cancel_question"), xalign=0, hexpand=True,
+                                  ellipsize=Pango.EllipsizeMode.END)
+        row.append(self.question)
+        self.keep_button = Gtk.Button(label=t("gui.op.cancel_keep"))
+        self.keep_button.add_css_class("suggested-action")
+        self.keep_button.connect("clicked", lambda *_: self._show_progress())
+        self.confirm_button = Gtk.Button(label=t("gui.op.cancel_confirm"))
+        self.confirm_button.add_css_class("destructive-action")
+        self.confirm_button.connect("clicked", lambda *_: self._do_cancel())
+        row.append(self.keep_button)
+        row.append(self.confirm_button)
+        return row
 
     # --- Progress (same behaviour as the former in-page bar) ---
     def start(self):
@@ -81,30 +103,32 @@ class ProgressWindow(Adw.Window):
 
     # --- Cancel / close ---
     def _confirm_cancel(self):
-        """Always asks first (no mis-click): the button and the close button share this."""
-        dialog = Adw.AlertDialog(heading=t("gui.op.cancel_heading"),
-                                 body=t("gui.op.cancel_body", self.title_text))
-        dialog.add_response("keep", t("gui.op.cancel_keep"))
-        dialog.add_response("confirm", t("gui.op.cancel_confirm"))
-        dialog.set_response_appearance("confirm", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("keep")
-        dialog.set_close_response("keep")
-        dialog.connect("response", lambda _d, r: self._do_cancel() if r == "confirm" else None)
-        dialog.present(self)
+        """Always asks first (no mis-click), in the window itself: the button and the close
+        button share this. "Continue" simply goes back to the progress."""
+        self.question.set_label(t("gui.op.cancel_question"))
+        self.confirm_button.set_visible(True)
+        self.stack.set_visible_child_name("confirm")
+        self.keep_button.grab_focus()
+
+    def _show_progress(self):
+        self.stack.set_visible_child_name("progress")
 
     def _do_cancel(self):
+        self._show_progress()
         self.cancel_button.set_sensitive(False)
         self._on_cancel()
 
     def _on_close_request(self, _win) -> bool:
         if self._state != "running":
             return False
-        if not self._cancellable:
-            dialog = Adw.AlertDialog(heading=t("gui.op.busy_heading"), body=t("gui.op.cannot_cancel"))
-            dialog.add_response("ok", t("gui.op.error_close"))
-            dialog.present(self)
-            return True
-        self._confirm_cancel()
+        if self._cancellable:
+            self._confirm_cancel()
+        else:
+            # Nothing to cancel: the same line says so, with a single button.
+            self.question.set_label(t("gui.op.cannot_cancel"))
+            self.confirm_button.set_visible(False)
+            self.stack.set_visible_child_name("confirm")
+            self.keep_button.grab_focus()
         return True
 
     # --- End of the operation ---

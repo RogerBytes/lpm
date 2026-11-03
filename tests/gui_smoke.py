@@ -214,6 +214,29 @@ try:
 except Exception:
     errors.append("update button:\n" + traceback.format_exc())
 
+# --- Progress window: the cancel question is in the window, same size, generic ------------
+try:
+    import progresswindow
+    from i18n import t
+    cancelled = []
+    pw = progresswindow.ProgressWindow("Some operation", True, lambda: cancelled.append(1))
+    pw.present()
+    pump(0.4)
+    size = (pw.get_width(), pw.get_height())
+    pw.cancel_button.emit("clicked")
+    pump(0.3)
+    assert pw.stack.get_visible_child_name() == "confirm" and pw.question.get_label() == t("gui.op.cancel_question")
+    assert (pw.get_width(), pw.get_height()) == size, ((pw.get_width(), pw.get_height()), size)
+    pw.keep_button.emit("clicked")
+    assert pw.stack.get_visible_child_name() == "progress" and not cancelled
+    pw.cancel_button.emit("clicked")
+    pw.confirm_button.emit("clicked")
+    assert cancelled == [1] and pw.stack.get_visible_child_name() == "progress"
+    pw.finish()
+    print("cancel question in window: OK")
+except Exception:
+    errors.append("cancel question:\n" + traceback.format_exc())
+
 # --- Operations: one at a time, own progress window, error window only on failure ------
 try:
     import operations
