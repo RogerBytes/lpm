@@ -92,11 +92,13 @@ class DrawMixin:
         help_visible = self.gamepad_help_visible()
         if not help_visible:
             help_start[0] = None  # next appearance: restart from black (visible fade-in)
+        all_messages = self.wrapped_loading_messages(cr, width)
+        # Room kept for the TALLEST message, ALWAYS (even while the picker hides the messages):
+        # the banner and the logo never jump when a message appears or changes.
+        message_reserved = (max(len(m) for m in all_messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if all_messages else 0
         messages = self.loading_messages_lines(cr, width)
-        # Room kept for the TALLEST message, so the banner never jumps from one message to the next.
-        message_reserved = (max(len(m) for m in messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if messages else 0
         # The help line's room is ALWAYS reserved (placeholder): the banner never moves when it appears.
-        banner = self._banner_geometry(self.current_surface, width, height, True, message_reserved)
+        banner = self._banner_geometry(self.current_surface, width, height, True, message_reserved)  # drawn
         if banner is not None:
             off_x, off_y, scale, _base_y = banner
             cr.set_operator(cairo.OPERATOR_OVER)
@@ -121,9 +123,9 @@ class DrawMixin:
         # Logo and entry label are anchored to where the banner will be (its size is known in
         # advance, see banner_probe), whatever it is showing: they never move, neither when the
         # banner appears after a choice nor when the help line or a message takes some room.
-        anchor = self._banner_geometry(self.current_surface or self.banner_probe, width, height, True, message_reserved)
+        anchor = self._banner_geometry(self.banner_probe or self.current_surface, width, height, True, message_reserved)
         if entry_label_text[0]:
-            shown = self._banner_geometry(self.current_surface or self.banner_probe, width, height, True, message_reserved)
+            shown = self._banner_geometry(self.banner_probe or self.current_surface, width, height, True, message_reserved)
             self.draw_entry_label(cr, width, height, anchor, shown)
 
         if self.logo_surface is not None:
@@ -356,6 +358,12 @@ class DrawMixin:
         there is no message or if the picker is on screen). Needs no font set by the caller."""
         if not LOADING_MESSAGES or picker_request_pending[0] or any(w.picker_visible for w in windows):
             message_start[0] = None  # restart from black when the messages come back
+            return []
+        return self.wrapped_loading_messages(cr, width)
+
+    def wrapped_loading_messages(self, cr, width):
+        """Same lines as above, whether the messages are shown or not (for the reserved room)."""
+        if not LOADING_MESSAGES:
             return []
         cr.select_font_face("sans-serif", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         cr.set_font_size(LOADING_MESSAGE_FONT_SIZE)
