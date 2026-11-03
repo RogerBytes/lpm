@@ -117,7 +117,8 @@ except Exception:
 
 # zgu_yaml_hooks: reads a game YAML on STDIN and prints, one per line, the automatic launch/close
 # hooks it contains ("<key path>\x1f<value>"): the keys Lutris runs by itself at every launch or
-# exit (..._command, ..._script and the like). Nothing printed when there is none.
+# exit (..._command, ..._script and the like), only when they hold something (an empty value or
+# a "_wait" yes/no flag is not a script). Nothing printed when there is none.
 zgu_yaml_hooks() {
   python3 -c '
 import sys, yaml
@@ -128,8 +129,11 @@ def find_hooks(obj, path=""):
         for k, v in obj.items():
             kl = k.lower() if isinstance(k, str) else ""
             cur_path = f"{path}.{k}" if path else str(k)
-            if kl.endswith("_command") or kl.endswith("_script") or kl.endswith("_wait") or "exec" in kl:
-                found.append((cur_path, v))
+            if kl.endswith("_wait"):
+                continue  # a yes/no flag, not a script
+            if kl.endswith("_command") or kl.endswith("_script") or "exec" in kl:
+                if isinstance(v, str) and v.strip() or isinstance(v, (int, float)) and not isinstance(v, bool):
+                    found.append((cur_path, v))
                 continue
             found.extend(find_hooks(v, cur_path))
     elif isinstance(obj, list):
