@@ -223,6 +223,9 @@ class ExeInstallPage:
 
 
 
+HOOKS_DIALOG_MAX_GAMES = 6  # longer lists are cut ("… and N more")
+
+
 class InstallPage:
     def __init__(self, owner, initial_files):
         self.owner = owner
@@ -350,19 +353,25 @@ class InstallPage:
             if kind == "GAME" and len(fields) >= 2:
                 games.append((fields[0], fields[1], []))
             elif kind == "HOOK" and games and len(fields) >= 2:
-                value = fields[1] if len(fields[1]) <= 120 else fields[1][:117] + "..."
+                value = fields[1] if len(fields[1]) <= 70 else fields[1][:67] + "..."
                 games[-1][2].append((fields[0], value))
         return games
+
+    @staticmethod
+    def _hook_line(name: str, hooks) -> str:
+        """One short line: the game, then the script(s) it runs (just the path or command)."""
+        scripts = ", ".join(dict.fromkeys(value for _key, value in hooks))
+        return f"\u2022 {name}: {scripts}"
 
     def _ask_hooks(self, games, total: int, on_choice):
         """One confirmation for the whole batch, listing every package that embeds scripts.
         on_choice(None) = cancel, on_choice(False) = install without them, on_choice(True) = allow."""
-        listing = "\n\n".join(
-            f"\u2022 {name} ({filename})\n" + "\n".join(f"    {key}: {value}" for key, value in hooks)
-            for name, filename, hooks in games)
+        listing = "\n".join(InstallPage._hook_line(name, hooks) for name, _filename, hooks in games[:HOOKS_DIALOG_MAX_GAMES])
+        if len(games) > HOOKS_DIALOG_MAX_GAMES:
+            listing += "\n" + t("gui.install.hooks_dialog_more", len(games) - HOOKS_DIALOG_MAX_GAMES)
         dialog = Adw.AlertDialog(
             heading=t("gui.install.hooks_dialog_heading"),
-            body=t("gui.install.hooks_dialog_body", f"{len(games)}/{total}", listing))
+            body=t("gui.install.hooks_dialog_body", listing))
         dialog.add_response("cancel", t("gui.common.cancel"))
         dialog.add_response("without", t("gui.install.hooks_dialog_without"))
         dialog.add_response("allow", t("gui.install.hooks_dialog_allow"))

@@ -254,7 +254,7 @@ try:
     stub = types.SimpleNamespace(window=win)
     pages_lifecycle.InstallPage._ask_hooks(stub, games, 2, choices.append)
     dlg = shown_dialogs[0]
-    assert "Hook Game" in dlg.get_body() and "prelaunch_command" in dlg.get_body() and "1/2" in dlg.get_body()
+    assert "Hook Game" in dlg.get_body() and "/bin/true" in dlg.get_body() and "prelaunch_command" not in dlg.get_body()
     assert dlg.get_default_response() == "without", dlg.get_default_response()
     for response in ("without", "allow", "cancel"):
         dlg.emit("response", response)
