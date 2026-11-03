@@ -17,9 +17,14 @@ ERROR_DETAIL_MAX_LINES = 12
 
 
 class ProgressWindow(Adw.Window):
-    def __init__(self, title: str, cancellable: bool, on_cancel, has_finished_items=None):
+    def __init__(self, title: str, cancellable: bool, on_cancel, has_finished_items=None, parent=None):
         super().__init__(application=Gio.Application.get_default(), title=title,
                          default_width=560, resizable=True)
+        # Attached to the main window (same request on X11 and Wayland): it stays in front of it,
+        # usually centered on it, and can still be minimized. Not modal: the main window stays
+        # usable. Without a parent (main window closed) it is a normal window.
+        if parent is not None:
+            self.set_transient_for(parent)
         self._cancellable = cancellable
         self._on_cancel = on_cancel  # called with None, "stop" or "undo"
         self._has_finished_items = has_finished_items  # None: nothing to undo for this operation

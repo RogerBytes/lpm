@@ -147,7 +147,8 @@ class _CommandRun:
         operations.begin(self)
         page.run_button.set_sensitive(False)
         self.progress_window = ProgressWindow(page.page.get_title() or "lpm", self.cancellable, self._request_cancel,
-                                              self._has_finished_items if self.undoable else None)
+                                              self._has_finished_items if self.undoable else None,
+                                              parent=page.get_root())
         self.progress_window.start()
         self.progress_window.present()
         _GUI_LOGGER.info("$ bin/lpm " + " ".join(self.args))
