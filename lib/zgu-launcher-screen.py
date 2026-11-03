@@ -183,7 +183,8 @@ def tick_gamepad():
         if direction == 0:
             _gamepad_prev_dpad_y[pad] = 0
         else:
-            if direction != _gamepad_prev_dpad_y[pad]:
+            new_press = direction != _gamepad_prev_dpad_y[pad]
+            if new_press:
                 fire = True
                 _gamepad_next_repeat[pad] = now + GAMEPAD_REPEAT_DELAY_S
             elif now >= _gamepad_next_repeat[pad]:
@@ -195,7 +196,7 @@ def tick_gamepad():
             if fire:
                 for win in windows:
                     if win.picker_visible:
-                        win.gamepad_move_selection(direction)
+                        win.gamepad_move_selection(direction, new_press)
     return True
 
 

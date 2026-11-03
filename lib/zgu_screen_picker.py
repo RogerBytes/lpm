@@ -331,8 +331,11 @@ class PickerMixin:
 
     # --- Gamepad navigation (see init_gamepad()/tick_gamepad() above): direct actions
     # on our own widgets, never a key injected from outside. ---
-    def gamepad_move_selection(self, delta):
-        self.set_pad_mode(True)
+    def gamepad_move_selection(self, delta, new_press=True):
+        # Gamepad mode only on a NEW press, not on the auto-repeat of a held (or drifting) stick:
+        # otherwise it fought with the mouse, each one switching the display back and forth.
+        if new_press:
+            self.set_pad_mode(True)
         row = self.picker_listbox.get_selected_row()
         idx = row.get_index() if row is not None else -1
         new_row = self.picker_listbox.get_row_at_index(idx + delta)
