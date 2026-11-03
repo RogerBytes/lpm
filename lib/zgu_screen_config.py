@@ -143,8 +143,6 @@ SUBTITLE_BAND_HEIGHT = 84
 # bottom edge stays where it is, so it becomes shorter) and the least it may be reduced to.
 LOGO_PICKER_CLEARANCE = 14
 PICKER_CARD_MIN_HEIGHT = 360
-# With a banner announced but not loaded yet, the logo waits (no jump) for at most this long.
-LOGO_WAIT_FOR_BANNER_S = 2.0
 
 MAX_BANNER_WIDTH_FRACTION = 0.80
 BANNER_VERTICAL_LIFT = 30

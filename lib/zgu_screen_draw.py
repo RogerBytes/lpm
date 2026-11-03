@@ -11,9 +11,7 @@ import cairo
 from zgu_screen_config import (
     BANNER_EXTRA_DOWN_FRACTION,
     BANNER_EXTRA_LIFT_NO_LABEL,
-    HAS_BANNER,
     LOGO_BANNER_GAP,
-    LOGO_WAIT_FOR_BANNER_S,
     SUBTITLE_BAND_HEIGHT,
     TOP_ZONE_MIN_MARGIN,
     BANNER_VERTICAL_LIFT,
@@ -97,7 +95,7 @@ class DrawMixin:
         messages = self.loading_messages_lines(cr, width)
         # Room kept for the TALLEST message, so the banner never jumps from one message to the next.
         message_reserved = (max(len(m) for m in messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if messages else 0
-        banner = self._banner_geometry(width, height, help_visible, message_reserved)
+        banner = self._banner_geometry(self.current_surface, width, height, help_visible, message_reserved)
         if banner is not None:
             off_x, off_y, scale, _base_y = banner
             cr.set_operator(cairo.OPERATOR_OVER)
@@ -119,22 +117,26 @@ class DrawMixin:
         if messages:
             self.draw_loading_message(cr, messages, width, height, help_visible)
 
+        # Logo and entry label are anchored to where the banner will be (its size is known in
+        # advance, see banner_probe), whatever it is showing: they never move, neither when the
+        # banner appears after a choice nor when the help line or a message takes some room.
+        anchor = self._banner_geometry(self.current_surface or self.banner_probe, width, height, False, 0)
         if entry_label_text[0]:
-            self.draw_entry_label(cr, width, banner)
+            self.draw_entry_label(cr, width, anchor)
 
         if self.logo_surface is not None:
-            self.draw_logo(cr, width, height, banner)
+            self.draw_logo(cr, width, height, anchor)
         elif title_text[0]:
             self.draw_top_title(cr, width)
 
-    def _banner_geometry(self, width, height, help_visible, message_reserved):
+    def _banner_geometry(self, surface, width, height, help_visible, message_reserved):
         """(x, y, scale, base_y) of the banner (splash image), or None if there is none to
         draw. base_y is its top before the extra move down: the logo is anchored to it."""
         banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0) - message_reserved
-        if self.current_surface is None or banner_zone_height <= 0:
+        if surface is None or banner_zone_height <= 0:
             return None
-        img_w = self.current_surface.get_width()
-        img_h = self.current_surface.get_height()
+        img_w = surface.get_width()
+        img_h = surface.get_height()
         scale = min(
             1.0,
             (width * MAX_BANNER_WIDTH_FRACTION) / img_w,
@@ -435,10 +437,6 @@ class DrawMixin:
         return self.logo_draw_x, self.logo_draw_y + shift + self.block_extra_down, scale
 
     def draw_logo(self, cr, width, height, banner):
-        # A banner is announced but not loaded yet: wait for it instead of drawing the logo at
-        # the top and moving it a moment later (but never for long, the banner may be unreadable).
-        if banner is None and HAS_BANNER and time.monotonic() - self.created_at < LOGO_WAIT_FOR_BANNER_S:
-            return
         x, y, scale = self._logo_placement(width, height, banner)
         if not NO_LABEL:
             # The logo never moves for the picker: it is the picker card that goes below it.

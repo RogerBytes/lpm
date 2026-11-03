@@ -208,7 +208,6 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
             self.set_title(window_title)
         self.monitor = monitor
         self.monitor_geom = geom
-        self.created_at = time.monotonic()
 
         self._init_picker_state()
 
@@ -251,6 +250,16 @@ class ScreenWindow(PickerMixin, DrawMixin, Gtk.Window):
                 self.logo_surface = cairo.ImageSurface.create_from_png(LOGO_PATH)
             except Exception:
                 self.logo_surface = None
+
+        # Size of the banner, read in advance (splash.png sits next to logo.png): the picker
+        # shows no banner at first, yet the logo must already be where it will stay.
+        self.banner_probe = None
+        banner_file = os.path.join(os.path.dirname(LOGO_PATH), "splash.png") if LOGO_PATH else ""
+        if HAS_BANNER and os.path.isfile(banner_file):
+            try:
+                self.banner_probe = cairo.ImageSurface.create_from_png(banner_file)
+            except Exception:
+                self.banner_probe = None
 
         top_zone_bottom = self.zone_top_y
         top_zone_expanded = NO_LABEL and not HAS_BANNER
