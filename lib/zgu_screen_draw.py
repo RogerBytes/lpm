@@ -9,6 +9,7 @@ gi.require_version("Gtk", "4.0")
 import cairo
 
 from zgu_screen_config import (
+    BANNER_EXTRA_DOWN_FRACTION,
     BANNER_EXTRA_LIFT_NO_LABEL,
     HAS_BANNER,
     LOGO_BANNER_GAP,
@@ -99,9 +100,9 @@ class DrawMixin:
         messages = self.loading_messages_lines(cr, width)
         # Room kept for the TALLEST message, so the banner never jumps from one message to the next.
         message_reserved = (max(len(m) for m in messages) * LOADING_MESSAGE_LINE_HEIGHT + 12) if messages else 0
-        banner = self._banner_geometry(width, help_visible, message_reserved)
+        banner = self._banner_geometry(width, height, help_visible, message_reserved)
         if banner is not None:
-            off_x, off_y, scale = banner
+            off_x, off_y, scale, _base_y = banner
             cr.set_operator(cairo.OPERATOR_OVER)
             cr.translate(off_x, off_y)
             cr.scale(scale, scale)
@@ -129,8 +130,9 @@ class DrawMixin:
         elif title_text[0]:
             self.draw_top_title(cr, width)
 
-    def _banner_geometry(self, width, help_visible, message_reserved):
-        """(x, y, scale) of the banner (splash image), or None if there is none to draw."""
+    def _banner_geometry(self, width, height, help_visible, message_reserved):
+        """(x, y, scale, base_y) of the banner (splash image), or None if there is none to
+        draw. base_y is its top before the extra move down: the logo is anchored to it."""
         banner_zone_height = self.banner_zone_height - (HELP_RESERVED_HEIGHT if help_visible else 0) - message_reserved
         if self.current_surface is None or banner_zone_height <= 0:
             return None
@@ -145,7 +147,12 @@ class DrawMixin:
         off_y = self.banner_zone_top + (banner_zone_height - img_h * scale) / 2
         extra_lift = BANNER_EXTRA_LIFT_NO_LABEL if NO_LABEL else 0
         off_y = max(self.banner_zone_top, off_y - BANNER_VERTICAL_LIFT - extra_lift)
-        return off_x, off_y, scale
+        base_y = off_y
+        if NO_LABEL:
+            # Moved down, but never below the end of its zone (tall banner: moved less).
+            zone_end = self.banner_zone_top + banner_zone_height
+            off_y += max(0, min(height * BANNER_EXTRA_DOWN_FRACTION, zone_end - (off_y + img_h * scale)))
+        return off_x, off_y, scale, base_y
 
     @staticmethod
     def _banner_band():
@@ -407,7 +414,7 @@ class DrawMixin:
         label_x = (width - extents.width) / 2
         if banner is not None:
             # Centered in the band kept free between the logo and the banner.
-            label_baseline_y = banner[1] - self._banner_band() / 2 + extents.height / 2
+            label_baseline_y = banner[3] - self._banner_band() / 2 + extents.height / 2
         else:
             label_baseline_y = self.label_zone_top + LABEL_ZONE_TOP_PADDING + LABEL_SHIFT_DOWN + self.block_extra_down + extents.height
 
@@ -432,7 +439,7 @@ class DrawMixin:
         img_h = self.logo_surface.get_height()
         scale = self.logo_draw_w / img_w
         if banner is not None:
-            bottom = self._logo_bottom_limit(height, banner[1])
+            bottom = self._logo_bottom_limit(height, banner[3])
             room = bottom - TOP_ZONE_MIN_MARGIN
             if room > 0:
                 scale = min(scale, room / img_h)
