@@ -58,7 +58,8 @@ class ProgressWindow(Adw.Window):
         """Just two buttons, half the width each: blue "Continue", red "Cancel the operation"
         (the same for every operation). For an operation that cannot be cancelled, the same
         row holds a sentence and one button instead (see _on_close_request)."""
-        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER, homogeneous=False)
+        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER, homogeneous=True)  # equal widths
+        self.confirm_row = row
         self.notice = Gtk.Label(xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.END, visible=False)
         row.append(self.notice)
         self.keep_button = Gtk.Button(label=t("gui.op.cancel_keep"), hexpand=True)
@@ -108,7 +109,7 @@ class ProgressWindow(Adw.Window):
         button share this. "Continue" simply goes back to the progress."""
         self.notice.set_visible(False)
         self.confirm_button.set_visible(True)
-        self.keep_button.set_hexpand(True)
+        self.confirm_row.set_homogeneous(True)
         self.stack.set_visible_child_name("confirm")
         self.keep_button.grab_focus()
 
@@ -129,6 +130,7 @@ class ProgressWindow(Adw.Window):
             # Nothing to cancel: the same line says so, with a single button.
             self.notice.set_label(t("gui.op.cannot_cancel"))
             self.notice.set_visible(True)
+            self.confirm_row.set_homogeneous(False)
             self.keep_button.set_hexpand(False)
             self.confirm_button.set_visible(False)
             self.stack.set_visible_child_name("confirm")
