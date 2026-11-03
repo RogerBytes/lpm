@@ -105,7 +105,9 @@ except Exception:
   # Folder the game will have once installed (its first folder in the archive, like the install
   # does): the full path of each script is given as it will be, "$GAMEDIR" and /home/<user>
   # resolved the same way the install resolves them.
-  slug=$(bsdtar -tf "${filepath}" 2>/dev/null | awk -F/ 'NR > 1 && $1 != ".lpm-config.yml" && $1 != "" { print $1; exit }')
+  # Only the first 2 MB of the stream are read: listing the whole archive would decompress all of
+  # it (tens of seconds for a big game).
+  slug=$(zstd -dc -- "${filepath}" 2>/dev/null | head -c 2097152 | bsdtar -tf - 2>/dev/null | awk -F/ 'NR > 1 && $1 != ".lpm-config.yml" && $1 != "" { print $1; exit }')
   printf 'GAME\x1f%s\x1f%s\n' "${game_name}" "$(basename "${filepath}")"
   while IFS=$'\x1f' read -r hook_path hook_value; do
     [[ -z "${hook_path}" ]] && continue

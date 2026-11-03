@@ -9,11 +9,13 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 import backend
+import operations
 from i18n import t
-from guilog import _GUI_LOGGER, show_log_dialog
+from guilog import _GUI_LOGGER
+from progresswindow import ProgressWindow
 from refresh import _refresh_game_lists, _refresh_runner_lists
 from util import _run_on_main
 
@@ -70,20 +72,7 @@ class CommandPage(Gtk.Box):
         self.group = Adw.PreferencesGroup(title=subtitle or None)
         self.page.add(self.group)
 
-        self._build_progress_group()
         self._build_action_group()
-
-    def _build_progress_group(self):
-        # Progress bar: hidden while no command runs (see run_command). Pulsing by default,
-        # since nothing is known until a "[n/total]" line arrives (see _ITEM_LINE_RE); once
-        # received, the text shows "which item out of how many" and the fill advances only on
-        # "[PROGRESS] <pct>" lines (the real progress of the current item).
-        self._pulse_source_id: int | None = None
-        self.progress_bar = Gtk.ProgressBar()
-        self.progress_bar.set_show_text(True)
-        self.progress_bar.set_hexpand(True)
-        self.progress_bar.set_visible(False)
-        self.page.add(self._wrap_action_group(self.progress_bar))
 
     def _build_action_group(self):
         self.run_button = Gtk.Button(label=t("gui.common.run"))
@@ -94,14 +83,6 @@ class CommandPage(Gtk.Box):
         self.run_button.set_margin_end(6)
         self.run_button.set_margin_bottom(6)
         action_row_box = Gtk.Box(halign=Gtk.Align.END, spacing=6)
-        # "Cancel" button: hidden except during a command run with cancellable=True.
-        self.cancel_button = Gtk.Button(label=t("gui.install.cancel_button"))
-        self.cancel_button.add_css_class("destructive-action")
-        self.cancel_button.add_css_class("pill")
-        self.cancel_button.set_margin_top(6)
-        self.cancel_button.set_margin_bottom(6)
-        self.cancel_button.set_visible(False)
-        action_row_box.append(self.cancel_button)
         action_row_box.append(self.run_button)
         # Kept so an immediate-effect page (page_vsync) can hide the "Run" button.
         self.action_group = self._wrap_action_group(action_row_box)
@@ -119,74 +100,6 @@ class CommandPage(Gtk.Box):
     def toast(self, text: str):
         self.toast_overlay.add_toast(Adw.Toast(title=text, timeout=4))
 
-    def toast_failure(self, code, detail=""):
-        """Failure message with a "View log" button that opens lpm-gui.log in the GUI
-        (the message mentions that file, which must be readable without leaving the app).
-        detail = last error line printed by the command (already translated), if any."""
-        if detail:
-            if len(detail) > 220:
-                detail = detail[:217] + "..."
-            title = t("gui.common.command_failed_detail", code, detail)
-        else:
-            title = t("gui.common.command_failed", code)
-        toast = Adw.Toast(title=title, timeout=15,
-                          button_label=t("gui.common.view_log"))
-        toast.connect("button-clicked", lambda *_: show_log_dialog(self.get_root()))
-        self.toast_overlay.add_toast(toast)
-
-    # --- Progress bar (see run_command) ---
-    def _pulse_tick(self) -> bool:
-        self.progress_bar.pulse()
-        return True  # True = GLib.timeout_add keeps calling this, indefinitely
-
-    def _stop_pulsing(self):
-        if self._pulse_source_id is not None:
-            GLib.source_remove(self._pulse_source_id)
-            self._pulse_source_id = None
-
-    def _start_progress(self):
-        self._step_text = ""
-        self.progress_bar.set_fraction(0.0)
-        self.progress_bar.set_text(None)
-        self.progress_bar.set_visible(True)
-        self._stop_pulsing()
-        self._pulse_source_id = GLib.timeout_add(150, self._pulse_tick)
-
-    def _update_step(self, text: str):
-        """Current step of a multi-step command ("[STEP]"): bar text, pulsing until a real
-        percentage is known. Kept so it can prefix the step's "n / total - name" lines
-        (see _update_item_progress)."""
-        self._step_text = text
-        self.progress_bar.set_text(text)
-        self.progress_bar.set_fraction(0.0)
-        self._stop_pulsing()
-        self._pulse_source_id = GLib.timeout_add(150, self._pulse_tick)
-
-    def _update_item_progress(self, current: int, total: int, name: str = ""):
-        # "[n/total]" = a new item starts: update the text ("which item out of how many").
-        # Its internal progress is not known yet (not every command emits "[PROGRESS] <pct>",
-        # see _update_item_percent), so go back to pulsing rather than freezing at 0%:
-        # uninstall/pack (no "[PROGRESS]") pulse for each item, while install/install-runner
-        # switch to a real fraction at the first "[PROGRESS]" line for THAT item.
-        item_text = f"{current} / {total} \u2013 {name}" if name else f"{current} / {total}"
-        step_text = getattr(self, "_step_text", "")
-        self.progress_bar.set_text(f"{step_text} : {item_text}" if step_text else item_text)
-        self.progress_bar.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
-        self.progress_bar.set_fraction(0.0)
-        self._stop_pulsing()
-        self._pulse_source_id = GLib.timeout_add(150, self._pulse_tick)
-
-    def _update_item_percent(self, pct: int):
-        # "[PROGRESS] <pct>" = REAL progress (0-100) of the CURRENT item being installed
-        # (see "pv -n" in zgp-game-installer.sh/zgr-runner-installer.sh). Never touches the
-        # "n / total" text (see _update_item_progress); only the bar fill.
-        self._stop_pulsing()
-        self.progress_bar.set_fraction(max(0.0, min(1.0, pct / 100.0)))
-
-    def _finish_progress(self):
-        self._stop_pulsing()
-        self.progress_bar.set_visible(False)
-
     def run_command(self, args: list[str], done_message: str | None = None, refresh: str | None = None,
                     cancellable: bool = False, on_cancelled: Callable[[list[str]], None] | None = None,
                     cancel_toast: str | None = None, cancel_group: bool = True,
@@ -201,7 +114,9 @@ class CommandPage(Gtk.Box):
 
 
 class _CommandRun:
-    """One run of a bin/lpm command from a CommandPage: progress, cancellation, result."""
+    """One run of a bin/lpm command from a CommandPage. Its progress, cancel button and error
+    live in an independent ProgressWindow, so the run goes on even if the main window is closed
+    (the page is then no longer in a window: nothing of it is touched, see _page_alive)."""
 
     def __init__(self, page, args, done_message, refresh, cancellable, on_cancelled,
                  cancel_toast, cancel_group, on_report):
@@ -218,20 +133,22 @@ class _CommandRun:
         self.cancelled = False
         self.installed: list[str] = []
         self.report: list[tuple[str, str]] = []
-        self.cancel_handler_id = None
+        self.progress_window: ProgressWindow | None = None
 
     def start(self):
         page = self.page
+        if operations.is_busy():
+            page.toast(t("gui.op.already_running"))
+            return
+        operations.begin(self)
         page.run_button.set_sensitive(False)
-        _run_on_main(page._start_progress)
+        self.progress_window = ProgressWindow(page.page.get_title() or "lpm", self.cancellable, self._request_cancel)
+        self.progress_window.start()
+        self.progress_window.present()
         _GUI_LOGGER.info("$ bin/lpm " + " ".join(self.args))
         # Cancellation (cancellable=True): SIGTERM goes to the WHOLE process group (see
         # backend.run_lpm, new_session); the lib/ script cleans up the current game itself
         # (lpm_cancel_cleanup in zgp-game-installer.sh) and exits with 130.
-        if self.cancellable:
-            page.cancel_button.set_sensitive(True)
-            page.cancel_button.set_visible(True)
-            self.cancel_handler_id = page.cancel_button.connect("clicked", self._request_cancel)
         backend.run_lpm_async(self.args, on_line=self._on_line, on_done=self._on_done,
                               on_proc=self._on_proc, new_session=self.cancellable)
 
@@ -243,7 +160,6 @@ class _CommandRun:
         if proc is None or proc.poll() is not None:
             return
         self.cancelled = True
-        self.page.cancel_button.set_sensitive(False)
         try:
             if self.cancel_group:
                 os.killpg(proc.pid, signal.SIGTERM)
@@ -268,11 +184,11 @@ class _CommandRun:
         self._on_progress_line(stripped)
 
     def _on_progress_line(self, stripped: str):
-        page = self.page
+        window = self.progress_window
         step_match = _STEP_LINE_RE.match(stripped)
         if step_match:
-            _run_on_main(page._update_step, t("gui.check.step_format", step_match.group(1),
-                                              step_match.group(2), step_match.group(3)))
+            _run_on_main(window.set_step, t("gui.check.step_format", step_match.group(1),
+                                            step_match.group(2), step_match.group(3)))
             return
         report_match = _REPORT_LINE_RE.match(stripped)
         if report_match:
@@ -281,45 +197,67 @@ class _CommandRun:
         item_match = _ITEM_LINE_RE.match(stripped)
         if item_match:
             name_match = _ITEM_NAME_RE.search(stripped)
-            _run_on_main(page._update_item_progress, int(item_match.group(1)), int(item_match.group(2)),
+            _run_on_main(window.set_item, int(item_match.group(1)), int(item_match.group(2)),
                          name_match.group(1) if name_match else "")
             return
         percent_match = _PERCENT_LINE_RE.match(stripped)
         if percent_match:
-            _run_on_main(page._update_item_percent, int(percent_match.group(1)))
+            _run_on_main(window.set_percent, int(percent_match.group(1)))
 
     def _on_done(self, result: backend.CommandResult):
         for err_line in result.stderr.strip().splitlines():
             _GUI_LOGGER.info("! " + err_line)
         _run_on_main(self._finish, result)
 
+    def _page_alive(self) -> bool:
+        """False once the main window that held the page was closed."""
+        return self.page.get_root() is not None
+
     def _refresh_lists(self):
+        if not self._page_alive():
+            return
         if self.refresh == "games":
             _refresh_game_lists()
         elif self.refresh == "runners":
             _refresh_runner_lists()
 
+    def _notify_end(self, body: str):
+        """Desktop notification for the end of ANY operation, except where the command's own
+        script already sends one (see operations.COMMANDS_THAT_NOTIFY)."""
+        if self.args and self.args[0] in operations.COMMANDS_THAT_NOTIFY:
+            return
+        operations.notify("lpm", body)
+
     def _finish(self, result: backend.CommandResult):
         page = self.page
-        page.run_button.set_sensitive(True)
-        page._finish_progress()
-        if self.cancel_handler_id is not None:
-            page.cancel_button.disconnect(self.cancel_handler_id)
-            page.cancel_button.set_visible(False)
-        if self.on_report is not None and self.report and not self.cancelled:
+        operations.end(self)
+        alive = self._page_alive()
+        if alive:
+            page.run_button.set_sensitive(True)
+        reported = False
+        if self.on_report is not None and self.report and not self.cancelled and alive:
             self.on_report(list(self.report), result.returncode, result.stderr)
+            reported = True
         if self.cancelled and result.returncode != 0:
-            if self.cancel_toast != "":
+            self.progress_window.finish()
+            self._notify_end(self.cancel_toast or t("gui.install.toast_cancelled"))
+            if alive and self.cancel_toast != "":
                 page.toast(self.cancel_toast or t("gui.install.toast_cancelled"))
             self._refresh_lists()
-            if self.on_cancelled is not None:
+            if self.on_cancelled is not None and alive:
                 self.on_cancelled(list(self.installed))
         elif result.returncode == 0:
-            page.toast(self.done_message or t("gui.common.done"))
-            self._refresh_lists()
-            # Reset the selection after a success only: after a failure the user will
-            # likely retry with the same selection.
-            page.reset_selection()
+            self.progress_window.finish()
+            self._notify_end(self.done_message or t("gui.common.done"))
+            if alive:
+                page.toast(self.done_message or t("gui.common.done"))
+                self._refresh_lists()
+                # Reset the selection after a success only: after a failure the user will
+                # likely retry with the same selection.
+                page.reset_selection()
+        elif reported:
+            # The report dialog already tells what is wrong (lpm check).
+            self.progress_window.finish()
         else:
-            err_lines = [ln.strip() for ln in result.stderr.splitlines() if ln.strip()]
-            page.toast_failure(result.returncode, err_lines[-1] if err_lines else "")
+            self.progress_window.show_error(t("gui.op.error_heading"),
+                                   result.stderr.strip() or t("gui.common.command_failed", result.returncode))

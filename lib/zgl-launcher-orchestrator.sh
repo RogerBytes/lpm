@@ -731,6 +731,14 @@ POST_WINDOW_GRACE_MS=1000
   if { [[ "${use_winetrace}" = true ]] || { [[ "${session_kind}" = "x11" ]] && command -v xdotool >/dev/null 2>&1; }; } \
       && [[ -z "${window_detected}" ]]; then
     zgu_log "launcher-orchestrator" "WARN" "slug=${slug} reason=no_window_detected_after_delay delay_s=${max_wait_s}"
+    # Diagnostic kept for "why was no window recognised?": the windows Wine created (a copy of the
+    # trace, last 200 lines) and whether the game's wineserver is still running (= still starting).
+    if [[ -s "${trace_file}" ]]; then
+      tail -n 200 "${trace_file}" > "${ZGU_LOG_DIR}/last-window-trace.log" 2>/dev/null
+    else
+      : > "${ZGU_LOG_DIR}/last-window-trace.log" 2>/dev/null
+    fi
+    zgu_log "launcher-orchestrator" "INFO" "slug=${slug} reason=no_window_trace trace_lines=$(wc -l < "${ZGU_LOG_DIR}/last-window-trace.log" 2>/dev/null || echo 0) file=${ZGU_LOG_DIR}/last-window-trace.log"
     {
       printf '%s\n' "${bg_state}"
       printf '%s\n' "IND_HIDE"

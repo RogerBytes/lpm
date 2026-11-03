@@ -8,6 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
 
+import operations
 from mainwindow import MainWindow
 
 APP_ID = "com.rogerbytes.lpm.gui"
@@ -58,22 +59,28 @@ class LpmApp(Adw.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.HANDLES_OPEN)
 
-    def do_activate(self):
-        win = self.props.active_window
-        if not win:
+    def _main_window(self):
+        """The main window, created if it was closed (an operation may still run in its own
+        progress window, which is then the application's only window)."""
+        win = next((w for w in self.get_windows() if isinstance(w, MainWindow)), None)
+        if win is None:
             _load_app_css()
             win = MainWindow(self)
+        return win
+
+    def do_activate(self):
+        win = self._main_window()
         win.present()
+        running = operations.progress_window()
+        if running is not None:
+            running.present()
 
     def do_open(self, files, _n_files, _hint):
         """Called by GLib instead of do_activate() when files were passed as arguments (on
         first launch, or relayed over D-Bus to the running instance). "files" is a non-empty
         list of Gio.File. Only the first file is handled: lpm-gui is never invoked with
         several paths at once."""
-        win = self.props.active_window
-        if not win:
-            _load_app_css()
-            win = MainWindow(self)
+        win = self._main_window()
         path = files[0].get_path()
         if path:
             win.open_install_for(path)

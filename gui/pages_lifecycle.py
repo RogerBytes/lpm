@@ -8,6 +8,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
 import backend
+import operations
 from i18n import t
 from util import _run_on_main
 from commandpage import CommandPage
@@ -422,6 +423,9 @@ class InstallPage:
         self._ask_hooks(games, len(selected), on_choice)
 
     def on_run(self, *_):
+        if operations.is_busy():
+            self.page.toast(t("gui.op.already_running"))
+            return
         selected = self.file_selector.selected_paths()
         if not selected:
             self.page.toast(t("gui.install.toast_choose_file"))

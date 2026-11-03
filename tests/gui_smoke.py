@@ -214,24 +214,57 @@ try:
 except Exception:
     errors.append("update button:\n" + traceback.format_exc())
 
-# --- Failure toast: shows the command's last error line; GUI log really written ---------
+# --- Operations: one at a time, own progress window, error window only on failure ------
 try:
+    import operations
+    import progresswindow
+    from i18n import t
     win.show_page("install")
     pump(0.3)
     ipage = win._built_pages["install"]
-    shown = []
-    ipage.toast_overlay.add_toast = lambda toast: shown.append(toast.get_title())
-    ipage.toast_failure(1, "Boom: disk full " + "x" * 400)
-    ipage.toast_failure(2)
-    assert "Boom: disk full" in shown[0] and shown[0].endswith("lpm-gui.log") and len(shown[0]) < 400, shown[0]
-    assert "(code 2)" in shown[1] or "code 2" in shown[1], shown[1]
+    toasts = []
+    ipage.toast_overlay.add_toast = lambda toast: toasts.append(toast.get_title())
+
+    def op_windows():
+        return [w for w in win.get_application().get_windows() if isinstance(w, progresswindow.ProgressWindow)]
+
+    # failure: an error window (not a toast), brought in front, with the command's error text
+    ipage.run_command(["no-such-command-xyz"], "done")
+    assert operations.is_busy(), "operation not registered"
+    assert len(op_windows()) == 1, "no progress window"
+    ipage.run_command(["list"], "done")  # refused: only 0 or 1 operation at a time
+    assert len(op_windows()) == 1 and t("gui.op.already_running") in toasts, toasts
+    pump(3.0)
+    assert not operations.is_busy(), "operation not released"
+    windows_now = op_windows()
+    assert len(windows_now) == 1, "error window missing"
+    labels = [w.get_label() for w in walk(windows_now[0]) if isinstance(w, Gtk.Label)]
+    assert t("gui.op.error_heading") in labels and len(labels) >= 2 and labels[1].strip(), labels
+    windows_now[0].close()
+    pump(0.3)
+    assert not op_windows(), "error window not closed"
+
+    # success: the progress window goes away by itself, no error window
+    notified = []
+    operations.notify = lambda title, body: notified.append(body)
+    ipage.run_command(["list"], "Finished OK")
+    pump(3.0)
+    assert not op_windows(), "window left open after a success"
+    assert notified == ["Finished OK"], notified
+    # an already-open file does not replace a running operation
+    ipage.run_command(["no-such-command-xyz"], "x")
+    win.open_install_for("/tmp/whatever.zgp")
+    assert win._built_pages["install"] is ipage, "page replaced during an operation"
+    pump(3.0)
+    for extra in op_windows():
+        extra.close()
     import guilog
     guilog._GUI_LOGGER.info("smoke probe")
     gui_log = os.path.join(os.path.expanduser("~"), ".local", "share", "lpm", "lpm-gui.log")
     assert os.path.getsize(gui_log) > 0, "lpm-gui.log stays empty"
-    print("failure toast + gui log: OK")
+    print("operations window + lock + gui log: OK")
 except Exception:
-    errors.append("failure toast:\n" + traceback.format_exc())
+    errors.append("operations:\n" + traceback.format_exc())
 
 # --- Install: scripts embedded in archives are listed, then ONE confirmation -------------
 try:
@@ -263,6 +296,36 @@ try:
     print("install scripts confirmation: OK")
 except Exception:
     errors.append("install scripts confirmation:\n" + traceback.format_exc())
+
+# --- Closing the main window does not stop a running operation ----------------------------
+try:
+    import operations
+    import progresswindow
+    import backend
+    from mainwindow import MainWindow
+    slow = os.path.join(os.environ["HOME"], "bin", "slow-lpm")
+    with open(slow, "w") as f:
+        f.write("#!/bin/sh\nsleep 2\nexit 0\n")
+    os.chmod(slow, 0o755)
+    real_bin = backend.BIN_LPM
+    backend.BIN_LPM = slow
+    app = win.get_application()
+    win2 = MainWindow(app)
+    win2.show_page("install")
+    pump(0.3)
+    page2 = win2._built_pages["install"]
+    page2.run_command(["x"], "ok")
+    win2.destroy()
+    pump(0.5)
+    live = [w for w in app.get_windows() if isinstance(w, progresswindow.ProgressWindow)]
+    assert operations.is_busy() and len(live) == 1, "operation stopped with the main window"
+    pump(3.5)
+    backend.BIN_LPM = real_bin
+    assert not operations.is_busy(), "operation never ended"
+    assert not [w for w in app.get_windows() if isinstance(w, progresswindow.ProgressWindow)], "progress window left open"
+    print("operation survives main window: OK")
+except Exception:
+    errors.append("operation survives main window:\n" + traceback.format_exc())
 
 print("pages built: %d/%d" % (len(ok), len(page_ids)))
 print("pages: " + ", ".join(ok))

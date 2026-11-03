@@ -8,6 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
+import operations
 from i18n import t
 from pages import CommandPages
 
@@ -292,6 +293,10 @@ class MainWindow(Adw.ApplicationWindow):
         """Open the right install page directly (game or runner, depending on the extension)
         with "path" pre-filled. Replaces the former zenity-driven "click" mode (see bin/lpm,
         section 2: double-clicking a .zgp/.zgr now delegates here)."""
+        if operations.is_busy():
+            # Nothing is replaced while an operation runs: the file waits for the user.
+            operations.show_busy_dialog(self)
+            return
         extension = os.path.splitext(path)[1].lower()
         cmd_id = "install-runner" if extension == ".zgr" else "install"
 

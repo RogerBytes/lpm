@@ -10,6 +10,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 import backend
+import operations
 from i18n import t
 from commandpage import _PERCENT_LINE_RE, _STEP_LINE_RE
 from guilog import _GUI_LOGGER, show_log_dialog
@@ -176,6 +177,10 @@ class _SelfUpdateRun:
         self.bar.set_fraction(max(0.0, min(1.0, pct / 100.0)))
 
     def start(self):
+        if operations.is_busy():
+            operations.show_busy_dialog(self.window)
+            return
+        operations.begin(self)
         self._build_dialog()
         self._start_pulse()
         _GUI_LOGGER.info("$ bin/lpm self-update install")
@@ -206,6 +211,7 @@ class _SelfUpdateRun:
         self.dialog.force_close()
 
     def _finish(self, result):
+        operations.end(self)
         self._stop_pulse()
         if result.returncode == 0 and self.updated:
             self.bar.set_fraction(1.0)

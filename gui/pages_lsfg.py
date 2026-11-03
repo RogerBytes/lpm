@@ -7,6 +7,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 import backend
+import operations
 from i18n import t
 from commandpage import CommandPage
 from util import _run_on_main, json_result
@@ -142,7 +143,14 @@ class LsfgPage:
         dialog.present(self.window)
 
     def _install_flatpak_layer(self, runtime_version):
+        if operations.is_busy():
+            operations.show_busy_dialog(self.window)
+            return
+        token = object()
+        operations.begin(token)
+
         def on_install_done(install_result: backend.CommandResult):
+            operations.end(token)
             install_data = json_result(install_result)
 
             def apply_install():
