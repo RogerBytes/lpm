@@ -1381,3 +1381,7 @@ gui.op.cancel_confirm=Cancel the operation
 gui.op.cannot_cancel=This operation cannot be cancelled. Wait for it to finish.
 gui.op.error_heading=The operation failed
 gui.op.error_close=Close
+gui.op.cancel_stop=Stop here
+gui.op.cancel_stop_tip=Items already finished are kept.
+gui.op.cancel_undo=Undo all
+gui.op.cancel_undo_tip=Items already finished are removed.

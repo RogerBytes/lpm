@@ -102,7 +102,7 @@ class CommandPage(Gtk.Box):
 
     def run_command(self, args: list[str], done_message: str | None = None, refresh: str | None = None,
                     cancellable: bool = False, on_cancelled: Callable[[list[str]], None] | None = None,
-                    cancel_toast: str | None = None, cancel_group: bool = True,
+                    cancel_toast: str | None = None, cancel_group: bool = True, undoable: bool = False,
                     on_report: Callable[[list[tuple[str, str]], int, str], None] | None = None):
         """"refresh": None (default), "games" or "runners" -- whether this command changes
         the list of installed games or runners, so that all selectors built elsewhere are
@@ -110,7 +110,7 @@ class CommandPage(Gtk.Box):
         Deliberately coarse (no partial refresh): a needless refresh costs only a few instant
         CLI calls like "lpm list"."""
         _CommandRun(self, args, done_message, refresh, cancellable, on_cancelled,
-                    cancel_toast, cancel_group, on_report).start()
+                    cancel_toast, cancel_group, on_report, undoable).start()
 
 
 class _CommandRun:
@@ -119,7 +119,7 @@ class _CommandRun:
     (the page is then no longer in a window: nothing of it is touched, see _page_alive)."""
 
     def __init__(self, page, args, done_message, refresh, cancellable, on_cancelled,
-                 cancel_toast, cancel_group, on_report):
+                 cancel_toast, cancel_group, on_report, undoable=False):
         self.page = page
         self.args = args
         self.done_message = done_message
@@ -129,6 +129,10 @@ class _CommandRun:
         self.cancel_toast = cancel_toast
         self.cancel_group = cancel_group
         self.on_report = on_report
+        # undoable: what is already finished can be undone (installed games, exported archives)
+        # -> the progress window asks "stop here" or "undo all" when something is finished.
+        self.undoable = undoable
+        self.cancel_choice: str | None = None  # "stop" or "undo" (None: no choice was asked)
         self.proc = None
         self.cancelled = False
         self.installed: list[str] = []
@@ -142,7 +146,8 @@ class _CommandRun:
             return
         operations.begin(self)
         page.run_button.set_sensitive(False)
-        self.progress_window = ProgressWindow(page.page.get_title() or "lpm", self.cancellable, self._request_cancel)
+        self.progress_window = ProgressWindow(page.page.get_title() or "lpm", self.cancellable, self._request_cancel,
+                                              self._has_finished_items if self.undoable else None)
         self.progress_window.start()
         self.progress_window.present()
         _GUI_LOGGER.info("$ bin/lpm " + " ".join(self.args))
@@ -155,7 +160,11 @@ class _CommandRun:
     def _on_proc(self, proc):
         self.proc = proc
 
-    def _request_cancel(self, *_):
+    def _has_finished_items(self) -> bool:
+        return bool(self.installed)
+
+    def _request_cancel(self, choice: str | None = None):
+        self.cancel_choice = choice
         proc = self.proc
         if proc is None or proc.poll() is not None:
             return
@@ -244,8 +253,13 @@ class _CommandRun:
             if alive and self.cancel_toast != "":
                 page.toast(self.cancel_toast or t("gui.install.toast_cancelled"))
             self._refresh_lists()
-            if self.on_cancelled is not None and alive:
-                self.on_cancelled(list(self.installed))
+            if self.on_cancelled is not None and (alive or self.cancel_choice):
+                # The window's choice (stop / undo) answers the keep-or-delete question.
+                operations.cancel_choice[0] = self.cancel_choice
+                try:
+                    self.on_cancelled(list(self.installed))
+                finally:
+                    operations.cancel_choice[0] = None
         elif result.returncode == 0:
             self.progress_window.finish()
             self._notify_end(self.done_message or t("gui.common.done"))

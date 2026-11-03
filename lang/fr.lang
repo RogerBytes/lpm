@@ -1380,3 +1380,7 @@ gui.op.cancel_confirm=Annuler l'opération
 gui.op.cannot_cancel=Cette opération ne peut pas être annulée. Attends sa fin.
 gui.op.error_heading=L'opération a échoué
 gui.op.error_close=Fermer
+gui.op.cancel_stop=Stopper ici
+gui.op.cancel_stop_tip=Les éléments déjà terminés restent.
+gui.op.cancel_undo=Tout annuler
+gui.op.cancel_undo_tip=Les éléments déjà terminés sont supprimés.

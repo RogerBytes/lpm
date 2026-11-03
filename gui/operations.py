@@ -24,6 +24,11 @@ _current = [None]
 COMMANDS_THAT_NOTIFY = ("install", "killwine")
 
 
+# "stop" / "undo" while an on_cancelled handler runs (the choice made in the progress window,
+# see widgets_rows.ask_keep_or_delete), else None.
+cancel_choice = [None]
+
+
 def is_busy() -> bool:
     return _current[0] is not None
 

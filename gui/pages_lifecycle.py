@@ -406,7 +406,7 @@ class InstallPage:
         batch_desktop_dir = self.desktop_path_row.value() if self.desktop_shortcut_row.get_active() else ""
         self.page.run_command(
             self._install_args(selected, allow_scripts), t("gui.common.install_done"), refresh="games",
-            cancellable=True,
+            cancellable=True, undoable=True,
             on_cancelled=lambda slugs: self._on_cancelled(slugs, batch_desktop_dir))
 
     def _on_hooks_scanned(self, selected: list[str], result):
@@ -512,7 +512,7 @@ class LifecyclePages:
             if hash_row.get_active():
                 args.append("--hash")
             args.extend(selected)
-            page.run_command(args, t("gui.pack.done"), cancellable=True, on_cancelled=on_cancelled,
+            page.run_command(args, t("gui.pack.done"), cancellable=True, undoable=True, on_cancelled=on_cancelled,
                              cancel_toast=t("gui.pack.toast_cancelled"))
 
         page.run_button.connect("clicked", on_run)

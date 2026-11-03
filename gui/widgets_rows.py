@@ -11,6 +11,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gio, Gtk, Pango  # noqa: E402
 
 import backend
+import operations
 from i18n import t
 
 
@@ -544,7 +545,15 @@ def ask_keep_or_delete(window, heading: str, body: str, on_delete):
     done (default choice, including when closing the window: deletion is irreversible) or
     delete it -- on_delete() is called only in the latter case.
     i18n.t does not convert the literal "\\n" of the .lang files (only the bash loader
-    does): explicit conversion here."""
+    does): explicit conversion here.
+    When the progress window already asked ("stop here" / "undo all"), that choice is applied
+    without any dialog."""
+    choice = operations.cancel_choice[0]
+    if choice == "undo":
+        on_delete()
+        return
+    if choice == "stop":
+        return
     dialog = Adw.AlertDialog(heading=heading, body=body.replace("\\n", "\n"))
     dialog.add_response("keep", t("gui.install.cancel_keep"))
     dialog.add_response("delete", t("gui.install.cancel_delete"))

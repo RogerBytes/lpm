@@ -17,11 +17,12 @@ ERROR_DETAIL_MAX_LINES = 12
 
 
 class ProgressWindow(Adw.Window):
-    def __init__(self, title: str, cancellable: bool, on_cancel):
+    def __init__(self, title: str, cancellable: bool, on_cancel, has_finished_items=None):
         super().__init__(application=Gio.Application.get_default(), title=title,
                          default_width=560, resizable=True)
         self._cancellable = cancellable
-        self._on_cancel = on_cancel
+        self._on_cancel = on_cancel  # called with None, "stop" or "undo"
+        self._has_finished_items = has_finished_items  # None: nothing to undo for this operation
         self._state = "running"  # running -> finished
         self._pulse_id: int | None = None
         self._step_text = ""
@@ -37,6 +38,7 @@ class ProgressWindow(Adw.Window):
         self.stack = Gtk.Stack(hhomogeneous=True, vhomogeneous=True)
         self.stack.add_named(self._build_progress_row(), "progress")
         self.stack.add_named(self._build_confirm_row(), "confirm")
+        self.stack.add_named(self._build_choice_row(), "choice")
         self.box.append(self.stack)
         toolbar = Adw.ToolbarView()
         toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle="")))
@@ -67,9 +69,25 @@ class ProgressWindow(Adw.Window):
         self.keep_button.connect("clicked", lambda *_: self._show_progress())
         self.confirm_button = Gtk.Button(label=t("gui.op.cancel_confirm"), hexpand=True)
         self.confirm_button.add_css_class("destructive-action")
-        self.confirm_button.connect("clicked", lambda *_: self._do_cancel())
+        self.confirm_button.connect("clicked", lambda *_: self._after_confirm())
         row.append(self.keep_button)
         row.append(self.confirm_button)
+        return row
+
+    def _build_choice_row(self) -> Gtk.Box:
+        """Second step, same look: what to do with what is ALREADY finished (installed games,
+        exported archives). The tooltips say it without making the window bigger."""
+        row = Gtk.Box(spacing=10, valign=Gtk.Align.CENTER, homogeneous=True)
+        self.stop_button = Gtk.Button(label=t("gui.op.cancel_stop"), hexpand=True,
+                                      tooltip_text=t("gui.op.cancel_stop_tip"))
+        self.stop_button.add_css_class("suggested-action")
+        self.stop_button.connect("clicked", lambda *_: self._do_cancel("stop"))
+        self.undo_button = Gtk.Button(label=t("gui.op.cancel_undo"), hexpand=True,
+                                      tooltip_text=t("gui.op.cancel_undo_tip"))
+        self.undo_button.add_css_class("destructive-action")
+        self.undo_button.connect("clicked", lambda *_: self._do_cancel("undo"))
+        row.append(self.stop_button)
+        row.append(self.undo_button)
         return row
 
     # --- Progress (same behaviour as the former in-page bar) ---
@@ -116,14 +134,25 @@ class ProgressWindow(Adw.Window):
     def _show_progress(self):
         self.stack.set_visible_child_name("progress")
 
-    def _do_cancel(self):
+    def _after_confirm(self):
+        """Cancel confirmed: if something is already finished and can be undone, ask what to do
+        with it (second step); else cancel at once."""
+        if self._has_finished_items is not None and self._has_finished_items():
+            self.stack.set_visible_child_name("choice")
+            self.stop_button.grab_focus()
+        else:
+            self._do_cancel(None)
+
+    def _do_cancel(self, choice):
         self._show_progress()
         self.cancel_button.set_sensitive(False)
-        self._on_cancel()
+        self._on_cancel(choice)
 
     def _on_close_request(self, _win) -> bool:
         if self._state != "running":
             return False
+        if self.stack.get_visible_child_name() == "choice":
+            return True  # the second question must be answered
         if self._cancellable:
             self._confirm_cancel()
         else:

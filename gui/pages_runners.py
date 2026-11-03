@@ -80,7 +80,7 @@ class InstallRunnerPage:
             args.append("--ignore-hash")
         args.extend(targets)
         self.page.run_command(args, t("gui.install_runner.done"), refresh="runners",
-                         cancellable=True, cancel_toast=t("gui.install_runner.toast_cancelled"),
+                         cancellable=True, undoable=True, cancel_toast=t("gui.install_runner.toast_cancelled"),
                          on_cancelled=self.owner._runner_install_cancel_handler(self.page))
 
 
@@ -155,7 +155,7 @@ class RunnerPages:
                 return
             page.run_command(
                 ["install-runner", "-y", *selected], t("gui.download_runner.done"), refresh="runners",
-                cancellable=True, cancel_toast=t("gui.install_runner.toast_cancelled"),
+                cancellable=True, undoable=True, cancel_toast=t("gui.install_runner.toast_cancelled"),
                 on_cancelled=self._runner_install_cancel_handler(page),
             )
 
@@ -213,7 +213,7 @@ class RunnerPages:
             if hash_row.get_active():
                 args.append("--hash")
             args.extend(selected)
-            page.run_command(args, t("gui.pack.done"), cancellable=True,
+            page.run_command(args, t("gui.pack.done"), cancellable=True, undoable=True,
                              cancel_toast=t("gui.pack.toast_cancelled"),
                              on_cancelled=self._export_cancel_handler(page))
 

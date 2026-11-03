@@ -217,8 +217,11 @@ except Exception:
 # --- Progress window: the cancel question is in the window, same size, generic ------------
 try:
     import progresswindow
+    import operations
+    import widgets_rows
     cancelled = []
-    pw = progresswindow.ProgressWindow("Some operation", True, lambda: cancelled.append(1))
+    done_items = []
+    pw = progresswindow.ProgressWindow("Some operation", True, cancelled.append, lambda: bool(done_items))
     pw.present()
     pump(0.4)
     size = (pw.get_width(), pw.get_height())
@@ -228,10 +231,31 @@ try:
     assert (pw.get_width(), pw.get_height()) == size, ((pw.get_width(), pw.get_height()), size)
     pw.keep_button.emit("clicked")
     assert pw.stack.get_visible_child_name() == "progress" and not cancelled
+    # nothing finished yet: cancelling is immediate
     pw.cancel_button.emit("clicked")
     pw.confirm_button.emit("clicked")
-    assert cancelled == [1] and pw.stack.get_visible_child_name() == "progress"
+    assert cancelled == [None] and pw.stack.get_visible_child_name() == "progress", cancelled
+    # something finished: a second step (same size) asks "stop here" / "undo all"
+    pw.cancel_button.set_sensitive(True)
+    done_items.append("game")
+    pw.cancel_button.emit("clicked")
+    pw.confirm_button.emit("clicked")
+    pump(0.3)
+    assert pw.stack.get_visible_child_name() == "choice" and cancelled == [None]
+    assert pw._on_close_request(pw) is True and pw.stack.get_visible_child_name() == "choice", "the second question can be dodged"
+    assert (pw.get_width(), pw.get_height()) == size, ((pw.get_width(), pw.get_height()), size)
+    pw.undo_button.emit("clicked")
+    assert cancelled == [None, "undo"] and pw.stack.get_visible_child_name() == "progress", cancelled
     pw.finish()
+    # that choice answers the keep-or-delete question without any dialog
+    deleted = []
+    for choice, expect in (("undo", [1]), ("stop", []), (None, None)):
+        operations.cancel_choice[0] = choice
+        if choice is not None:
+            widgets_rows.ask_keep_or_delete(win, "h", "b", lambda: deleted.append(1))
+            assert deleted == expect, (choice, deleted)
+            deleted.clear()
+    operations.cancel_choice[0] = None
     print("cancel question in window: OK")
 except Exception:
     errors.append("cancel question:\n" + traceback.format_exc())
@@ -348,6 +372,41 @@ try:
     print("operation survives main window: OK")
 except Exception:
     errors.append("operation survives main window:\n" + traceback.format_exc())
+
+# --- Cancelling a batch with something already done: "undo all" reaches the handler --------
+try:
+    import operations
+    import progresswindow
+    import backend
+    from mainwindow import MainWindow
+    batch = os.path.join(os.environ["HOME"], "bin", "batch-lpm")
+    with open(batch, "w") as f:
+        f.write("#!/bin/sh\necho '[INSTALLED] foo'\nsleep 30\n")
+    os.chmod(batch, 0o755)
+    real_bin = backend.BIN_LPM
+    backend.BIN_LPM = batch
+    win3 = MainWindow(win.get_application())
+    win3.show_page("install")
+    pump(0.3)
+    page3 = win3._built_pages["install"]
+    seen = []
+    page3.run_command(["x"], "ok", cancellable=True, undoable=True,
+                      on_cancelled=lambda slugs: seen.append((slugs, operations.cancel_choice[0])))
+    pump(1.0)
+    pwin = next(w for w in win.get_application().get_windows() if isinstance(w, progresswindow.ProgressWindow))
+    pwin.cancel_button.emit("clicked")
+    pwin.confirm_button.emit("clicked")
+    pump(0.3)
+    assert pwin.stack.get_visible_child_name() == "choice", pwin.stack.get_visible_child_name()
+    pwin.undo_button.emit("clicked")
+    pump(3.0)
+    backend.BIN_LPM = real_bin
+    assert seen == [(["foo"], "undo")], seen
+    assert not operations.is_busy() and operations.cancel_choice[0] is None
+    win3.destroy()
+    print("cancel batch -> undo all: OK")
+except Exception:
+    errors.append("cancel batch undo:\n" + traceback.format_exc())
 
 print("pages built: %d/%d" % (len(ok), len(page_ids)))
 print("pages: " + ", ".join(ok))
