@@ -442,7 +442,7 @@ class DrawMixin:
             # Centered between the visible bottom of the logo and the top of the banner.
             top = self._logo_ink_bottom(width, height, anchor)
             mid = (top + shown[1]) / 2
-            label_baseline_y = mid + extents.height / 2
+            label_baseline_y = mid - extents.y_bearing - extents.height / 2  # ink centered on mid
         elif anchor is not None:
             label_baseline_y = anchor[3] - self._banner_band() / 2 + extents.height / 2
         else:
