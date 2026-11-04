@@ -59,9 +59,9 @@ def _make_toolbar_view(header, stack, bottom_bar):
 
 
 
-def _connect_double_click(widget, on_activate):
+def _connect_double_click(widget, on_activate, describe=None):
     """Double-click on a row/thumbnail = "Next" on the item under the pointer. The timing is
-    done HERE (two presses on the same item within the system's double-click time,
+    done HERE (two presses on the same item within the system's double-click time
     gtk-double-click-time) rather than trusting GTK's press counter, which is reset when the
     list's own click handling interferes. Capture phase, so that handling can never swallow
     the click; the item under the pointer is (re)selected here."""
@@ -75,14 +75,19 @@ def _connect_double_click(widget, on_activate):
             return widget.get_child_at_pos(int(x), int(y))
         return widget.get_row_at_y(int(y))
 
-    def pressed(_gesture, _n_press, x, y):
+    def pressed(_gesture, n_press, x, y):
         item = item_at(x, y)
-        if item is None:
-            last["item"] = None
-            return
         now = GLib.get_monotonic_time() / 1000.0
         settings = Gtk.Settings.get_default()
         limit = settings.get_property("gtk-double-click-time") if settings else 400
+        same = item is not None and item is last["item"]
+        # Diagnostics (temporary): what each press does, to understand missed double-clicks.
+        _GUI_LOGGER.info("dblclick: press n=%s item=%s same_as_last=%s dt=%dms limit=%dms %s" % (
+            n_press, "none" if item is None else item.get_index(), same,
+            now - last["time"], limit, describe() if describe else ""))
+        if item is None:
+            last["item"] = None
+            return
         if item is last["item"] and now - last["time"] <= limit:
             last["item"] = None
             if isinstance(widget, Gtk.FlowBox):
@@ -160,7 +165,8 @@ class SgdbTitleResolverWindow(Adw.Window):
 
         self._game_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         self._game_listbox.connect("row-selected", self._on_game_row_selected)
-        _connect_double_click(self._game_listbox, self._on_next)
+        _connect_double_click(self._game_listbox, self._on_next,
+                              lambda: "page=%s sel=%s" % (self._stack.get_visible_child_name(), self._game_listbox.get_selected_row() and self._game_listbox.get_selected_row().get_index()))
         game_scroller = Gtk.ScrolledWindow(child=self._game_listbox, vexpand=True)
         self._stack.add_named(game_scroller, "choice")
 
@@ -242,6 +248,7 @@ class SgdbTitleResolverWindow(Adw.Window):
         self._advance()
 
     def _show_choice(self, matches: list[dict]):
+        _GUI_LOGGER.info("dblclick: list shown for item %d/%d (%d matches)" % (self._index + 1, len(self._queue), len(matches)))
         self._matches = matches
         for row in list(self._game_listbox):
             self._game_listbox.remove(row)
@@ -387,7 +394,8 @@ class SgdbPickerWindow(Adw.Window):
             margin_top=12, margin_bottom=12, margin_start=12, margin_end=12,
         )
         self._flowbox.connect("selected-children-changed", self._on_image_selection_changed)
-        _connect_double_click(self._flowbox, self._on_next)
+        _connect_double_click(self._flowbox, self._on_next,
+                              lambda: "page=%s stage=%s" % (self._stack.get_visible_child_name(), self._stage))
         image_scroller = Gtk.ScrolledWindow(child=self._flowbox, vexpand=True)
         self._stack.add_named(image_scroller, "image_choice")
 
