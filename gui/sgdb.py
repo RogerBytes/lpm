@@ -7,7 +7,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 import backend
 from i18n import t
@@ -59,6 +59,21 @@ def _make_toolbar_view(header, stack, bottom_bar):
 
 
 
+def _connect_double_click(widget, on_activate):
+    """Double-click on a row/thumbnail = "Next" on the current selection. The click's first
+    press has already selected the item under the pointer, so the selection is up to date;
+    "on_activate" itself ignores the call when nothing is selected."""
+    gesture = Gtk.GestureClick()
+    gesture.set_button(1)
+
+    def pressed(_gesture, n_press, _x, _y):
+        if n_press == 2:
+            GLib.idle_add(on_activate)
+
+    gesture.connect("pressed", pressed)
+    widget.add_controller(gesture)
+
+
 class SgdbTitleResolverWindow(Adw.Window):
     """Phase A of SteamGridDB image selection (icon/splash/logo): resolves the IDENTITY of
     each selected game (which exact game on SteamGridDB) BEFORE any image choice or download.
@@ -90,7 +105,7 @@ class SgdbTitleResolverWindow(Adw.Window):
     # Every title is searched in the background right from the start (text only, light), a few
     # at a time, so that the list of matches of an ambiguous title is already there when
     # reached and unambiguous ones are resolved instantly.
-    _PREFETCH_PARALLEL = 5
+    _PREFETCH_PARALLEL = 8
 
     def __init__(self, parent_window, queue: list[tuple[str, str]]):
         super().__init__(
@@ -122,6 +137,7 @@ class SgdbTitleResolverWindow(Adw.Window):
 
         self._game_listbox = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
         self._game_listbox.connect("row-selected", self._on_game_row_selected)
+        _connect_double_click(self._game_listbox, self._on_next)
         game_scroller = Gtk.ScrolledWindow(child=self._game_listbox, vexpand=True)
         self._stack.add_named(game_scroller, "choice")
 
@@ -289,8 +305,8 @@ class SgdbPickerWindow(Adw.Window):
     # Candidate lists (+ thumbnails) are fetched in the background for the next items, so
     # that choosing is instant after the first one: at most _PREFETCH_PARALLEL fetches at a
     # time, never more than _PREFETCH_AHEAD items ahead of the one being shown.
-    _PREFETCH_PARALLEL = 3
-    _PREFETCH_AHEAD = 6
+    _PREFETCH_PARALLEL = 4
+    _PREFETCH_AHEAD = 10
 
     def __init__(self, parent_window, queue: list[dict], auto_pick: bool = False):
         super().__init__(
@@ -348,6 +364,7 @@ class SgdbPickerWindow(Adw.Window):
             margin_top=12, margin_bottom=12, margin_start=12, margin_end=12,
         )
         self._flowbox.connect("selected-children-changed", self._on_image_selection_changed)
+        _connect_double_click(self._flowbox, self._on_next)
         image_scroller = Gtk.ScrolledWindow(child=self._flowbox, vexpand=True)
         self._stack.add_named(image_scroller, "image_choice")
 
