@@ -46,9 +46,19 @@ class ProgressWindow(Adw.Window):
         self.stack.add_named(self._build_choice_row(), "choice")
         self.box.append(self.stack)
         toolbar = Adw.ToolbarView()
-        # Minimize + close only (no maximize): the window stays small and can be hidden.
-        toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle=""),
-                                          decoration_layout=":minimize,close"))
+        header = Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle=""))
+        # GTK never shows its own minimize button on a window attached to another one
+        # (set_transient_for), so this small one is added, on the side OPPOSITE to the close
+        # button, wherever the system layout (gtk-decoration-layout) puts that one.
+        minimize = Gtk.Button(icon_name="window-minimize-symbolic", valign=Gtk.Align.CENTER)
+        minimize.add_css_class("flat")
+        minimize.connect("clicked", lambda _b: self.minimize())
+        layout = Gtk.Settings.get_default().get_property("gtk-decoration-layout") or ""
+        if "close" in layout.split(":")[0]:
+            header.pack_end(minimize)
+        else:
+            header.pack_start(minimize)
+        toolbar.add_top_bar(header)
         toolbar.set_content(self.box)
         self.set_content(toolbar)
 
