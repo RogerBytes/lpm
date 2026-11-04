@@ -257,9 +257,7 @@ class InstallPage:
     def _add_option_rows(self):
         # No hash option: a hash file next to the archive is checked, otherwise nothing is.
         # No loading screen option either: it stays on, changed afterwards on the "Shortcut" page.
-        # Install shortcut: menu on by default, file off (see add_shortcut_rows); the file
-        # list may hold several .zgp, and an on-by-default file shortcut would create several
-        # at once.
+        # Install shortcut: menu and file both on by default (see add_shortcut_rows).
         self.menu_shortcut_row, self.desktop_shortcut_row, self.desktop_path_row, _ = \
             add_shortcut_rows(self.page, self.window, with_loadingscreen=False)
 
@@ -287,7 +285,7 @@ class InstallPage:
     def reset_fields(self):
         self.file_selector.set_paths([])
         self.menu_shortcut_row.set_active(True)
-        self.desktop_shortcut_row.set_active(False)
+        self.desktop_shortcut_row.set_active(True)
         self.desktop_path_row.reset()
 
     def _shortcut_mode(self) -> str:

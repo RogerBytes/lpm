@@ -29,12 +29,11 @@ source "${script_dir}/zgu-desktop-utils.sh"
 #   -n, --no-loadingscreen                    disable the lpm loading screen for these
 #                                              game(s) (default: enabled, see
 #                                              zgl-launcher-orchestrator.sh)
-#   -k, --allow-hooks                         allow the Lutris launch hooks
+#   -k, --allow-hooks                         re-enable the Lutris launch hooks
 #                                              (prelaunch_command/prelaunch_wait/
-#                                              postexit_command) already configured for
-#                                              these game(s); default: disabled for safety
-#                                              (commented out in their YAML, never deleted;
-#                                              see zgu_apply_hook_policy)
+#                                              postexit_command) that lpm had disabled for
+#                                              these game(s); default: hooks are left exactly
+#                                              as they are (see zgu_apply_hook_policy)
 #   --desktop-dir=<path>                      folder for the desktop shortcut, instead of the
 #                                              one detected by zgu_get_desktop_dir();
 #                                              no effect if no desktop shortcut is requested
@@ -189,10 +188,11 @@ for game_name in "${games_to_process[@]}"; do
     : > "$(zgu_lpm_path "${game_prefix_dir}" no_loadingscreen)" 2>/dev/null
   fi
 
-  # Disable/restore the Lutris launch hooks (see zgu_apply_hook_policy in
-  # zgu-desktop-utils.sh) -- no-op if "game_configpath" is empty (no resolved YAML config)
-  # or the file does not exist.
-  if [[ -n "${game_configpath}" ]]; then
+  # Re-enable the Lutris launch hooks lpm had disabled, ONLY with -k (see zgu_apply_hook_policy
+  # in zgu-desktop-utils.sh): without it hooks are never touched, what was decided at install
+  # time (kept or refused) stays as it is. No-op if "game_configpath" is empty (no resolved
+  # YAML config) or the file does not exist.
+  if [[ "${allow_hooks}" == "true" && -n "${game_configpath}" ]]; then
     zgu_apply_hook_policy "${lutris_config_dir}/${game_configpath}.yml" "${allow_hooks}"
   fi
 

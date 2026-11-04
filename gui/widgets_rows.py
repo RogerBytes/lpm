@@ -505,8 +505,7 @@ def add_compression_rows(page):
 
 def add_shortcut_rows(page, window, with_loadingscreen=True):
     """Shortcut settings shared by install and the "Shortcut" page: menu shortcut (on by
-    default, the convention for installed software), file shortcut (off by default: a page
-    processing several games at once would otherwise create several unrequested files), its
+    default, the convention for installed software), file shortcut (also on by default), its
     path (visible only if the file shortcut is on) and the lpm loading screen (on by
     default; only effective through a shortcut created by lpm, so hidden when menu and file
     are both unchecked).
@@ -515,7 +514,7 @@ def add_shortcut_rows(page, window, with_loadingscreen=True):
     Returns (menu_row, desktop_row, desktop_path_row, loadingscreen_row)."""
     menu_row = Adw.SwitchRow(title=t("gui.install.menu_shortcut_title"), active=True)
     page.add_row(menu_row)
-    desktop_row = Adw.SwitchRow(title=t("gui.install.desktop_shortcut_title"), active=False)
+    desktop_row = Adw.SwitchRow(title=t("gui.install.desktop_shortcut_title"), active=True)
     page.add_row(desktop_row)
 
     desktop_path_row = DesktopPathRow(window)

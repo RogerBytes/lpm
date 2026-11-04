@@ -1040,8 +1040,6 @@ gui.shortcut.toast_choose_game=Select at least one game (or check "select all").
 gui.shortcut.done=Shortcuts regenerated.
 gui.shortcut.loadingscreen_title=Loading screen
 gui.shortcut.loadingscreen_subtitle=Shown while the game is launching, before Lutris takes over.
-gui.shortcut.allow_hooks_title=Allow launch hooks
-gui.shortcut.allow_hooks_subtitle="Pre-launch"/"post-exit" scripts configured in Lutris for this game. Off: neutralized (commented out, never deleted) in its Lutris config, for safety.
 
 gui.images.page_title=Game images
 gui.images.sidebar_label=Fetch images

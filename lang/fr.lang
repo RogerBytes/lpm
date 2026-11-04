@@ -1040,8 +1040,6 @@ gui.shortcut.toast_choose_game=Sélectionne au moins un jeu (ou coche "tout sél
 gui.shortcut.done=Raccourcis régénérés.
 gui.shortcut.loadingscreen_title=Écran de chargement
 gui.shortcut.loadingscreen_subtitle=Affiché pendant le lancement du jeu, avant que Lutris ne prenne le relais.
-gui.shortcut.allow_hooks_title=Autoriser les hooks de lancement
-gui.shortcut.allow_hooks_subtitle=Scripts "avant lancement"/"après fermeture" configurés dans Lutris pour ce jeu. Désactivé : neutralisés (commentés, jamais supprimés) dans sa configuration Lutris, par sécurité.
 
 gui.images.page_title=Images de jeu
 gui.images.sidebar_label=Récupérer des images

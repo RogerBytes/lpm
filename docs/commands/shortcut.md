@@ -32,7 +32,7 @@ Options may be mixed freely with the targets.
 | --- | --- |
 | `-s MODE`, `--shortcut MODE`, `--shortcut=MODE` | Where to write shortcuts: `menu`, `desktop`, `both` (default) or `none`. Any other value is rejected. With the separate-word form, the value is the next argument. |
 | `-n`, `--no-loadingscreen` | Disable lpm's loading screen for the selected game(s): creates the empty marker file `<game dir>/lpm/settings/no-loadingscreen`. Without `-n`, the marker is removed (loading screen enabled). |
-| `-k`, `--allow-hooks` | Allow the Lutris launch hooks already configured for the game(s). Without `-k` they are neutralised (see Behavior). |
+| `-k`, `--allow-hooks` | Re-enable the Lutris launch hooks that lpm had disabled for the game(s). Without `-k` the hooks are left exactly as they are (see Behavior). |
 | `--desktop-dir=<path>` | Folder where the desktop shortcut is written instead of the auto-detected desktop folder. Only the `=` form exists. No effect when the mode is `menu` or `none`. |
 
 `-y`, `--allow-scripts`, `--ignore-hash`, `--hash` and `-<level>` are parsed by `bin/lpm` but have no effect here (no confirmation is ever asked). Note that `bin/lpm` only consumes them when they come right after `shortcut`.
@@ -49,7 +49,7 @@ Options may be mixed freely with the targets.
    - Desktop shortcut: if the mode includes the desktop, writes `<desktop dir>/<slug>.desktop`, makes it executable and marks it trusted with `gio` (errors ignored). It is silently skipped if the desktop folder does not exist. If the game has an `lpm/extras/` folder, a symlink `<Game name> Bonus` to it is (re)created next to the shortcut. A desktop shortcut is never deleted by this command, even with `-s menu` or `-s none`.
    - Desktop folder auto-detection: `xdg-user-dir DESKTOP` (when it is not `$HOME`), else `~/Bureau`, else `~/Desktop`, else `$HOME`.
    - Loading-screen marker: created (`-n`) or removed (no `-n`) in the game directory.
-   - Hook policy: if the game has a Lutris YAML (`configpath`), then without `-k` every line whose key is `prelaunch_command`, `prelaunch_wait` or `postexit_command` is commented out and tagged `# lpm:hook-disabled (...)`; with `-k` lines previously tagged are restored. Exception: if `prelaunch_command` ends with `/scripts/lpm-launcher.sh` (the relay installed by `lpm launcher ... on`), hooks are treated as allowed, so nothing is disabled. The `# lpm:hook-disabled` comments are kept intact by [`lpm lsfg`](lsfg.md) and [`lpm launcher`](launcher.md), which edit the YAML line by line.
+   - Hook policy: if the game has a Lutris YAML (`configpath`), hooks are never disabled by this command: without `-k` they are left exactly as they are (what was decided at install time stays); with `-k`, `prelaunch_command`, `prelaunch_wait` and `postexit_command` lines previously tagged `# lpm:hook-disabled (...)` are restored. The `# lpm:hook-disabled` comments are kept intact by [`lpm lsfg`](lsfg.md) and [`lpm launcher`](launcher.md), which edit the YAML line by line.
    - Prints the confirmation line (also when the mode is `none`).
 
 ## Output
