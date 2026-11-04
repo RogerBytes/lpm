@@ -87,6 +87,11 @@ class SgdbTitleResolverWindow(Adw.Window):
         the end -- the caller must abandon all processing (no Phase B), with a single generic
         failure marker, not one failure per type/game not yet processed."""
 
+    # Every title is searched in the background right from the start (text only, light), a few
+    # at a time, so that the list of matches of an ambiguous title is already there when
+    # reached and unambiguous ones are resolved instantly.
+    _PREFETCH_PARALLEL = 5
+
     def __init__(self, parent_window, queue: list[tuple[str, str]]):
         super().__init__(
             title=t("gui.sgdb_picker.title_window_title"),
@@ -102,6 +107,10 @@ class SgdbTitleResolverWindow(Adw.Window):
         self._on_finished: Callable[[dict[str, tuple[str, str]], bool], None] | None = None
         self._closed = False
         self._cancelled = False
+        self._waiting = False  # current item shown as "loading", waiting for its result
+        self._results: dict[int, backend.CommandResult] = {}
+        self._inflight: set[int] = set()
+        self._requested: set[int] = set()  # never fetched twice, even once consumed
 
         self._window_title = Adw.WindowTitle(title=t("gui.sgdb_picker.title_window_title"))
         header = Adw.HeaderBar(title_widget=self._window_title, show_end_title_buttons=True)
@@ -147,10 +156,36 @@ class SgdbTitleResolverWindow(Adw.Window):
         )
         self._loading_label.set_text(t("gui.sgdb_picker.loading", name))
         self._stack.set_visible_child_name("loading")
-        backend.run_lpm_async(
-            ["sgdb-images", "title", slug],
-            on_done=lambda result: _run_on_main(self._on_title_result, slug, result),
-        )
+        self._waiting = True
+        self._prefetch()
+        self._show_current_if_ready()
+
+    def _show_current_if_ready(self):
+        if self._waiting and self._index in self._results:
+            self._waiting = False
+            slug, _name = self._current_item()
+            self._on_title_result(slug, self._results.pop(self._index))
+
+    def _prefetch(self):
+        for i in range(self._index, len(self._queue)):
+            if len(self._inflight) >= self._PREFETCH_PARALLEL:
+                break
+            if i in self._requested:
+                continue
+            self._requested.add(i)
+            self._inflight.add(i)
+            backend.run_lpm_async(
+                ["sgdb-images", "title", self._queue[i][0]],
+                on_done=lambda result, i=i: _run_on_main(self._on_fetched, i, result),
+            )
+
+    def _on_fetched(self, index: int, result: backend.CommandResult):
+        self._inflight.discard(index)
+        if self._closed:
+            return
+        self._results[index] = result
+        self._show_current_if_ready()
+        self._prefetch()
 
     def _on_title_result(self, slug: str, result: backend.CommandResult):
         if self._closed:
@@ -289,6 +324,7 @@ class SgdbPickerWindow(Adw.Window):
         # flight, and every thumbnail directory created (all removed when the window ends).
         self._results: dict[int, backend.CommandResult] = {}
         self._inflight: set[int] = set()
+        self._requested: set[int] = set()  # never fetched twice, even once consumed
         self._thumb_dirs: set[str] = set()
 
         self._build_widgets(auto_pick)
@@ -373,10 +409,11 @@ class SgdbPickerWindow(Adw.Window):
         for i in range(self._index, last):
             if len(self._inflight) >= self._PREFETCH_PARALLEL:
                 break
-            if i in self._results or i in self._inflight:
+            if i in self._requested:
                 continue
             item = self._queue[i]
             args = ["sgdb-images", item["type"], item["slug"], item["game_id"], item["game_name"] or ""]
+            self._requested.add(i)
             self._inflight.add(i)
             backend.run_lpm_async(args, on_done=lambda result, i=i: _run_on_main(self._on_fetched, i, result))
 
