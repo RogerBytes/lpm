@@ -63,12 +63,10 @@ def _connect_double_click(widget, on_activate):
     """Double-click on a row/thumbnail = "Next" on the item under the pointer. The gesture
     listens in the CAPTURE phase so the list's own click handling can never swallow the
     second click; the item under the pointer is (re)selected here, so it does not depend on
-    the first click having selected it. A click arriving right after a validation is ignored
-    (the next screen may already be there thanks to the prefetch: no accidental validation)."""
+    the first click having selected it."""
     gesture = Gtk.GestureClick()
     gesture.set_button(1)
     gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-    last = [0.0]
 
     def item_at(x, y):
         if isinstance(widget, Gtk.FlowBox):
@@ -76,15 +74,14 @@ def _connect_double_click(widget, on_activate):
         return widget.get_row_at_y(int(y))
 
     def pressed(_gesture, n_press, x, y):
-        if n_press != 2:
-            return
-        now = GLib.get_monotonic_time() / 1000.0
-        if now - last[0] < 300:
+        # GTK keeps counting presses while they follow each other within the system's
+        # double-click time (1, 2, 3, 4...): two quick double-clicks in a row (the next screen
+        # is instant thanks to the prefetch) give 3 then 4, so every EVEN count validates.
+        if n_press < 2 or n_press % 2:
             return
         item = item_at(x, y)
         if item is None:
             return
-        last[0] = now
         if isinstance(widget, Gtk.FlowBox):
             widget.select_child(item)
         else:
