@@ -84,7 +84,10 @@ zgp_logo_save_from_url() {
   ext="${ext,,}"
   # No usable extension in the URL (none, or a path/odd chars): neutral name, the content decides.
   [[ "${ext}" =~ ^[a-z0-9]{1,5}$ ]] || ext="img"
-  local raw_file="${splash_dir}/.lpm-download.${ext}"
+  # Unique temporary file: splash and logo of the same game share this directory and can run
+  # at the same time; a shared name made them overwrite each other's download (corrupted PNGs).
+  local raw_file
+  raw_file="$(mktemp "${splash_dir}/.lpm-download.XXXXXX.${ext}")" || return 1
 
   if ! zgu_image_download "${chosen_url}" "${raw_file}"; then
     logo_fail_detail="download_failed url=${chosen_url} ${zgu_image_err}"
