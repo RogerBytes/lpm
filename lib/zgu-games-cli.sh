@@ -62,6 +62,55 @@ zgp_require_image_tools() {
   fi
 }
 
+# Downloads an image. Args: url out_file. A temporary network/server hiccup is retried (3 tries
+# in all). On failure sets zgu_image_err ("curl_exit=N http=NNN") for the log; returns 1.
+zgu_image_download() {
+  local url="$1" out="$2" http try rc=1
+  zgu_image_err=""
+  for try in 1 2 3; do
+    http=$(curl -sLf --max-time 30 -o "${out}" -w '%{http_code}' "${url}" 2>/dev/null)
+    rc=$?
+    if [[ "${rc}" -eq 0 && -s "${out}" ]]; then
+      return 0
+    fi
+    zgu_image_err="curl_exit=${rc} http=${http:-000}"
+    # A 4xx answer will not change by retrying.
+    [[ "${http}" =~ ^4 ]] && break
+    sleep 1
+  done
+  rm -f "${out}"
+  return 1
+}
+
+# Converts an image (png, jpg, webp, gif, animated webp/gif, video such as webm...) to a PNG.
+# Args: in_file out_png [extra ImageMagick options before the output, e.g. -background none].
+# Only the FIRST frame is kept (an animated image would otherwise give out-0.png, out-1.png...
+# and no out.png at all); if ImageMagick cannot read the file, ffmpeg (when installed) extracts
+# the first frame. Sets zgu_image_err (file type, size, first error line) for the log; returns 1
+# when no non-empty PNG was produced.
+zgu_image_to_png() {
+  local in="$1" out="$2"
+  shift 2
+  local err
+  zgu_image_err=""
+  rm -f "${out}"
+  err=$("${convert_bin[@]}" "${in}[0]" "$@" "${out}" 2>&1 >/dev/null | head -n1)
+  [[ -s "${out}" ]] && return 0
+  if command -v ffmpeg >/dev/null 2>&1; then
+    local frame="${out%.png}.lpm-frame.png"
+    if ffmpeg -y -loglevel error -i "${in}" -frames:v 1 "${frame}" >/dev/null 2>&1 && [[ -s "${frame}" ]]; then
+      if "${convert_bin[@]}" "${frame}" "$@" "${out}" >/dev/null 2>&1 && [[ -s "${out}" ]]; then
+        rm -f "${frame}"
+        return 0
+      fi
+    fi
+    rm -f "${frame}"
+  fi
+  rm -f "${out}"
+  zgu_image_err="type=$(file -b --mime-type "${in}" 2>/dev/null) size=$(stat -c %s "${in}" 2>/dev/null) err=${err//$'\t'/ }"
+  return 1
+}
+
 # Detects Lutris and checks that its database exists (exits otherwise). Args: lang report_fn.
 zgp_require_lutris_db() {
   local lang="$1" report="$2"

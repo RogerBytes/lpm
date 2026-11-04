@@ -71,6 +71,7 @@ zgp_logo_report_skip() {
   echo "${msg}" >&2
 }
 
+logo_fail_detail=""
 zgp_logo_save_from_url() {
   local slug="$1" game_dir="$2" chosen_url="$3"
 
@@ -78,11 +79,15 @@ zgp_logo_save_from_url() {
   splash_dir="$(zgu_lpm_path "${game_dir}" splash)"
   mkdir -p "${splash_dir}"
 
-  local ext="${chosen_url##*.}"
+  local ext="${chosen_url%%[?#]*}"
+  ext="${ext##*.}"
   ext="${ext,,}"
+  # No usable extension in the URL (none, or a path/odd chars): neutral name, the content decides.
+  [[ "${ext}" =~ ^[a-z0-9]{1,5}$ ]] || ext="img"
   local raw_file="${splash_dir}/.lpm-download.${ext}"
 
-  if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
+  if ! zgu_image_download "${chosen_url}" "${raw_file}"; then
+    logo_fail_detail="download_failed url=${chosen_url} ${zgu_image_err}"
     rm -f "${raw_file}"
     return 1
   fi
@@ -90,7 +95,8 @@ zgp_logo_save_from_url() {
   # "-background none" keeps the logo's original transparency instead of replacing it with a
   # background (unlike zgp-game-splash.sh: a full-screen banner is always opaque, a logo is
   # not).
-  if ! "${convert_bin[@]}" "${raw_file}" -background none "${splash_dir}/logo.png" 2>/dev/null; then
+  if ! zgu_image_to_png "${raw_file}" "${splash_dir}/logo.png" -background none; then
+    logo_fail_detail="conversion_failed url=${chosen_url} ${zgu_image_err}"
     rm -f "${raw_file}"
     return 1
   fi
@@ -156,7 +162,7 @@ zgp_logo_process_one() {
   zgp_logo_choose_url "${slug}" "${g_name}" || return 1
   if ! zgp_logo_save_from_url "${slug}" "${game_dir}" "${logo_chosen_url}"; then
     zgp_logo_report_skip "$(t logo.download_failed "${g_name}")"
-    zgu_log "logo" "ERROR" "slug=${slug} reason=download_or_conversion_failed"
+    zgu_log "logo" "ERROR" "slug=${slug} reason=${logo_fail_detail:-download_or_conversion_failed}"
     return 1
   fi
 

@@ -107,19 +107,22 @@ zgp_splash_download() {
   splash_dir="$(zgu_lpm_path "${game_dir}" splash)"
   mkdir -p "${splash_dir}"
 
-  local ext="${chosen_url##*.}"
+  local ext="${chosen_url%%[?#]*}"
+  ext="${ext##*.}"
   ext="${ext,,}"
+  # No usable extension in the URL (none, or a path/odd chars): neutral name, the content decides.
+  [[ "${ext}" =~ ^[a-z0-9]{1,5}$ ]] || ext="img"
   local raw_file="${splash_dir}/.lpm-download.${ext}"
 
-  if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
+  if ! zgu_image_download "${chosen_url}" "${raw_file}"; then
     zgp_splash_report_skip "$(t splash.download_failed "${g_name}")"
-    zgu_log "splash" "ERROR" "slug=${slug} reason=download_failed"
+    zgu_log "splash" "ERROR" "slug=${slug} reason=download_failed url=${chosen_url} ${zgu_image_err}"
     rm -f "${raw_file}"
     return 1
   fi
-  if ! "${convert_bin[@]}" "${raw_file}" "${splash_dir}/splash.png" 2>/dev/null; then
+  if ! zgu_image_to_png "${raw_file}" "${splash_dir}/splash.png"; then
     zgp_splash_report_skip "$(t splash.convert_failed "${g_name}")"
-    zgu_log "splash" "ERROR" "slug=${slug} reason=conversion_failed"
+    zgu_log "splash" "ERROR" "slug=${slug} reason=conversion_failed url=${chosen_url} ${zgu_image_err}"
     rm -f "${raw_file}"
     return 1
   fi
