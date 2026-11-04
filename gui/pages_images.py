@@ -173,11 +173,14 @@ class ImagesPage:
         resolver = SgdbTitleResolverWindow(self.window, entries)
         resolver.start(lambda resolved, cancelled: self._on_titles_resolved(entries, types, auto_pick, resolved, cancelled))
 
-    def _finish_images(self, failed_labels):
-        """End of the whole run: one aggregated message, then the form goes back to its start."""
+    def _finish_images(self, failed_labels, missing_count=0):
+        """End of the whole run: one aggregated message, then the form goes back to its start.
+        Images SteamGridDB does not have ("missing_count") are not failures."""
         self.page.run_button.set_sensitive(True)
         if failed_labels:
             self.page.toast(t("gui.images.toast_failed", ", ".join(failed_labels)))
+        elif missing_count:
+            self.page.toast(t("gui.images.toast_done_missing", str(missing_count)))
         else:
             self.page.toast(t("gui.common.done"))
         self.reset_fields()
@@ -194,7 +197,8 @@ class ImagesPage:
             self._finish_images(failed_labels)
             return
         picker = SgdbPickerWindow(self.window, image_queue, auto_pick=auto_pick)
-        picker.start(lambda image_failed_labels: self._finish_images(failed_labels + image_failed_labels))
+        picker.start(lambda image_failed_labels: self._finish_images(
+            failed_labels + image_failed_labels, len(picker.missing_labels)))
 
     @staticmethod
     def _build_image_queue(entries, types, resolved):

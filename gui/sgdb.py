@@ -401,6 +401,8 @@ class SgdbPickerWindow(Adw.Window):
         self._current_thumb_dir = ""
         self._image_urls: list[str] = []
         self._failed_labels: list[str] = []
+        # "<game> — <type>" for which SteamGridDB has no image at all (not failures).
+        self.missing_labels = self._missing_labels = []
         self._on_finished: Callable[[list[str]], None] | None = None
         self._closed = False
         # Downloads launched in the background AS SOON AS each choice is made (never waiting
@@ -528,7 +530,14 @@ class SgdbPickerWindow(Adw.Window):
             return
         data = json_result(result)
 
-        if data.get("error") or not data.get("images"):
+        # "no_candidates": the game exists on SteamGridDB but has no image of this type -- not a
+        # failure. Any other error (no key, game not found, command failed) is one.
+        if data.get("error") == "no_candidates" or (
+                result.returncode == 0 and not data.get("error") and not data.get("images")):
+            self._missing_labels.append(f"{item['name']} — {item['type_label']}")
+            self._advance()
+            return
+        if data.get("error") or result.returncode != 0 or not data.get("images"):
             self._record_failure(item)
             self._advance()
             return

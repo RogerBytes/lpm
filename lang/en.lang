@@ -1049,6 +1049,7 @@ gui.images.toggle_splash=Splash (loading image)
 gui.images.toggle_logo=Logo
 gui.images.toast_choose_type=Check at least one image type.
 gui.images.toast_failed=Failed: %s.
+gui.images.toast_done_missing=Done — %s image(s) not found on SteamGridDB.
 gui.images.sgdb_key_title=SteamGridDB API key
 gui.images.sgdb_key_set_failed=Invalid key -- make sure it's active on steamgriddb.com.
 gui.images.sgdb_key_invalid_notice=⚠️ No valid SteamGridDB API key configured
