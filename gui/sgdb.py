@@ -60,15 +60,36 @@ def _make_toolbar_view(header, stack, bottom_bar):
 
 
 def _connect_double_click(widget, on_activate):
-    """Double-click on a row/thumbnail = "Next" on the current selection. The click's first
-    press has already selected the item under the pointer, so the selection is up to date;
-    "on_activate" itself ignores the call when nothing is selected."""
+    """Double-click on a row/thumbnail = "Next" on the item under the pointer. The gesture
+    listens in the CAPTURE phase so the list's own click handling can never swallow the
+    second click; the item under the pointer is (re)selected here, so it does not depend on
+    the first click having selected it. A click arriving right after a validation is ignored
+    (the next screen may already be there thanks to the prefetch: no accidental validation)."""
     gesture = Gtk.GestureClick()
     gesture.set_button(1)
+    gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    last = [0.0]
 
-    def pressed(_gesture, n_press, _x, _y):
-        if n_press == 2:
-            GLib.idle_add(on_activate)
+    def item_at(x, y):
+        if isinstance(widget, Gtk.FlowBox):
+            return widget.get_child_at_pos(int(x), int(y))
+        return widget.get_row_at_y(int(y))
+
+    def pressed(_gesture, n_press, x, y):
+        if n_press != 2:
+            return
+        now = GLib.get_monotonic_time() / 1000.0
+        if now - last[0] < 300:
+            return
+        item = item_at(x, y)
+        if item is None:
+            return
+        last[0] = now
+        if isinstance(widget, Gtk.FlowBox):
+            widget.select_child(item)
+        else:
+            widget.select_row(item)
+        GLib.idle_add(on_activate)
 
     gesture.connect("pressed", pressed)
     widget.add_controller(gesture)
