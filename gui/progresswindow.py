@@ -17,14 +17,11 @@ ERROR_DETAIL_MAX_LINES = 12
 
 
 class ProgressWindow(Adw.Window):
-    def __init__(self, title: str, cancellable: bool, on_cancel, has_finished_items=None, parent=None):
+    def __init__(self, title: str, cancellable: bool, on_cancel, has_finished_items=None):
         super().__init__(application=Gio.Application.get_default(), title=title,
                          default_width=560, resizable=True)
-        # Attached to the main window (same request on X11 and Wayland): it stays in front of it,
-        # usually centered on it, and can still be minimized. Not modal: the main window stays
-        # usable. Without a parent (main window closed) it is a normal window.
-        if parent is not None:
-            self.set_transient_for(parent)
+        # Independent of the main window (same behavior on X11 and Wayland), not modal: the
+        # main window stays usable, and this one survives its closing.
         self._cancellable = cancellable
         self._on_cancel = on_cancel  # called with None, "stop" or "undo"
         self._has_finished_items = has_finished_items  # None: nothing to undo for this operation
@@ -46,19 +43,9 @@ class ProgressWindow(Adw.Window):
         self.stack.add_named(self._build_choice_row(), "choice")
         self.box.append(self.stack)
         toolbar = Adw.ToolbarView()
-        header = Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle=""))
-        # GTK never shows its own minimize button on a window attached to another one
-        # (set_transient_for), so this small one is added, on the side OPPOSITE to the close
-        # button, wherever the system layout (gtk-decoration-layout) puts that one.
-        minimize = Gtk.Button(icon_name="window-minimize-symbolic", valign=Gtk.Align.CENTER)
-        minimize.add_css_class("flat")
-        minimize.connect("clicked", lambda _b: self.minimize())
-        layout = Gtk.Settings.get_default().get_property("gtk-decoration-layout") or ""
-        if "close" in layout.split(":")[0]:
-            header.pack_end(minimize)
-        else:
-            header.pack_start(minimize)
-        toolbar.add_top_bar(header)
+        # Independent window (no set_transient_for): GTK then shows its own minimize and
+        # close buttons, where the system layout puts them.
+        toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle="")))
         toolbar.set_content(self.box)
         self.set_content(toolbar)
 

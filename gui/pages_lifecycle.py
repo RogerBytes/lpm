@@ -255,14 +255,13 @@ class InstallPage:
             self.file_selector.set_paths([])
 
     def _add_option_rows(self):
-        self.ignore_hash_row = Adw.SwitchRow(title=t("gui.common.ignore_hash_title"))
-        self.page.add_row(self.ignore_hash_row)
-
+        # No hash option: a hash file next to the archive is checked, otherwise nothing is.
+        # No loading screen option either: it stays on, changed afterwards on the "Shortcut" page.
         # Install shortcut: menu on by default, file off (see add_shortcut_rows); the file
         # list may hold several .zgp, and an on-by-default file shortcut would create several
         # at once.
-        self.menu_shortcut_row, self.desktop_shortcut_row, self.desktop_path_row, self.loadingscreen_row = \
-            add_shortcut_rows(self.page, self.window)
+        self.menu_shortcut_row, self.desktop_shortcut_row, self.desktop_path_row, _ = \
+            add_shortcut_rows(self.page, self.window, with_loadingscreen=False)
 
     def _wire_reset_and_run(self):
         self.page.reset_selection = self.reset_fields
@@ -287,11 +286,9 @@ class InstallPage:
     # everything: the file list AND the switches.
     def reset_fields(self):
         self.file_selector.set_paths([])
-        self.ignore_hash_row.set_active(False)
         self.menu_shortcut_row.set_active(True)
         self.desktop_shortcut_row.set_active(False)
         self.desktop_path_row.reset()
-        self.loadingscreen_row.set_active(True)
 
     def _shortcut_mode(self) -> str:
         menu_on = self.menu_shortcut_row.get_active()
@@ -308,13 +305,8 @@ class InstallPage:
         args = ["install", "-y"]
         if allow_scripts:
             args.append("--allow-scripts")
-        if self.ignore_hash_row.get_active():
-            args.append("--ignore-hash")
-        menu_on = self.menu_shortcut_row.get_active()
         desktop_on = self.desktop_shortcut_row.get_active()
         args.append(f"--shortcut={self._shortcut_mode()}")
-        if (menu_on or desktop_on) and not self.loadingscreen_row.get_active():
-            args.append("--no-loadingscreen")
         if desktop_on:
             desktop_path = self.desktop_path_row.value()
             if desktop_path:
