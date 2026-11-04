@@ -71,21 +71,31 @@ def sync_controllers(sdl, pads, on_added=None, on_removed=None):
 
 def connect_double_click(listbox, on_activate):
     """Double-click on a row of a Gtk.ListBox: selects the row under the pointer, then calls
-    on_activate(). The timing is done HERE (two presses on the same row within the system's
-    double-click time, gtk-double-click-time) instead of trusting GTK's press counter, which
-    is reset whenever the list's own click handling interferes. Capture phase, so that
-    handling can never swallow the click either."""
+    on_activate(). The gesture listens on the WINDOW (capture phase), not on the list: the
+    first click after a list was rebuilt under a motionless pointer can be missed by the
+    list's own controllers, the window always gets it. The timing is done HERE (two presses
+    on the same row within the system's double-click time, gtk-double-click-time)."""
     import gi
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gtk, GLib
+    gi.require_version("Graphene", "1.0")
+    from gi.repository import Gtk, GLib, Graphene
 
-    gesture = Gtk.GestureClick()
-    gesture.set_button(1)
-    gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
     last = {"row": None, "time": 0.0}
+    state = {"window": None}
 
-    def pressed(_gesture, _n_press, _x, y):
-        row = listbox.get_row_at_y(int(y))
+    def row_at(window, x, y):
+        if not listbox.get_mapped():
+            return None
+        target = window.pick(x, y, Gtk.PickFlags.DEFAULT)
+        if target is None or not (target is listbox or target.is_ancestor(listbox)):
+            return None
+        point = Graphene.Point()
+        point.init(x, y)
+        ok, local = window.compute_point(listbox, point)
+        return listbox.get_row_at_y(int(local.y)) if ok else None
+
+    def pressed(gesture, _n_press, x, y):
+        row = row_at(state["window"], x, y)
         if row is None:
             last["row"] = None
             return
@@ -99,8 +109,19 @@ def connect_double_click(listbox, on_activate):
         else:
             last["row"], last["time"] = row, now
 
-    gesture.connect("pressed", pressed)
-    listbox.add_controller(gesture)
+    def attach(*_args):
+        window = listbox.get_root()
+        if window is None or state["window"] is window:
+            return
+        state["window"] = window
+        gesture = Gtk.GestureClick()
+        gesture.set_button(1)
+        gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        gesture.connect("pressed", pressed)
+        window.add_controller(gesture)
+
+    listbox.connect("map", attach)
+    attach()
 
 
 def env_value(pid, name):
