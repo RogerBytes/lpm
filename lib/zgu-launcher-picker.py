@@ -30,10 +30,11 @@
 #     prevention": the gamepad only responded after a click or several seconds), and
 #     Wayland has no portable way to force focus from outside. Reading the gamepad in this
 #     process works the same on X11 AND Wayland.
-#   - Mouse: click to select a row (never to validate, single or double click), and two
+#   - Mouse: click to select a row, double-click to validate it, and two
 #     visible "Validate"/"Cancel" buttons.
 
 import sys
+import time
 import os
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -47,8 +48,10 @@ from zgu_common import (
     PICKER_BUTTON_CSS,
     PICKER_TEXT_CSS,
     SDL_CONTROLLER_BUTTON_DPAD_UP,
+    connect_double_click,
     init_sdl,
     load_sdl2,
+    sync_controllers,
 )
 
 try:
@@ -135,10 +138,27 @@ _gamepad_prev_stick_y = {}
 
 
 
+GAMEPAD_RESCAN_S = 1.0  # hot-plug: connected gamepads are re-scanned about once a second
+_gamepad_next_scan = 0.0
+
+
+def _gamepad_added(handle):
+    _gamepad_prev_a[handle] = 0
+    _gamepad_prev_b[handle] = 0
+    _gamepad_prev_dpad_y[handle] = 0
+    _gamepad_prev_stick_y[handle] = 0
+
+
+def _gamepad_removed(handle):
+    for state in (_gamepad_prev_a, _gamepad_prev_b, _gamepad_prev_dpad_y, _gamepad_prev_stick_y):
+        state.pop(handle, None)
+
+
 def init_gamepad():
     """Fully best-effort: a missing libSDL2 or no detected gamepad must NEVER prevent this
     picker from working with keyboard/mouse. Gamepad reading is part of the window itself,
-    so it cannot simply exit like a dedicated script could."""
+    so it cannot simply exit like a dedicated script could. Gamepads connected or
+    reconnected later (Bluetooth...) are picked up by tick_gamepad."""
     global _sdl
     try:
         sdl = load_sdl2()
@@ -146,22 +166,21 @@ def init_gamepad():
             return
         if not init_sdl(sdl):
             return
-        for i in range(sdl.SDL_NumJoysticks()):
-            if sdl.SDL_IsGameController(i):
-                handle = sdl.SDL_GameControllerOpen(i)
-                if handle:
-                    _gamepad_pads.append(handle)
-                    _gamepad_prev_a[handle] = 0
-                    _gamepad_prev_b[handle] = 0
-                    _gamepad_prev_dpad_y[handle] = 0
-                    _gamepad_prev_stick_y[handle] = 0
         _sdl = sdl
+        sync_controllers(sdl, _gamepad_pads, _gamepad_added, _gamepad_removed)
     except Exception:
         _sdl = None
 
 
 def tick_gamepad():
-    if _sdl is None or not _gamepad_pads or win is None:
+    global _gamepad_next_scan
+    if _sdl is None or win is None:
+        return True
+    now_scan = time.monotonic()
+    if now_scan >= _gamepad_next_scan:
+        _gamepad_next_scan = now_scan + GAMEPAD_RESCAN_S
+        sync_controllers(_sdl, _gamepad_pads, _gamepad_added, _gamepad_removed)
+    if not _gamepad_pads:
         return True
     _sdl.SDL_GameControllerUpdate()
     for pad in _gamepad_pads:
@@ -245,8 +264,9 @@ class PickerWindow(Gtk.Window):
 
         self.listbox = Gtk.ListBox()
         self.listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
-        # "row-activated" is NOT connected (see file header): the mouse only selects,
-        # never validates (single or double click).
+        # "row-activated" is NOT connected: a single click only selects; a double-click
+        # validates (see connect_double_click).
+        connect_double_click(self.listbox, lambda: self._validate_row(self.listbox.get_selected_row()))
         listbox_key_ctrl = Gtk.EventControllerKey()
         listbox_key_ctrl.connect("key-pressed", self.on_listbox_key_pressed)
         self.listbox.add_controller(listbox_key_ctrl)

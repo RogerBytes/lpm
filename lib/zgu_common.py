@@ -34,6 +34,75 @@ def find_controllers(sdl):
     return pads
 
 
+def sync_controllers(sdl, pads, on_added=None, on_removed=None):
+    """Hot-plug: makes the list of open handles "pads" (modified in place) match the game
+    controllers connected RIGHT NOW. A controller that was disconnected is closed and dropped
+    (on_removed(handle)), a new or reconnected one (Bluetooth, USB) is opened and added
+    (on_added(handle)). Best-effort: never raises. Events are pumped first (that is when SDL
+    notices a device appearing) then discarded, so the event queue never fills up."""
+    try:
+        sdl.SDL_PumpEvents()
+        sdl.SDL_FlushEvents(0, 0xFFFF)
+        for pad in list(pads):
+            if not sdl.SDL_GameControllerGetAttached(pad):
+                pads.remove(pad)
+                sdl.SDL_GameControllerClose(pad)
+                if on_removed:
+                    on_removed(pad)
+        open_ids = set()
+        for pad in pads:
+            joystick = sdl.SDL_GameControllerGetJoystick(pad)
+            if joystick:
+                open_ids.add(sdl.SDL_JoystickInstanceID(joystick))
+        for i in range(sdl.SDL_NumJoysticks()):
+            if not sdl.SDL_IsGameController(i):
+                continue
+            if sdl.SDL_JoystickGetDeviceInstanceID(i) in open_ids:
+                continue
+            handle = sdl.SDL_GameControllerOpen(i)
+            if handle:
+                pads.append(handle)
+                open_ids.add(sdl.SDL_JoystickGetDeviceInstanceID(i))
+                if on_added:
+                    on_added(handle)
+    except Exception:
+        pass
+
+
+def connect_double_click(listbox, on_activate):
+    """Double-click on a row of a Gtk.ListBox: selects the row under the pointer, then calls
+    on_activate(). The timing is done HERE (two presses on the same row within the system's
+    double-click time, gtk-double-click-time) instead of trusting GTK's press counter, which
+    is reset whenever the list's own click handling interferes. Capture phase, so that
+    handling can never swallow the click either."""
+    import gi
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk, GLib
+
+    gesture = Gtk.GestureClick()
+    gesture.set_button(1)
+    gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    last = {"row": None, "time": 0.0}
+
+    def pressed(_gesture, _n_press, _x, y):
+        row = listbox.get_row_at_y(int(y))
+        if row is None:
+            last["row"] = None
+            return
+        now = GLib.get_monotonic_time() / 1000.0
+        settings = Gtk.Settings.get_default()
+        limit = settings.get_property("gtk-double-click-time") if settings else 400
+        if row is last["row"] and now - last["time"] <= limit:
+            last["row"] = None
+            listbox.select_row(row)
+            GLib.idle_add(on_activate)
+        else:
+            last["row"], last["time"] = row, now
+
+    gesture.connect("pressed", pressed)
+    listbox.add_controller(gesture)
+
+
 def env_value(pid, name):
     """Value of the environment variable <name> (bytes, e.g. b"WINEPREFIX") of process <pid>,
     read from /proc, or None when unreadable or not set."""
@@ -131,6 +200,17 @@ def init_sdl(sdl):
     sdl.SDL_GameControllerClose.restype = None
     sdl.SDL_GameControllerClose.argtypes = [ctypes.c_void_p]
     sdl.SDL_GameControllerUpdate.restype = None
+    sdl.SDL_PumpEvents.restype = None
+    sdl.SDL_FlushEvents.restype = None
+    sdl.SDL_FlushEvents.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+    sdl.SDL_GameControllerGetAttached.restype = ctypes.c_int
+    sdl.SDL_GameControllerGetAttached.argtypes = [ctypes.c_void_p]
+    sdl.SDL_GameControllerGetJoystick.restype = ctypes.c_void_p
+    sdl.SDL_GameControllerGetJoystick.argtypes = [ctypes.c_void_p]
+    sdl.SDL_JoystickInstanceID.restype = ctypes.c_int32
+    sdl.SDL_JoystickInstanceID.argtypes = [ctypes.c_void_p]
+    sdl.SDL_JoystickGetDeviceInstanceID.restype = ctypes.c_int32
+    sdl.SDL_JoystickGetDeviceInstanceID.argtypes = [ctypes.c_int]
     sdl.SDL_GameControllerGetButton.restype = ctypes.c_uint8
     sdl.SDL_GameControllerGetButton.argtypes = [ctypes.c_void_p, ctypes.c_int]
     sdl.SDL_GameControllerGetAxis.restype = ctypes.c_int16

@@ -189,4 +189,30 @@ seq1 = []
 extend(seq1, 1, 5)
 expect("random order: single line", seq1[:6], [0] * 6)
 
+# --- Hot-plug: sync_controllers follows controllers that appear, disappear and come back (SDL
+# virtual joystick: no real device needed).
+import ctypes
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+sys.path.insert(0, os.path.join(ROOT, "lib"))
+import zgu_common
+_sdl = zgu_common.load_sdl2()
+if _sdl is not None and hasattr(_sdl, "SDL_JoystickAttachVirtual") and zgu_common.init_sdl(_sdl):
+    _sdl.SDL_JoystickAttachVirtual.restype = ctypes.c_int
+    _sdl.SDL_JoystickAttachVirtual.argtypes = [ctypes.c_int] * 4
+    _sdl.SDL_JoystickDetachVirtual.argtypes = [ctypes.c_int]
+    _pads, _log = [], []
+    _sync = lambda: zgu_common.sync_controllers(_sdl, _pads, lambda h: _log.append("add"), lambda h: _log.append("rm"))
+    _sync()
+    expect("hot-plug: no controller at start", len(_pads), 0)
+    _dev = _sdl.SDL_JoystickAttachVirtual(1, 6, 15, 0)
+    _sync()
+    _sync()
+    expect("hot-plug: controller connected later is opened once", (len(_pads), _log), (1, ["add"]))
+    _sdl.SDL_JoystickDetachVirtual(_dev)
+    _sync()
+    expect("hot-plug: disconnected controller is dropped", (len(_pads), _log), (0, ["add", "rm"]))
+    _dev = _sdl.SDL_JoystickAttachVirtual(1, 6, 15, 0)
+    _sync()
+    expect("hot-plug: reconnected controller is opened again", (len(_pads), _log), (1, ["add", "rm", "add"]))
+
 sys.exit(0 if ok else 1)

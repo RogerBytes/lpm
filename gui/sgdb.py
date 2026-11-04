@@ -60,33 +60,38 @@ def _make_toolbar_view(header, stack, bottom_bar):
 
 
 def _connect_double_click(widget, on_activate):
-    """Double-click on a row/thumbnail = "Next" on the item under the pointer. The gesture
-    listens in the CAPTURE phase so the list's own click handling can never swallow the
-    second click; the item under the pointer is (re)selected here, so it does not depend on
-    the first click having selected it."""
+    """Double-click on a row/thumbnail = "Next" on the item under the pointer. The timing is
+    done HERE (two presses on the same item within the system's double-click time,
+    gtk-double-click-time) rather than trusting GTK's press counter, which is reset when the
+    list's own click handling interferes. Capture phase, so that handling can never swallow
+    the click; the item under the pointer is (re)selected here."""
     gesture = Gtk.GestureClick()
     gesture.set_button(1)
     gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    last = {"item": None, "time": 0.0}
 
     def item_at(x, y):
         if isinstance(widget, Gtk.FlowBox):
             return widget.get_child_at_pos(int(x), int(y))
         return widget.get_row_at_y(int(y))
 
-    def pressed(_gesture, n_press, x, y):
-        # GTK keeps counting presses while they follow each other within the system's
-        # double-click time (1, 2, 3, 4...): two quick double-clicks in a row (the next screen
-        # is instant thanks to the prefetch) give 3 then 4, so every EVEN count validates.
-        if n_press < 2 or n_press % 2:
-            return
+    def pressed(_gesture, _n_press, x, y):
         item = item_at(x, y)
         if item is None:
+            last["item"] = None
             return
-        if isinstance(widget, Gtk.FlowBox):
-            widget.select_child(item)
+        now = GLib.get_monotonic_time() / 1000.0
+        settings = Gtk.Settings.get_default()
+        limit = settings.get_property("gtk-double-click-time") if settings else 400
+        if item is last["item"] and now - last["time"] <= limit:
+            last["item"] = None
+            if isinstance(widget, Gtk.FlowBox):
+                widget.select_child(item)
+            else:
+                widget.select_row(item)
+            GLib.idle_add(on_activate)
         else:
-            widget.select_row(item)
-        GLib.idle_add(on_activate)
+            last["item"], last["time"] = item, now
 
     gesture.connect("pressed", pressed)
     widget.add_controller(gesture)

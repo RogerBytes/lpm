@@ -103,6 +103,7 @@ from zgu_common import (
     close_prefix_game,
     init_sdl,
     load_sdl2,
+    sync_controllers,
 )
 from zgu_screen_draw import DrawMixin
 from zgu_screen_picker import PickerMixin
@@ -122,10 +123,29 @@ _gamepad_next_repeat = {}
 
 
 
+GAMEPAD_RESCAN_S = 1.0  # hot-plug: connected gamepads are re-scanned about once a second
+_gamepad_next_scan = 0.0
+
+
+def _gamepad_added(handle):
+    _gamepad_prev_a[handle] = 0
+    _gamepad_prev_b[handle] = 0
+    _gamepad_prev_dpad_y[handle] = 0
+    _gamepad_prev_stick_y[handle] = 0
+    _gamepad_next_repeat[handle] = 0.0
+
+
+def _gamepad_removed(handle):
+    for state in (_gamepad_prev_a, _gamepad_prev_b, _gamepad_prev_dpad_y,
+                  _gamepad_prev_stick_y, _gamepad_next_repeat):
+        state.pop(handle, None)
+
+
 def init_gamepad():
     """Fully best-effort: a missing libSDL2 or no detected gamepad must NEVER prevent the
     loading screen/picker from working with keyboard/mouse. Gamepad reading is part of
-    the window itself, so it cannot simply exit like a dedicated script could."""
+    the window itself, so it cannot simply exit like a dedicated script could. Gamepads
+    connected or reconnected later (Bluetooth...) are picked up by tick_gamepad."""
     global _sdl
     try:
         sdl = load_sdl2()
@@ -133,23 +153,21 @@ def init_gamepad():
             return
         if not init_sdl(sdl):
             return
-        for i in range(sdl.SDL_NumJoysticks()):
-            if sdl.SDL_IsGameController(i):
-                handle = sdl.SDL_GameControllerOpen(i)
-                if handle:
-                    gamepad_pads.append(handle)
-                    _gamepad_prev_a[handle] = 0
-                    _gamepad_prev_b[handle] = 0
-                    _gamepad_prev_dpad_y[handle] = 0
-                    _gamepad_prev_stick_y[handle] = 0
-                    _gamepad_next_repeat[handle] = 0.0
         _sdl = sdl
+        sync_controllers(sdl, gamepad_pads, _gamepad_added, _gamepad_removed)
     except Exception:
         _sdl = None
 
 
 def tick_gamepad():
-    if _sdl is None or not gamepad_pads:
+    global _gamepad_next_scan
+    if _sdl is None:
+        return True
+    now_scan = time.monotonic()
+    if now_scan >= _gamepad_next_scan:
+        _gamepad_next_scan = now_scan + GAMEPAD_RESCAN_S
+        sync_controllers(_sdl, gamepad_pads, _gamepad_added, _gamepad_removed)
+    if not gamepad_pads:
         return True
     _sdl.SDL_GameControllerUpdate()
     for pad in gamepad_pads:

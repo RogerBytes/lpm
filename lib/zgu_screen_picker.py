@@ -7,6 +7,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk, Gdk, GLib, Pango
 
+from zgu_common import connect_double_click
 from zgu_screen_config import (
     BLOCK_EXTRA_DOWN_FRACTION,
     ENTRY_FONT_SIZE_PX,
@@ -76,8 +77,9 @@ class PickerMixin:
         self.picker_listbox = Gtk.ListBox()
         self.picker_listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
         self.picker_listbox.connect("row-selected", self._on_row_selected)
-        # "row-activated" is NOT connected -- a click (single or double) only selects,
-        # never validates directly.
+        # "row-activated" is NOT connected: a single click only selects; a double-click
+        # validates (see connect_double_click).
+        connect_double_click(self.picker_listbox, self._validate_selected_row)
         listbox_key_ctrl = Gtk.EventControllerKey()
         listbox_key_ctrl.connect("key-pressed", self.on_listbox_key_pressed)
         self.picker_listbox.add_controller(listbox_key_ctrl)
