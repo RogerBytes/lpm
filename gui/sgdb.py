@@ -59,6 +59,37 @@ def _make_toolbar_view(header, stack, bottom_bar):
 
 
 
+def _log_window_clicks(window):
+    """Diagnostics (temporary): logs EVERY mouse press/release reaching the window (capture
+    phase, before any list), with its position and the widget under the pointer, to find
+    out where a missing click disappears."""
+    gesture = Gtk.GestureClick()
+    gesture.set_button(0)
+    gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+
+    def describe(x, y):
+        try:
+            target = window.pick(x, y, Gtk.PickFlags.DEFAULT)
+            names = []
+            while target is not None and target is not window and len(names) < 4:
+                names.append(type(target).__name__)
+                target = target.get_parent()
+            return ">".join(names) or "window"
+        except Exception as exc:  # diagnostics must never break anything
+            return "pick-error %s" % exc
+
+    def pressed(g, n_press, x, y):
+        _GUI_LOGGER.info("winclick: PRESS btn=%d n=%d x=%d y=%d under=%s" % (
+            g.get_current_button(), n_press, x, y, describe(x, y)))
+
+    def released(g, n_press, x, y):
+        _GUI_LOGGER.info("winclick: release btn=%d n=%d" % (g.get_current_button(), n_press))
+
+    gesture.connect("pressed", pressed)
+    gesture.connect("released", released)
+    window.add_controller(gesture)
+
+
 def _connect_double_click(widget, on_activate, describe=None):
     """Double-click on a row/thumbnail = "Next" on the item under the pointer. The timing is
     done HERE (two presses on the same item within the system's double-click time
@@ -174,6 +205,7 @@ class SgdbTitleResolverWindow(Adw.Window):
             self.close, self._advance, self._on_next)
 
         self.set_content(_make_toolbar_view(header, self._stack, bottom_bar))
+        _log_window_clicks(self)
 
         self.connect("close-request", self._on_close_request)
 
@@ -405,6 +437,7 @@ class SgdbPickerWindow(Adw.Window):
         self._next_btn.set_visible(not auto_pick)
 
         self.set_content(_make_toolbar_view(header, self._stack, bottom_bar))
+        _log_window_clicks(self)
 
         self.connect("close-request", self._on_close_request)
 
