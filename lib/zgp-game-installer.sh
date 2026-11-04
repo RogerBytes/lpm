@@ -872,7 +872,7 @@ if [[ ${#install_succeeded_slugs[@]} -gt 0 ]]; then
   # Run in the background, detached ("&" + "disown"): nothing here needs to wait for
   # sync-media (purely cosmetic); each game's result remains available via "lpm log" (see
   # zgu_log in zgp-game-sync-media.sh).
-  bash "${script_dir}/zgp-game-sync-media.sh" "${install_succeeded_slugs[@]}" >/dev/null 2>&1 &
+  bash "${script_dir}/zgp-game-sync-media.sh" "${install_succeeded_slugs[@]}" >/dev/null 2>&1 3>&- </dev/null &
   disown
 fi
 

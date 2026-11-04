@@ -266,7 +266,7 @@ if [[ ${#created_slugs[@]} -gt 0 ]]; then
   # Run in the background, detached ("&" + "disown"), for the same reason as
   # zgp-game-installer.sh: nothing here needs to wait for "sync-media" (purely cosmetic);
   # results are available afterwards via "lpm log".
-  bash "${script_dir}/zgp-game-sync-media.sh" "${created_slugs[@]}" >/dev/null 2>&1 &
+  bash "${script_dir}/zgp-game-sync-media.sh" "${created_slugs[@]}" >/dev/null 2>&1 3>&- </dev/null &
   disown
 fi
 

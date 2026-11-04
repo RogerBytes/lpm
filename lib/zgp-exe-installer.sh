@@ -247,7 +247,7 @@ zgu_cli_ok "$(t exe_install.summary_done "${display_name}")"
 # "disown"), as in zgp-game-installer.sh: purely cosmetic, so nothing waits on it, and a
 # lutris.net network problem must never fail this command. Results are viewable via "lpm
 # log".
-bash "${script_dir}/zgp-game-sync-media.sh" "${final_slug}" >/dev/null 2>&1 &
+bash "${script_dir}/zgp-game-sync-media.sh" "${final_slug}" >/dev/null 2>&1 3>&- </dev/null &
 disown
 
 exit 0
