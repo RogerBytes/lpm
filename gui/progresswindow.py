@@ -46,7 +46,9 @@ class ProgressWindow(Adw.Window):
         self.stack.add_named(self._build_choice_row(), "choice")
         self.box.append(self.stack)
         toolbar = Adw.ToolbarView()
-        toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle="")))
+        # Minimize + close only (no maximize): the window stays small and can be hidden.
+        toolbar.add_top_bar(Adw.HeaderBar(title_widget=Adw.WindowTitle(title=title, subtitle=""),
+                                          decoration_layout=":minimize,close"))
         toolbar.set_content(self.box)
         self.set_content(toolbar)
 

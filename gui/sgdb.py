@@ -251,6 +251,12 @@ class SgdbPickerWindow(Adw.Window):
         "logo": Gtk.ContentFit.CONTAIN,
     }
 
+    # Candidate lists (+ thumbnails) are fetched in the background for the next items, so
+    # that choosing is instant after the first one: at most _PREFETCH_PARALLEL fetches at a
+    # time, never more than _PREFETCH_AHEAD items ahead of the one being shown.
+    _PREFETCH_PARALLEL = 3
+    _PREFETCH_AHEAD = 6
+
     def __init__(self, parent_window, queue: list[dict], auto_pick: bool = False):
         super().__init__(
             title=t("gui.sgdb_picker.window_title"),
@@ -279,6 +285,11 @@ class SgdbPickerWindow(Adw.Window):
         self._pending_downloads = 0
         self._all_choices_done = False
         self._finished_naturally = False
+        # Prefetch: results received ahead of time (queue index -> CommandResult), fetches in
+        # flight, and every thumbnail directory created (all removed when the window ends).
+        self._results: dict[int, backend.CommandResult] = {}
+        self._inflight: set[int] = set()
+        self._thumb_dirs: set[str] = set()
 
         self._build_widgets(auto_pick)
 
@@ -348,13 +359,39 @@ class SgdbPickerWindow(Adw.Window):
         self._loading_label.set_text(t("gui.sgdb_picker.loading", item["name"]))
         self._stack.set_visible_child_name("loading")
         # The game's identity is already resolved (Phase A, see SgdbTitleResolverWindow):
-        # no search or disambiguation to redo here, only fetch the image candidates for
-        # this specific type.
-        self._request_images(item, item["game_id"], item["game_name"])
+        # no search or disambiguation to redo here, only the image candidates for this
+        # specific type -- usually already fetched by the prefetch, else shown once they arrive.
+        self._prefetch()
+        self._show_current_if_ready()
 
-    def _request_images(self, item: dict, game_id: str, game_name: str):
-        args = ["sgdb-images", item["type"], item["slug"], game_id, game_name or ""]
-        backend.run_lpm_async(args, on_done=lambda result: _run_on_main(self._on_images_result, item, result))
+    def _show_current_if_ready(self):
+        if self._stage == "loading" and self._index in self._results:
+            self._on_images_result(self._current_item(), self._results.pop(self._index))
+
+    def _prefetch(self):
+        last = min(len(self._queue), self._index + self._PREFETCH_AHEAD)
+        for i in range(self._index, last):
+            if len(self._inflight) >= self._PREFETCH_PARALLEL:
+                break
+            if i in self._results or i in self._inflight:
+                continue
+            item = self._queue[i]
+            args = ["sgdb-images", item["type"], item["slug"], item["game_id"], item["game_name"] or ""]
+            self._inflight.add(i)
+            backend.run_lpm_async(args, on_done=lambda result, i=i: _run_on_main(self._on_fetched, i, result))
+
+    def _on_fetched(self, index: int, result: backend.CommandResult):
+        self._inflight.discard(index)
+        thumb_dir = str(json_result(result).get("thumb_dir", ""))
+        if thumb_dir:
+            self._thumb_dirs.add(thumb_dir)
+        if self._closed:
+            if thumb_dir:
+                shutil.rmtree(thumb_dir, ignore_errors=True)
+            return
+        self._results[index] = result
+        self._show_current_if_ready()
+        self._prefetch()
 
     def _on_images_result(self, item: dict, result: backend.CommandResult):
         if self._closed:
@@ -503,6 +540,8 @@ class SgdbPickerWindow(Adw.Window):
             return
         self._closed = True
         self._cleanup_current_thumb_dir()
+        for thumb_dir in self._thumb_dirs:
+            shutil.rmtree(thumb_dir, ignore_errors=True)
         callback = self._on_finished
         self._on_finished = None
         self.destroy()
