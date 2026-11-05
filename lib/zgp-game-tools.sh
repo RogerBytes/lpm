@@ -474,7 +474,23 @@ run_winetricks() {
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
-  zgt_launch_detached env WINEPREFIX="${prefix_dir}" WINE="${wine_bin}" WINEDLLOVERRIDES="${overrides_env}" "${winetricks_bin}"
+  # Output is kept in a log (not /dev/null): winetricks often exits at once (no zenity/yad, wrong
+  # WINE, 64-bit prefix...) and, without a trace, "launched" would be a lie.
+  local wt_log="${XDG_DATA_HOME:-${HOME}/.local/share}/lpm/winetricks-launch.log" wt_pid
+  mkdir -p "$(dirname "${wt_log}")" 2>/dev/null
+  {
+    printf '=== %s ===\nbin=%s\nWINE=%s\nWINEPREFIX=%s\nDISPLAY=%s WAYLAND_DISPLAY=%s\nzenity=%s yad=%s\n' \
+      "$(date '+%F %T')" "${winetricks_bin}" "${wine_bin}" "${prefix_dir}" "${DISPLAY:-}" "${WAYLAND_DISPLAY:-}" \
+      "$(command -v zenity || echo absent)" "$(command -v yad || echo absent)"
+  } > "${wt_log}" 2>&1
+  setsid env WINEPREFIX="${prefix_dir}" WINE="${wine_bin}" WINEDLLOVERRIDES="${overrides_env}" "${winetricks_bin}" >>"${wt_log}" 2>&1 </dev/null &
+  wt_pid=$!
+  disown
+  sleep 2
+  if ! kill -0 "${wt_pid}" 2>/dev/null; then
+    zgu_cli_error "winetricks s'est arrêté immédiatement, voir ${wt_log}"
+    return 1
+  fi
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
 }
 
