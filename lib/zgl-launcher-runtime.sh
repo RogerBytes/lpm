@@ -295,8 +295,8 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
   set_entry_label "${entry_labels[${chosen_idx}]}"
 fi
 
-# --- 3. Write lpm-launch.bat (emptied then rewritten; "start" with an empty title, no direct
-# call, to handle paths with spaces and return control to cmd properly). Written to
+# --- 3. Write lpm-launch.bat (emptied then rewritten; "call" keeps the exe attached to cmd like a
+# direct Lutris launch: with "start", SacredReborn config.exe never showed up). Written to
 # "${bat_path}" (resolved above from the YAML, with fallback); this path MUST be inside
 # the Wine prefix drive_c so Lutris/cmd.exe can run it (see zgl-launcher-manager.sh). ---
 bat_content=$(
@@ -305,9 +305,9 @@ bat_content=$(
   if [[ -n "${chosen_args}" ]]; then
     # Pasted as-is after the executable, never reformatted/re-escaped: "args" is free text typed
     # by the user (see zgl-launcher-entries.sh), like Lutris's own "Arguments" field.
-    printf 'start "" "%s" %s\r\n' "${chosen_exe}" "${chosen_args}"
+    printf 'call "%s" %s\r\n' "${chosen_exe}" "${chosen_args}"
   else
-    printf 'start "" "%s"\r\n' "${chosen_exe}"
+    printf 'call "%s"\r\n' "${chosen_exe}"
   fi
   printf x
 )
