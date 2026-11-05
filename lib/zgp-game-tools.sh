@@ -483,7 +483,22 @@ run_winetricks() {
       "$(date '+%F %T')" "${winetricks_bin}" "${wine_bin}" "${prefix_dir}" "${DISPLAY:-}" "${WAYLAND_DISPLAY:-}" \
       "$(command -v zenity || echo absent)" "$(command -v yad || echo absent)"
   } > "${wt_log}" 2>&1
+  # Proton runner (toolmanifest.vdf at its root): its wine cannot run alone from the host
+  # ("could not load kernel32.dll"), so winetricks goes through umu-run (as Lutris/prefix creation).
+  local proton_root umu_bin=""
+  proton_root="$(dirname "$(dirname "$(dirname "${wine_bin}")")")"
+  if [[ -f "${proton_root}/toolmanifest.vdf" ]]; then
+    umu_bin=$(command -v umu-run 2>/dev/null || true)
+    [[ -z "${umu_bin}" && -x "${runtime_dir}/umu/umu-run" ]] && umu_bin="${runtime_dir}/umu/umu-run"
+    if [[ -z "${umu_bin}" ]]; then
+      zgu_cli_error "umu-run introuvable (runner Proton)"
+      return 1
+    fi
+    echo "via umu-run: ${umu_bin} PROTONPATH=${proton_root}" >> "${wt_log}"
+    setsid env WINEPREFIX="${prefix_dir}" PROTONPATH="${proton_root}" GAMEID="0" WINEDLLOVERRIDES="${overrides_env}" "${umu_bin}" winetricks >>"${wt_log}" 2>&1 </dev/null &
+  else
   setsid env WINEPREFIX="${prefix_dir}" WINE="${wine_bin}" WINEDLLOVERRIDES="${overrides_env}" "${winetricks_bin}" >>"${wt_log}" 2>&1 </dev/null &
+  fi
   wt_pid=$!
   disown
   sleep 2
