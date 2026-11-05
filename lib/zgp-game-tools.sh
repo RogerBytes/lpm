@@ -495,7 +495,7 @@ run_winetricks() {
       return 1
     fi
     echo "via umu-run: ${umu_bin} PROTONPATH=${proton_root}" >> "${wt_log}"
-    setsid env WINEPREFIX="${prefix_dir}" PROTONPATH="${proton_root}" GAMEID="0" WINEDLLOVERRIDES="${overrides_env}" "${umu_bin}" winetricks >>"${wt_log}" 2>&1 </dev/null &
+    setsid env WINEPREFIX="${prefix_dir}" PROTONPATH="${proton_root}" GAMEID="0" WINEDLLOVERRIDES="${overrides_env}" "${umu_bin}" winetricks --gui >>"${wt_log}" 2>&1 </dev/null &
   else
   setsid env WINEPREFIX="${prefix_dir}" WINE="${wine_bin}" WINEDLLOVERRIDES="${overrides_env}" "${winetricks_bin}" >>"${wt_log}" 2>&1 </dev/null &
   fi
