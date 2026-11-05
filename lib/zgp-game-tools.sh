@@ -444,6 +444,29 @@ zgt_launch_detached() {
   disown
 }
 
+
+# zgt_launch_wine <wine args...>: launches "<wine> args" detached. Proton runner (toolmanifest.vdf at its
+# root): through umu-run (its wine alone fails from the host, "could not load kernel32.dll"); output
+# kept in ~/.local/share/lpm/tools-launch.log instead of /dev/null.
+zgt_launch_wine() {
+  local proton_root umu_bin="" tl_log="${XDG_DATA_HOME:-${HOME}/.local/share}/lpm/tools-launch.log"
+  mkdir -p "$(dirname "${tl_log}")" 2>/dev/null
+  proton_root="$(dirname "$(dirname "$(dirname "${wine_bin}")")")"
+  if [[ -f "${proton_root}/toolmanifest.vdf" ]]; then
+    umu_bin=$(command -v umu-run 2>/dev/null || true)
+    [[ -z "${umu_bin}" && -x "${runtime_dir}/umu/umu-run" ]] && umu_bin="${runtime_dir}/umu/umu-run"
+    if [[ -n "${umu_bin}" ]]; then
+      { printf '=== %s === umu-run %s\n' "$(date '+%F %T')" "$*"; } > "${tl_log}"
+      setsid env WINEPREFIX="${prefix_dir}" PROTONPATH="${proton_root}" GAMEID="0" WINEDLLOVERRIDES="${overrides_env}" "${umu_bin}" "$@" >>"${tl_log}" 2>&1 </dev/null &
+      disown
+      return 0
+    fi
+  fi
+  { printf '=== %s === wine %s\n' "$(date '+%F %T')" "$*"; } > "${tl_log}"
+  setsid env WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="${overrides_env}" "${wine_bin}" "$@" >>"${tl_log}" 2>&1 </dev/null &
+  disown
+}
+
 # zgt_already_running <pgrep_pattern>
 # Checks whether a process matching the pattern (e.g. "winecfg\.exe") is ALREADY running for
 # THIS exact prefix (${prefix_dir}), not just "a winecfg somewhere on the machine", which could
@@ -514,7 +537,7 @@ run_regedit() {
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
-  zgt_launch_detached env WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="${overrides_env}" "${wine_bin}" regedit.exe
+  zgt_launch_wine regedit.exe
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
 }
 
@@ -523,7 +546,7 @@ run_winecfg() {
     zgu_cli_error "$(t game_tools.already_running_cli "${target_name}")"
     return 1
   fi
-  zgt_launch_detached env WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="${overrides_env}" "${wine_bin}" winecfg.exe
+  zgt_launch_wine winecfg.exe
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
 }
 
@@ -543,7 +566,7 @@ run_console() {
     # the console would simply open in the current folder, harmlessly.
     # shellcheck disable=SC2164
     cd "${console_start_dir}" 2>/dev/null || cd "${prefix_dir}"
-    zgt_launch_detached env WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="${overrides_env}" "${wine_bin}" wineconsole cmd
+    zgt_launch_wine wineconsole cmd
   )
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
 }
@@ -559,7 +582,7 @@ run_exe() {
     zgu_cli_error "$(t game_tools.exe_not_found_cli "${exe_path}")"
     return 1
   fi
-  zgt_launch_detached env WINEPREFIX="${prefix_dir}" WINEDLLOVERRIDES="${overrides_env}" "${wine_bin}" "${exe_path}"
+  zgt_launch_wine "${exe_path}"
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
 }
 
