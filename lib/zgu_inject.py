@@ -13,6 +13,7 @@ import ctypes
 import os
 import shutil
 import subprocess
+import time
 
 BTN_LEFT, BTN_MIDDLE, BTN_RIGHT = 1, 2, 3  # X11 button numbers; wheel up/down = 4/5
 # ydotool "click" codes: 0x40 = press, 0x80 = release, low bits = button (0 left, 1 right, 2 middle)
@@ -65,6 +66,28 @@ class Injector:
             pass  # best-effort: a missed event must never crash the caller
 
     # --- keyboard ------------------------------------------------------------------------
+    def hold(self, codes, seconds=0.15):
+        """Like tap(), but keeps the keys down for `seconds` before releasing them. For programs that
+        poll the keyboard state (MangoHud checks it about once per frame): a press and release
+        in the same instant is never seen by them."""
+        codes = list(codes)
+        if self.log_path:
+            self._log("hold " + " ".join(str(c) for c in codes))
+            return
+        x = self._xtest()
+        if x:
+            x11, xtst, display = x
+            for code in codes:
+                xtst.XTestFakeKeyEvent(display, code + 8, 1, 0)
+            x11.XFlush(display)
+            time.sleep(seconds)
+            for code in reversed(codes):
+                xtst.XTestFakeKeyEvent(display, code + 8, 0, 0)
+            x11.XFlush(display)
+        else:
+            self._ydotool("key", "--key-delay", int(seconds * 1000), *["%d:1" % c for c in codes],
+                          *["%d:0" % c for c in reversed(codes)])
+
     def tap(self, codes):
         """Press every code in order, then release them in reverse order (e.g. [42, 30] = Shift+A).
         One call, so on Wayland it is a single ydotool process."""

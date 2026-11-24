@@ -159,9 +159,40 @@ def overlay_visible():
     return os.path.exists(runtime_file("overlay-visible"))
 
 
+def _diag_log(message):
+    try:
+        path = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"),
+                            "lpm", "menu-watcher.log")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("%s [menu] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), message))
+    except OSError:
+        pass
+
+
+def _mangohud_loaded():
+    """(processes with the MangoHud library loaded, processes with MANGOHUD in their environment)."""
+    maps = envs = 0
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open("/proc/%s/environ" % pid, "rb") as f:
+                if b"MANGOHUD=1" in f.read():
+                    envs += 1
+            with open("/proc/%s/maps" % pid, "rb") as f:
+                if b"angohud" in f.read():
+                    maps += 1
+        except OSError:
+            continue
+    return maps, envs
+
+
 def toggle_overlay(new_state):
     try:
-        Injector(SESSION_KIND).tap([KEY_RIGHTSHIFT, KEY_F12])
+        maps, envs = _mangohud_loaded()
+        _diag_log("overlay toggle -> %s (MangoHud library loaded in %d process(es), MANGOHUD=1 in the environment of %d)"
+                  % ("on" if new_state else "off", maps, envs))
+        Injector(SESSION_KIND).hold([KEY_RIGHTSHIFT, KEY_F12])
         if new_state:
             open(runtime_file("overlay-visible"), "w").close()
         else:
