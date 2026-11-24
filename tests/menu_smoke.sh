@@ -56,11 +56,11 @@ check() {  # name, expected output (state + keys, one per line), keys... (env: F
 }
 check "menu: Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
 check "menu: Window > F11" $'exited\nkey F11' Return Down Return
-check "menu: Quit > Esc is sent and the menu stays" $'running\nkey Escape' Down Return Return
-check "menu: Quit > Alt+F4 is sent and the menu stays" $'running\nkey alt+F4' Down Return Down Return
+check "menu: Quit > Esc is sent and the menu closes" $'exited\nkey Escape' Down Return Return
+check "menu: Quit > Alt+F4 is sent and the menu closes" $'exited\nkey alt+F4' Down Return Down Return
 check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Return Down Down Return Down Return
-check "menu: force quit > Yes: the menu stays while the game runs" "running" Down Return Down Down Return Return
-FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down Return Down Down Return Return
+check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Return Down Down Return Return
+FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down
 OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Down Return
 check "menu: Escape goes back, then closes" "exited" Return Escape Escape
 exit "${status}"

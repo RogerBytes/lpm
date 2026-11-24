@@ -20,8 +20,7 @@
 # xdotool on X11, ydotool on Wayland. Same tools as zgu-gamepad-alttab-watcher.py.
 # "Quit the game" offers Esc, Alt+F4 (the game's own ways out) and "Force quit", which asks for a
 # confirmation then stops the wineserver of this game's prefix (zgu_common.close_prefix_game),
-# exactly what the old quit combo did. In that submenu the menu STAYS OPEN until the game is
-# really gone (zgu-prefix-watch.py), re-appearing after each key it sent.
+# exactly what the old quit combo did. Every entry closes the menu first.
 #
 # The menu closes by itself as soon as it loses the focus after having had it (click on the game,
 # Alt+Tab...): otherwise it would stay hidden behind the game with no way to bring it back.
@@ -114,20 +113,20 @@ def quit_game():
 def build_menu():
     # Alt+Tab is deliberately NOT here: it stays the L1+L2+R1+R2+R3 hold + D-pad left/right
     # (zgu-gamepad-alttab-watcher.py).
-    # Kinds: "key" = send a key, then close the menu; "keystay" = send a key, then show the menu
-    # again (the game may need more than one try); "callstay" = run a function, menu stays open.
+    # Kinds: "key" = send a key, then close the menu; "key" = send a key, then show the menu
+    # again (the game may need more than one try); "call" = run a function, menu stays open.
     window_menu = [
         (label("ALTENTER", "Alt+Enter"), "key", "alt+enter"),
         ("F11", "key", "f11"),
     ]
     force_menu = [
-        (label("QUIT_CONFIRM", "Yes, force quit the game"), "callstay", quit_game),
+        (label("QUIT_CONFIRM", "Yes, force quit the game"), "call", quit_game),
         (label("QUIT_CANCEL", "No, back"), "back", None),
     ]
     # Esc first: some games have no gamepad shortcut for their own menu.
     quit_menu = [
-        (label("ESCAPE", "Esc"), "keystay", "escape"),
-        ("Alt+F4", "keystay", "alt+f4"),
+        (label("ESCAPE", "Esc"), "key", "escape"),
+        ("Alt+F4", "key", "alt+f4"),
         (label("FORCE", "Force quit the game"), "submenu", force_menu),
     ]
     return [
@@ -161,7 +160,7 @@ class MenuWindow(Gtk.Window):
         self.pending = None      # action to run once the window is closed
         self.closing = False
         self.was_active = False  # has had the focus at least once
-        self.busy = False        # a key is being sent: losing the focus is expected
+        self.busy = False        # losing the focus is expected (not used for now)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.title_label = Gtk.Label(label=self.title_text, xalign=0)
@@ -221,11 +220,6 @@ class MenuWindow(Gtk.Window):
             self.refill(0)
         elif kind == "back":
             self.go_back()
-        elif kind == "keystay":
-            self.send_and_return(value)
-        elif kind == "callstay":
-            value()
-            self.go_back()  # back to the "Quit the game" list; the menu waits for the game to end
         else:
             self.pending = (kind, value)
             self.finish()
@@ -266,25 +260,6 @@ class MenuWindow(Gtk.Window):
             self.closing = True
             self.close()
             app.quit()
-
-    def send_and_return(self, key_name):
-        """Hide the menu so the game gets the focus back, send the key, then show the menu again."""
-        self.busy = True
-        self.set_visible(False)
-
-        def send():
-            send_key(key_name)
-            GLib.timeout_add(700, show_again)
-            return False
-
-        def show_again():
-            if not self.closing:
-                self.set_visible(True)
-                self.present()
-                GLib.timeout_add(1500, lambda: (setattr(self, "busy", False), False)[1])
-            return False
-
-        GLib.timeout_add(350, send)
 
     def on_close_request(self, _win):
         self.closing = True
