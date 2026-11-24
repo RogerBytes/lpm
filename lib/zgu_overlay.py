@@ -222,3 +222,18 @@ def x11_xid(win):
         return int(win.get_surface().get_xid())
     except Exception:
         return 0
+
+
+def xwayland_available():
+    """True when an X server can be reached (on a Wayland session: XWayland)."""
+    if not os.environ.get("DISPLAY"):
+        return False
+    try:
+        lib = _x11_lib()
+        display = lib.XOpenDisplay(None)
+        if not display:
+            return False
+        lib.XCloseDisplay(display)
+        return True
+    except Exception:
+        return False

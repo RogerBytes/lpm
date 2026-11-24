@@ -58,7 +58,7 @@ try:
     import gi
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gtk, Gdk, GLib
-    from zgu_overlay import x11_focus_window, x11_restore_focus, x11_set_hints, x11_xid, place_on_x11, pointer_monitor, use_veil
+    from zgu_overlay import x11_focus_window, x11_restore_focus, x11_set_hints, x11_xid, xwayland_available, place_on_x11, pointer_monitor, use_veil
 except Exception as exc:  # pragma: no cover - system dependency missing
     sys.stderr.write("zgu-virtual-keyboard: GTK4/PyGObject unavailable (%s)\n" % exc)
     sys.exit(1)
@@ -69,6 +69,14 @@ if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]
 
 SESSION_KIND = sys.argv[1]
 PREFIX_DIR = sys.argv[2]
+# Wayland session: the WINDOW can still be an X11 window (XWayland), which allows the "never takes the
+# focus" hints; the KEYS are still injected the Wayland way (SESSION_KIND), they must reach native
+# Wayland games too. keyboard_mode=hide in menu.conf keeps a native Wayland window.
+WINDOW_KIND = SESSION_KIND
+if SESSION_KIND == "wayland" and load_menu_conf().get("keyboard_mode", "auto").strip().lower() != "hide" \
+        and xwayland_available():
+    os.environ["GDK_BACKEND"] = "x11"
+    WINDOW_KIND = "x11"
 TITLE = "LPM keyboard"
 KEY_SHIFT, KEY_ALTGR = 42, 100
 UNIT = 58  # pixels of a normal key
@@ -204,12 +212,12 @@ class KeyboardWindow(Gtk.Window):
             mode = load_menu_conf().get("keyboard_mode", "auto").strip().lower()
         except Exception:
             mode = "auto"
-        if SESSION_KIND == "x11" and mode != "hide":
+        if WINDOW_KIND == "x11" and mode != "hide":
             self.nofocus = x11_set_hints(self, "UTILITY", no_focus=True, above=True)
 
         self.veil = use_veil()
         if self.veil:
-            monitor = pointer_monitor(SESSION_KIND)
+            monitor = pointer_monitor(WINDOW_KIND)
             if monitor is not None:
                 self.fullscreen_on_monitor(monitor)
                 geo = monitor.get_geometry()
@@ -365,6 +373,10 @@ class KeyboardWindow(Gtk.Window):
 
     def on_active_changed(self, _win, _param):
         if self.is_active():
+            if self.nofocus and WINDOW_KIND != SESSION_KIND:
+                # XWayland: the compositor gave the focus to this window and it cannot be given back
+                # to a native Wayland game: use the hide / show method instead.
+                self.nofocus = False
             if not self.nofocus:
                 self.was_active = True
             self.busy = False
