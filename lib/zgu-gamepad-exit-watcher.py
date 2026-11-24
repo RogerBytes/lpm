@@ -488,10 +488,10 @@ def main():
             if hold_pad is not None:
                 up = bool(sdl.SDL_GameControllerGetButton(hold_pad, SDL_CONTROLLER_BUTTON_DPAD_UP))
                 down = bool(sdl.SDL_GameControllerGetButton(hold_pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN))
-                if up and not prev_up:
+                if down and not prev_down:  # down: the keyboard appears at the bottom of the screen
                     log("virtual keyboard requested by gamepad")
                     start_detached(KEYBOARD_SCRIPT)
-                if down and not prev_down:
+                if up and not prev_up:
                     mouse.toggle()
                 prev_up, prev_down = up, down
             else:

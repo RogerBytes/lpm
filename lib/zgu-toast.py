@@ -19,9 +19,10 @@ from zgu_overlay import place_on_x11  # noqa: E402
 TITLE = "LPM toast"
 SHOW_SECONDS = 2.2
 CSS = b"""
-window.lpm-toast { background: transparent; }
+window.lpm-toast, window.lpm-toast.background, window.lpm-toast decoration {
+  background: transparent; box-shadow: none; border: none; border-radius: 0; }
 .lpm-toast-card { background: rgba(26,26,26,0.92); border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 10px; padding: 10px 18px; box-shadow: 0 0 14px rgba(53,132,228,0.35); }
+  border-radius: 10px; padding: 10px 18px; box-shadow: none; }
 .lpm-toast-card label { color: #ffffff; font-weight: 600; }
 """
 

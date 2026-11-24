@@ -3,7 +3,7 @@
 #
 # Usage: zgu-virtual-keyboard.py <x11|wayland> <prefix_folder>
 #
-# Opened from the LPM menu ("Virtual keyboard") or with L1+L2+R1+R2+R3 held then D-pad up
+# Opened from the LPM menu ("Virtual keyboard") or with L1+L2+R1+R2+R3 held then D-pad down
 # (zgu-gamepad-exit-watcher.py). Stays open until closed (Select, the close key, Esc on a real
 # keyboard, a click outside the card, or the end of the game).
 #
