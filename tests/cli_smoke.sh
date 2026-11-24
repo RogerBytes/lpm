@@ -12,6 +12,8 @@ chmod +x "${work}/repo/bin/lpm"
 R="${work}/repo/bin/lpm"
 
 export HOME="${work}/home"
+# GitHub runners define XDG_* for their own home: the tests must only look inside the fake HOME.
+export XDG_CONFIG_HOME="${HOME}/.config" XDG_DATA_HOME="${HOME}/.local/share" XDG_CACHE_HOME="${HOME}/.cache"
 export LANG=C LC_ALL=C LANGUAGE=en
 unset DISPLAY WAYLAND_DISPLAY
 mkdir -p "${HOME}/bin" "${HOME}/.config/lutris/games" "${HOME}/.local/share/applications" \
