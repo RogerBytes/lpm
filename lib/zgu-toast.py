@@ -14,7 +14,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from zgu_overlay import place_on_x11  # noqa: E402
+from zgu_overlay import place_on_x11, x11_focus_window, x11_restore_focus, x11_set_hints  # noqa: E402
 
 TITLE = "LPM toast"
 SHOW_SECONDS = 2.2
@@ -45,8 +45,13 @@ def on_activate(application):
     win.set_child(card)
     if kind == "x11":
         # invisible until it has been moved to the corner (no flash at the default position)
+        # type "notification": desktops do not play their opening animation for it, and no focus
+        x11_set_hints(win, "NOTIFICATION", no_focus=True)
+        game_focus = x11_focus_window()
         win.set_opacity(0.0)
         win.present()
+        for delay in (100, 400):  # the window manager may focus the new window: give it back
+            GLib.timeout_add(delay, lambda: (x11_restore_focus(game_focus), False)[1])
         GLib.timeout_add(30, place_on_x11, win, TITLE, "topright", 0, lambda: win.set_opacity(1.0), 30, 40)
     else:
         win.present()

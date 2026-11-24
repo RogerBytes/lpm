@@ -306,9 +306,11 @@ PICKER_BUTTON_CSS = b"""
 #   keyboard_hotkey  modifiers + key joined by "+": ctrl+shift+m (default); "none" disables it
 #   backdrop         auto (default): fullscreen dark veil when the desktop composites; off: small window
 #   mouse_speed      gamepad mouse speed factor (default 1.0)
+#   keyboard_mode      auto (default): on X11 the virtual keyboard never takes the focus (no flicker); hide: always
+#                      hide it while a key is sent (the only method on Wayland)
 #   keyboard_delay_ms  wait, after the virtual keyboard hid itself, before a key is sent (default 50)
 MENU_CONF_DEFAULTS = {"gamepad_combo": "L1,R1,L2,R2,L3,R3", "keyboard_hotkey": "ctrl+shift+m", "backdrop": "auto",
-                      "mouse_speed": "1.0", "keyboard_delay_ms": "50"}
+                      "mouse_speed": "1.0", "keyboard_delay_ms": "50", "keyboard_mode": "auto"}
 
 # Linux key codes (linux/input-event-codes.h) for the keyboard hotkey.
 EVDEV_KEY_CODES = {

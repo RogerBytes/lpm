@@ -13,7 +13,9 @@
 # sends that physical key (plus Shift / AltGr when selected), so what is typed is exactly what the
 # label says. If GTK cannot tell the layout, a US layout is shown and a notice says so.
 #
-# SENDING A KEY: keys go to the window that has the focus. So for each key the keyboard hides
+# SENDING A KEY: keys go to the window that has the focus. On X11 the keyboard is a window that never
+# takes the focus (keyboard_mode=auto), so the game keeps it and the key is sent at once. Otherwise (Wayland,
+# or keyboard_mode=hide) for each key the keyboard hides
 # itself (the game gets the focus back), waits keyboard_delay_ms (menu.conf, default 50), sends the
 # key, and shows itself again IMMEDIATELY. Same method on X11 and Wayland.
 #
@@ -56,7 +58,7 @@ try:
     import gi
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gtk, Gdk, GLib
-    from zgu_overlay import place_on_x11, pointer_monitor, use_veil
+    from zgu_overlay import x11_focus_window, x11_restore_focus, x11_set_hints, x11_xid, place_on_x11, pointer_monitor, use_veil
 except Exception as exc:  # pragma: no cover - system dependency missing
     sys.stderr.write("zgu-virtual-keyboard: GTK4/PyGObject unavailable (%s)\n" % exc)
     sys.exit(1)
@@ -194,6 +196,17 @@ class KeyboardWindow(Gtk.Window):
         self.was_active = False
         self.sel = [2, 0]  # row, index in the row
 
+        # X11: a window that never takes the focus, so the game keeps it and keys go straight to it
+        # (no hide / show). Anywhere else, or if that fails, the key flow hides the window instead.
+        self.nofocus = False
+        self.game_focus = 0
+        try:
+            mode = load_menu_conf().get("keyboard_mode", "auto").strip().lower()
+        except Exception:
+            mode = "auto"
+        if SESSION_KIND == "x11" and mode != "hide":
+            self.nofocus = x11_set_hints(self, "UTILITY", no_focus=True, above=True)
+
         self.veil = use_veil()
         if self.veil:
             monitor = pointer_monitor(SESSION_KIND)
@@ -304,8 +317,23 @@ class KeyboardWindow(Gtk.Window):
         else:
             self.send([code])
 
+    def ensure_game_focus(self):
+        """No-focus mode: if the focus ended up on this window (a click, the window manager), give
+        it back to the window that had it when the keyboard opened. Another window that has it is left alone."""
+        if not self.nofocus or not self.game_focus:
+            return
+        current = x11_focus_window()
+        if current in (0, x11_xid(self)):
+            x11_restore_focus(self.game_focus)
+
     def send(self, codes):
-        """Hide, give the game the focus back, send, show again immediately."""
+        """No-focus window (X11): the game has the focus, send at once. Otherwise: hide, give the
+        game the focus back, send, show again immediately."""
+        if self.nofocus:
+            self.ensure_game_focus()
+            self.injector.tap(codes)
+            self.refresh()
+            return
         self.busy = True
         self.sending = True
         self.set_visible(False)
@@ -337,7 +365,8 @@ class KeyboardWindow(Gtk.Window):
 
     def on_active_changed(self, _win, _param):
         if self.is_active():
-            self.was_active = True
+            if not self.nofocus:
+                self.was_active = True
             self.busy = False
             self.refresh()  # on Wayland the layout is only known once the window had the focus
         elif self.was_active and not self.busy and not self.closing:
@@ -495,9 +524,12 @@ def on_activate(application):
     Gtk.StyleContext.add_provider_for_display(
         Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
     win = KeyboardWindow(application)
+    win.game_focus = x11_focus_window() if win.nofocus else 0
     win.present()
-    if SESSION_KIND == "x11" and not win.veil:
-        GLib.timeout_add(200, place_on_x11, win, TITLE, "bottom")
+    if win.nofocus:
+        # The window manager may give the focus to the new window: give it back to the game.
+        for delay in (100, 400):
+            GLib.timeout_add(delay, lambda: (win.ensure_game_focus(), False)[1])
     init_gamepad()
     GLib.timeout_add(GAMEPAD_POLL_MS, tick_gamepad, win)
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
