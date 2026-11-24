@@ -169,29 +169,26 @@ def _diag_log(message):
         pass
 
 
-def _mangohud_loaded():
-    """(processes with the MangoHud library loaded, processes with MANGOHUD in their environment)."""
-    maps = envs = 0
+def _mangohud_env_count():
+    """Number of processes with MANGOHUD=1 in their environment (the library itself cannot be checked
+    reliably: the maps of sandboxed processes are often unreadable)."""
+    count = 0
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
             continue
         try:
             with open("/proc/%s/environ" % pid, "rb") as f:
                 if b"MANGOHUD=1" in f.read():
-                    envs += 1
-            with open("/proc/%s/maps" % pid, "rb") as f:
-                if b"angohud" in f.read():
-                    maps += 1
+                    count += 1
         except OSError:
             continue
-    return maps, envs
+    return count
 
 
 def toggle_overlay(new_state):
     try:
-        maps, envs = _mangohud_loaded()
-        _diag_log("overlay toggle -> %s (MangoHud library loaded in %d process(es), MANGOHUD=1 in the environment of %d)"
-                  % ("on" if new_state else "off", maps, envs))
+        _diag_log("overlay toggle -> %s (MANGOHUD=1 in the environment of %d process(es))"
+                  % ("on" if new_state else "off", _mangohud_env_count()))
         Injector(SESSION_KIND).hold([KEY_RIGHTSHIFT, KEY_F12])
         if new_state:
             open(runtime_file("overlay-visible"), "w").close()
