@@ -83,7 +83,7 @@ gamepad_combo=L1,R1,L2,R2,L3,R3
 keyboard_hotkey=ctrl+shift+m
 ```
 
-`keyboard_hotkey=none` turns the keyboard hotkey off. `backdrop=off` forces the small window: by default (`backdrop=auto`), when the desktop supports transparency, the menu is a fullscreen dark translucent veil with the menu card in the middle (a click on the veil closes it). The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. The GUI offers to fix that at startup (one system password prompt, then log out and back in): it adds the user to the `input` group. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
+`keyboard_hotkey=none` turns the keyboard hotkey off. `backdrop=off` forces the small window: by default (`backdrop=auto`), when the desktop supports transparency, the menu is a fullscreen dark translucent veil (darker toward the edges) with the menu card in the middle, outlined by a thin border and a soft glow (a click on the veil closes it). The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. The GUI offers to fix that at startup (one system password prompt, then log out and back in): it adds the user to the `input` group. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
 
 ### If a fullscreen game reacts badly to the menu window
 

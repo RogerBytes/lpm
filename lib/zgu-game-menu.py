@@ -165,14 +165,25 @@ window.lpm-menu, window.lpm-menu.background, window.lpm-menu.csd {
     box-shadow: none;
 }
 /* Veil mode (fullscreen): dark translucent veil, card in the middle. */
-.lpm-veil { background-color: rgba(0, 0, 0, 0.45); }
-.lpm-card { background-color: rgba(26, 26, 26, 0.88); border-radius: 10px; min-width: 520px; }
+/* Veil: ~70% black, a bit lighter around the card (vignette: darker toward the screen edges). */
+.lpm-veil {
+    background-color: rgba(0, 0, 0, 0.66);
+    background-image: radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.30) 100%);
+}
+/* Card: thin light border and a soft bluish glow so it stands out of the veil. */
+.lpm-card {
+    background-color: rgba(26, 26, 26, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    box-shadow: 0 0 40px rgba(58, 110, 165, 0.35), 0 8px 30px rgba(0, 0, 0, 0.5);
+    min-width: 520px;
+}
 /* Compact mode (no compositing): the small window itself is the opaque card. */
 window.lpm-menu.lpm-compact, window.lpm-menu.lpm-compact.background, window.lpm-menu.lpm-compact.csd {
     background-color: #1a1a1a;
     border-radius: 10px;
 }
-window.lpm-compact .lpm-veil, window.lpm-compact .lpm-card { background-color: transparent; }
+window.lpm-compact .lpm-veil, window.lpm-compact .lpm-card { background-color: transparent; background-image: none; border: none; box-shadow: none; }
 .lpm-menu-title { font-size: 22px; font-weight: bold; padding: 18px 24px 6px 24px; color: #ffffff; }
 .lpm-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #bdbdbd; }
 list.lpm-menu-list { background-color: transparent; }
