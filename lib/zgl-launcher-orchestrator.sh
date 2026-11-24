@@ -773,8 +773,14 @@ disown $! 2>/dev/null
 # "overlay-armed" names this prefix. ---
 overlay_armed_file="${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-armed-$(id -u)"
 rm -f "${overlay_armed_file}" "${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-visible-$(id -u)" 2>/dev/null
-if [[ "${has_display}" = true ]] && zgu_overlay_fps_wanted "${game_dir}" \
-   && ! grep -Eq '^[[:space:]]+mangohud:[[:space:]]*true' "${lutris_game_yml:-/nonexistent}" 2>/dev/null; then
+overlay_reason=""
+if [[ "${has_display}" != true ]]; then
+  overlay_reason="no_display"
+elif ! zgu_overlay_fps_wanted "${game_dir}"; then
+  overlay_reason="not_wanted game=$(zgu_overlay_fps_pergame "${game_dir}") global=$(zgu_overlay_fps_global)"
+elif grep -Eq '^[[:space:]]+mangohud:[[:space:]]*true' "${lutris_game_yml:-/nonexistent}" 2>/dev/null; then
+  overlay_reason="lutris_mangohud_already_on (always visible, nothing armed)"
+else
   overlay_found=false
   if [[ "${version}" = "flatpak" ]]; then
     flatpak list --runtime --columns=application 2>/dev/null | grep -qi 'MangoHud' && overlay_found=true
@@ -788,8 +794,12 @@ if [[ "${has_display}" = true ]] && zgu_overlay_fps_wanted "${game_dir}" \
     export MANGOHUD=1 MANGOHUD_CONFIG="${overlay_config}"
     overlay_flatpak_env=("--env=MANGOHUD=1" "--env=MANGOHUD_CONFIG=${overlay_config}")
     printf '%s\n' "${game_dir}" > "${overlay_armed_file}" 2>/dev/null
+    zgu_log "launcher-orchestrator" "OK" "slug=${slug} overlay=armed hidden config=${overlay_config} lutris=${version}"
+  else
+    overlay_reason="mangohud_not_found (lutris=${version})"
   fi
 fi
+[[ -n "${overlay_reason}" ]] && zgu_log "launcher-orchestrator" "INFO" "slug=${slug} overlay=not_armed reason=${overlay_reason}"
 
 if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
