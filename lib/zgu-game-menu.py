@@ -25,6 +25,22 @@
 # The menu closes by itself as soon as it loses the focus after having had it (click on the game,
 # Alt+Tab...): otherwise it would stay hidden behind the game with no way to bring it back.
 #
+# Look: when the desktop composites (transparency available) the window is FULLSCREEN and
+# transparent: a dark translucent veil over the whole screen with the menu "card" centered in it
+# (the layout centers it, so it works the same on X11 and Wayland). A click on the veil, outside
+# the card, closes the menu. Without compositing a fullscreen window would hide the game behind
+# an opaque rectangle, so a small opaque window is used instead (centered with xdotool on X11).
+# <XDG config>/lpm/menu.conf: "backdrop=off" forces the small window (see zgu_common.load_menu_conf).
+#
+# IF A FULLSCREEN GAME REACTS BADLY to this window (minimizes, loses mouse/pad), tricks to try,
+# simplest first (none is implemented, on purpose: see how real games behave first):
+#   1. X11: mark the window "always on top" (_NET_WM_STATE_ABOVE, e.g. a client message sent
+#      with libX11 through ctypes, or `wmctrl -i -r <id> -b add,above`). GTK4 removed
+#      set_keep_above(), so it has to be done from outside, as xdotool is already used here.
+#   2. Wayland: an "overlay" layer surface (wlr-layer-shell, library gtk4-layer-shell). Works on
+#      KDE and wlroots compositors (sway...), NOT on GNOME's Mutter.
+#   3. Last resort: backdrop=off in menu.conf (small window), or no veil for that game.
+#
 # Labels come from the environment (LPM_MENU_*, translated by the orchestrator); the English
 # text below is the fallback.
 
@@ -47,6 +63,7 @@ from zgu_common import (
     SDL_CONTROLLER_BUTTON_DPAD_UP,
     close_prefix_game,
     init_sdl,
+    load_menu_conf,
     load_sdl2,
     sync_controllers,
 )
@@ -140,14 +157,22 @@ def build_menu():
 
 
 CSS = b"""
-/* One radius everywhere (RADIUS below), the theme's own window corners overridden. Only the
-   BACKGROUND is translucent (rgba): texts keep an opaque color. */
+/* One radius everywhere, the theme's own window corners overridden. Only BACKGROUNDS are
+   translucent (rgba): texts keep an opaque color. */
 window.lpm-menu, window.lpm-menu.background, window.lpm-menu.csd {
-    background-color: rgba(26, 26, 26, 0.88);
+    background-color: transparent;
     color: #ffffff;
-    border-radius: 10px;
     box-shadow: none;
 }
+/* Veil mode (fullscreen): dark translucent veil, card in the middle. */
+.lpm-veil { background-color: rgba(0, 0, 0, 0.45); }
+.lpm-card { background-color: rgba(26, 26, 26, 0.88); border-radius: 10px; min-width: 520px; }
+/* Compact mode (no compositing): the small window itself is the opaque card. */
+window.lpm-menu.lpm-compact, window.lpm-menu.lpm-compact.background, window.lpm-menu.lpm-compact.csd {
+    background-color: #1a1a1a;
+    border-radius: 10px;
+}
+window.lpm-compact .lpm-veil, window.lpm-compact .lpm-card { background-color: transparent; }
 .lpm-menu-title { font-size: 22px; font-weight: bold; padding: 18px 24px 6px 24px; color: #ffffff; }
 .lpm-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #bdbdbd; }
 list.lpm-menu-list { background-color: transparent; }
@@ -162,9 +187,14 @@ class MenuWindow(Gtk.Window):
         super().__init__(application=app)
         self.add_css_class("lpm-menu")
         self.set_title("LPM menu")
-        self.set_default_size(520, 460)
-        self.set_resizable(False)
         self.set_decorated(False)
+        self.veil = use_veil()
+        if self.veil:
+            self.fullscreen_on_pointer_monitor()
+        else:
+            self.add_css_class("lpm-compact")
+            self.set_default_size(520, 460)
+            self.set_resizable(False)
         self.stack = []          # (entries, title, selected index) of the levels above
         self.entries = build_menu()
         self.title_text = label("TITLE", "LPM menu")
@@ -174,6 +204,10 @@ class MenuWindow(Gtk.Window):
         self.busy = False        # losing the focus is expected (not used for now)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.add_css_class("lpm-card")
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_valign(Gtk.Align.CENTER)
+        self.card = box
         self.title_label = Gtk.Label(label=self.title_text, xalign=0)
         self.title_label.add_css_class("lpm-menu-title")
         box.append(self.title_label)
@@ -187,7 +221,23 @@ class MenuWindow(Gtk.Window):
         hint = Gtk.Label(label=label("HINT", "A: validate    B: back"), xalign=0)
         hint.add_css_class("lpm-menu-hint")
         box.append(hint)
-        self.set_child(box)
+        if self.veil:
+            veil = Gtk.Box()
+            veil.add_css_class("lpm-veil")
+            veil.set_hexpand(True)
+            veil.set_vexpand(True)
+            box.set_hexpand(True)   # the card takes the whole space, halign/valign center it
+            box.set_vexpand(True)
+            veil.append(box)
+            click = Gtk.GestureClick()
+            click.connect("pressed", self.on_veil_pressed)
+            self.add_controller(click)
+            self.set_child(veil)
+            self.card.set_size_request(520, 460)
+        else:
+            box.set_halign(Gtk.Align.FILL)
+            box.set_valign(Gtk.Align.FILL)
+            self.set_child(box)
 
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self.on_key)
@@ -195,6 +245,24 @@ class MenuWindow(Gtk.Window):
         self.connect("close-request", self.on_close_request)
         self.connect("notify::is-active", self.on_active_changed)
         self.refill(0)
+
+    def fullscreen_on_pointer_monitor(self):
+        monitor = pointer_monitor()
+        if monitor is not None:
+            self.fullscreen_on_monitor(monitor)
+            geo = monitor.get_geometry()
+            self.set_default_size(geo.width, geo.height)  # also right when no window manager
+        else:
+            self.fullscreen()
+
+    def on_veil_pressed(self, _gesture, _n, x, y):
+        """A click on the veil, outside the card, closes the menu."""
+        ok, rect = self.card.compute_bounds(self)
+        if ok and not (rect.get_x() <= x <= rect.get_x() + rect.get_width()
+                       and rect.get_y() <= y <= rect.get_y() + rect.get_height()):
+            self.closing = True
+            self.close()
+            app.quit()
 
     def refill(self, select):
         child = self.listbox.get_first_child()
@@ -345,6 +413,38 @@ def tick_gamepad(win):
     return True
 
 
+def use_veil():
+    """True when the fullscreen translucent veil can be used (see the file header)."""
+    if os.environ.get("LPM_MENU_FORCE_VEIL") == "1":
+        return True
+    if load_menu_conf().get("backdrop", "auto").lower() == "off":
+        return False
+    display = Gdk.Display.get_default()
+    return bool(display is not None and display.is_composited())
+
+
+def pointer_monitor():
+    """Monitor under the pointer (X11, through xdotool), else None (Wayland: the compositor
+    chooses, usually the focused monitor)."""
+    xdotool = _xdotool()
+    if SESSION_KIND != "x11" or not xdotool:
+        return None
+    try:
+        mouse = subprocess.run([xdotool, "getmouselocation", "--shell"], check=False,
+                               capture_output=True, text=True, timeout=3).stdout
+        pos = dict(line.split("=", 1) for line in mouse.split() if "=" in line)
+        px, py = int(pos.get("X", 0)), int(pos.get("Y", 0))
+        monitors = Gdk.Display.get_default().get_monitors()
+        for i in range(monitors.get_n_items()):
+            monitor = monitors.get_item(i)
+            g = monitor.get_geometry()
+            if g.x <= px < g.x + g.width and g.y <= py < g.y + g.height:
+                return monitor
+    except Exception:
+        pass
+    return None
+
+
 def center_on_x11(win, attempt=0):
     """GTK4 cannot place a window itself and a window manager often opens it at the top left:
     move it to the middle of the monitor under the pointer with xdotool (already needed for
@@ -405,9 +505,10 @@ def on_activate(application):
         Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
     win = MenuWindow(application)
     win.present()
-    if SESSION_KIND == "x11":
+    if SESSION_KIND == "x11" and not win.veil:
         GLib.timeout_add(200, center_on_x11, win)
-    # Wayland: a client cannot position its own window; the compositor decides (most center it).
+    # Veil mode: the layout centers the card. Compact mode on Wayland: a client cannot position
+    # its own window, the compositor decides (most center it).
     init_gamepad()
     GLib.timeout_add(GAMEPAD_POLL_MS, tick_gamepad, win)
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)

@@ -83,7 +83,15 @@ gamepad_combo=L1,R1,L2,R2,L3,R3
 keyboard_hotkey=ctrl+shift+m
 ```
 
-`keyboard_hotkey=none` turns the keyboard hotkey off. The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. The GUI offers to fix that at startup (one system password prompt, then log out and back in): it adds the user to the `input` group. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
+`keyboard_hotkey=none` turns the keyboard hotkey off. `backdrop=off` forces the small window: by default (`backdrop=auto`), when the desktop supports transparency, the menu is a fullscreen dark translucent veil with the menu card in the middle (a click on the veil closes it). The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. The GUI offers to fix that at startup (one system password prompt, then log out and back in): it adds the user to the `input` group. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
+
+### If a fullscreen game reacts badly to the menu window
+
+Not seen yet; to try in this order (none is implemented, see the header of `lib/zgu-game-menu.py`):
+
+1. **X11**: mark the menu window "always on top" (`_NET_WM_STATE_ABOVE`, sent from outside with libX11 through ctypes, or `wmctrl -i -r <id> -b add,above`). GTK4 removed `set_keep_above()`.
+2. **Wayland**: an overlay layer surface (wlr-layer-shell, `gtk4-layer-shell`). Works on KDE and wlroots compositors (sway...), not on GNOME.
+3. **Last resort**: `backdrop=off` in `menu.conf` (small window instead of the veil).
 
 ## Output
 

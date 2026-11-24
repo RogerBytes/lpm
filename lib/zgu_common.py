@@ -298,7 +298,8 @@ PICKER_BUTTON_CSS = b"""
 # file or key = default. To change the shortcuts, edit this file (no per-game setting).
 #   gamepad_combo    buttons pressed together: L1,R1,L2,R2,L3,R3 (default: all six)
 #   keyboard_hotkey  modifiers + key joined by "+": ctrl+shift+m (default); "none" disables it
-MENU_CONF_DEFAULTS = {"gamepad_combo": "L1,R1,L2,R2,L3,R3", "keyboard_hotkey": "ctrl+shift+m"}
+#   backdrop         auto (default): fullscreen dark veil when the desktop composites; off: small window
+MENU_CONF_DEFAULTS = {"gamepad_combo": "L1,R1,L2,R2,L3,R3", "keyboard_hotkey": "ctrl+shift+m", "backdrop": "auto"}
 
 # Linux key codes (linux/input-event-codes.h) for the keyboard hotkey.
 EVDEV_KEY_CODES = {

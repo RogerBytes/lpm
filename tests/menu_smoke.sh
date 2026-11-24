@@ -29,7 +29,10 @@ pid=\$!
 sleep 2
 wid=\$("${real_xdotool}" search --name LPM | head -1)
 [ -n "\${wid}" ] && "${real_xdotool}" windowfocus "\${wid}"
-for k in "\$@"; do "${real_xdotool}" key "\${k}"; sleep 0.5; done
+for k in "\$@"; do
+  if [ "\${k}" = "click-corner" ]; then "${real_xdotool}" mousemove 5 5 click 1; else "${real_xdotool}" key "\${k}"; fi
+  sleep 0.5
+done
 if [ -n "\${OTHER_WINDOW:-}" ]; then  # focus another window, as a click on the game would
   "${py}" -c "
 import gi; gi.require_version('Gtk','4.0')
@@ -63,5 +66,7 @@ check "menu: force quit asks a confirmation (No keeps the menu open)" "running" 
 check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Return Down Down Return Return
 FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down
 OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Down Return
+LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
+LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): a click on the veil closes it" "exited" click-corner
 check "menu: Escape goes back, then closes" "exited" Return Escape Escape
 exit "${status}"
