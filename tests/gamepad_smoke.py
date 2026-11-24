@@ -254,7 +254,7 @@ class Fake2:
         return 32767 if seq[min(state["t"], len(seq) - 1)][1] else 0
 
 w.sdl = Fake2()
-w.MenuLauncher.open = lambda self: opened.append(state["t"])
+w.MenuLauncher.open = lambda self, source="": opened.append(state["t"])
 w.MenuLauncher.close = lambda self: None
 def fake_sleep2(_):
     state["t"] += 1

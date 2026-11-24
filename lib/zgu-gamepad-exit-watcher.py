@@ -59,6 +59,26 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 running = True
 
+# Diagnostic log (the watcher runs detached, its output is discarded): what it found at start
+# (keyboards opened or refused, gamepads), every trigger, and the menu's own errors.
+LOG_PATH = os.path.join(
+    os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"),
+    "lpm", "menu-watcher.log")
+
+
+def log(message):
+    try:
+        os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+        if os.path.getsize(LOG_PATH) > 200000:
+            os.remove(LOG_PATH)
+    except OSError:
+        pass
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write("%s [%d] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), os.getpid(), message))
+    except OSError:
+        pass
+
 
 def _load_prefix_watch():
     import importlib.util
@@ -144,17 +164,25 @@ class MenuLauncher:
 
     def is_open(self):
         if self.proc is not None and self.proc.poll() is not None:
+            log("menu ended with code %s" % self.proc.returncode)
             self.proc = None
         return self.proc is not None
 
-    def open(self):
+    def open(self, source):
         if self.is_open():
             return
+        log("menu requested by %s: starting %s" % (source, MENU_SCRIPT))
+        try:
+            os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+            err = open(LOG_PATH, "a", encoding="utf-8")
+        except OSError:
+            err = subprocess.DEVNULL
         try:
             self.proc = subprocess.Popen(
                 [sys.executable, MENU_SCRIPT, SESSION_KIND, PREFIX_DIR],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except OSError:
+                stdin=subprocess.DEVNULL, stdout=err, stderr=err)
+        except OSError as exc:
+            log("menu start failed: %s" % exc)
             self.proc = None
 
     def close(self):
@@ -178,6 +206,8 @@ class KeyboardHotkey:
         self.fds = {}
         self.down = set()
         self.next_scan = 0.0
+        self.refused = set()
+        self.reported_none = False
 
     def _event_paths(self):
         paths = []
@@ -211,8 +241,14 @@ class KeyboardHotkey:
         for path in wanted - set(self.fds):
             try:
                 self.fds[path] = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
-            except OSError:
-                pass
+                log("keyboard opened: %s" % path)
+            except OSError as exc:
+                if path not in self.refused:
+                    self.refused.add(path)
+                    log("keyboard NOT readable: %s (%s)" % (path, exc))
+        if not wanted and not self.reported_none:
+            self.reported_none = True
+            log("no keyboard found in /proc/bus/input/devices")
 
     def _drop(self, path):
         fd = self.fds.pop(path, None)
@@ -298,12 +334,16 @@ def main():
     loops_since_rescan = 0
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
     menu = MenuLauncher()
+    log("start: session=%s prefix=%s gamepads=%d combo=%s hotkey=%s python=%s" % (
+        SESSION_KIND, PREFIX_DIR, len(pads), MENU_CONF["gamepad_combo"], MENU_CONF["keyboard_hotkey"],
+        sys.executable))
     keyboard = KeyboardHotkey(KEYBOARD_HOTKEY) if KEYBOARD_HOTKEY else None
     combo_was_down = True  # a combo already held at start must be released first
 
     try:
         while running:
             if game_watch.game_ended():
+                log("game ended, stopping")
                 return
             sdl.SDL_GameControllerUpdate()
 
@@ -320,12 +360,12 @@ def main():
 
             combo_down = bool(pads) and combo_complete(pads)
             if combo_down and not combo_was_down:
-                menu.open()
+                menu.open("gamepad combo")
             combo_was_down = combo_down
 
             if keyboard is not None:
                 if keyboard.poll(POLL_INTERVAL_SECONDS):
-                    menu.open()
+                    menu.open("keyboard hotkey")
             else:
                 time.sleep(POLL_INTERVAL_SECONDS)
     finally:
