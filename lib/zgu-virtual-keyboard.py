@@ -18,7 +18,7 @@
 # key, and shows itself again IMMEDIATELY. Same method on X11 and Wayland.
 #
 # Gamepad (SDL2, read here): D-pad / left stick move, A types the key, B Backspace, X Space,
-# Y Shift, Start Enter, L1 / R1 cursor left / right, Select closes.
+# Y Shift (held 0.6 s: shift lock), Start Enter, L1 / R1 cursor left / right, Select closes.
 
 import fcntl
 import importlib.util
@@ -82,14 +82,17 @@ def _chars(codes):
     return [("char", c, 1.0) for c in codes]
 
 
+# Aligned grid: 14 columns of the same width, so up / down always lands on the key just above
+# or below (a real keyboard is staggered, which is awkward with a D-pad). Same key ORDER as a
+# real keyboard. "caps" is the shift lock (letters only, like Caps Lock).
 ROWS = [
-    _chars([41, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]) + [("key", 14, 2.0, "⌫")],
-    [("key", 15, 1.5, "Tab")] + _chars([16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]),
-    _chars([30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 43]) + [("key", 28, 2.0, "Enter ⏎")],
-    [("shift", KEY_SHIFT, 1.5, "Shift")] + _chars([86, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53]),
-    [("key", 1, 1.2, "Esc"), ("altgr", KEY_ALTGR, 1.5, "AltGr"), ("key", 57, 6.0, "␣"),
-     ("key", 105, 1.0, "←"), ("key", 108, 1.0, "↓"), ("key", 103, 1.0, "↑"), ("key", 106, 1.0, "→"),
-     ("close", 0, 1.2, "✕")],
+    _chars([41, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]) + [("key", 14, 1.0, "⌫")],
+    [("key", 15, 1.0, "Tab")] + _chars([16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]) + [("key", 1, 1.0, "Esc")],
+    [("caps", 0, 1.0, "⇪")] + _chars([30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 43]) + [("key", 28, 1.0, "⏎")],
+    [("shift", KEY_SHIFT, 1.0, "⇧")] + _chars([86, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53])
+    + [("altgr", KEY_ALTGR, 1.0, "AltGr"), ("close", 0, 1.0, "✕")],
+    [("key", 105, 1.0, "←"), ("key", 108, 1.0, "↓"), ("key", 103, 1.0, "↑"), ("key", 106, 1.0, "→"),
+     ("key", 57, 10.0, "␣")],
 ]
 
 # US fallback labels (code -> (normal, shifted)), only used when GTK cannot give the layout.
@@ -183,6 +186,7 @@ class KeyboardWindow(Gtk.Window):
         except ValueError:
             self.delay_ms = 50
         self.shift = False
+        self.lock = False  # shift lock: letters stay capital until it is turned off
         self.altgr = False
         self.closing = False
         self.busy = False       # hidden / just shown again: losing the focus is expected
@@ -254,25 +258,28 @@ class KeyboardWindow(Gtk.Window):
         self.refresh()
 
     # --- display ---------------------------------------------------------------------------
-    def level(self):
-        return (1 if self.shift else 0) + (2 if self.altgr else 0)
+    def level(self, code=None):
+        """Level of a key. The lock only concerns the keys whose normal label is a letter."""
+        shifted = self.shift
+        if self.lock and code is not None and self.reader.label(code, 0).isalpha():
+            shifted = True
+        return (1 if shifted else 0) + (2 if self.altgr else 0)
 
     def refresh(self):
         """Labels (current layout and Shift/AltGr state), toggles and selection."""
-        level = self.level()
         for r, row in enumerate(self.keys):
             for c, entry in enumerate(row):
                 button = entry["button"]
-                label = self.reader.label(entry["code"], level) if entry["kind"] == "char" else entry["fixed"]
+                label = self.reader.label(entry["code"], self.level(entry["code"])) if entry["kind"] == "char" else entry["fixed"]
                 button.set_label(label or " ")
-                on = (entry["kind"] == "shift" and self.shift) or (entry["kind"] == "altgr" and self.altgr)
+                on = (entry["kind"] == "shift" and self.shift) or (entry["kind"] == "caps" and self.lock) or (entry["kind"] == "altgr" and self.altgr)
                 for cls, active in (("lpm-kb-on", on), ("lpm-kb-sel", [r, c] == self.sel)):
                     if active:
                         button.add_css_class(cls)
                     else:
                         button.remove_css_class(cls)
         notice = "" if self.reader.detected else text("NOLAYOUT", "Keyboard layout not detected (US shown).") + "    "
-        self.hint.set_label(notice + text("HINT", "A: key  B: delete  X: space  Y: Shift  Start: Enter  L1/R1: cursor  Select: close"))
+        self.hint.set_label(notice + text("HINT", "A: key  B: delete  X: space  Y: Shift (hold: lock)  Start: Enter  L1/R1: cursor  Select: close"))
 
     # --- sending -----------------------------------------------------------------------------
     def press(self, entry):
@@ -282,13 +289,16 @@ class KeyboardWindow(Gtk.Window):
         if kind == "shift":
             self.shift = not self.shift
             self.refresh()
+        elif kind == "caps":
+            self.lock = not self.lock
+            self.refresh()
         elif kind == "altgr":
             self.altgr = not self.altgr
             self.refresh()
         elif kind == "close":
             self.close_keyboard()
         elif kind == "char":
-            codes = ([KEY_SHIFT] if self.shift else []) + ([KEY_ALTGR] if self.altgr else []) + [code]
+            codes = ([KEY_SHIFT] if self.level(code) & 1 else []) + ([KEY_ALTGR] if self.altgr else []) + [code]
             self.shift = self.altgr = False
             self.send(codes)
         else:
@@ -367,7 +377,17 @@ class KeyboardWindow(Gtk.Window):
         self.press(self.keys[self.sel[0]][self.sel[1]])
 
     def gamepad_shift(self):
-        self.shift = not self.shift
+        """Short press of Y: one capital (or turns the lock off when it is on)."""
+        if self.lock:
+            self.lock = False
+        else:
+            self.shift = not self.shift
+        self.refresh()
+
+    def gamepad_lock(self):
+        """Long press of Y: shift lock on / off."""
+        self.lock = not self.lock
+        self.shift = False
         self.refresh()
 
 
@@ -377,6 +397,7 @@ _pads = []
 _state = {}
 _next_scan = 0.0
 REPEAT_FIRST_S, REPEAT_S = 0.35, 0.10
+LOCK_HOLD_S = 0.6  # Y held this long = shift lock
 
 
 def init_gamepad():
@@ -416,12 +437,24 @@ def tick_gamepad(win):
             SDL_CONTROLLER_BUTTON_A: win.gamepad_a,
             SDL_CONTROLLER_BUTTON_B: lambda: win.press_code(14),
             SDL_CONTROLLER_BUTTON_X: lambda: win.press_code(57),
-            SDL_CONTROLLER_BUTTON_Y: win.gamepad_shift,
             SDL_CONTROLLER_BUTTON_START: lambda: win.press_code(28),
             SDL_CONTROLLER_BUTTON_LEFTSHOULDER: lambda: win.press_code(105),
             SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: lambda: win.press_code(106),
             SDL_CONTROLLER_BUTTON_BACK: win.close_keyboard,
         }
+        y_down = btn(pad, SDL_CONTROLLER_BUTTON_Y)
+        if y_down and not st["held"][SDL_CONTROLLER_BUTTON_Y]:
+            st["y_since"] = now
+        elif y_down and st.get("y_since") and now - st["y_since"] >= LOCK_HOLD_S:
+            st["y_since"] = None  # long press: lock, done once
+            st["y_long"] = True
+            win.gamepad_lock()
+        elif not y_down and st["held"][SDL_CONTROLLER_BUTTON_Y]:
+            if st.get("y_since") and not st.get("y_long"):
+                win.gamepad_shift()
+            st["y_since"] = None
+            st["y_long"] = False
+        st["held"][SDL_CONTROLLER_BUTTON_Y] = y_down
         for code, action in actions.items():
             value = btn(pad, code)
             if value and not st["held"][code]:
