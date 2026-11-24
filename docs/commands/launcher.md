@@ -74,7 +74,7 @@ When the LPM Launcher is enabled, two small watchers run for the whole play sess
 | Entry | Does |
 |---|---|
 | Window ▸ | Alt+Enter, F11: the key is sent to the game once the menu is closed. (Alt+Tab stays the hold combo above.) |
-| Quit the game ▸ | Esc, Alt+F4 (sent to the game), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). Each one closes the menu. |
+| Quit the game ▸ | Esc, Alt+F4 (asks for a confirmation, then is sent to the game), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). Each one closes the menu. |
 
 The shortcuts are the same for every game and can be changed in `~/.config/lpm/menu.conf` (or `$XDG_CONFIG_HOME/lpm/menu.conf`):
 

@@ -9,7 +9,7 @@ trap 'rm -rf "${work}"' EXIT
 mkdir -p "${work}/bin" "${work}/prefix"
 real_xdotool="$(command -v xdotool || true)"
 if [ -z "${real_xdotool}" ]; then echo "SKIP: xdotool not installed"; exit 0; fi
-printf '#!/bin/sh\necho "$@" >> "%s/keys.log"\n' "${work}" > "${work}/bin/xdotool"
+printf '#!/bin/sh\n[ "$1" = key ] && echo "$@" >> "%s/keys.log"\nexit 0\n' "${work}" > "${work}/bin/xdotool"
 chmod +x "${work}/bin/xdotool"
 py="${PYTHON:-/usr/bin/python3.12}"
 [ -x "${py}" ] || py="$(command -v python3)"
@@ -57,7 +57,8 @@ check() {  # name, expected output (state + keys, one per line), keys... (env: F
 check "menu: Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
 check "menu: Window > F11" $'exited\nkey F11' Return Down Return
 check "menu: Quit > Esc is sent and the menu closes" $'exited\nkey Escape' Down Return Return
-check "menu: Quit > Alt+F4 is sent and the menu closes" $'exited\nkey alt+F4' Down Return Down Return
+check "menu: Quit > Alt+F4 asks a confirmation, then sends it" $'exited\nkey alt+F4' Down Return Down Return Return
+check "menu: Alt+F4 > No keeps the menu open, nothing sent" "running" Down Return Down Return Down Return
 check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Return Down Down Return Down Return
 check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Return Down Down Return Return
 FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down

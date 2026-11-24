@@ -123,10 +123,14 @@ def build_menu():
         (label("QUIT_CONFIRM", "Yes, force quit the game"), "call", quit_game),
         (label("QUIT_CANCEL", "No, back"), "back", None),
     ]
+    altf4_menu = [
+        (label("ALTF4_CONFIRM", "Yes, send Alt+F4"), "key", "alt+f4"),
+        (label("QUIT_CANCEL", "No, back"), "back", None),
+    ]
     # Esc first: some games have no gamepad shortcut for their own menu.
     quit_menu = [
         (label("ESCAPE", "Esc"), "key", "escape"),
-        ("Alt+F4", "key", "alt+f4"),
+        ("Alt+F4", "submenu", altf4_menu),
         (label("FORCE", "Force quit the game"), "submenu", force_menu),
     ]
     return [
@@ -136,12 +140,19 @@ def build_menu():
 
 
 CSS = b"""
-window.lpm-menu { background-color: #1a1a1a; color: #ffffff; border-radius: 14px; }
+/* One radius everywhere (RADIUS below), the theme's own window corners overridden. Only the
+   BACKGROUND is translucent (rgba): texts keep an opaque color. */
+window.lpm-menu, window.lpm-menu.background, window.lpm-menu.csd {
+    background-color: rgba(26, 26, 26, 0.88);
+    color: #ffffff;
+    border-radius: 10px;
+    box-shadow: none;
+}
 .lpm-menu-title { font-size: 22px; font-weight: bold; padding: 18px 24px 6px 24px; color: #ffffff; }
-.lpm-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #9a9a9a; }
+.lpm-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #bdbdbd; }
 list.lpm-menu-list { background-color: transparent; }
-list.lpm-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color: transparent; color: #ffffff; }
-list.lpm-menu-list row:selected { background-color: #3a6ea5; border-radius: 8px; color: #ffffff; }
+list.lpm-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color: transparent; color: #ffffff; border-radius: 10px; }
+list.lpm-menu-list row:selected { background-color: #3a6ea5; color: #ffffff; }
 .lpm-menu-entry { font-size: 24px; color: #ffffff; }
 """
 
@@ -150,7 +161,7 @@ class MenuWindow(Gtk.Window):
     def __init__(self, app):
         super().__init__(application=app)
         self.add_css_class("lpm-menu")
-        self.set_title("LPM")
+        self.set_title("LPM menu")
         self.set_default_size(520, 460)
         self.set_resizable(False)
         self.set_decorated(False)
@@ -334,6 +345,46 @@ def tick_gamepad(win):
     return True
 
 
+def center_on_x11(win, attempt=0):
+    """GTK4 cannot place a window itself and a window manager often opens it at the top left:
+    move it to the middle of the monitor under the pointer with xdotool (already needed for
+    the keys). Retries a few times while the window is not mapped yet."""
+    xdotool = _xdotool()
+    if not xdotool:
+        return False
+    try:
+        found = subprocess.run([xdotool, "search", "--onlyvisible", "--pid", str(os.getpid()),
+                                "--name", "^LPM menu$"], check=False, capture_output=True,
+                               text=True, timeout=3).stdout.split()
+        if not found:
+            return attempt < 5 and GLib.timeout_add(200, center_on_x11, win, attempt + 1) and False
+        width, height = win.get_width(), win.get_height()
+        if width <= 1 or height <= 1:
+            return attempt < 5 and GLib.timeout_add(200, center_on_x11, win, attempt + 1) and False
+        mouse = subprocess.run([xdotool, "getmouselocation", "--shell"], check=False,
+                               capture_output=True, text=True, timeout=3).stdout
+        pos = dict(line.split("=", 1) for line in mouse.split() if "=" in line)
+        px, py = int(pos.get("X", 0)), int(pos.get("Y", 0))
+        monitors = Gdk.Display.get_default().get_monitors()
+        geo = None
+        for i in range(monitors.get_n_items()):
+            g = monitors.get_item(i).get_geometry()
+            if g.x <= px < g.x + g.width and g.y <= py < g.y + g.height:
+                geo = g
+                break
+        if geo is None and monitors.get_n_items():
+            geo = monitors.get_item(0).get_geometry()
+        if geo is None:
+            return False
+        x = geo.x + (geo.width - width) // 2
+        y = geo.y + (geo.height - height) // 2
+        subprocess.run([xdotool, "windowmove", found[-1], str(x), str(y)], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+    except Exception:
+        pass
+    return False
+
+
 def _load_prefix_watch():
     spec = importlib.util.spec_from_file_location(
         "zgu_prefix_watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), "zgu-prefix-watch.py"))
@@ -354,6 +405,9 @@ def on_activate(application):
         Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
     win = MenuWindow(application)
     win.present()
+    if SESSION_KIND == "x11":
+        GLib.timeout_add(200, center_on_x11, win)
+    # Wayland: a client cannot position its own window; the compositor decides (most center it).
     init_gamepad()
     GLib.timeout_add(GAMEPAD_POLL_MS, tick_gamepad, win)
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)

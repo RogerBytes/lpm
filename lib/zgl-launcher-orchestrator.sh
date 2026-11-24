@@ -769,7 +769,7 @@ if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
   LPM_MENU_TITLE="$(t launcher.menu_title)" LPM_MENU_HINT="$(t launcher.menu_hint)" \
     LPM_MENU_WINDOW="$(t launcher.menu_window)" LPM_MENU_ALTENTER="$(t launcher.menu_altenter)" \
-    LPM_MENU_ESCAPE="$(t launcher.menu_escape)" LPM_MENU_QUIT="$(t launcher.menu_quit)" LPM_MENU_FORCE="$(t launcher.menu_force)" \
+    LPM_MENU_ESCAPE="$(t launcher.menu_escape)" LPM_MENU_QUIT="$(t launcher.menu_quit)" LPM_MENU_FORCE="$(t launcher.menu_force)" LPM_MENU_ALTF4_CONFIRM="$(t launcher.menu_altf4_confirm)" \
     LPM_MENU_QUIT_CONFIRM="$(t launcher.menu_quit_confirm)" LPM_MENU_QUIT_CANCEL="$(t launcher.menu_quit_cancel)" \
     python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &
   disown $! 2>/dev/null

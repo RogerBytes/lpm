@@ -867,6 +867,7 @@ launcher.menu_window=Fenêtre
 launcher.menu_altenter=Alt+Entrée
 launcher.menu_escape=Échap
 launcher.menu_quit=Quitter le jeu
+launcher.menu_altf4_confirm=Oui, envoyer Alt+F4
 launcher.menu_force=Forcer à quitter le jeu
 launcher.menu_quit_confirm=Oui, forcer à quitter le jeu
 launcher.menu_quit_cancel=Non, retour
