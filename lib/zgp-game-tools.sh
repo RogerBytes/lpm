@@ -35,7 +35,7 @@ source "${script_dir}/zgu-lpm-paths.sh"
 # --- Arguments ---
 # $1 = target slug (required)
 # $2 = target tool (required):
-#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud | gamepad
+#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud | overlay | gamepad
 # $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), runner name (only for $2=runner), or on|off|status (only for $2=mangohud or gamepad (gamepad also has edit), default status); also required for those tools
 cli_slug="${1:-}"
 cli_tool="${2:-}"
@@ -359,6 +359,41 @@ run_gamepad() {
 
 if [[ "${cli_tool}" = "gamepad" ]]; then
   run_gamepad "${cli_exe_path}"
+  exit $?
+fi
+
+# --- "overlay" tool: the FPS overlay (MangoHud) that the in-game LPM menu shows / hides. NOT the
+# Lutris "Enable MangoHud" option above (that one displays it all the time and lives in the
+# game's Lutris config): this one is loaded hidden at launch and kept in lpm's own files.
+# Actions: status (default; prints "game=<follow|on|off> global=<on|off>"), follow | on | off
+# (this game: follow the global setting, or force on / off), global-on | global-off. ---
+run_overlay() {
+  local action="${1:-status}"
+  case "${action}" in
+    status) echo "game=$(zgu_overlay_fps_pergame "${prefix_dir}") global=$(zgu_overlay_fps_global)" ;;
+    follow|on|off)
+      if ! zgu_overlay_fps_set_pergame "${prefix_dir}" "${action}"; then
+        zgu_cli_error "$(t game_tools.overlay_write_failed_cli "${target_name}")"
+        return 1
+      fi
+      zgu_cli_ok "$(t game_tools.overlay_set_cli "${target_name}" "${action}")"
+      ;;
+    global-on|global-off)
+      if ! zgu_overlay_fps_set_global "${action#global-}"; then
+        zgu_cli_error "$(t game_tools.overlay_write_failed_cli "${target_name}")"
+        return 1
+      fi
+      zgu_cli_ok "$(t game_tools.overlay_global_cli "${action#global-}")"
+      ;;
+    *)
+      zgu_cli_error "$(t game_tools.overlay_invalid_action_cli "${action}")"
+      return 1
+      ;;
+  esac
+}
+
+if [[ "${cli_tool}" = "overlay" ]]; then
+  run_overlay "${cli_exe_path}"
   exit $?
 fi
 

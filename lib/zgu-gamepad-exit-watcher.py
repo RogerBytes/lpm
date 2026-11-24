@@ -520,10 +520,11 @@ def main():
                 time.sleep(POLL_INTERVAL_SECONDS)
     finally:
         mouse.stop()
-        try:
-            os.remove(CMD_FILE)
-        except OSError:
-            pass
+        for leftover in (CMD_FILE, runtime_file("overlay-armed"), runtime_file("overlay-visible")):
+            try:
+                os.remove(leftover)  # nothing of this game session must stay for the next one
+            except OSError:
+                pass
         menu.close()
         if keyboard is not None:
             keyboard.close()

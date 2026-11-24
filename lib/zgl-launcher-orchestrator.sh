@@ -54,9 +54,10 @@ source "${script_dir}/zgu-lpm-paths.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 
 # --- Final Lutris command: the same as the one used in Exec= before the orchestrator ---
+overlay_flatpak_env=()
 launch_lutris() {
   if [[ "${version}" = "flatpak" ]]; then
-    exec env LUTRIS_SKIP_INIT=1 flatpak run net.lutris.Lutris "lutris:rungameid/${game_id}"
+    exec env LUTRIS_SKIP_INIT=1 flatpak run ${overlay_flatpak_env[@]+"${overlay_flatpak_env[@]}"} net.lutris.Lutris "lutris:rungameid/${game_id}"
   else
     exec env LUTRIS_SKIP_INIT=1 lutris "lutris:rungameid/${game_id}"
   fi
@@ -765,12 +766,37 @@ disown $! 2>/dev/null
 # the game is quit another way (undetectable from here), so without this cleanup an orphan
 # instance from a previous session would stay active next to the new one. Assumes one game
 # at a time (consistent with the rest of lpm).
+# --- FPS overlay (MangoHud) switchable from the LPM menu: loaded now but HIDDEN, only when it is
+# wanted for this game (per-game setting, else global), MangoHud is installed and the Lutris option
+# "Enable MangoHud" is not already on (that one shows it all the time). Environment of THIS launch
+# only: nothing is written to the prefix or to Lutris. The menu shows its entry only when
+# "overlay-armed" names this prefix. ---
+overlay_armed_file="${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-armed-$(id -u)"
+rm -f "${overlay_armed_file}" "${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-visible-$(id -u)" 2>/dev/null
+if [[ "${has_display}" = true ]] && zgu_overlay_fps_wanted "${game_dir}" \
+   && ! grep -Eq '^[[:space:]]+mangohud:[[:space:]]*true' "${lutris_game_yml:-/nonexistent}" 2>/dev/null; then
+  overlay_found=false
+  if [[ "${version}" = "flatpak" ]]; then
+    flatpak list --runtime --columns=application 2>/dev/null | grep -qi 'MangoHud' && overlay_found=true
+  else
+    command -v mangohud >/dev/null 2>&1 && overlay_found=true
+  fi
+  if [[ "${overlay_found}" = true ]]; then
+    # read_cfg: keep the user's own MangoHud.conf look; no_display: hidden at start; the toggle key
+    # is set explicitly because the menu sends it.
+    overlay_config="read_cfg,no_display,toggle_hud=Shift_R+F12"
+    export MANGOHUD=1 MANGOHUD_CONFIG="${overlay_config}"
+    overlay_flatpak_env=("--env=MANGOHUD=1" "--env=MANGOHUD_CONFIG=${overlay_config}")
+    printf '%s\n' "${game_dir}" > "${overlay_armed_file}" 2>/dev/null
+  fi
+fi
+
 if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
   LPM_MENU_TITLE="$(t launcher.menu_title)" LPM_MENU_HINT="$(t launcher.menu_hint)" \
     LPM_MENU_WINDOW="$(t launcher.menu_window)" LPM_MENU_ALTENTER="$(t launcher.menu_altenter)" \
     LPM_MENU_ESCAPE="$(t launcher.menu_escape)" LPM_MENU_QUIT="$(t launcher.menu_quit)" LPM_MENU_FORCE="$(t launcher.menu_force)" LPM_MENU_ALTF4_CONFIRM="$(t launcher.menu_altf4_confirm)" \
-    LPM_MENU_KEYBOARD="$(t launcher.menu_keyboard)" LPM_MENU_MOUSE="$(t launcher.menu_mouse)" LPM_MENU_ON="$(t launcher.menu_on)" LPM_MENU_OFF="$(t launcher.menu_off)" \
+    LPM_MENU_KEYBOARD="$(t launcher.menu_keyboard)" LPM_MENU_MOUSE="$(t launcher.menu_mouse)" LPM_MENU_OVERLAY="$(t launcher.menu_overlay)" LPM_MENU_VOLUME="$(t launcher.menu_volume)" LPM_MENU_MUTE="$(t launcher.menu_mute)" \
     LPM_KB_HINT="$(t launcher.kb_hint)" LPM_KB_HINT_KEYS="$(t launcher.kb_hint_keys)" LPM_KB_NOLAYOUT="$(t launcher.kb_nolayout)" \
     LPM_MENU_QUIT_CONFIRM="$(t launcher.menu_quit_confirm)" LPM_MENU_QUIT_CANCEL="$(t launcher.menu_quit_cancel)" \
     python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &

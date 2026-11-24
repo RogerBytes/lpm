@@ -176,7 +176,7 @@ try:
     ttool = next(w for w in walk(tpage) if type(w).__name__ == "SingleChoiceSelect")
     tgame._listbox.select_row(tgame._rows[tgame._slugs.index("mario")])
     pump(0.8)
-    runner_idx = ttool.n_items() - 3
+    runner_idx = ttool.n_items() - 4
     ttool.set_selected(runner_idx)
     pump(0.5)
     assert trunner.get_visible(), "runner selector hidden"

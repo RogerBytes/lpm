@@ -36,6 +36,7 @@ class ToolsPage:
         self._add_favorite_row()
         self._add_runner_row()
         self._add_mangohud_row()
+        self._add_overlay_rows()
         self._add_gamepad_rows()
         self._add_env_row()
         self._wire_visibility()
@@ -52,7 +53,7 @@ class ToolsPage:
         # in the dropdown, in the same order -- the two lists are decoupled (as for
         # "flatpak"/"native"/"reset" in page_lutris_version), so translating the display never
         # touches the arguments sent to bin/lpm.
-        self.tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud", "gamepad"]
+        self.tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud", "overlay", "gamepad"]
         tool_labels = [
             t("gui.tools.tool_winetricks"),
             t("gui.tools.tool_regedit"),
@@ -64,6 +65,7 @@ class ToolsPage:
             t("gui.tools.tool_env"),
             t("gui.tools.tool_runner"),
             t("gui.tools.tool_mangohud"),
+            t("gui.tools.tool_overlay"),
             t("gui.tools.tool_gamepad"),
         ]
         # Same list style as the game selector (scrolls inside the page): a classic dropdown
@@ -130,6 +132,62 @@ class ToolsPage:
         self.mangohud_row.set_sensitive(False)
         self.page.add_row(self.mangohud_row)
         self.mangohud_state = {"slug": None, "token": 0}
+
+    OVERLAY_CHOICES = ("follow", "on", "off")
+
+    def _add_overlay_rows(self):
+        # FPS overlay of the in-game menu: a global switch (saved at once when toggled, it is not
+        # tied to one game) and the choice for the selected game (applied by "Run").
+        self.overlay_global_row = Adw.SwitchRow(title=t("gui.tools.overlay_global_title"),
+                                                subtitle=t("gui.tools.overlay_global_subtitle"))
+        self.overlay_global_row.set_sensitive(False)
+        self.overlay_global_row.connect("notify::active", self._on_overlay_global_toggled)
+        self.page.add_row(self.overlay_global_row)
+        self.overlay_game_row = Adw.ComboRow(title=t("gui.tools.overlay_game_title"))
+        self.overlay_game_row.set_model(Gtk.StringList.new([
+            t("gui.tools.overlay_follow"), t("gui.tools.overlay_on"), t("gui.tools.overlay_off")]))
+        self.overlay_game_row.set_sensitive(False)
+        self.page.add_row(self.overlay_game_row)
+        self.overlay_state = {"slug": None, "token": 0, "loading": False}
+
+    def _on_overlay_global_toggled(self, row, _pspec):
+        if self.overlay_state["loading"] or not self.overlay_state["slug"]:
+            return
+        action = "global-on" if row.get_active() else "global-off"
+        backend.run_lpm_async(["tools", self.overlay_state["slug"], "overlay", action], on_done=lambda r: _run_on_main(
+            lambda: self.page.toast(t("gui.tools.overlay_done") if r.returncode == 0
+                                    else t("gui.common.command_failed", r.returncode))))
+
+    def _load_overlay(self):
+        slug = self.game_row.selected_slug()
+        self.overlay_state["token"] += 1
+        token = self.overlay_state["token"]
+        self.overlay_state["slug"] = None
+        self.overlay_game_row.set_sensitive(False)
+        self.overlay_global_row.set_sensitive(False)
+        if not slug or self.tool_row.get_selected() != self.tools.index("overlay"):
+            return
+
+        def done(result):
+            def apply():
+                if token != self.overlay_state["token"]:
+                    return
+                if result.returncode != 0:
+                    self.page.toast(t("gui.common.command_failed", result.returncode))
+                    return
+                values = dict(p.split("=", 1) for p in result.stdout.split() if "=" in p)
+                self.overlay_state["loading"] = True
+                self.overlay_global_row.set_active(values.get("global") == "on")
+                game = values.get("game", "follow")
+                self.overlay_game_row.set_selected(self.OVERLAY_CHOICES.index(game) if game in self.OVERLAY_CHOICES else 0)
+                self.overlay_state["loading"] = False
+                self.overlay_state["slug"] = slug
+                self.overlay_game_row.set_sensitive(True)
+                self.overlay_global_row.set_sensitive(True)
+
+            _run_on_main(apply)
+
+        backend.run_lpm_async(["tools", slug, "overlay", "status"], on_done=done)
 
     def _add_gamepad_rows(self):
         # Gamepad profile (AntiMicroX) -- visible only for the "gamepad" tool. Same pattern as
@@ -323,11 +381,14 @@ class ToolsPage:
         self.env_box.set_visible(idx == self.tools.index("env"))
         self.runner_row.set_visible(idx == self.tools.index("runner"))
         self.mangohud_row.set_visible(idx == self.tools.index("mangohud"))
+        self.overlay_global_row.set_visible(idx == self.tools.index("overlay"))
+        self.overlay_game_row.set_visible(idx == self.tools.index("overlay"))
         self.gamepad_row.set_visible(idx == self.tools.index("gamepad"))
         self.gamepad_edit_row.set_visible(idx == self.tools.index("gamepad"))
         self.page.run_button.set_visible(idx != self.tools.index("gamepad"))
         self._load_env()
         self._load_mangohud()
+        self._load_overlay()
         self._load_gamepad()
 
     # Reset after a successful run and when leaving the page, like "install an .exe"
@@ -359,6 +420,7 @@ class ToolsPage:
 
     # Message shown after a successful run, for the tools that have their own.
     _DONE_MESSAGES = {"runner": "gui.tools.runner_done", "mangohud": "gui.tools.mangohud_done",
+                      "overlay": "gui.tools.overlay_done",
                       "env": "gui.tools.env_done"}
 
     def _tool_arguments(self, tool, slug):
@@ -380,6 +442,11 @@ class ToolsPage:
                 self.page.toast(t("gui.common.command_failed", "?"))
                 return None
             return ["on" if self.mangohud_row.get_active() else "off"]
+        if tool == "overlay":
+            if self.overlay_state["slug"] != slug:
+                self.page.toast(t("gui.common.command_failed", "?"))
+                return None
+            return [self.OVERLAY_CHOICES[self.overlay_game_row.get_selected()]]
         if tool == "env":
             return self._env_arguments(slug)
         return []

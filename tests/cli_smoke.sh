@@ -345,6 +345,17 @@ expect "tools mangohud off: key removed" bash -c '! grep -q mangohud "$1"' _ "${
 check "tools mangohud off when already off" 0 'MangoHud disabled' tools mario mangohud off
 check "tools mangohud: invalid action" 1 'unknown MangoHud action' tools mario mangohud maybe
 
+# FPS overlay of the in-game menu (lpm's own files, not the Lutris YAML)
+check "tools overlay status (default)" 0 '^game=follow global=on$' tools mario overlay status
+check "tools overlay off" 0 'off' tools mario overlay off
+check "tools overlay status (game off)" 0 '^game=off global=on$' tools mario overlay
+check "tools overlay global-off" 0 'off' tools mario overlay global-off
+check "tools overlay status (global off)" 0 '^game=off global=off$' tools mario overlay status
+check "tools overlay follow" 0 'follow' tools mario overlay follow
+check "tools overlay global-on" 0 'on' tools mario overlay global-on
+check "tools overlay status (back to default)" 0 '^game=follow global=on$' tools mario overlay status
+check "tools overlay: invalid action" 1 'unknown overlay action' tools mario overlay maybe
+
 # Gamepad: Lutris option system.antimicro_config -> profile in <prefix>/lpm/gamepad/
 gp_yml="${HOME}/.config/lutris/games/mario-1.yml"
 gp_prof="${HOME}/Games/mario/lpm/gamepad/lpm-gamepad.gamecontroller.amgp"

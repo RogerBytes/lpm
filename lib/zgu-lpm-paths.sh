@@ -8,7 +8,7 @@
 #   lpm/launcher.yml            LPM Launcher entries
 #   lpm/settings/               loading-screen switches and settings
 #       no-loadingscreen, keep-focus, max-wait-s, extra-loading-ms,
-#       loading-message.txt, ignore-windows.txt
+#       loading-message.txt, ignore-windows.txt, overlay-fps (on | off; absent = follow the global setting)
 #   lpm/scripts/                wine trace wrapper + the game's pre/post-launch scripts
 #   lpm/gamepad/                AntiMicroX profile
 #   lpm/images/splash/          loading-screen images
@@ -37,6 +37,7 @@ zgu_lpm_rel() {
     extra_loading)    new="settings/extra-loading-ms";  legacy="lpm-extra-loading-ms" ;;
     loading_message)  new="settings/loading-message.txt"; legacy="lpm-loading-message.txt" ;;
     ignore_windows)   new="settings/ignore-windows.txt"; legacy="lpm-ignore-windows.txt" ;;
+    overlay_fps)      new="settings/overlay-fps";       legacy="lpm-overlay-fps" ;;
     scripts)          new="scripts";                    legacy="scripts" ;;
     gamepad)          new="gamepad";                    legacy="lpm_gamepad" ;;
     splash)           new="images/splash";              legacy="splash" ;;
@@ -164,4 +165,67 @@ zgu_lpm_fix_yml_paths() {
     -e "s|${pat_sc}|${esc}/${ZGU_LPM_DIRNAME}/$(zgu_lpm_rel scripts new)/|g" \
     "${yml}" 2>/dev/null
   return 0
+}
+
+
+# --- FPS overlay (MangoHud) shown / hidden from the in-game LPM menu ---
+# Global setting: key "overlay_fps" (on | off, default on) of <XDG config>/lpm/menu.conf.
+# Per game: "<prefix>/lpm/settings/overlay-fps" holding "on" or "off"; no file = follow the global
+# setting. The game is started with MangoHud loaded but HIDDEN only when the result is "on".
+
+zgu_overlay_fps_conf() {
+  printf '%s/lpm/menu.conf' "${XDG_CONFIG_HOME:-${HOME}/.config}"
+}
+
+# zgu_overlay_fps_global: prints "on" or "off".
+zgu_overlay_fps_global() {
+  local conf value
+  conf="$(zgu_overlay_fps_conf)"
+  value="$(sed -n 's/^[[:space:]]*overlay_fps[[:space:]]*=[[:space:]]*//p' "${conf}" 2>/dev/null | tail -n 1 | tr -d '[:space:]')"
+  case "${value,,}" in
+    off|0|no|false) printf 'off' ;;
+    *) printf 'on' ;;
+  esac
+}
+
+# zgu_overlay_fps_set_global <on|off>: writes the key, keeping the other lines of menu.conf.
+zgu_overlay_fps_set_global() {
+  local conf tmp
+  conf="$(zgu_overlay_fps_conf)"
+  mkdir -p "$(dirname "${conf}")" || return 1
+  tmp="$(mktemp "${conf}.XXXXXX")" || return 1
+  { grep -v -E '^[[:space:]]*overlay_fps[[:space:]]*=' "${conf}" 2>/dev/null; printf 'overlay_fps=%s\n' "$1"; } > "${tmp}" \
+    && mv -f "${tmp}" "${conf}"
+}
+
+# zgu_overlay_fps_pergame <prefix>: prints "follow", "on" or "off".
+zgu_overlay_fps_pergame() {
+  local file value
+  file="$(zgu_lpm_find "$1" overlay_fps)"
+  value="$(tr -d '[:space:]' < "${file}" 2>/dev/null)"
+  case "${value,,}" in
+    on|off) printf '%s' "${value,,}" ;;
+    *) printf 'follow' ;;
+  esac
+}
+
+# zgu_overlay_fps_set_pergame <prefix> <follow|on|off>
+zgu_overlay_fps_set_pergame() {
+  local file
+  file="$(zgu_lpm_path "$1" overlay_fps)"
+  if [[ "$2" = "follow" ]]; then
+    zgu_lpm_remove "$1" overlay_fps
+    zgu_lpm_prune "$1"
+    return 0
+  fi
+  mkdir -p "$(dirname "${file}")" || return 1
+  printf '%s\n' "$2" > "${file}"
+}
+
+# zgu_overlay_fps_wanted <prefix>: exit status 0 when the overlay must be loaded for this game.
+zgu_overlay_fps_wanted() {
+  local game
+  game="$(zgu_overlay_fps_pergame "$1")"
+  [[ "${game}" = "follow" ]] && game="$(zgu_overlay_fps_global)"
+  [[ "${game}" = "on" ]]
 }

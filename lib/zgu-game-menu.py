@@ -57,7 +57,10 @@ from zgu_common import (
     close_keyboard_if_running,
     GAMEPAD_AXIS_THRESHOLD,
     GAMEPAD_POLL_MS,
+    SDL_CONTROLLER_AXIS_LEFTX,
     SDL_CONTROLLER_AXIS_LEFTY,
+    SDL_CONTROLLER_BUTTON_DPAD_LEFT,
+    SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
     SDL_CONTROLLER_BUTTON_A,
     SDL_CONTROLLER_BUTTON_B,
     SDL_CONTROLLER_BUTTON_DPAD_DOWN,
@@ -74,6 +77,8 @@ try:
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gtk, Gdk, GLib
     from zgu_overlay import place_on_x11, pointer_monitor, use_veil, xdotool_path
+    import zgu_audio
+    from zgu_inject import Injector
 except Exception as exc:  # pragma: no cover - system dependency missing
     sys.stderr.write("zgu-game-menu: GTK4/PyGObject unavailable (%s)\n" % exc)
     sys.exit(1)
@@ -123,11 +128,44 @@ def quit_game():
     close_prefix_game(PREFIX_DIR)
 
 
-def toggle_gamepad_mouse():
+def gamepad_mouse_on():
+    return os.path.exists(runtime_file("gamepad-mouse"))
+
+
+def toggle_gamepad_mouse(_new_state=None):
     """Asks the watcher (zgu-gamepad-exit-watcher.py) to turn the gamepad mouse on / off."""
     try:
         with open(runtime_file("gamepad-cmd"), "w", encoding="utf-8") as f:
             f.write("mouse-toggle\n")
+    except OSError:
+        pass
+
+
+# --- MangoHud overlay. The launcher (zgl-launcher-orchestrator.sh) starts the game with MangoHud
+# loaded but HIDDEN and writes the prefix path in "overlay-armed"; only then is the entry shown.
+# MangoHud's own toggle key is Shift_R+F12 (the launcher sets it explicitly). ---
+KEY_RIGHTSHIFT, KEY_F12 = 54, 88
+
+
+def overlay_armed():
+    try:
+        with open(runtime_file("overlay-armed"), encoding="utf-8") as f:
+            return f.read().strip().rstrip("/") == PREFIX_DIR.rstrip("/")
+    except OSError:
+        return False
+
+
+def overlay_visible():
+    return os.path.exists(runtime_file("overlay-visible"))
+
+
+def toggle_overlay(new_state):
+    try:
+        Injector(SESSION_KIND).tap([KEY_RIGHTSHIFT, KEY_F12])
+        if new_state:
+            open(runtime_file("overlay-visible"), "w").close()
+        else:
+            os.remove(runtime_file("overlay-visible"))
     except OSError:
         pass
 
@@ -158,7 +196,7 @@ def build_menu():
         ("F11", "key", "f11"),
     ]
     force_menu = [
-        (label("QUIT_CONFIRM", "Yes, force quit the game"), "call", quit_game),
+        (label("QUIT_CONFIRM", "Yes, force quit the game"), "call", quit_game, {"danger": True}),
         (label("QUIT_CANCEL", "No, back"), "back", None),
     ]
     altf4_menu = [
@@ -169,17 +207,22 @@ def build_menu():
     quit_menu = [
         (label("ESCAPE", "Esc"), "key", "escape"),
         ("Alt+F4", "submenu", altf4_menu),
-        (label("FORCE", "Force quit the game"), "submenu", force_menu),
+        (label("FORCE", "Force quit the game"), "submenu", force_menu, {"danger": True}),
     ]
-    mouse_on = os.path.exists(runtime_file("gamepad-mouse"))
-    mouse_label = "%s: %s" % (label("MOUSE", "Gamepad mouse"),
-                              label("ON", "on") if mouse_on else label("OFF", "off"))
-    return [
+    root = [
         (label("WINDOW", "Window"), "submenu", window_menu),
         (label("KEYBOARD", "Virtual keyboard"), "call", start_keyboard),
-        (mouse_label, "call", toggle_gamepad_mouse),
-        (label("QUIT", "Quit the game"), "submenu", quit_menu),
+        (label("MOUSE", "Gamepad mouse"), "switch", (gamepad_mouse_on, toggle_gamepad_mouse)),
     ]
+    if overlay_armed():
+        root.append((label("OVERLAY", "FPS overlay"), "switch", (overlay_visible, toggle_overlay)))
+    if zgu_audio.available() and zgu_audio.get_volume() is not None:
+        root.append((label("VOLUME", "Volume"), "slider",
+                     (lambda: zgu_audio.get_volume() or 0, zgu_audio.set_volume)))
+        root.append((label("MUTE", "Mute"), "switch", (zgu_audio.get_mute, zgu_audio.set_mute)))
+    # Quit goes last, set apart by a thin line
+    root.append((label("QUIT", "Quit the game"), "submenu", quit_menu, {"sep": True}))
+    return root
 
 
 CSS = b"""
@@ -216,6 +259,11 @@ list.lpm-menu-list { background-color: transparent; }
 list.lpm-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color: transparent; color: #ffffff; border-radius: 10px; }
 list.lpm-menu-list row:selected { background-color: #3a6ea5; color: #ffffff; }
 .lpm-menu-entry { font-size: 24px; color: #ffffff; }
+.lpm-menu-chevron { font-size: 28px; color: rgba(255, 255, 255, 0.55); }
+.lpm-menu-pct { font-size: 20px; color: #ffffff; min-width: 64px; }
+list.lpm-menu-list row.lpm-sep { margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15); border-radius: 0 0 10px 10px; padding-top: 14px; }
+list.lpm-menu-list row.lpm-danger .lpm-menu-entry { color: #e57373; }
+list.lpm-menu-list row:selected .lpm-menu-chevron { color: #ffffff; }
 """
 
 
@@ -307,15 +355,72 @@ class MenuWindow(Gtk.Window):
             nxt = child.get_next_sibling()
             self.listbox.remove(child)
             child = nxt
-        for entry_label, kind, _value in self.entries:
-            text = entry_label + (" ▸" if kind == "submenu" else "")
-            lbl = Gtk.Label(label=text, xalign=0)
+        self.rows = []
+        for entry in self.entries:
+            entry_label, kind, value = entry[:3]
+            opts = entry[3] if len(entry) > 3 else {}
+            row = Gtk.ListBoxRow()
+            if opts.get("sep"):
+                row.add_css_class("lpm-sep")
+            if opts.get("danger"):
+                row.add_css_class("lpm-danger")
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+            lbl = Gtk.Label(label=entry_label, xalign=0)
             lbl.add_css_class("lpm-menu-entry")
-            self.listbox.append(lbl)
+            lbl.set_hexpand(True)
+            box.append(lbl)
+            info = {}
+            if kind == "submenu":
+                chevron = Gtk.Label(label="›")
+                chevron.add_css_class("lpm-menu-chevron")
+                box.append(chevron)
+            elif kind == "switch":
+                switch = Gtk.Switch()
+                switch.set_valign(Gtk.Align.CENTER)
+                switch.set_can_target(False)   # the row handles the click
+                switch.set_focusable(False)
+                info["on"] = bool(value[0]())
+                switch.set_active(info["on"])
+                info["switch"] = switch
+                box.append(switch)
+            elif kind == "slider":
+                scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, zgu_audio.MAXIMUM, zgu_audio.STEP)
+                scale.set_draw_value(False)
+                scale.set_size_request(220, -1)
+                scale.set_valign(Gtk.Align.CENTER)
+                scale.set_focusable(False)
+                pct = Gtk.Label(label="")
+                pct.add_css_class("lpm-menu-pct")
+                info.update(scale=scale, pct=pct, value=int(value[0]()))
+                scale.set_value(info["value"])
+                pct.set_text("%d %%" % info["value"])
+                scale.connect("value-changed", self.on_scale_changed, len(self.rows))
+                box.append(scale)
+                box.append(pct)
+            row.set_child(box)
+            self.listbox.append(row)
+            self.rows.append(info)
         row = self.listbox.get_row_at_index(max(0, min(select, len(self.entries) - 1)))
         if row:
             self.listbox.select_row(row)
             row.grab_focus()
+
+    def on_scale_changed(self, scale, idx):
+        info = self.rows[idx]
+        new = int(round(scale.get_value()))
+        if new == info.get("value"):
+            return  # programmatic update, nothing to do
+        info["value"] = new
+        info["pct"].set_text("%d %%" % new)
+        self.entries[idx][2][1](new)
+
+    def adjust(self, step):
+        """Left / right on the selected row: moves a slider."""
+        idx = self.selected_index()
+        if self.entries[idx][1] != "slider":
+            return
+        scale = self.rows[idx]["scale"]
+        scale.set_value(max(0, min(zgu_audio.MAXIMUM, scale.get_value() + step * zgu_audio.STEP)))
 
     def selected_index(self):
         row = self.listbox.get_selected_row()
@@ -328,8 +433,15 @@ class MenuWindow(Gtk.Window):
         row.grab_focus()
 
     def activate_index(self, idx):
-        _label, kind, value = self.entries[idx]
-        if kind == "submenu":
+        _label, kind, value = self.entries[idx][:3]
+        if kind == "switch":
+            info = self.rows[idx]
+            info["on"] = not info["on"]
+            info["switch"].set_active(info["on"])
+            value[1](info["on"])      # the menu stays open
+        elif kind == "slider":
+            pass                      # left / right (or a click on the bar) change it
+        elif kind == "submenu":
             self.stack.append((self.entries, self.title_label.get_text(), idx))
             self.title_label.set_text(_label)
             self.entries = value
@@ -359,6 +471,10 @@ class MenuWindow(Gtk.Window):
             self.move(-1)
         elif keyval in (Gdk.KEY_Down, Gdk.KEY_KP_Down):
             self.move(1)
+        elif keyval in (Gdk.KEY_Left, Gdk.KEY_KP_Left):
+            self.adjust(-1)
+        elif keyval in (Gdk.KEY_Right, Gdk.KEY_KP_Right):
+            self.adjust(1)
         elif keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
             self.activate_index(self.selected_index())
         elif keyval == Gdk.KEY_Escape:
@@ -433,7 +549,7 @@ def tick_gamepad(win):
         return True
     _sdl.SDL_GameControllerUpdate()
     for pad in _pads:
-        state = _prev.setdefault(pad, {"a": 1, "b": 1, "dir": 0})  # held at start: ignored
+        state = _prev.setdefault(pad, {"a": 1, "b": 1, "dir": 0, "h": 0, "hnext": 0.0})  # held at start: ignored
         a = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_A)
         b = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_B)
         up = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP)
@@ -442,6 +558,18 @@ def tick_gamepad(win):
         direction = -1 if (up or axis < -GAMEPAD_AXIS_THRESHOLD) else (1 if (down or axis > GAMEPAD_AXIS_THRESHOLD) else 0)
         if direction and direction != state["dir"]:
             win.move(direction)
+        left = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT)
+        right = _sdl.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
+        axis_x = _sdl.SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX)
+        horizontal = -1 if (left or axis_x < -GAMEPAD_AXIS_THRESHOLD) else (1 if (right or axis_x > GAMEPAD_AXIS_THRESHOLD) else 0)
+        if horizontal != state["h"]:
+            state["h"] = horizontal
+            state["hnext"] = now + 0.40       # a held direction repeats after 0.4 s
+            if horizontal:
+                win.adjust(horizontal)
+        elif horizontal and now >= state["hnext"]:
+            state["hnext"] = now + 0.10
+            win.adjust(horizontal)
         if a and not state["a"]:
             win.gamepad_validate()
         if b and not state["b"]:

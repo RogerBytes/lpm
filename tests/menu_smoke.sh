@@ -68,7 +68,7 @@ check "menu: Quit > Alt+F4 asks a confirmation, then sends it" $'exited\nkey alt
 check "menu: Alt+F4 > No keeps the menu open, nothing sent" "running" Down Down Down Return Down Return Down Return
 check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Down Down Return Down Down Return Down Return
 check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Down Down Return Down Down Return Return
-check "menu: Gamepad mouse asks the watcher to toggle it" $'exited\ncmd: mouse-toggle' Down Down Return
+check "menu: Gamepad mouse is a switch: asks the watcher to toggle it, menu stays open" $'running\ncmd: mouse-toggle' Down Down Return
 FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down
 OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Return
 LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
