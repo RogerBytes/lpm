@@ -486,6 +486,21 @@ def on_activate(application):
     GLib.timeout_add(1000, check_game)
 
 
+def single_instance():
+    """One menu at a time; the lock also tells the gamepad mouse to stay quiet while the menu is open."""
+    import fcntl
+    base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    handle = open(os.path.join(base, "lpm-game-menu.lock-%d" % os.getuid()), "w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return None
+    return handle
+
+
+_lock = single_instance()
+if _lock is None:
+    sys.exit(0)
 app = Gtk.Application(application_id="org.lpm.GameMenu")
 app.connect("activate", on_activate)
 sys.exit(app.run([sys.argv[0]]))

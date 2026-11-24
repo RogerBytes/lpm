@@ -42,9 +42,13 @@ def on_activate(application):
     card.add_css_class("lpm-toast-card")
     card.append(Gtk.Label(label=text))
     win.set_child(card)
-    win.present()
     if kind == "x11":
-        GLib.timeout_add(120, place_on_x11, win, TITLE, "topright")
+        # invisible until it has been moved to the corner (no flash at the default position)
+        win.set_opacity(0.0)
+        win.present()
+        GLib.timeout_add(30, place_on_x11, win, TITLE, "topright", 0, lambda: win.set_opacity(1.0), 30, 40)
+    else:
+        win.present()
     GLib.timeout_add(int(SHOW_SECONDS * 1000), application.quit)
 
 

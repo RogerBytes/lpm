@@ -315,14 +315,22 @@ def _mouse_suspend_check():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     mouse = mod.GamepadMouse(None, None, 1.0, 0.016)
-    before = mouse.keyboard_open(1.0)
+    before = mouse.other_ui_open(1.0)
     handle = open(os.path.join(run, "lpm-virtual-keyboard.lock-%d" % os.getuid()), "w")
     fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    during = mouse.keyboard_open(2.0)
+    during = mouse.other_ui_open(2.0)
     handle.close()
-    after = mouse.keyboard_open(3.0)
-    good = (not before) and during and (not after)
-    print(("OK: " if good else "FAIL: ") + "mouse: suspended while the virtual keyboard is open")
+    after = mouse.other_ui_open(3.0)
+    menu = open(os.path.join(run, "lpm-game-menu.lock-%d" % os.getuid()), "w")
+    fcntl.flock(menu, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    menu_during = mouse.other_ui_open(4.0)
+    menu.close()
+    menu_after = mouse.other_ui_open(5.0)
+    left_right = (mod.GamepadMouse.logical({"R2": True}, mod.BTN_LEFT) and mod.GamepadMouse.logical({"L2": True}, mod.BTN_RIGHT)
+                  and not mod.GamepadMouse.logical({"L2": True}, mod.BTN_LEFT))
+    print(("OK: " if left_right else "FAIL: ") + "mouse: R2 = left click, L2 = right click")
+    good = (not before) and during and (not after) and menu_during and (not menu_after) and left_right
+    print(("OK: " if good else "FAIL: ") + "mouse: suspended while the virtual keyboard or the menu is open")
     return good
 
 

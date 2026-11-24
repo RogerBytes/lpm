@@ -96,15 +96,18 @@ class GamepadMouse:
     def _axis(self, pad, code):
         return self.sdl.SDL_GameControllerGetAxis(pad, code) / 32767.0
 
-    def keyboard_open(self, now):
-        """True while the virtual keyboard runs (it holds a lock for its whole life): the mouse is
-        suspended then. Checked ten times a second at most."""
+    def other_ui_open(self, now):
+        """True while the virtual keyboard or the LPM menu runs (each holds a lock for its whole
+        life): the mouse is suspended then, so simulated clicks cannot close them. Checked ten
+        times a second at most."""
         if now >= self.next_kb_check:
             self.next_kb_check = now + 0.1
             base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-            path = os.path.join(base, "lpm-virtual-keyboard.lock-%d" % os.getuid())
             self.kb_open = False
-            if os.path.exists(path):
+            for name in ("lpm-virtual-keyboard.lock-%d", "lpm-game-menu.lock-%d"):
+                path = os.path.join(base, name % os.getuid())
+                if not os.path.exists(path):
+                    continue
                 try:
                     with open(path, "r") as handle:
                         try:
@@ -138,7 +141,11 @@ class GamepadMouse:
                     and self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.9
                     and self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.9):
                 hold = True
-        if self.keyboard_open(now):  # virtual keyboard open: the keyboard alone reacts
+        pressed["L2"] = any(self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.5 for pad in self.pads)
+        pressed["R2"] = any(self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.5 for pad in self.pads)
+        if pressed[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] and pressed[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER]:
+            hold = True  # L1 + R1 together are part of the LPM menu / window-switch combos: no click
+        if self.other_ui_open(now):  # keyboard or menu open: it alone reacts
             self.release_all()
             self.rest_x = self.rest_y = 0.0
             self.down.update(pressed)  # a button still held when the keyboard closes is not a click
@@ -156,10 +163,11 @@ class GamepadMouse:
             self.rest_y -= iy
             self.inj.move(ix, iy)
 
-        for code, mouse_button in ((SDL_CONTROLLER_BUTTON_A, BTN_LEFT), (SDL_CONTROLLER_BUTTON_B, BTN_RIGHT),
-                                   (SDL_CONTROLLER_BUTTON_Y, BTN_MIDDLE)):
-            if pressed[code] != self.down.get(code, False):
-                self.inj.button(mouse_button, pressed[code])
+        for mouse_button, was, now_down in ((BTN_LEFT,) + tuple(self.logical(d, BTN_LEFT) for d in (self.down, pressed)),
+                                            (BTN_RIGHT,) + tuple(self.logical(d, BTN_RIGHT) for d in (self.down, pressed)),
+                                            (BTN_MIDDLE,) + tuple(self.logical(d, BTN_MIDDLE) for d in (self.down, pressed))):
+            if was != now_down:
+                self.inj.button(mouse_button, now_down)
         for code, key in ((SDL_CONTROLLER_BUTTON_X, KEY_ENTER), (SDL_CONTROLLER_BUTTON_START, KEY_ESC)):
             if pressed[code] and not self.down.get(code, False):
                 self.inj.tap([key])
@@ -173,11 +181,19 @@ class GamepadMouse:
                     self.wheel_next[code] = now + WHEEL_REPEAT_S
         self.down = dict(pressed)
 
+    @staticmethod
+    def logical(state, mouse_button):
+        """Is this mouse button down, given the pad buttons: left = A or R2, right = B or L2, middle = Y."""
+        if mouse_button == BTN_LEFT:
+            return bool(state.get(SDL_CONTROLLER_BUTTON_A) or state.get("R2"))
+        if mouse_button == BTN_RIGHT:
+            return bool(state.get(SDL_CONTROLLER_BUTTON_B) or state.get("L2"))
+        return bool(state.get(SDL_CONTROLLER_BUTTON_Y))
+
     def release_all(self):
         """Release any mouse button this process still holds down (also on exit)."""
-        for code, mouse_button in ((SDL_CONTROLLER_BUTTON_A, BTN_LEFT), (SDL_CONTROLLER_BUTTON_B, BTN_RIGHT),
-                                   (SDL_CONTROLLER_BUTTON_Y, BTN_MIDDLE)):
-            if self.down.get(code):
+        for mouse_button in (BTN_LEFT, BTN_RIGHT, BTN_MIDDLE):
+            if self.logical(self.down, mouse_button):
                 self.inj.button(mouse_button, False)
         self.down = {}
 

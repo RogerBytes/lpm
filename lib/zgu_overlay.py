@@ -60,11 +60,13 @@ def pointer_monitor(session_kind):
     return None
 
 
-def place_on_x11(win, title, where="center", attempt=0):
+def place_on_x11(win, title, where="center", attempt=0, done=None, retry_ms=200, max_attempts=5):
     """Move a small window to the middle ("center") or the bottom middle ("bottom") of the monitor
     under the pointer, with xdotool. Retries a few times while the window is not mapped yet."""
     xdotool = xdotool_path()
     if not xdotool:
+        if done:
+            done()
         return False
     try:
         found = subprocess.run([xdotool, "search", "--onlyvisible", "--pid", str(os.getpid()),
@@ -72,14 +74,18 @@ def place_on_x11(win, title, where="center", attempt=0):
                                text=True, timeout=3).stdout.split()
         width, height = win.get_width(), win.get_height()
         if not found or width <= 1 or height <= 1:
-            if attempt < 5:
-                GLib.timeout_add(200, place_on_x11, win, title, where, attempt + 1)
+            if attempt < max_attempts:
+                GLib.timeout_add(retry_ms, place_on_x11, win, title, where, attempt + 1, done, retry_ms, max_attempts)
+            elif done:
+                done()
             return False
         monitor = pointer_monitor("x11")
         monitors = Gdk.Display.get_default().get_monitors()
         if monitor is None and monitors.get_n_items():
             monitor = monitors.get_item(0)
         if monitor is None:
+            if done:
+                done()
             return False
         geo = monitor.get_geometry()
         x = geo.x + (geo.width - width) // 2
@@ -92,4 +98,6 @@ def place_on_x11(win, title, where="center", attempt=0):
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
     except Exception:
         pass
+    if done:
+        done()
     return False
