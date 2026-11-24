@@ -58,7 +58,8 @@ check() {  # name, expected output (state + keys, one per line), keys... (env: F
   if [ "${got}" = "${want}" ]; then echo "OK: ${name}"; else echo "FAILED: ${name}"; echo "  got:      ${got//$'\n'/ | }"; echo "  expected: ${want//$'\n'/ | }"; status=1; fi
 }
 check "menu: Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
-check "menu: Window > F11" $'exited\nkey F11' Return Down Return
+check "menu: Window > F4 (alone)" $'exited\nkey F4' Return Down Return
+check "menu: Window > F11" $'exited\nkey F11' Return Down Down Return
 check "menu: Quit > Esc is sent and the menu closes" $'exited\nkey Escape' Down Return Return
 check "menu: Quit > Alt+F4 asks a confirmation, then sends it" $'exited\nkey alt+F4' Down Return Down Return Return
 check "menu: Alt+F4 > No keeps the menu open, nothing sent" "running" Down Return Down Return Down Return

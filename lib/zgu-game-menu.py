@@ -93,6 +93,7 @@ def label(name, default):
 KEYS = {
     "alt+tab": ("alt+Tab", ["56:1", "15:1", "15:0", "56:0"]),
     "alt+enter": ("alt+Return", ["56:1", "28:1", "28:0", "56:0"]),
+    "f4": ("F4", ["62:1", "62:0"]),
     "alt+f4": ("alt+F4", ["56:1", "62:1", "62:0", "56:0"]),
     "f11": ("F11", ["87:1", "87:0"]),
     "escape": ("Escape", ["1:1", "1:0"]),
@@ -134,6 +135,7 @@ def build_menu():
     # again (the game may need more than one try); "call" = run a function, menu stays open.
     window_menu = [
         (label("ALTENTER", "Alt+Enter"), "key", "alt+enter"),
+        ("F4", "key", "f4"),
         ("F11", "key", "f11"),
     ]
     force_menu = [
