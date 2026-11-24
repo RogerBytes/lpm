@@ -73,8 +73,8 @@ When the LPM Launcher is enabled, two small watchers run for the whole play sess
 
 | Entry | Does |
 |---|---|
-| Window ▸ | Alt+Tab, Alt+Enter, F4, F11, Esc: the key is sent to the game once the menu is closed. |
-| Quit the game | Asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). |
+| Window ▸ | Alt+Enter, F11: the key is sent to the game once the menu is closed. (Alt+Tab stays the hold combo above.) |
+| Quit the game ▸ | F4, Esc (sent to the game), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). |
 
 The shortcuts are the same for every game and can be changed in `~/.config/lpm/menu.conf` (or `$XDG_CONFIG_HOME/lpm/menu.conf`):
 
@@ -83,7 +83,7 @@ gamepad_combo=L1,R1,L2,R2,L3,R3
 keyboard_hotkey=ctrl+shift+m
 ```
 
-`keyboard_hotkey=none` turns the keyboard hotkey off. The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
+`keyboard_hotkey=none` turns the keyboard hotkey off. The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. The GUI offers to fix that at startup (one system password prompt, then log out and back in): it adds the user to the `input` group. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
 
 ## Output
 

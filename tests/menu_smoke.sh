@@ -38,9 +38,11 @@ check() {  # name, expected output (state + keys, one per line), keys...
   got="$(PATH="${work}/bin:${PATH}" timeout -s KILL 60 xvfb-run -a dbus-run-session -- "${work}/driver.sh" "$@" 2>/dev/null | grep -vE 'dbus-daemon|^$')"
   if [ "${got}" = "${want}" ]; then echo "OK: ${name}"; else echo "FAILED: ${name}"; echo "  got:      ${got//$'\n'/ | }"; echo "  expected: ${want//$'\n'/ | }"; status=1; fi
 }
-check "menu: Window > Alt+Tab" $'exited\nkey alt+Tab' Return Return
-check "menu: Window > F11" $'exited\nkey F11' Return Down Down Down Return
-check "menu: Quit asks for a confirmation (back keeps the menu open)" "running" Down Return Down Return
-check "menu: Quit > confirm closes the menu" "exited" Down Return Return
+check "menu: Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
+check "menu: Window > F11" $'exited\nkey F11' Return Down Return
+check "menu: Quit > F4" $'exited\nkey F4' Down Return Return
+check "menu: Quit > Esc" $'exited\nkey Escape' Down Return Down Return
+check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Return Down Down Return Down Return
+check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Return Down Down Return Return
 check "menu: Escape goes back, then closes" "exited" Return Escape Escape
 exit "${status}"

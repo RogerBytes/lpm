@@ -18,8 +18,9 @@
 #
 # Keys are sent AFTER the menu window is closed (short delay, so the focus is back on the game):
 # xdotool on X11, ydotool on Wayland. Same tools as zgu-gamepad-alttab-watcher.py.
-# "Quit the game" asks for a confirmation, then stops the wineserver of this game's prefix
-# (zgu_common.close_prefix_game), exactly what the old quit combo did.
+# "Quit the game" offers F4 and Esc (the game's own way out) and "Force quit", which asks for a
+# confirmation then stops the wineserver of this game's prefix (zgu_common.close_prefix_game),
+# exactly what the old quit combo did.
 #
 # Labels come from the environment (LPM_MENU_*, translated by the orchestrator); the English
 # text below is the fallback.
@@ -106,16 +107,20 @@ def quit_game():
 # --- The menu. Entry = (label, kind, value): kind "key" (value = name in KEYS), "call"
 # (value = function), "submenu" (value = list of entries). Add a feature = add an entry.
 def build_menu():
+    # Alt+Tab is deliberately NOT here: it stays the L1+L2+R1+R2+R3 hold + D-pad left/right
+    # (zgu-gamepad-alttab-watcher.py).
     window_menu = [
-        ("Alt+Tab", "key", "alt+tab"),
         (label("ALTENTER", "Alt+Enter"), "key", "alt+enter"),
-        ("F4", "key", "f4"),
         ("F11", "key", "f11"),
-        (label("ESCAPE", "Esc"), "key", "escape"),
     ]
-    quit_menu = [
+    force_menu = [
         (label("QUIT_CONFIRM", "Yes, force quit the game"), "call", quit_game),
         (label("QUIT_CANCEL", "No, back"), "back", None),
+    ]
+    quit_menu = [
+        ("F4", "key", "f4"),
+        (label("ESCAPE", "Esc"), "key", "escape"),
+        (label("FORCE", "Force quit the game"), "submenu", force_menu),
     ]
     return [
         (label("WINDOW", "Window"), "submenu", window_menu),

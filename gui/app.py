@@ -6,8 +6,9 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
+import inputaccess
 import operations
 from mainwindow import MainWindow
 
@@ -71,6 +72,7 @@ class LpmApp(Adw.Application):
     def do_activate(self):
         win = self._main_window()
         win.present()
+        GLib.idle_add(inputaccess.maybe_offer, win)  # keyboard hotkey of the in-game menu
         running = operations.progress_window()
         if running is not None:
             running.present()
