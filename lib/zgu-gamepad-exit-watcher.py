@@ -146,7 +146,7 @@ def parse_combo(text):
 
 MENU_CONF = load_menu_conf()
 COMBO_BUTTONS, COMBO_AXES = parse_combo(MENU_CONF["gamepad_combo"])
-KEYBOARD_HOTKEY = parse_keyboard_hotkey(MENU_CONF["keyboard_hotkey"])
+KEYBOARD_HOTKEY = parse_keyboard_hotkey(MENU_CONF["keyboard_hotkey"], resolve=True)
 AXIS_PULL_THRESHOLD = int(32767 * 0.9)  # trigger counts as pressed beyond 90% of its travel
 POLL_INTERVAL_SECONDS = 0.05
 # Re-scan connected gamepads about once per second (not on every 50ms tick); see the
@@ -207,6 +207,7 @@ class KeyboardHotkey:
         self.down = set()
         self.next_scan = 0.0
         self.refused = set()
+        self.logged_codes = set()
         self.reported_none = False
 
     def _event_paths(self):
@@ -262,6 +263,9 @@ class KeyboardHotkey:
         for path in list(self.fds):
             self._drop(path)
 
+    def _mods_down(self):
+        return all(any(c in self.down for c in pair) for pair in self.hotkey[0])
+
     def _hotkey_down(self):
         mods, key = self.hotkey
         return key in self.down and all(any(c in self.down for c in pair) for pair in mods)
@@ -299,6 +303,11 @@ class KeyboardHotkey:
                         self.down.discard(code)
                     if self._hotkey_down() and not was_down:
                         triggered = True  # rising edge, event by event
+                    elif value == 1 and code not in self.logged_codes and self._mods_down():
+                        # Diagnostic: the modifiers are down but this is not the hotkey's key
+                        # (typically a keyboard layout whose key codes differ).
+                        self.logged_codes.add(code)
+                        log("modifiers down + key code %d pressed (hotkey expects code %d)" % (code, self.hotkey[1]))
         return triggered
 
 
@@ -334,6 +343,7 @@ def main():
     loops_since_rescan = 0
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
     menu = MenuLauncher()
+    log("hotkey key code on this keyboard layout: %s" % (KEYBOARD_HOTKEY[1] if KEYBOARD_HOTKEY else "disabled"))
     log("start: session=%s prefix=%s gamepads=%d combo=%s hotkey=%s python=%s" % (
         SESSION_KIND, PREFIX_DIR, len(pads), MENU_CONF["gamepad_combo"], MENU_CONF["keyboard_hotkey"],
         sys.executable))

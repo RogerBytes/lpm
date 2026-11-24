@@ -331,9 +331,40 @@ def load_menu_conf():
     return conf
 
 
-def parse_keyboard_hotkey(text):
+def x11_keycode_for_char(char):
+    """evdev code of the key that PRODUCES <char> on the CURRENT keyboard layout, asked to the X
+    server (libX11 through ctypes; XWayland answers too). None when it cannot be known.
+
+    Needed because evdev codes are PHYSICAL positions: with an AZERTY layout, the key labelled
+    "M" is the one that QWERTY calls ";" (code 39), not code 50."""
+    try:
+        import ctypes
+        x11 = ctypes.CDLL("libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        x11.XStringToKeysym.restype = ctypes.c_ulong
+        x11.XStringToKeysym.argtypes = [ctypes.c_char_p]
+        x11.XKeysymToKeycode.restype = ctypes.c_ubyte
+        x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        display = x11.XOpenDisplay(None)
+        if not display:
+            return None
+        try:
+            keysym = x11.XStringToKeysym(char.encode())
+            keycode = x11.XKeysymToKeycode(display, keysym) if keysym else 0
+        finally:
+            x11.XCloseDisplay(display)
+        return keycode - 8 if keycode > 8 else None  # X keycodes = evdev codes + 8
+    except Exception:
+        return None
+
+
+def parse_keyboard_hotkey(text, resolve=False):
     """"ctrl+shift+m" -> (list of modifier code tuples, key code), or None when disabled or
-    not understood (an invalid hotkey must never break the gamepad combo)."""
+    not understood (an invalid hotkey must never break the gamepad combo). With resolve=True a
+    letter or digit is looked up in the current keyboard layout (x11_keycode_for_char), the
+    physical-position table being the fallback."""
     text = (text or "").strip().lower()
     if not text or text == "none":
         return None
@@ -343,6 +374,8 @@ def parse_keyboard_hotkey(text):
             mods.append(EVDEV_MODIFIER_CODES[part])
         elif part in EVDEV_KEY_CODES and key is None:
             key = EVDEV_KEY_CODES[part]
+            if resolve and len(part) == 1:
+                key = x11_keycode_for_char(part) or key
         else:
             return None
     return (mods, key) if key is not None else None

@@ -210,6 +210,14 @@ if _sdl is not None and hasattr(_sdl, "SDL_JoystickAttachVirtual") and zgu_commo
 # --- LPM menu opener (lib/zgu-gamepad-exit-watcher.py) ------------------------------------
 print("--- menu opener")
 expect("hotkey: default", zgu_common.parse_keyboard_hotkey("ctrl+shift+m"), ([(29, 97), (42, 54)], 50))
+_env = os.environ.pop("DISPLAY", None)
+expect("hotkey: no X server -> physical-position table", zgu_common.parse_keyboard_hotkey("ctrl+shift+m", resolve=True)[1], 50)
+if _env is not None:
+    os.environ["DISPLAY"] = _env
+_real = zgu_common.x11_keycode_for_char
+zgu_common.x11_keycode_for_char = lambda c: 39  # AZERTY: the key labelled M sits where QWERTY has ";"
+expect("hotkey: layout lookup wins over the table", zgu_common.parse_keyboard_hotkey("ctrl+shift+m", resolve=True)[1], 39)
+zgu_common.x11_keycode_for_char = _real
 expect("hotkey: none disables", zgu_common.parse_keyboard_hotkey("none"), None)
 expect("hotkey: garbage ignored", zgu_common.parse_keyboard_hotkey("ctrl+bidule"), None)
 
