@@ -182,7 +182,10 @@ SDL_INIT_GAMECONTROLLER = 0x00002000
 SDL_INIT_EVENTS = 0x00004000
 SDL_CONTROLLER_BUTTON_A = 0
 SDL_CONTROLLER_BUTTON_B = 1
+SDL_CONTROLLER_BUTTON_X = 2
+SDL_CONTROLLER_BUTTON_Y = 3
 SDL_CONTROLLER_BUTTON_BACK = 4               # Select
+SDL_CONTROLLER_BUTTON_START = 6
 SDL_CONTROLLER_BUTTON_LEFTSTICK = 7          # left stick click (L3)
 SDL_CONTROLLER_BUTTON_RIGHTSTICK = 8         # right stick click (R3)
 SDL_CONTROLLER_BUTTON_LEFTSHOULDER = 9       # L1
@@ -191,7 +194,10 @@ SDL_CONTROLLER_BUTTON_DPAD_UP = 11
 SDL_CONTROLLER_BUTTON_DPAD_DOWN = 12
 SDL_CONTROLLER_BUTTON_DPAD_LEFT = 13
 SDL_CONTROLLER_BUTTON_DPAD_RIGHT = 14
+SDL_CONTROLLER_AXIS_LEFTX = 0
 SDL_CONTROLLER_AXIS_LEFTY = 1
+SDL_CONTROLLER_AXIS_RIGHTX = 2
+SDL_CONTROLLER_AXIS_RIGHTY = 3
 SDL_CONTROLLER_AXIS_TRIGGERLEFT = 4          # L2 (analog, 0..32767)
 SDL_CONTROLLER_AXIS_TRIGGERRIGHT = 5         # R2 (analog, 0..32767)
 
@@ -299,7 +305,10 @@ PICKER_BUTTON_CSS = b"""
 #   gamepad_combo    buttons pressed together: L1,R1,L2,R2,L3,R3 (default: all six)
 #   keyboard_hotkey  modifiers + key joined by "+": ctrl+shift+m (default); "none" disables it
 #   backdrop         auto (default): fullscreen dark veil when the desktop composites; off: small window
-MENU_CONF_DEFAULTS = {"gamepad_combo": "L1,R1,L2,R2,L3,R3", "keyboard_hotkey": "ctrl+shift+m", "backdrop": "auto"}
+#   mouse_speed      gamepad mouse speed factor (default 1.0)
+#   keyboard_delay_ms  wait, after the virtual keyboard hid itself, before a key is sent (default 50)
+MENU_CONF_DEFAULTS = {"gamepad_combo": "L1,R1,L2,R2,L3,R3", "keyboard_hotkey": "ctrl+shift+m", "backdrop": "auto",
+                      "mouse_speed": "1.0", "keyboard_delay_ms": "50"}
 
 # Linux key codes (linux/input-event-codes.h) for the keyboard hotkey.
 EVDEV_KEY_CODES = {
@@ -380,3 +389,11 @@ def parse_keyboard_hotkey(text, resolve=False):
         else:
             return None
     return (mods, key) if key is not None else None
+
+
+def runtime_file(name):
+    """Small per-user file in the runtime dir ($XDG_RUNTIME_DIR, else /tmp): the in-game menu, the
+    watcher and the mouse process talk through these ("gamepad-cmd": a command for the watcher,
+    "gamepad-mouse": exists while the gamepad mouse is on)."""
+    base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    return os.path.join(base, "lpm-%s-%d" % (name, os.getuid()))

@@ -22,6 +22,12 @@
 #
 # The menu is started once per trigger (rising edge) and never twice at the same time.
 #
+# Also here (same SDL reading): with the window-switch hold of zgu-gamepad-alttab-watcher.py
+# (L1+L2+R1+R2+R3, no L3) pressed, D-pad UP opens the virtual keyboard (zgu-virtual-keyboard.py)
+# and D-pad DOWN turns the gamepad mouse on / off (zgu-gamepad-mouse.py, a separate process that
+# lives only while the mouse mode is on). The LPM menu asks for the same through a small command
+# file (zgu_common.runtime_file("gamepad-cmd")).
+#
 # SYSTEM DEPENDENCY: the libSDL2 shared library ("libsdl2-2.0-0" on Debian/Ubuntu, "sdl2"
 # on Arch, "SDL2" on Fedora). No extra Python package: libSDL2 is called through ctypes.
 
@@ -35,6 +41,8 @@ import time
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zgu_common import (
+    SDL_CONTROLLER_BUTTON_DPAD_DOWN,
+    SDL_CONTROLLER_BUTTON_DPAD_UP,
     SDL_CONTROLLER_AXIS_TRIGGERLEFT,
     SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
     SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
@@ -46,6 +54,7 @@ from zgu_common import (
     load_sdl2,
     load_menu_conf,
     parse_keyboard_hotkey,
+    runtime_file,
 )
 
 if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]:
@@ -191,6 +200,94 @@ class MenuLauncher:
                 self.proc.terminate()
             except OSError:
                 pass
+
+
+KEYBOARD_SCRIPT = os.path.join(SCRIPT_DIR, "zgu-virtual-keyboard.py")
+MOUSE_SCRIPT = os.path.join(SCRIPT_DIR, "zgu-gamepad-mouse.py")
+CMD_FILE = runtime_file("gamepad-cmd")
+MOUSE_STATE_FILE = runtime_file("gamepad-mouse")
+
+
+def start_detached(script):
+    """Starts one of the GUI helpers (own session, output to the diagnostic log)."""
+    try:
+        os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+        err = open(LOG_PATH, "a", encoding="utf-8")
+    except OSError:
+        err = subprocess.DEVNULL
+    try:
+        return subprocess.Popen([sys.executable, script, SESSION_KIND, PREFIX_DIR],
+                                stdin=subprocess.DEVNULL, stdout=err, stderr=err, start_new_session=True)
+    except OSError as exc:
+        log("cannot start %s: %s" % (os.path.basename(script), exc))
+        return None
+
+
+class MouseMode:
+    """The gamepad mouse: a separate process that lives only while the mode is on."""
+
+    def __init__(self):
+        self.proc = None
+
+    def is_on(self):
+        if self.proc is not None and self.proc.poll() is not None:
+            log("gamepad mouse ended with code %s" % self.proc.returncode)
+            self.proc = None
+            self._state(False)
+        return self.proc is not None
+
+    @staticmethod
+    def _state(on):
+        try:
+            if on:
+                open(MOUSE_STATE_FILE, "w").close()
+            elif os.path.exists(MOUSE_STATE_FILE):
+                os.remove(MOUSE_STATE_FILE)
+        except OSError:
+            pass
+
+    def toggle(self):
+        if self.is_on():
+            self.stop()
+            return
+        self.proc = start_detached(MOUSE_SCRIPT)
+        if self.proc is not None:
+            log("gamepad mouse ON")
+            self._state(True)
+
+    def stop(self):
+        if self.proc is not None:
+            log("gamepad mouse OFF")
+            try:
+                self.proc.terminate()
+            except OSError:
+                pass
+            self.proc = None
+        self._state(False)
+
+
+def take_command():
+    """Command left by the LPM menu in CMD_FILE (one word), or "" ."""
+    try:
+        with open(CMD_FILE, encoding="utf-8") as f:
+            command = f.read().strip()
+        os.remove(CMD_FILE)
+        return command
+    except OSError:
+        return ""
+
+
+def window_hold_active(sdl_, pads):
+    """The window-switch hold of zgu-gamepad-alttab-watcher.py: L1 + R1 + R3 + L2 + R2, WITHOUT L3."""
+    for pad in pads:
+        if (sdl_.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+                and sdl_.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+                and sdl_.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSTICK)
+                and not sdl_.SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_LEFTSTICK)
+                and sdl_.SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) >= AXIS_PULL_THRESHOLD
+                and sdl_.SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) >= AXIS_PULL_THRESHOLD):
+            return pad
+    return None
 
 
 class KeyboardHotkey:
@@ -349,6 +446,10 @@ def main():
         sys.executable))
     keyboard = KeyboardHotkey(KEYBOARD_HOTKEY) if KEYBOARD_HOTKEY else None
     combo_was_down = True  # a combo already held at start must be released first
+    mouse = MouseMode()
+    take_command()  # drop a command left by a previous session
+    mouse._state(False)
+    prev_up = prev_down = True  # D-pad directions held at start do nothing
 
     try:
         while running:
@@ -368,6 +469,23 @@ def main():
                             pass
                     pads = find_controllers(sdl)
 
+            hold_pad = window_hold_active(sdl, pads) if pads else None
+            if hold_pad is not None:
+                up = bool(sdl.SDL_GameControllerGetButton(hold_pad, SDL_CONTROLLER_BUTTON_DPAD_UP))
+                down = bool(sdl.SDL_GameControllerGetButton(hold_pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN))
+                if up and not prev_up:
+                    log("virtual keyboard requested by gamepad")
+                    start_detached(KEYBOARD_SCRIPT)
+                if down and not prev_down:
+                    mouse.toggle()
+                prev_up, prev_down = up, down
+            else:
+                prev_up = prev_down = True  # outside the hold: a direction held when it starts is ignored
+            command = take_command()
+            if command == "mouse-toggle":
+                mouse.toggle()
+            mouse.is_on()  # notices a mouse process that ended by itself
+
             combo_down = bool(pads) and combo_complete(pads)
             if combo_down and not combo_was_down:
                 menu.open("gamepad combo")
@@ -379,6 +497,11 @@ def main():
             else:
                 time.sleep(POLL_INTERVAL_SECONDS)
     finally:
+        mouse.stop()
+        try:
+            os.remove(CMD_FILE)
+        except OSError:
+            pass
         menu.close()
         if keyboard is not None:
             keyboard.close()

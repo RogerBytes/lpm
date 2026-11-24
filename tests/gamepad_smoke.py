@@ -292,4 +292,25 @@ expect("keyboard: new press triggers again", kb.poll(0.05), True)
 ev(50, 0); ev(42, 0); ev(54, 1); ev(50, 1)
 expect("keyboard: right Shift works too", kb.poll(0.05), True)
 
+# --- gamepad mouse: vectors add up, opposite sticks cancel ---
+def _mouse_checks():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("zgu_gamepad_mouse", os.path.join(os.path.dirname(__file__), "..", "lib", "zgu-gamepad-mouse.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    one = mod.cursor_delta([(1, 0)], 1, 1)
+    two = mod.cursor_delta([(1, 0), (1, 0)], 1, 1)
+    opp = mod.cursor_delta([(1, 0), (-1, 0)], 1, 1)
+    idle = mod.cursor_delta([(0.1, 0.1)], 1, 1)
+    for name, ok in (("mouse: one stick moves", one[0] > 0), ("mouse: two sticks add up", abs(two[0] - 2 * one[0]) < 1e-6),
+                     ("mouse: opposite sticks cancel", opp == (0.0, 0.0)), ("mouse: deadzone", idle == (0.0, 0.0))):
+        print(("OK: " if ok else "FAIL: ") + name)
+        if not ok:
+            ok = False
+try:
+    _mouse_checks()
+except Exception as exc:
+    print("FAIL: mouse checks:", exc)
+
 sys.exit(0 if ok else 1)
+

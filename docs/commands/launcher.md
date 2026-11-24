@@ -69,11 +69,15 @@ When the LPM Launcher is enabled, two small watchers run for the whole play sess
 
 **Window switch** (`lib/zgu-gamepad-alttab-watcher.py`): hold **L1 + L2 + R1 + R2 + R3**, then D-pad left / right sends Shift+Tab / Tab, as with Alt held: the window switcher moves back / forward. Releasing the combo validates the selection.
 
+**Shortcuts while holding the window-switch combo**: D-pad up opens the virtual keyboard, D-pad down turns the gamepad mouse on or off (same as the two menu entries).
+
 **LPM menu** (`lib/zgu-gamepad-exit-watcher.py` opens `lib/zgu-game-menu.py`): press **L1 + L2 + R1 + R2 + L3 + R3** together (or **Ctrl+Shift+M** on the keyboard) and a menu appears over the game. The game is not paused. Move with the D-pad (or the arrows), validate with A (or Enter or a click), go back with B (or Esc). The menu closes by itself when it loses the focus (a click on the game, Alt+Tab...) and when the game ends.
 
 | Entry | Does |
 |---|---|
 | Window ▸ | Alt+Enter, F4 (alone), F11: the key is sent to the game once the menu is closed. (Alt+Tab stays the hold combo above.) |
+| Virtual keyboard | Opens an on-screen keyboard driven by the pad (D-pad / left stick to move, A key, B Backspace, X Space, Y Shift, Start Enter, L1/R1 cursor left/right, Select closes). The window hides for a moment (`keyboard_delay_ms`), the key is sent to the game, the keyboard comes back. Labels follow the real layout (AZERTY...), read through GDK on X11 and Wayland; if it cannot be detected a notice is shown and a US layout is used. |
+| Gamepad mouse: on/off | Both sticks move the pointer (they add up), A left click, B right click, Y middle click, X Enter, L1 / R1 wheel up / down, Start Esc. The game still receives the pad buttons. |
 | Quit the game ▸ | Esc, Alt+F4 (asks for a confirmation, then is sent to the game), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). Each one closes the menu. |
 
 The shortcuts are the same for every game and can be changed in `~/.config/lpm/menu.conf` (or `$XDG_CONFIG_HOME/lpm/menu.conf`):
@@ -81,6 +85,8 @@ The shortcuts are the same for every game and can be changed in `~/.config/lpm/m
 ```
 gamepad_combo=L1,R1,L2,R2,L3,R3
 keyboard_hotkey=ctrl+shift+m
+mouse_speed=1.0
+keyboard_delay_ms=50
 ```
 
 `keyboard_hotkey=none` turns the keyboard hotkey off. `backdrop=off` forces the small window: by default (`backdrop=auto`), when the desktop supports transparency, the menu is a fullscreen dark translucent veil (darker toward the edges) with the menu card in the middle, outlined by a thin border and a soft glow (a click on the veil closes it). The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. The GUI offers to fix that at startup (one system password prompt, then log out and back in): it adds the user to the `input` group. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.

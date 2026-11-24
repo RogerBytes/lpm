@@ -62,8 +62,8 @@ from zgu_common import (
     SDL_CONTROLLER_BUTTON_DPAD_DOWN,
     SDL_CONTROLLER_BUTTON_DPAD_UP,
     close_prefix_game,
+    runtime_file,
     init_sdl,
-    load_menu_conf,
     load_sdl2,
     sync_controllers,
 )
@@ -72,6 +72,7 @@ try:
     import gi
     gi.require_version("Gtk", "4.0")
     from gi.repository import Gtk, Gdk, GLib
+    from zgu_overlay import place_on_x11, pointer_monitor, use_veil, xdotool_path
 except Exception as exc:  # pragma: no cover - system dependency missing
     sys.stderr.write("zgu-game-menu: GTK4/PyGObject unavailable (%s)\n" % exc)
     sys.exit(1)
@@ -100,12 +101,7 @@ KEYS = {
 }
 
 
-def _xdotool():
-    if shutil.which("xdotool"):
-        return "xdotool"
-    if os.access("/run/host/usr/bin/xdotool", os.X_OK):
-        return "/run/host/usr/bin/xdotool"
-    return None
+_xdotool = xdotool_path
 
 
 def send_key(name):
@@ -124,6 +120,26 @@ def send_key(name):
 
 def quit_game():
     close_prefix_game(PREFIX_DIR)
+
+
+def toggle_gamepad_mouse():
+    """Asks the watcher (zgu-gamepad-exit-watcher.py) to turn the gamepad mouse on / off."""
+    try:
+        with open(runtime_file("gamepad-cmd"), "w", encoding="utf-8") as f:
+            f.write("mouse-toggle\n")
+    except OSError:
+        pass
+
+
+def start_keyboard():
+    """Starts the virtual keyboard (it keeps running after this menu has exited)."""
+    try:
+        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                        "zgu-virtual-keyboard.py"), SESSION_KIND, PREFIX_DIR],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError:
+        pass
 
 
 # --- The menu. Entry = (label, kind, value): kind "key" (value = name in KEYS), "call"
@@ -152,8 +168,13 @@ def build_menu():
         ("Alt+F4", "submenu", altf4_menu),
         (label("FORCE", "Force quit the game"), "submenu", force_menu),
     ]
+    mouse_on = os.path.exists(runtime_file("gamepad-mouse"))
+    mouse_label = "%s: %s" % (label("MOUSE", "Gamepad mouse"),
+                              label("ON", "on") if mouse_on else label("OFF", "off"))
     return [
         (label("WINDOW", "Window"), "submenu", window_menu),
+        (label("KEYBOARD", "Virtual keyboard"), "call", start_keyboard),
+        (mouse_label, "call", toggle_gamepad_mouse),
         (label("QUIT", "Quit the game"), "submenu", quit_menu),
     ]
 
@@ -260,7 +281,7 @@ class MenuWindow(Gtk.Window):
         self.refill(0)
 
     def fullscreen_on_pointer_monitor(self):
-        monitor = pointer_monitor()
+        monitor = pointer_monitor(SESSION_KIND)
         if monitor is not None:
             self.fullscreen_on_monitor(monitor)
             geo = monitor.get_geometry()
@@ -426,78 +447,6 @@ def tick_gamepad(win):
     return True
 
 
-def use_veil():
-    """True when the fullscreen translucent veil can be used (see the file header)."""
-    if os.environ.get("LPM_MENU_FORCE_VEIL") == "1":
-        return True
-    if load_menu_conf().get("backdrop", "auto").lower() == "off":
-        return False
-    display = Gdk.Display.get_default()
-    return bool(display is not None and display.is_composited())
-
-
-def pointer_monitor():
-    """Monitor under the pointer (X11, through xdotool), else None (Wayland: the compositor
-    chooses, usually the focused monitor)."""
-    xdotool = _xdotool()
-    if SESSION_KIND != "x11" or not xdotool:
-        return None
-    try:
-        mouse = subprocess.run([xdotool, "getmouselocation", "--shell"], check=False,
-                               capture_output=True, text=True, timeout=3).stdout
-        pos = dict(line.split("=", 1) for line in mouse.split() if "=" in line)
-        px, py = int(pos.get("X", 0)), int(pos.get("Y", 0))
-        monitors = Gdk.Display.get_default().get_monitors()
-        for i in range(monitors.get_n_items()):
-            monitor = monitors.get_item(i)
-            g = monitor.get_geometry()
-            if g.x <= px < g.x + g.width and g.y <= py < g.y + g.height:
-                return monitor
-    except Exception:
-        pass
-    return None
-
-
-def center_on_x11(win, attempt=0):
-    """GTK4 cannot place a window itself and a window manager often opens it at the top left:
-    move it to the middle of the monitor under the pointer with xdotool (already needed for
-    the keys). Retries a few times while the window is not mapped yet."""
-    xdotool = _xdotool()
-    if not xdotool:
-        return False
-    try:
-        found = subprocess.run([xdotool, "search", "--onlyvisible", "--pid", str(os.getpid()),
-                                "--name", "^LPM menu$"], check=False, capture_output=True,
-                               text=True, timeout=3).stdout.split()
-        if not found:
-            return attempt < 5 and GLib.timeout_add(200, center_on_x11, win, attempt + 1) and False
-        width, height = win.get_width(), win.get_height()
-        if width <= 1 or height <= 1:
-            return attempt < 5 and GLib.timeout_add(200, center_on_x11, win, attempt + 1) and False
-        mouse = subprocess.run([xdotool, "getmouselocation", "--shell"], check=False,
-                               capture_output=True, text=True, timeout=3).stdout
-        pos = dict(line.split("=", 1) for line in mouse.split() if "=" in line)
-        px, py = int(pos.get("X", 0)), int(pos.get("Y", 0))
-        monitors = Gdk.Display.get_default().get_monitors()
-        geo = None
-        for i in range(monitors.get_n_items()):
-            g = monitors.get_item(i).get_geometry()
-            if g.x <= px < g.x + g.width and g.y <= py < g.y + g.height:
-                geo = g
-                break
-        if geo is None and monitors.get_n_items():
-            geo = monitors.get_item(0).get_geometry()
-        if geo is None:
-            return False
-        x = geo.x + (geo.width - width) // 2
-        y = geo.y + (geo.height - height) // 2
-        subprocess.run([xdotool, "windowmove", found[-1], str(x), str(y)], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
-    except Exception:
-        pass
-    return False
-
-
 def _load_prefix_watch():
     spec = importlib.util.spec_from_file_location(
         "zgu_prefix_watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), "zgu-prefix-watch.py"))
@@ -519,7 +468,7 @@ def on_activate(application):
     win = MenuWindow(application)
     win.present()
     if SESSION_KIND == "x11" and not win.veil:
-        GLib.timeout_add(200, center_on_x11, win)
+        GLib.timeout_add(200, place_on_x11, win, "LPM menu", "center")
     # Veil mode: the layout centers the card. Compact mode on Wayland: a client cannot position
     # its own window, the compositor decides (most center it).
     init_gamepad()

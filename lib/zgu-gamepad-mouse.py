@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+# --- lpm launcher: gamepad mouse (both sticks move the cursor), via SDL2 ---
+#
+# Usage: zgu-gamepad-mouse.py <x11|wayland> <prefix_folder>
+#
+# Started by zgu-gamepad-exit-watcher.py when the mouse mode is turned on (LPM menu, or
+# L1+L2+R1+R2+R3 held then D-pad down) and stopped (SIGTERM) when it is turned off. It also
+# stops by itself when the game is over (see zgu-prefix-watch.py).
+#
+# Both sticks move the cursor independently and their movements ADD UP: both going the same
+# way = twice as fast, opposite ways cancel out.
+#   A = left click   B = right click   Y = middle click   X = Enter   Start = Escape
+#   L1 = wheel up    R1 = wheel down (repeats while held)
+#
+# Read through SDL2 without grabbing the pad, like the other watchers: the game still receives
+# the same buttons. While the L1+R1+R3 + triggers "hold" of the window switch is pressed, the
+# buttons below do nothing (L1/R1 would otherwise scroll).
+#
+# Events: XTest on X11, ydotool on Wayland (zgu_inject.py).
+
+import math
+import os
+import signal
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from zgu_common import (  # noqa: E402
+    SDL_CONTROLLER_AXIS_LEFTX,
+    SDL_CONTROLLER_AXIS_LEFTY,
+    SDL_CONTROLLER_AXIS_RIGHTX,
+    SDL_CONTROLLER_AXIS_RIGHTY,
+    SDL_CONTROLLER_AXIS_TRIGGERLEFT,
+    SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
+    SDL_CONTROLLER_BUTTON_A,
+    SDL_CONTROLLER_BUTTON_B,
+    SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+    SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+    SDL_CONTROLLER_BUTTON_START,
+    SDL_CONTROLLER_BUTTON_X,
+    SDL_CONTROLLER_BUTTON_Y,
+    init_sdl,
+    load_menu_conf,
+    load_sdl2,
+    sync_controllers,
+)
+from zgu_inject import BTN_LEFT, BTN_MIDDLE, BTN_RIGHT, Injector  # noqa: E402
+
+DEADZONE = 0.20            # fraction of the stick travel ignored around the center
+MAX_SPEED_PX_S = 900.0     # pixels per second, ONE stick fully pushed (times mouse_speed)
+WHEEL_FIRST_REPEAT_S = 0.40
+WHEEL_REPEAT_S = 0.12
+KEY_ENTER, KEY_ESC = 28, 1
+
+
+def stick_vector(x, y):
+    """Stick position (-1..1 each) -> speed vector: dead zone, then a quadratic curve (fine control
+    near the center, full speed at the edge). Returns (vx, vy) in -1..1."""
+    magnitude = math.hypot(x, y)
+    if magnitude < DEADZONE:
+        return 0.0, 0.0
+    scale = min(1.0, (magnitude - DEADZONE) / (1.0 - DEADZONE))
+    factor = scale * scale / magnitude
+    return x * factor, y * factor
+
+
+def cursor_delta(sticks, seconds, speed):
+    """Movement for this tick, in pixels (float). `sticks` = [(x, y), ...]: the vectors ADD UP."""
+    vx = vy = 0.0
+    for x, y in sticks:
+        sx, sy = stick_vector(x, y)
+        vx += sx
+        vy += sy
+    return vx * MAX_SPEED_PX_S * speed * seconds, vy * MAX_SPEED_PX_S * speed * seconds
+
+
+class GamepadMouse:
+    def __init__(self, sdl, injector, speed, tick_seconds):
+        self.sdl = sdl
+        self.inj = injector
+        self.speed = speed
+        self.tick = tick_seconds
+        self.pads = []
+        self.rest_x = self.rest_y = 0.0     # fractional pixels not sent yet
+        self.down = {}                      # button code -> was pressed last tick
+        self.wheel_next = {}                # wheel button -> time of the next repeat
+        self.next_scan = 0.0
+
+    def _btn(self, pad, code):
+        return bool(self.sdl.SDL_GameControllerGetButton(pad, code))
+
+    def _axis(self, pad, code):
+        return self.sdl.SDL_GameControllerGetAxis(pad, code) / 32767.0
+
+    def step(self, now):
+        """One tick: read the pads, send the events."""
+        if now >= self.next_scan:
+            self.next_scan = now + 1.0
+            sync_controllers(self.sdl, self.pads)
+        if not self.pads:
+            return
+        self.sdl.SDL_GameControllerUpdate()
+        sticks = []
+        pressed = {}
+        hold = False
+        for pad in self.pads:
+            sticks.append((self._axis(pad, SDL_CONTROLLER_AXIS_LEFTX), self._axis(pad, SDL_CONTROLLER_AXIS_LEFTY)))
+            sticks.append((self._axis(pad, SDL_CONTROLLER_AXIS_RIGHTX), self._axis(pad, SDL_CONTROLLER_AXIS_RIGHTY)))
+            for code in (SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_X,
+                         SDL_CONTROLLER_BUTTON_Y, SDL_CONTROLLER_BUTTON_START,
+                         SDL_CONTROLLER_BUTTON_LEFTSHOULDER, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER):
+                pressed[code] = pressed.get(code, False) or self._btn(pad, code)
+            if (self._btn(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) and self._btn(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+                    and self._btn(pad, SDL_CONTROLLER_BUTTON_RIGHTSTICK)
+                    and self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.9
+                    and self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.9):
+                hold = True
+        if hold:  # window-switch hold: no mouse action, and nothing stays pressed
+            self.release_all()
+            return
+
+        dx, dy = cursor_delta(sticks, self.tick, self.speed)
+        self.rest_x += dx
+        self.rest_y += dy
+        ix, iy = int(self.rest_x), int(self.rest_y)
+        if ix or iy:
+            self.rest_x -= ix
+            self.rest_y -= iy
+            self.inj.move(ix, iy)
+
+        for code, mouse_button in ((SDL_CONTROLLER_BUTTON_A, BTN_LEFT), (SDL_CONTROLLER_BUTTON_B, BTN_RIGHT),
+                                   (SDL_CONTROLLER_BUTTON_Y, BTN_MIDDLE)):
+            if pressed[code] != self.down.get(code, False):
+                self.inj.button(mouse_button, pressed[code])
+        for code, key in ((SDL_CONTROLLER_BUTTON_X, KEY_ENTER), (SDL_CONTROLLER_BUTTON_START, KEY_ESC)):
+            if pressed[code] and not self.down.get(code, False):
+                self.inj.tap([key])
+        for code, direction in ((SDL_CONTROLLER_BUTTON_LEFTSHOULDER, -1), (SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, 1)):
+            if pressed[code]:
+                if not self.down.get(code, False):
+                    self.inj.wheel(direction)
+                    self.wheel_next[code] = now + WHEEL_FIRST_REPEAT_S
+                elif now >= self.wheel_next.get(code, now + 1):
+                    self.inj.wheel(direction)
+                    self.wheel_next[code] = now + WHEEL_REPEAT_S
+        self.down = dict(pressed)
+
+    def release_all(self):
+        """Release any mouse button this process still holds down (also on exit)."""
+        for code, mouse_button in ((SDL_CONTROLLER_BUTTON_A, BTN_LEFT), (SDL_CONTROLLER_BUTTON_B, BTN_RIGHT),
+                                   (SDL_CONTROLLER_BUTTON_Y, BTN_MIDDLE)):
+            if self.down.get(code):
+                self.inj.button(mouse_button, False)
+        self.down = {}
+
+
+def main():
+    if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]:
+        sys.stderr.write("Usage: zgu-gamepad-mouse.py <x11|wayland> <prefix_folder>\n")
+        return 1
+    session_kind, prefix_dir = sys.argv[1], sys.argv[2]
+    running = [True]
+
+    def stop(_signum, _frame):
+        running[0] = False
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+
+    sdl = load_sdl2()
+    if sdl is None or not init_sdl(sdl):
+        sys.stderr.write("zgu-gamepad-mouse: SDL2 unavailable\n")
+        return 1
+    try:
+        speed = max(0.1, min(5.0, float(load_menu_conf().get("mouse_speed", "1.0"))))
+    except ValueError:
+        speed = 1.0
+    # ydotool starts a process per call: fewer, bigger steps on Wayland.
+    tick = 0.016 if session_kind == "x11" else 0.04
+
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "zgu_prefix_watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), "zgu-prefix-watch.py"))
+    watch_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(watch_module)
+    game_watch = watch_module.GameEndWatch(prefix_dir)
+
+    mouse = GamepadMouse(sdl, Injector(session_kind), speed, tick)
+    try:
+        while running[0] and not game_watch.game_ended():
+            mouse.step(time.monotonic())
+            time.sleep(tick)
+    finally:
+        mouse.release_all()
+        sdl.SDL_Quit()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

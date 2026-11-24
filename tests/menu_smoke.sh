@@ -14,11 +14,13 @@ chmod +x "${work}/bin/xdotool"
 py="${PYTHON:-/usr/bin/python3.12}"
 [ -x "${py}" ] || py="$(command -v python3)"
 export GTK_A11Y=none
+export XDG_RUNTIME_DIR="${work}/run"
+mkdir -p "${XDG_RUNTIME_DIR}"
 
 # One scenario inside the Xvfb: $1 = expected keys, $2 = expected state (exited/running), rest = keys to press.
 cat > "${work}/driver.sh" <<DRV
 #!/bin/bash
-rm -f "${work}/keys.log"
+rm -f "${work}/keys.log" "${work}"/run/lpm-gamepad-cmd-*
 if [ -n "\${FAKE_GAME:-}" ]; then
   ln -sf /bin/sleep "${work}/wineserver"
   WINEPREFIX="${work}/prefix" "${work}/wineserver" "\${FAKE_GAME}" &
@@ -47,6 +49,7 @@ fi
 sleep "\${WAIT:-1.5}"
 if kill -0 \${pid} 2>/dev/null; then echo "running"; kill \${pid}; else echo "exited"; fi
 cat "${work}/keys.log" 2>/dev/null
+[ -f "${work}/run/lpm-gamepad-cmd-\$(id -u)" ] && echo "cmd: \$(cat "${work}/run/lpm-gamepad-cmd-\$(id -u)")"
 DRV
 chmod +x "${work}/driver.sh"
 
@@ -60,13 +63,14 @@ check() {  # name, expected output (state + keys, one per line), keys... (env: F
 check "menu: Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
 check "menu: Window > F4 (alone)" $'exited\nkey F4' Return Down Return
 check "menu: Window > F11" $'exited\nkey F11' Return Down Down Return
-check "menu: Quit > Esc is sent and the menu closes" $'exited\nkey Escape' Down Return Return
-check "menu: Quit > Alt+F4 asks a confirmation, then sends it" $'exited\nkey alt+F4' Down Return Down Return Return
-check "menu: Alt+F4 > No keeps the menu open, nothing sent" "running" Down Return Down Return Down Return
-check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Return Down Down Return Down Return
-check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Return Down Down Return Return
+check "menu: Quit > Esc is sent and the menu closes" $'exited\nkey Escape' Down Down Down Return Return
+check "menu: Quit > Alt+F4 asks a confirmation, then sends it" $'exited\nkey alt+F4' Down Down Down Return Down Return Return
+check "menu: Alt+F4 > No keeps the menu open, nothing sent" "running" Down Down Down Return Down Return Down Return
+check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Down Down Return Down Down Return Down Return
+check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Down Down Return Down Down Return Return
+check "menu: Gamepad mouse asks the watcher to toggle it" $'exited\ncmd: mouse-toggle' Down Down Return
 FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down
-OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Down Return
+OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Return
 LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
 LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): a click on the veil closes it" "exited" click-corner
 check "menu: Escape goes back, then closes" "exited" Return Escape Escape
