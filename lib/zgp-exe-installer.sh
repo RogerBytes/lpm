@@ -187,7 +187,8 @@ fi
 
 if ! zgp_wait_for_prefix "${prefix_dir}"; then
   zgu_cli_error "$(t exe_install.init_failed_cli)"
-  rm -rf "${prefix_dir}"
+  chmod -R u+rwX -- "${prefix_dir}" 2>/dev/null
+  rm -rf -- "${prefix_dir}"
   exit 1
 fi
 
@@ -215,7 +216,8 @@ if [[ "${install_exit_code}" -ne 0 ]]; then
   esac
 
   if [[ "${wants_delete}" = true ]]; then
-    rm -rf "${prefix_dir}"
+    chmod -R u+rwX -- "${prefix_dir}" 2>/dev/null
+    rm -rf -- "${prefix_dir}"
     zgu_cli_ok "$(t exe_install.deleted_cli)"
     exit 0
   fi

@@ -94,7 +94,10 @@ safe_delete_prefix_dir() {
     return 1
   fi
 
-  rm -rf "${real_dir}"
+  # Read-only folders/files inside a prefix (some games, e.g. Okami) make a plain rm -rf fail:
+  # give ourselves write permission first, then delete.
+  chmod -R u+rwX -- "${real_dir}" 2>/dev/null
+  rm -rf -- "${real_dir}"
   return 0
 }
 

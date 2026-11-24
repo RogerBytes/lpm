@@ -374,7 +374,8 @@ lpm_cancel_cleanup() {
     real_games_dir=$(realpath -e "${games_dir}" 2>/dev/null)
     real_prefix=$(realpath -e "${inprogress_prefix}" 2>/dev/null)
     if [[ -n "${real_games_dir}" ]] && [[ -n "${real_prefix}" ]] && [[ "${real_prefix}" == "${real_games_dir}/"* ]]; then
-      rm -rf "${real_prefix}"
+      chmod -R u+rwX -- "${real_prefix}" 2>/dev/null
+      rm -rf -- "${real_prefix}"
     fi
     safe_cancel_slug="${inprogress_slug//\'/\'\'}"
     sqlite3 "${lutris_db}" "DELETE FROM games WHERE slug='${safe_cancel_slug}';" 2>/dev/null
