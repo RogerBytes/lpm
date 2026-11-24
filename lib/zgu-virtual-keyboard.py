@@ -100,7 +100,7 @@ ROWS = [
     [("key", 15, 1.0, "Tab")] + _chars([16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]) + [("key", 1, 1.0, "Esc")],
     [("caps", 0, 1.0, "⇪")] + _chars([30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 43]) + [("key", 28, 1.0, "⏎")],
     [("shift", KEY_SHIFT, 1.0, "⇧")] + _chars([86, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53])
-    + [("altgr", KEY_ALTGR, 1.0, "AltGr"), ("close", 0, 1.0, "✕")],
+    + [("altgr", KEY_ALTGR, 1.0, "AltGr")],
     [("key", 105, 1.0, "←"), ("key", 108, 1.0, "↓"), ("key", 103, 1.0, "↑"), ("key", 106, 1.0, "→"),
      ("key", 57, 10.0, "␣")],
 ]
@@ -174,14 +174,9 @@ window.lpm-compact .lpm-kb-veil, window.lpm-compact .lpm-kb-card {
     background-color: transparent; border: none; box-shadow: none;
 }
 button.lpm-kb-key {
-    background: rgba(70, 70, 70, 0.62); color: #ffffff; border: none; border-radius: 10px;
+    background: rgba(38, 38, 38, 0.72); color: #ffffff; border: none; border-radius: 10px;
     font-size: 20px; min-height: 48px; padding: 0; box-shadow: none;
 }
-button.lpm-kb-close {
-    background: rgba(70, 70, 70, 0.62); color: #ffffff; border: none; border-radius: 14px;
-    min-width: 28px; min-height: 28px; padding: 0; font-size: 14px; box-shadow: none;
-}
-button.lpm-kb-close:hover { background: #a54a4a; }
 button.lpm-kb-key.lpm-kb-on { background: #5a8f5a; }
 button.lpm-kb-key.lpm-kb-sel { background: #3a6ea5; }
 .lpm-kb-hint { font-size: 14px; color: #bdbdbd; padding: 10px 6px 0 6px; }
@@ -237,18 +232,9 @@ class KeyboardWindow(Gtk.Window):
         card.add_css_class("lpm-kb-card")
         self.card = card
         self.keys = []  # rows of dicts: kind, code, units, button
-        # Small round close button, top right (mouse only: the gamepad closes with Select)
-        header = Gtk.Box()
-        header.set_halign(Gtk.Align.END)
-        close_button = Gtk.Button(label="✕")
-        close_button.add_css_class("lpm-kb-close")
-        close_button.set_focusable(False)
-        close_button.connect("clicked", lambda _b: self.close_keyboard())
-        header.append(close_button)
-        card.append(header)
         for row_def in ROWS:
             row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-            row_box.set_halign(Gtk.Align.CENTER)
+            row_box.set_halign(Gtk.Align.START)  # rows are left aligned: columns stay aligned
             row = []
             for item in row_def:
                 kind, code, units = item[0], item[1], item[2]
@@ -314,7 +300,23 @@ class KeyboardWindow(Gtk.Window):
                     else:
                         button.remove_css_class(cls)
         notice = "" if self.reader.detected else text("NOLAYOUT", "Keyboard layout not detected (US shown).") + "    "
-        self.hint.set_label(notice + text("HINT", "A: key  B: delete  X: space  Y: Shift (hold: lock)  Start: Enter  L1/R1: cursor  Select: close"))
+        lines = [notice + text("HINT", "A: key  B: delete  X: space  Y: Shift (hold: lock)  Start: Enter  L1/R1: ← →  Select: close")]
+        hotkey = self.close_hotkey()
+        if hotkey:
+            lines.append(text("HINT_KEYS", "Keyboard: {hotkey} closes").replace("{hotkey}", hotkey))
+        self.hint.set_label("\n".join(lines))
+
+    @staticmethod
+    def close_hotkey():
+        """The keyboard hotkey of the LPM menu as shown to the user ("Ctrl+Shift+M"), "" when turned off."""
+        try:
+            value = load_menu_conf().get("keyboard_hotkey", "ctrl+shift+m").strip()
+        except Exception:
+            return ""
+        if not value or value.lower() == "none":
+            return ""
+        return "+".join(part.strip().capitalize() if len(part.strip()) > 1 else part.strip().upper()
+                        for part in value.split("+"))
 
     # --- sending -----------------------------------------------------------------------------
     def press(self, entry):
