@@ -38,6 +38,7 @@ from zgu_common import (  # noqa: E402
     SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
     SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
     SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+    SDL_CONTROLLER_BUTTON_BACK,
     SDL_CONTROLLER_BUTTON_START,
     SDL_CONTROLLER_BUTTON_X,
     SDL_CONTROLLER_BUTTON_Y,
@@ -88,6 +89,7 @@ class GamepadMouse:
         self.wheel_next = {}                # wheel button -> time of the next repeat
         self.next_scan = 0.0
         self.next_kb_check = 0.0
+        self.open_keyboard = None  # set by main(): starts the virtual keyboard
         self.kb_open = False
 
     def _btn(self, pad, code):
@@ -133,7 +135,7 @@ class GamepadMouse:
             sticks.append((self._axis(pad, SDL_CONTROLLER_AXIS_LEFTX), self._axis(pad, SDL_CONTROLLER_AXIS_LEFTY)))
             sticks.append((self._axis(pad, SDL_CONTROLLER_AXIS_RIGHTX), self._axis(pad, SDL_CONTROLLER_AXIS_RIGHTY)))
             for code in (SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B, SDL_CONTROLLER_BUTTON_X,
-                         SDL_CONTROLLER_BUTTON_Y, SDL_CONTROLLER_BUTTON_START,
+                         SDL_CONTROLLER_BUTTON_Y, SDL_CONTROLLER_BUTTON_START, SDL_CONTROLLER_BUTTON_BACK,
                          SDL_CONTROLLER_BUTTON_LEFTSHOULDER, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER):
                 pressed[code] = pressed.get(code, False) or self._btn(pad, code)
             if (self._btn(pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) and self._btn(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
@@ -168,6 +170,9 @@ class GamepadMouse:
                                             (BTN_MIDDLE,) + tuple(self.logical(d, BTN_MIDDLE) for d in (self.down, pressed))):
             if was != now_down:
                 self.inj.button(mouse_button, now_down)
+        if pressed[SDL_CONTROLLER_BUTTON_BACK] and not self.down.get(SDL_CONTROLLER_BUTTON_BACK, False) \
+                and self.open_keyboard:
+            self.open_keyboard()  # Select: shows the virtual keyboard (Select closes it, in the keyboard)
         for code, key in ((SDL_CONTROLLER_BUTTON_X, KEY_ENTER), (SDL_CONTROLLER_BUTTON_START, KEY_ESC)):
             if pressed[code] and not self.down.get(code, False):
                 self.inj.tap([key])
@@ -230,6 +235,18 @@ def main():
     game_watch = watch_module.GameEndWatch(prefix_dir)
 
     mouse = GamepadMouse(sdl, Injector(session_kind), speed, tick)
+
+    def open_keyboard():
+        import subprocess
+        try:
+            subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                            "zgu-virtual-keyboard.py"), session_kind, prefix_dir],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
+            pass
+
+    mouse.open_keyboard = open_keyboard
     try:
         while running[0] and not game_watch.game_ended():
             mouse.step(time.monotonic())
