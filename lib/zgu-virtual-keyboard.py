@@ -161,7 +161,7 @@ window.lpm-kb, window.lpm-kb.background, window.lpm-kb.csd {
 }
 .lpm-kb-veil { background-color: rgba(0, 0, 0, 0.25); }
 .lpm-kb-card {
-    background-color: rgba(26, 26, 26, 0.78);
+    background-color: rgba(26, 26, 26, 0.58);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
     box-shadow: 0 0 40px rgba(58, 110, 165, 0.10), 0 8px 30px rgba(0, 0, 0, 0.5);
@@ -174,11 +174,11 @@ window.lpm-compact .lpm-kb-veil, window.lpm-compact .lpm-kb-card {
     background-color: transparent; border: none; box-shadow: none;
 }
 button.lpm-kb-key {
-    background: rgba(70, 70, 70, 0.80); color: #ffffff; border: none; border-radius: 10px;
+    background: rgba(70, 70, 70, 0.62); color: #ffffff; border: none; border-radius: 10px;
     font-size: 20px; min-height: 48px; padding: 0; box-shadow: none;
 }
 button.lpm-kb-close {
-    background: rgba(70, 70, 70, 0.80); color: #ffffff; border: none; border-radius: 14px;
+    background: rgba(70, 70, 70, 0.62); color: #ffffff; border: none; border-radius: 14px;
     min-width: 28px; min-height: 28px; padding: 0; font-size: 14px; box-shadow: none;
 }
 button.lpm-kb-close:hover { background: #a54a4a; }
