@@ -512,7 +512,10 @@ def main():
 
             if keyboard is not None:
                 if keyboard.poll(POLL_INTERVAL_SECONDS):
-                    menu.open("keyboard hotkey")
+                    if close_keyboard_if_running():  # the virtual keyboard is open: the hotkey closes it
+                        log("virtual keyboard closed by the keyboard hotkey")
+                    else:
+                        menu.open("keyboard hotkey")
             else:
                 time.sleep(POLL_INTERVAL_SECONDS)
     finally:

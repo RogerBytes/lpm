@@ -177,6 +177,11 @@ button.lpm-kb-key {
     background: rgba(70, 70, 70, 0.80); color: #ffffff; border: none; border-radius: 10px;
     font-size: 20px; min-height: 48px; padding: 0; box-shadow: none;
 }
+button.lpm-kb-close {
+    background: rgba(70, 70, 70, 0.80); color: #ffffff; border: none; border-radius: 14px;
+    min-width: 28px; min-height: 28px; padding: 0; font-size: 14px; box-shadow: none;
+}
+button.lpm-kb-close:hover { background: #a54a4a; }
 button.lpm-kb-key.lpm-kb-on { background: #5a8f5a; }
 button.lpm-kb-key.lpm-kb-sel { background: #3a6ea5; }
 .lpm-kb-hint { font-size: 14px; color: #bdbdbd; padding: 10px 6px 0 6px; }
@@ -232,6 +237,15 @@ class KeyboardWindow(Gtk.Window):
         card.add_css_class("lpm-kb-card")
         self.card = card
         self.keys = []  # rows of dicts: kind, code, units, button
+        # Small round close button, top right (mouse only: the gamepad closes with Select)
+        header = Gtk.Box()
+        header.set_halign(Gtk.Align.END)
+        close_button = Gtk.Button(label="✕")
+        close_button.add_css_class("lpm-kb-close")
+        close_button.set_focusable(False)
+        close_button.connect("clicked", lambda _b: self.close_keyboard())
+        header.append(close_button)
+        card.append(header)
         for row_def in ROWS:
             row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
             row_box.set_halign(Gtk.Align.CENTER)
