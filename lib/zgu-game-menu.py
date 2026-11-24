@@ -18,13 +18,18 @@
 #
 # Keys are sent AFTER the menu window is closed (short delay, so the focus is back on the game):
 # xdotool on X11, ydotool on Wayland. Same tools as zgu-gamepad-alttab-watcher.py.
-# "Quit the game" offers F4 and Esc (the game's own way out) and "Force quit", which asks for a
+# "Quit the game" offers Esc, Alt+F4 (the game's own ways out) and "Force quit", which asks for a
 # confirmation then stops the wineserver of this game's prefix (zgu_common.close_prefix_game),
-# exactly what the old quit combo did.
+# exactly what the old quit combo did. In that submenu the menu STAYS OPEN until the game is
+# really gone (zgu-prefix-watch.py), re-appearing after each key it sent.
+#
+# The menu closes by itself as soon as it loses the focus after having had it (click on the game,
+# Alt+Tab...): otherwise it would stay hidden behind the game with no way to bring it back.
 #
 # Labels come from the environment (LPM_MENU_*, translated by the orchestrator); the English
 # text below is the fallback.
 
+import importlib.util
 import os
 import shutil
 import signal
@@ -72,7 +77,7 @@ def label(name, default):
 KEYS = {
     "alt+tab": ("alt+Tab", ["56:1", "15:1", "15:0", "56:0"]),
     "alt+enter": ("alt+Return", ["56:1", "28:1", "28:0", "56:0"]),
-    "f4": ("F4", ["62:1", "62:0"]),
+    "alt+f4": ("alt+F4", ["56:1", "62:1", "62:0", "56:0"]),
     "f11": ("F11", ["87:1", "87:0"]),
     "escape": ("Escape", ["1:1", "1:0"]),
 }
@@ -109,17 +114,20 @@ def quit_game():
 def build_menu():
     # Alt+Tab is deliberately NOT here: it stays the L1+L2+R1+R2+R3 hold + D-pad left/right
     # (zgu-gamepad-alttab-watcher.py).
+    # Kinds: "key" = send a key, then close the menu; "keystay" = send a key, then show the menu
+    # again (the game may need more than one try); "callstay" = run a function, menu stays open.
     window_menu = [
         (label("ALTENTER", "Alt+Enter"), "key", "alt+enter"),
         ("F11", "key", "f11"),
     ]
     force_menu = [
-        (label("QUIT_CONFIRM", "Yes, force quit the game"), "call", quit_game),
+        (label("QUIT_CONFIRM", "Yes, force quit the game"), "callstay", quit_game),
         (label("QUIT_CANCEL", "No, back"), "back", None),
     ]
+    # Esc first: some games have no gamepad shortcut for their own menu.
     quit_menu = [
-        ("F4", "key", "f4"),
-        (label("ESCAPE", "Esc"), "key", "escape"),
+        (label("ESCAPE", "Esc"), "keystay", "escape"),
+        ("Alt+F4", "keystay", "alt+f4"),
         (label("FORCE", "Force quit the game"), "submenu", force_menu),
     ]
     return [
@@ -152,6 +160,8 @@ class MenuWindow(Gtk.Window):
         self.title_text = label("TITLE", "LPM menu")
         self.pending = None      # action to run once the window is closed
         self.closing = False
+        self.was_active = False  # has had the focus at least once
+        self.busy = False        # a key is being sent: losing the focus is expected
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.title_label = Gtk.Label(label=self.title_text, xalign=0)
@@ -173,6 +183,7 @@ class MenuWindow(Gtk.Window):
         keys.connect("key-pressed", self.on_key)
         self.add_controller(keys)
         self.connect("close-request", self.on_close_request)
+        self.connect("notify::is-active", self.on_active_changed)
         self.refill(0)
 
     def refill(self, select):
@@ -210,6 +221,11 @@ class MenuWindow(Gtk.Window):
             self.refill(0)
         elif kind == "back":
             self.go_back()
+        elif kind == "keystay":
+            self.send_and_return(value)
+        elif kind == "callstay":
+            value()
+            self.go_back()  # back to the "Quit the game" list; the menu waits for the game to end
         else:
             self.pending = (kind, value)
             self.finish()
@@ -240,6 +256,35 @@ class MenuWindow(Gtk.Window):
         else:
             return False
         return True
+
+    def on_active_changed(self, _win, _param):
+        if self.is_active():
+            self.was_active = True
+            self.busy = False
+        elif self.was_active and not self.busy and not self.closing:
+            # Focus went elsewhere (click on the game, Alt+Tab...): close the menu.
+            self.closing = True
+            self.close()
+            app.quit()
+
+    def send_and_return(self, key_name):
+        """Hide the menu so the game gets the focus back, send the key, then show the menu again."""
+        self.busy = True
+        self.set_visible(False)
+
+        def send():
+            send_key(key_name)
+            GLib.timeout_add(700, show_again)
+            return False
+
+        def show_again():
+            if not self.closing:
+                self.set_visible(True)
+                self.present()
+                GLib.timeout_add(1500, lambda: (setattr(self, "busy", False), False)[1])
+            return False
+
+        GLib.timeout_add(350, send)
 
     def on_close_request(self, _win):
         self.closing = True
@@ -314,6 +359,14 @@ def tick_gamepad(win):
     return True
 
 
+def _load_prefix_watch():
+    spec = importlib.util.spec_from_file_location(
+        "zgu_prefix_watch", os.path.join(os.path.dirname(os.path.abspath(__file__)), "zgu-prefix-watch.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def on_activate(application):
     application.hold()  # keep running after the window closes: the action runs right after
     # SDL2 installs its own SIGTERM/SIGINT handlers, which would swallow the signal the opener
@@ -328,6 +381,17 @@ def on_activate(application):
     win.present()
     init_gamepad()
     GLib.timeout_add(GAMEPAD_POLL_MS, tick_gamepad, win)
+    game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
+
+    def check_game():
+        if game_watch.game_ended():
+            win.closing = True
+            win.close()
+            application.quit()
+            return False
+        return True
+
+    GLib.timeout_add(1000, check_game)
 
 
 app = Gtk.Application(application_id="org.lpm.GameMenu")

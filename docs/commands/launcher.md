@@ -69,12 +69,12 @@ When the LPM Launcher is enabled, two small watchers run for the whole play sess
 
 **Window switch** (`lib/zgu-gamepad-alttab-watcher.py`): hold **L1 + L2 + R1 + R2 + R3**, then D-pad left / right sends Shift+Tab / Tab, as with Alt held: the window switcher moves back / forward. Releasing the combo validates the selection.
 
-**LPM menu** (`lib/zgu-gamepad-exit-watcher.py` opens `lib/zgu-game-menu.py`): press **L1 + L2 + R1 + R2 + L3 + R3** together (or **Ctrl+Shift+M** on the keyboard) and a menu appears over the game. The game is not paused. Move with the D-pad (or the arrows), validate with A (or Enter or a click), go back with B (or Esc).
+**LPM menu** (`lib/zgu-gamepad-exit-watcher.py` opens `lib/zgu-game-menu.py`): press **L1 + L2 + R1 + R2 + L3 + R3** together (or **Ctrl+Shift+M** on the keyboard) and a menu appears over the game. The game is not paused. Move with the D-pad (or the arrows), validate with A (or Enter or a click), go back with B (or Esc). The menu closes by itself when it loses the focus (a click on the game, Alt+Tab...) and when the game ends.
 
 | Entry | Does |
 |---|---|
 | Window ▸ | Alt+Enter, F11: the key is sent to the game once the menu is closed. (Alt+Tab stays the hold combo above.) |
-| Quit the game ▸ | F4, Esc (sent to the game), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). |
+| Quit the game ▸ | Esc, Alt+F4 (sent to the game; the menu comes back after each one), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). In this submenu the menu stays open until the game has really ended. |
 
 The shortcuts are the same for every game and can be changed in `~/.config/lpm/menu.conf` (or `$XDG_CONFIG_HOME/lpm/menu.conf`):
 
