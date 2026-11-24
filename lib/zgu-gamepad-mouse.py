@@ -18,6 +18,7 @@
 #
 # Events: XTest on X11, ydotool on Wayland (zgu_inject.py).
 
+import fcntl
 import math
 import os
 import signal
@@ -86,12 +87,33 @@ class GamepadMouse:
         self.down = {}                      # button code -> was pressed last tick
         self.wheel_next = {}                # wheel button -> time of the next repeat
         self.next_scan = 0.0
+        self.next_kb_check = 0.0
+        self.kb_open = False
 
     def _btn(self, pad, code):
         return bool(self.sdl.SDL_GameControllerGetButton(pad, code))
 
     def _axis(self, pad, code):
         return self.sdl.SDL_GameControllerGetAxis(pad, code) / 32767.0
+
+    def keyboard_open(self, now):
+        """True while the virtual keyboard runs (it holds a lock for its whole life): the mouse is
+        suspended then. Checked ten times a second at most."""
+        if now >= self.next_kb_check:
+            self.next_kb_check = now + 0.1
+            base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+            path = os.path.join(base, "lpm-virtual-keyboard.lock-%d" % os.getuid())
+            self.kb_open = False
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as handle:
+                        try:
+                            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        except OSError:
+                            self.kb_open = True
+                except OSError:
+                    pass
+        return self.kb_open
 
     def step(self, now):
         """One tick: read the pads, send the events."""
@@ -116,6 +138,11 @@ class GamepadMouse:
                     and self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.9
                     and self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.9):
                 hold = True
+        if self.keyboard_open(now):  # virtual keyboard open: the keyboard alone reacts
+            self.release_all()
+            self.rest_x = self.rest_y = 0.0
+            self.down.update(pressed)  # a button still held when the keyboard closes is not a click
+            return
         if hold:  # window-switch hold: no mouse action, and nothing stays pressed
             self.release_all()
             return

@@ -83,7 +83,11 @@ def place_on_x11(win, title, where="center", attempt=0):
             return False
         geo = monitor.get_geometry()
         x = geo.x + (geo.width - width) // 2
-        y = geo.y + (geo.height - height) // 2 if where == "center" else geo.y + geo.height - height - 60
+        if where == "topright":
+            x = geo.x + geo.width - width - 24
+            y = geo.y + 24
+        else:
+            y = geo.y + (geo.height - height) // 2 if where == "center" else geo.y + geo.height - height - 60
         subprocess.run([xdotool, "windowmove", found[-1], str(x), str(y)], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
     except Exception:

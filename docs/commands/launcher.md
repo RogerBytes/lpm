@@ -77,7 +77,7 @@ When the LPM Launcher is enabled, two small watchers run for the whole play sess
 |---|---|
 | Window ▸ | Alt+Enter, F4 (alone), F11: the key is sent to the game once the menu is closed. (Alt+Tab stays the hold combo above.) |
 | Virtual keyboard | Opens an on-screen keyboard driven by the pad (D-pad / left stick to move, A key, B Backspace, X Space, Y Shift, Start Enter, L1/R1 cursor left/right, Select closes). The window hides for a moment (`keyboard_delay_ms`), the key is sent to the game, the keyboard comes back. Labels follow the real layout (AZERTY...), read through GDK on X11 and Wayland; if it cannot be detected a notice is shown and a US layout is used. |
-| Gamepad mouse: on/off | Both sticks move the pointer (they add up), A left click, B right click, Y middle click, X Enter, L1 / R1 wheel up / down, Start Esc. The game still receives the pad buttons. |
+| Gamepad mouse: on/off | Both sticks move the pointer (they add up), A left click, B right click, Y middle click, X Enter, L1 / R1 wheel up / down, Start Esc. A small notice in the top right corner (about 2 s) confirms each on / off (on Wayland the compositor chooses where it goes). While the virtual keyboard is open the mouse is suspended, and resumes when it closes. The game still receives the pad buttons. |
 | Quit the game ▸ | Esc, Alt+F4 (asks for a confirmation, then is sent to the game), or **Force quit the game**: asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). Each one closes the menu. |
 
 The shortcuts are the same for every game and can be changed in `~/.config/lpm/menu.conf` (or `$XDG_CONFIG_HOME/lpm/menu.conf`):

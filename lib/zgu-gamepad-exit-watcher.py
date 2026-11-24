@@ -204,6 +204,7 @@ class MenuLauncher:
 
 KEYBOARD_SCRIPT = os.path.join(SCRIPT_DIR, "zgu-virtual-keyboard.py")
 MOUSE_SCRIPT = os.path.join(SCRIPT_DIR, "zgu-gamepad-mouse.py")
+TOAST_SCRIPT = os.path.join(SCRIPT_DIR, "zgu-toast.py")
 CMD_FILE = runtime_file("gamepad-cmd")
 MOUSE_STATE_FILE = runtime_file("gamepad-mouse")
 
@@ -221,6 +222,18 @@ def start_detached(script):
     except OSError as exc:
         log("cannot start %s: %s" % (os.path.basename(script), exc))
         return None
+
+
+def show_toast(on):
+    """Brief notice (top right) that the gamepad mouse was turned on / off."""
+    label = os.environ.get("LPM_MENU_MOUSE", "").strip() or "Gamepad mouse"
+    state = (os.environ.get("LPM_MENU_ON", "").strip() or "on") if on else (os.environ.get("LPM_MENU_OFF", "").strip() or "off")
+    try:
+        subprocess.Popen([sys.executable, TOAST_SCRIPT, SESSION_KIND, "%s: %s" % (label, state)],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError as exc:
+        log("cannot show the notice: %s" % exc)
 
 
 class MouseMode:
@@ -254,10 +267,12 @@ class MouseMode:
         if self.proc is not None:
             log("gamepad mouse ON")
             self._state(True)
+            show_toast(True)
 
     def stop(self):
         if self.proc is not None:
             log("gamepad mouse OFF")
+            show_toast(False)
             try:
                 self.proc.terminate()
             except OSError:

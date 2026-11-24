@@ -307,7 +307,28 @@ def _mouse_checks():
         print(("OK: " if ok else "FAIL: ") + name)
         if not ok:
             ok = False
+def _mouse_suspend_check():
+    import fcntl, importlib.util, tempfile
+    run = tempfile.mkdtemp()
+    os.environ["XDG_RUNTIME_DIR"] = run
+    spec = importlib.util.spec_from_file_location("zgu_gamepad_mouse2", os.path.join(os.path.dirname(__file__), "..", "lib", "zgu-gamepad-mouse.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mouse = mod.GamepadMouse(None, None, 1.0, 0.016)
+    before = mouse.keyboard_open(1.0)
+    handle = open(os.path.join(run, "lpm-virtual-keyboard.lock-%d" % os.getuid()), "w")
+    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    during = mouse.keyboard_open(2.0)
+    handle.close()
+    after = mouse.keyboard_open(3.0)
+    good = (not before) and during and (not after)
+    print(("OK: " if good else "FAIL: ") + "mouse: suspended while the virtual keyboard is open")
+    return good
+
+
 try:
+    if not _mouse_suspend_check():
+        ok = False
     _mouse_checks()
 except Exception as exc:
     print("FAIL: mouse checks:", exc)
