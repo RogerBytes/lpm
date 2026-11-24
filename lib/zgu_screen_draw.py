@@ -17,10 +17,7 @@ from zgu_screen_config import (
     BANNER_VERTICAL_LIFT,
     ENTRY_LABEL_FONT_SIZE,
     FONT_SIZE,
-    HELP_ALTENTER_TEXT,
     HELP_ALTTAB_TEXT,
-    HELP_F11_TEXT,
-    HELP_F4_TEXT,
     HELP_FADE_S,
     HELP_FONT_SIZE,
     HELP_GAP,
@@ -164,8 +161,7 @@ class DrawMixin:
         return LOGO_BANNER_GAP if NO_LABEL else SUBTITLE_BAND_HEIGHT
 
     def gamepad_help_visible(self):
-        if not gamepad_pads or not any((HELP_ALTTAB_TEXT, HELP_QUIT_TEXT, HELP_F4_TEXT,
-                                         HELP_ALTENTER_TEXT, HELP_F11_TEXT)):
+        if not gamepad_pads or not any((HELP_ALTTAB_TEXT, HELP_QUIT_TEXT)):
             return False
         # Wait until the picker is done (requested or shown on any screen).
         if picker_request_pending[0] or any(w.picker_visible for w in windows):
@@ -267,14 +263,9 @@ class DrawMixin:
         lines = []
         if HELP_ALTTAB_TEXT:
             lines.append(self._help_line_items(["L1", "L2", "R1", "R2", "R3"], True, HELP_ALTTAB_TEXT))
-        hotkey = ["L1", "L2", "R1", "R2", "R3"]
-        for text, kind in ((HELP_F4_TEXT, "dpad_up"), (HELP_ALTENTER_TEXT, "dpad_down"),
-                           (HELP_F11_TEXT, "Select")):
-            if text:
-                lines.append(self._help_line_items(hotkey, kind, text))
-        if HELP_QUIT_TEXT:
-            quit_items, quit_text = self._help_line_items(hotkey, False, HELP_QUIT_TEXT)
-            lines.append((quit_items + [("plus", "+"), ("L3", "L3")], quit_text))
+        if HELP_QUIT_TEXT:  # text = "LPM menu": the six-button combo opens the in-game menu
+            menu_items, menu_text = self._help_line_items(["L1", "L2", "R1", "R2"], False, HELP_QUIT_TEXT)
+            lines.append((menu_items + [("plus", "+"), ("L3", "L3"), ("plus", "+"), ("R3", "R3")], menu_text))
         return lines
 
     @staticmethod

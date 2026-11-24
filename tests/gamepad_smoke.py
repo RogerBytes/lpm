@@ -68,9 +68,7 @@ FREE = ([], False)
 scenario = [
     (["BACK"], False),          # Select held BEFORE the combo: must trigger nothing
     held("BACK"),               # combo completed with Select already held: nothing either
-    held(),                     # Select released
-    held("UP"), held("UP"), held("UP"),   # long press on Up: fires once only
-    held(),
+    held("UP"), held("UP"),     # Up / Down / Select during the hold: no longer shortcuts
     held("DOWN"), held(),
     held("BACK"), held(),
     held("LEFT"), held(),
@@ -93,9 +91,6 @@ def expect(label, got, want):
 x11 = run("x11", scenario)
 expect("X11", x11, [
     "xdotool keydown alt",
-    "xdotool key --clearmodifiers F4",
-    "xdotool key Return",
-    "xdotool key --clearmodifiers F11",
     "xdotool key shift+Tab",
     "xdotool keyup alt",
 ])
@@ -103,9 +98,6 @@ expect("X11", x11, [
 wl = run("wayland", scenario)
 expect("Wayland", wl, [
     "ydotool key 56:1",
-    "ydotool key 56:0 62:1 62:0 56:1",
-    "ydotool key 28:1 28:0",
-    "ydotool key 56:0 87:1 87:0 56:1",
     "ydotool key 42:1 15:1 15:0 42:0",
     "ydotool key 56:0",
 ])
@@ -214,5 +206,82 @@ if _sdl is not None and hasattr(_sdl, "SDL_JoystickAttachVirtual") and zgu_commo
     _dev = _sdl.SDL_JoystickAttachVirtual(1, 6, 15, 0)
     _sync()
     expect("hot-plug: reconnected controller is opened again", (len(_pads), _log), (1, ["add", "rm", "add"]))
+
+# --- LPM menu opener (lib/zgu-gamepad-exit-watcher.py) ------------------------------------
+print("--- menu opener")
+expect("hotkey: default", zgu_common.parse_keyboard_hotkey("ctrl+shift+m"), ([(29, 97), (42, 54)], 50))
+expect("hotkey: none disables", zgu_common.parse_keyboard_hotkey("none"), None)
+expect("hotkey: garbage ignored", zgu_common.parse_keyboard_hotkey("ctrl+bidule"), None)
+
+def load_exit_watcher(conf_text=None):
+    import tempfile
+    cfg = tempfile.mkdtemp()
+    if conf_text is not None:
+        os.makedirs(os.path.join(cfg, "lpm"))
+        open(os.path.join(cfg, "lpm", "menu.conf"), "w").write(conf_text)
+    os.environ["XDG_CONFIG_HOME"] = cfg
+    sys.argv = ["zgu-gamepad-exit-watcher.py", "x11", "/tmp"]
+    sp = importlib.util.spec_from_file_location("exit_w", os.path.join(ROOT, "lib", "zgu-gamepad-exit-watcher.py"))
+    mod = importlib.util.module_from_spec(sp)
+    sp.loader.exec_module(mod)
+    return mod
+
+w = load_exit_watcher()
+expect("combo: default = 4 buttons + 2 triggers", (len(w.COMBO_BUTTONS), len(w.COMBO_AXES)), (4, 2))
+w = load_exit_watcher("gamepad_combo=L1,R1\nkeyboard_hotkey=ctrl+f12\n")
+expect("combo: configurable", (len(w.COMBO_BUTTONS), len(w.COMBO_AXES), w.KEYBOARD_HOTKEY), (2, 0, ([(29, 97)], 88)))
+w = load_exit_watcher("gamepad_combo=L1,bidule\n")
+expect("combo: typo falls back to the default", (len(w.COMBO_BUTTONS), len(w.COMBO_AXES)), (4, 2))
+
+# Gamepad: the menu opens once per press (rising edge), not while held, and again after release.
+w = load_exit_watcher()
+FULL = ["L1", "R1", "L3", "R3"]
+seq = [([], False), (FULL, True), (FULL, True), (FULL, True), ([], False), (FULL, True), ([], False)]
+state = {"t": 0}
+opened = []
+
+class Fake2:
+    def SDL_GameControllerUpdate(self): pass
+    def SDL_NumJoysticks(self): return 1
+    def SDL_IsGameController(self, i): return 1
+    def SDL_GameControllerOpen(self, i): return 1
+    def SDL_GameControllerClose(self, h): pass
+    def SDL_Quit(self): pass
+    def SDL_GameControllerGetButton(self, pad, code):
+        pressed, _ = seq[min(state["t"], len(seq) - 1)]
+        return 1 if any(BTN[n] == code for n in pressed) else 0
+    def SDL_GameControllerGetAxis(self, pad, code):
+        return 32767 if seq[min(state["t"], len(seq) - 1)][1] else 0
+
+w.sdl = Fake2()
+w.MenuLauncher.open = lambda self: opened.append(state["t"])
+w.MenuLauncher.close = lambda self: None
+def fake_sleep2(_):
+    state["t"] += 1
+    if state["t"] >= len(seq):
+        w.running = False
+w.time.sleep = fake_sleep2
+w.main()
+expect("menu opens once per combo press", opened, [1, 5])
+
+# Keyboard: real struct input_event through a pipe.
+import struct as _st
+r, wfd = os.pipe()
+os.set_blocking(r, False)
+kb = w.KeyboardHotkey(([(29, 97), (42, 54)], 50))
+kb.fds = {"fake": r}
+kb.next_scan = 1e18
+def ev(code, value):
+    os.write(wfd, _st.pack("llHHi", 0, 0, 1, code, value))
+ev(29, 1); ev(42, 1)
+expect("keyboard: modifiers alone do nothing", kb.poll(0.05), False)
+ev(50, 1)
+expect("keyboard: Ctrl+Shift+M triggers", kb.poll(0.05), True)
+ev(50, 2)
+expect("keyboard: key repeat does not retrigger", kb.poll(0.05), False)
+ev(50, 0); ev(50, 1)
+expect("keyboard: new press triggers again", kb.poll(0.05), True)
+ev(50, 0); ev(42, 0); ev(54, 1); ev(50, 1)
+expect("keyboard: right Shift works too", kb.poll(0.05), True)
 
 sys.exit(0 if ok else 1)

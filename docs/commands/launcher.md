@@ -63,20 +63,27 @@ Disabling a game (`off`):
 
 A per-game failure is reported and the other games continue; the final status is 1 if any failed.
 
-## Gamepad shortcuts while the game runs
+## Shortcuts and LPM menu while the game runs
 
-When the LPM Launcher is enabled, a small watcher runs for the whole play session (`lib/zgu-gamepad-alttab-watcher.py`). It reads the pad through SDL2 without grabbing it, so the game and tools like AntiMicroX keep working. It stops by itself a few seconds after the game ends. It works on X11 (`xdotool`) and on Wayland (`ydotool`, which needs its `ydotoold` service).
+When the LPM Launcher is enabled, two small watchers run for the whole play session. They read the pad through SDL2 without grabbing it, so the game and tools like AntiMicroX keep working, and they stop by themselves a few seconds after the game ends. Keys are sent with `xdotool` on X11 and `ydotool` on Wayland (which needs its `ydotoold` service).
 
-Hold the hotkey combo **L1 + L2 + R1 + R2 + R3** (all pulled or pressed together), then:
+**Window switch** (`lib/zgu-gamepad-alttab-watcher.py`): hold **L1 + L2 + R1 + R2 + R3**, then D-pad left / right sends Shift+Tab / Tab, as with Alt held: the window switcher moves back / forward. Releasing the combo validates the selection.
 
-| While holding the combo | Sends |
+**LPM menu** (`lib/zgu-gamepad-exit-watcher.py` opens `lib/zgu-game-menu.py`): press **L1 + L2 + R1 + R2 + L3 + R3** together (or **Ctrl+Shift+M** on the keyboard) and a menu appears over the game. The game is not paused. Move with the D-pad (or the arrows), validate with A (or Enter or a click), go back with B (or Esc).
+
+| Entry | Does |
 |---|---|
-| D-pad left / right | Shift+Tab / Tab, as with Alt held: the window switcher moves back / forward. Releasing the combo validates the selection. |
-| D-pad up | `F4` alone (Alt is released for the keypress, so it never becomes Alt+F4 and the window is not closed). |
-| D-pad down | `Alt+Enter`. |
-| Select | `F11` alone (Alt released for the keypress). |
+| Window ▸ | Alt+Tab, Alt+Enter, F4, F11, Esc: the key is sent to the game once the menu is closed. |
+| Quit the game | Asks for a confirmation, then stops the Wine processes of the game's prefix (like `wineserver -k`). |
 
-A button already held when the combo is completed does nothing; only a new press counts, and holding a button does not repeat it. While the loading screen is shown and a pad is detected, a tip at the bottom left shows these combos one at a time (random first tip, 4.75 s each, fading in and out). Force-quitting the game uses a different combo (L1 + L2 + R1 + R2 + R3 + L3).
+The shortcuts are the same for every game and can be changed in `~/.config/lpm/menu.conf` (or `$XDG_CONFIG_HOME/lpm/menu.conf`):
+
+```
+gamepad_combo=L1,R1,L2,R2,L3,R3
+keyboard_hotkey=ctrl+shift+m
+```
+
+`keyboard_hotkey=none` turns the keyboard hotkey off. The keyboard is read from `/dev/input/event*`, the only way that works on X11 and Wayland; if the user cannot read those files (usually group `input`), only the gamepad combo works. While the loading screen is shown and a pad is detected, a tip at the bottom left shows the two gamepad combos one at a time.
 
 ## Output
 

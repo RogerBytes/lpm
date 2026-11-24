@@ -291,3 +291,58 @@ PICKER_BUTTON_CSS = b"""
     border: 1px solid #676767;
 }
 """
+
+
+# --- In-game menu settings (lib/zgu-gamepad-exit-watcher.py opens lib/zgu-game-menu.py) -------
+# ONE place for all games: <XDG config>/lpm/menu.conf, "key=value" lines, "#" comments. Missing
+# file or key = default. To change the shortcuts, edit this file (no per-game setting).
+#   gamepad_combo    buttons pressed together: L1,R1,L2,R2,L3,R3 (default: all six)
+#   keyboard_hotkey  modifiers + key joined by "+": ctrl+shift+m (default); "none" disables it
+MENU_CONF_DEFAULTS = {"gamepad_combo": "L1,R1,L2,R2,L3,R3", "keyboard_hotkey": "ctrl+shift+m"}
+
+# Linux key codes (linux/input-event-codes.h) for the keyboard hotkey.
+EVDEV_KEY_CODES = {
+    "q": 16, "w": 17, "e": 18, "r": 19, "t": 20, "y": 21, "u": 22, "i": 23, "o": 24, "p": 25,
+    "a": 30, "s": 31, "d": 32, "f": 33, "g": 34, "h": 35, "j": 36, "k": 37, "l": 38,
+    "z": 44, "x": 45, "c": 46, "v": 47, "b": 48, "n": 49, "m": 50,
+    "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10, "0": 11,
+    "f1": 59, "f2": 60, "f3": 61, "f4": 62, "f5": 63, "f6": 64, "f7": 65, "f8": 66, "f9": 67,
+    "f10": 68, "f11": 87, "f12": 88, "escape": 1, "tab": 15, "space": 57, "enter": 28,
+}
+# modifier name -> (left code, right code)
+EVDEV_MODIFIER_CODES = {"ctrl": (29, 97), "shift": (42, 54), "alt": (56, 100), "super": (125, 126)}
+
+
+def load_menu_conf():
+    """Settings of the in-game menu (see above) as a dict, defaults filled in."""
+    conf = dict(MENU_CONF_DEFAULTS)
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    try:
+        with open(os.path.join(base, "lpm", "menu.conf"), encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() in conf and value.strip():
+                    conf[key.strip()] = value.strip()
+    except OSError:
+        pass
+    return conf
+
+
+def parse_keyboard_hotkey(text):
+    """"ctrl+shift+m" -> (list of modifier code tuples, key code), or None when disabled or
+    not understood (an invalid hotkey must never break the gamepad combo)."""
+    text = (text or "").strip().lower()
+    if not text or text == "none":
+        return None
+    mods, key = [], None
+    for part in (p.strip() for p in text.split("+")):
+        if part in EVDEV_MODIFIER_CODES:
+            mods.append(EVDEV_MODIFIER_CODES[part])
+        elif part in EVDEV_KEY_CODES and key is None:
+            key = EVDEV_KEY_CODES[part]
+        else:
+            return None
+    return (mods, key) if key is not None else None

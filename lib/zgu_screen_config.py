@@ -52,11 +52,6 @@ ENTRY_LABEL_FONT_SIZE = 30
 PREFIX_DIR = os.environ.get("LPM_PREFIX_DIR", "").strip()
 HELP_ALTTAB_TEXT = os.environ.get("LPM_HELP_ALTTAB", "").strip()
 HELP_QUIT_TEXT = os.environ.get("LPM_HELP_QUIT", "").strip()
-# Single-press keys during the combo hold (see zgu-gamepad-alttab-watcher.py):
-# D-pad up = F4, D-pad down = Alt+Enter, Select = F11.
-HELP_F4_TEXT = os.environ.get("LPM_HELP_F4", "").strip()
-HELP_ALTENTER_TEXT = os.environ.get("LPM_HELP_ALTENTER", "").strip()
-HELP_F11_TEXT = os.environ.get("LPM_HELP_F11", "").strip()
 # --- Per-game messages at the bottom center (text of <game dir>/lpm/settings/loading-message.txt, passed
 # by the orchestrator in LPM_LOADING_MESSAGE): explain a long loading (mods, shaders...). One
 # line of the file = one message; ONE message at a time (a long one is wrapped on up to

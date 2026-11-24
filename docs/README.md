@@ -31,7 +31,7 @@ Back up, transfer and reinstall your Wine/Lutris games in one click.
 - Working icons for your games and runners, correctly shown in the menu and file manager.
 - Usable from the command line, or with the graphical interface (`lpm-gui`) if you'd rather not type anything.
 - Per-game tuning: Wine tools (winetricks, registry editor, winecfg, console, environment variables, change the runner), forcing VSync off, lsfg-vk frame generation, and a launcher with a loading screen that lets you pick among several executables.
-- Gamepad shortcuts during play when the launcher is enabled (Alt+Tab, F4, Alt+Enter, F11), on X11 and Wayland.
+- In-game LPM menu (window keys, quit) and Alt+Tab gamepad shortcut when the launcher is enabled, on X11 and Wayland.
 - Interface available in English and French.
 - Bash/zsh completion and a man page (`man lpm`) included.
 - Native `.deb`, `.rpm` and Arch packages, or a universal manual install on any distribution.

@@ -1,50 +1,36 @@
 #!/usr/bin/env python3
-# --- lpm launcher: "quit the game" gamepad combo, via SDL2, no exclusive grab ---
+# --- lpm launcher: opens the in-game LPM menu (gamepad combo or keyboard hotkey) ---
 #
 # Usage: zgu-gamepad-exit-watcher.py <x11|wayland> <prefix_folder>
 #
-# Deliberately separate from the picker's gamepad navigation (read directly in SDL2 by
-# zgu-launcher-screen.py / zgu-launcher-picker.py), which only runs while the picker is
-# shown. This watcher runs DURING the game, where the gamepad must stay readable by the
-# game itself AND by a remapping tool such as AntiMicro. SDL2 reads the gamepad through
-# the kernel joystick/evdev subsystem WITHOUT EVIOCGRAB, so several non-exclusive readers
-# coexist fine on Linux.
+# Historical name: this watcher used to be the "quit the game" combo. The combo now opens the
+# LPM menu (lib/zgu-game-menu.py), whose "Quit the game" entry does what the combo used to do.
 #
-# Why SDL2 rather than raw evdev: raw evdev button/axis codes differ per gamepad model
-# (the symbolic evdev names did not match the physical buttons on an 8BitDo SN30 Pro+).
-# SDL2's community "gamecontrollerdb.txt" (bundled in lib/data/gamecontrollerdb.txt) maps
-# each known gamepad, identified by its GUID (vendor/product/version), to a fixed standard
-# layout (LEFTSHOULDER, RIGHTSHOULDER, LEFTSTICK, RIGHTSTICK, TRIGGERLEFT/TRIGGERRIGHT), so
-# the combo works on any gamepad SDL2 recognizes without per-model capture.
+# Runs for the WHOLE game session (not single-use) and stops by itself once the game is over
+# (no wineserver of the prefix any more, see zgu-prefix-watch.py).
 #
-# Watched combo: L1 + R1 + L2 + R2 + left stick click (L3) + right stick click (R3), ALL
-# pressed at once. Chosen to avoid classic "reset" combos (Start+Select+L+R) and known
-# cheat-code combos (e.g. L1+L2+R1 on some PS2 games); it is also physically unlikely to
-# be done by accident.
+# Gamepad: read through SDL2 WITHOUT EVIOCGRAB, so the game and remapping tools such as
+# AntiMicro keep working. Default combo: L1 + R1 + L2 + R2 + L3 + R3 ALL pressed at once
+# (chosen to avoid classic reset combos and cheat codes); configurable, see
+# zgu_common.load_menu_conf (<XDG config>/lpm/menu.conf, one setting for every game). SDL2's
+# bundled gamecontrollerdb gives every known pad the same standard layout.
 #
-# Trigger: as soon as all 6 are pressed (polled every 50ms, no hold delay), it asks for the
-# game to be closed, then the script exits (single use).
+# Keyboard (default Ctrl+Shift+M, same config file): read straight from /dev/input/event*
+# (read-only, non-blocking), the only way that works on X11 AND Wayland (Wayland forbids global
+# key capture). It needs read access to those files (usually group "input"); without it the
+# keyboard hotkey is silently inactive and the gamepad combo keeps working.
 #
-# How the game is closed: not a global Alt+F4, which goes to whichever window has focus at
-# that instant (it once logged the user out of their whole graphical session). Instead,
-# send SIGINT to the wineserver OF THIS GAME'S PREFIX (matched via WINEPREFIX /
-# STEAM_COMPAT_DATA_PATH read from /proc, compared with the prefix folder argument). This is
-# equivalent to "wineserver -k": Wine closes the whole prefix itself. The game process is
-# deliberately not looked up by name (it may be called anything, e.g. "Main thread").
-# Independent of X11/Wayland and focus, can never touch anything outside that prefix, does
-# nothing if no wineserver of that prefix exists, and never uses "kill -9".
-#
-# Lifetime: the script stops by itself once it has sent SIGTERM once, or once the game is over
-# (no wineserver of the prefix any more, see zgu-prefix-watch.py). The orchestrator hands over
-# to Lutris via "exec" and cannot tell when the game ends, so the watcher checks by itself.
+# The menu is started once per trigger (rising edge) and never twice at the same time.
 #
 # SYSTEM DEPENDENCY: the libSDL2 shared library ("libsdl2-2.0-0" on Debian/Ubuntu, "sdl2"
-# on Arch, "SDL2" on Fedora). No extra Python package (pysdl2): the script calls libSDL2
-# directly via ctypes to keep the added dependency to a minimum.
+# on Arch, "SDL2" on Fedora). No extra Python package: libSDL2 is called through ctypes.
 
 import sys
 import os
+import select
 import signal
+import struct
+import subprocess
 import time
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -55,10 +41,11 @@ from zgu_common import (
     SDL_CONTROLLER_BUTTON_LEFTSTICK,
     SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
     SDL_CONTROLLER_BUTTON_RIGHTSTICK,
-    close_prefix_game,
     find_controllers,
     init_sdl,
     load_sdl2,
+    load_menu_conf,
+    parse_keyboard_hotkey,
 )
 
 if len(sys.argv) < 3 or sys.argv[1] not in ("x11", "wayland") or not sys.argv[2]:
@@ -114,28 +101,169 @@ elif getattr(sdl, "SDL_GameControllerAddMappingsFromFile", None) is None:
 
 
 
-def close_game():
-    """Stop the wineserver OF THIS GAME'S PREFIX (see zgu_common.close_prefix_game)."""
-    close_prefix_game(PREFIX_DIR)
-
-
 # --- SDL2 standardized buttons/axes (SDL_GameControllerButton / SDL_GameControllerAxis,
 # fixed numeric values of the C API, see SDL_gamecontroller.h). SDL2 translates every
 # recognized gamepad to this fixed layout, whatever the model.
+BUTTON_NAMES = {
+    "L1": SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
+    "R1": SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
+    "L3": SDL_CONTROLLER_BUTTON_LEFTSTICK,
+    "R3": SDL_CONTROLLER_BUTTON_RIGHTSTICK,
+}
+AXIS_NAMES = {"L2": SDL_CONTROLLER_AXIS_TRIGGERLEFT, "R2": SDL_CONTROLLER_AXIS_TRIGGERRIGHT}
+DEFAULT_COMBO = "L1,R1,L2,R2,L3,R3"
 
-COMBO_BUTTONS = (
-    SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
-    SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
-    SDL_CONTROLLER_BUTTON_LEFTSTICK,
-    SDL_CONTROLLER_BUTTON_RIGHTSTICK,
-)
-COMBO_AXES = (SDL_CONTROLLER_AXIS_TRIGGERLEFT, SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+
+def parse_combo(text):
+    """"L1,R1,L2,..." -> (button codes, axis codes). An unknown or empty list falls back to
+    the default combo: a typo in the config must never leave the menu unreachable."""
+    names = [n.strip().upper() for n in (text or "").split(",") if n.strip()]
+    if not names or any(n not in BUTTON_NAMES and n not in AXIS_NAMES for n in names):
+        names = DEFAULT_COMBO.split(",")
+    return (tuple(BUTTON_NAMES[n] for n in names if n in BUTTON_NAMES),
+            tuple(AXIS_NAMES[n] for n in names if n in AXIS_NAMES))
+
+
+MENU_CONF = load_menu_conf()
+COMBO_BUTTONS, COMBO_AXES = parse_combo(MENU_CONF["gamepad_combo"])
+KEYBOARD_HOTKEY = parse_keyboard_hotkey(MENU_CONF["keyboard_hotkey"])
 AXIS_PULL_THRESHOLD = int(32767 * 0.9)  # trigger counts as pressed beyond 90% of its travel
 POLL_INTERVAL_SECONDS = 0.05
 # Re-scan connected gamepads about once per second (not on every 50ms tick); see the
 # comment in main() below.
 RESCAN_INTERVAL_LOOPS = max(1, round(1.0 / POLL_INTERVAL_SECONDS))
 
+MENU_SCRIPT = os.path.join(SCRIPT_DIR, "zgu-game-menu.py")
+
+
+class MenuLauncher:
+    """Starts the menu (separate GTK process), never twice at once."""
+
+    def __init__(self):
+        self.proc = None
+
+    def is_open(self):
+        if self.proc is not None and self.proc.poll() is not None:
+            self.proc = None
+        return self.proc is not None
+
+    def open(self):
+        if self.is_open():
+            return
+        try:
+            self.proc = subprocess.Popen(
+                [sys.executable, MENU_SCRIPT, SESSION_KIND, PREFIX_DIR],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            self.proc = None
+
+    def close(self):
+        if self.is_open():
+            try:
+                self.proc.terminate()
+            except OSError:
+                pass
+
+
+class KeyboardHotkey:
+    """Reads the keyboards through /dev/input/event* (see file header). Devices come from
+    /proc/bus/input/devices (a "kbd" handler and key repeat = a real keyboard); an unreadable
+    device is skipped, so with no access this simply never triggers."""
+
+    EVENT = struct.Struct("llHHi")  # struct input_event (64-bit Linux)
+    EV_KEY = 1
+
+    def __init__(self, hotkey):
+        self.hotkey = hotkey
+        self.fds = {}
+        self.down = set()
+        self.next_scan = 0.0
+
+    def _event_paths(self):
+        paths = []
+        try:
+            with open("/proc/bus/input/devices", encoding="utf-8", errors="replace") as f:
+                blocks = f.read().split("\n\n")
+        except OSError:
+            return paths
+        for block in blocks:
+            handlers = ev = ""
+            for line in block.splitlines():
+                if line.startswith("H: Handlers="):
+                    handlers = line.split("=", 1)[1]
+                elif line.startswith("B: EV="):
+                    ev = line.split("=", 1)[1].strip()
+            try:
+                ev_bits = int(ev, 16)
+            except ValueError:
+                continue
+            if "kbd" in handlers.split() and ev_bits & (1 << 20):  # EV_REP: has key repeat
+                for word in handlers.split():
+                    if word.startswith("event"):
+                        paths.append("/dev/input/" + word)
+        return paths
+
+    def rescan(self):
+        wanted = set(self._event_paths())
+        for path in list(self.fds):
+            if path not in wanted:
+                self._drop(path)
+        for path in wanted - set(self.fds):
+            try:
+                self.fds[path] = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            except OSError:
+                pass
+
+    def _drop(self, path):
+        fd = self.fds.pop(path, None)
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def close(self):
+        for path in list(self.fds):
+            self._drop(path)
+
+    def _hotkey_down(self):
+        mods, key = self.hotkey
+        return key in self.down and all(any(c in self.down for c in pair) for pair in mods)
+
+    def poll(self, timeout):
+        """Waits up to `timeout` seconds for key events; True on the rising edge of the hotkey."""
+        now = time.monotonic()
+        if now >= self.next_scan:
+            self.next_scan = now + 2.0
+            self.rescan()
+        if not self.fds:
+            time.sleep(timeout)
+            return False
+        triggered = False
+        try:
+            ready, _, _ = select.select(list(self.fds.values()), [], [], timeout)
+        except (OSError, ValueError):
+            self.next_scan = 0.0
+            return False
+        for fd in ready:
+            try:
+                data = os.read(fd, self.EVENT.size * 64)
+            except BlockingIOError:
+                continue
+            except OSError:
+                self.next_scan = 0.0  # device unplugged: rescan
+                continue
+            for off in range(0, len(data) - self.EVENT.size + 1, self.EVENT.size):
+                _s, _u, etype, code, value = self.EVENT.unpack_from(data, off)
+                if etype == self.EV_KEY:
+                    was_down = self._hotkey_down()
+                    if value:
+                        self.down.add(code)
+                    else:
+                        self.down.discard(code)
+                    if self._hotkey_down() and not was_down:
+                        triggered = True  # rising edge, event by event
+        return triggered
 
 
 def count_available_controllers():
@@ -169,6 +297,9 @@ def main():
     pads = find_controllers(sdl)
     loops_since_rescan = 0
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)
+    menu = MenuLauncher()
+    keyboard = KeyboardHotkey(KEYBOARD_HOTKEY) if KEYBOARD_HOTKEY else None
+    combo_was_down = True  # a combo already held at start must be released first
 
     try:
         while running:
@@ -187,11 +318,20 @@ def main():
                             pass
                     pads = find_controllers(sdl)
 
-            if pads and combo_complete(pads):
-                close_game()
-                return
-            time.sleep(POLL_INTERVAL_SECONDS)
+            combo_down = bool(pads) and combo_complete(pads)
+            if combo_down and not combo_was_down:
+                menu.open()
+            combo_was_down = combo_down
+
+            if keyboard is not None:
+                if keyboard.poll(POLL_INTERVAL_SECONDS):
+                    menu.open()
+            else:
+                time.sleep(POLL_INTERVAL_SECONDS)
     finally:
+        menu.close()
+        if keyboard is not None:
+            keyboard.close()
         for pad in pads:
             try:
                 sdl.SDL_GameControllerClose(pad)

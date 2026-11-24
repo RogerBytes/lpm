@@ -321,7 +321,7 @@ if [[ ! -e "${loading_message_file}" ]]; then
   : > "${loading_message_file}" 2>/dev/null
 fi
 loading_message=$(head -c 1200 "${loading_message_file}" 2>/dev/null | tr '\r\t' '  ')
-LPM_PREFIX_DIR="${game_dir}" LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_HELP_F4="$(t launcher.help_f4)" LPM_HELP_ALTENTER="$(t launcher.help_altenter)" LPM_HELP_F11="$(t launcher.help_f11)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
+LPM_PREFIX_DIR="${game_dir}" LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
@@ -767,7 +767,11 @@ disown $! 2>/dev/null
 # at a time (consistent with the rest of lpm).
 if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
-  python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &
+  LPM_MENU_TITLE="$(t launcher.menu_title)" LPM_MENU_HINT="$(t launcher.menu_hint)" \
+    LPM_MENU_WINDOW="$(t launcher.menu_window)" LPM_MENU_ALTENTER="$(t launcher.menu_altenter)" \
+    LPM_MENU_ESCAPE="$(t launcher.menu_escape)" LPM_MENU_QUIT="$(t launcher.menu_quit)" \
+    LPM_MENU_QUIT_CONFIRM="$(t launcher.menu_quit_confirm)" LPM_MENU_QUIT_CANCEL="$(t launcher.menu_quit_cancel)" \
+    python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &
   disown $! 2>/dev/null
 
   # --- Gamepad "switch window" combo (Alt+Tab); see zgu-gamepad-alttab-watcher.py. Unlike the

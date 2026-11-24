@@ -13,12 +13,8 @@
 #     cycles windows (Shift+Tab / Tab), like holding Alt on a keyboard and pressing Tab
 #     repeatedly. Releasing the combo releases Alt and confirms the selection.
 #
-# During the same hold, three more keys are available (one press = one key):
-#
-#   D-pad Up    -> F4         (F4 ALONE: Alt is released during the press, otherwise it
-#                              would be Alt+F4 and close the active window)
-#   D-pad Down  -> Alt+Enter  (Alt is already held by the hold: only Enter is sent)
-#   Select/Back -> F11        (F11 ALONE, Alt released during the press, like F4)
+# F4, Alt+Enter, F11 and the other keys are no longer gamepad shortcuts: they are entries of
+# the LPM menu (lib/zgu-game-menu.py, opened by lib/zgu-gamepad-exit-watcher.py).
 #
 # Works on X11 (xdotool) and Wayland (ydotool).
 #
@@ -40,11 +36,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zgu_common import (
     SDL_CONTROLLER_AXIS_TRIGGERLEFT,
     SDL_CONTROLLER_AXIS_TRIGGERRIGHT,
-    SDL_CONTROLLER_BUTTON_BACK,
-    SDL_CONTROLLER_BUTTON_DPAD_DOWN,
     SDL_CONTROLLER_BUTTON_DPAD_LEFT,
     SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
-    SDL_CONTROLLER_BUTTON_DPAD_UP,
     SDL_CONTROLLER_BUTTON_LEFTSHOULDER,
     SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
     SDL_CONTROLLER_BUTTON_RIGHTSTICK,
@@ -116,12 +109,6 @@ YDOTOOL_ALT_DOWN = ["56:1"]
 YDOTOOL_ALT_UP = ["56:0"]
 YDOTOOL_TAB = ["15:1", "15:0"]
 YDOTOOL_SHIFT_TAB = ["42:1", "15:1", "15:0", "42:0"]
-# KEY_ENTER=28, KEY_F4=62, KEY_F11=87. For F4/F11, Alt is released (56:0) before the press
-# and pressed again (56:1) after, in ONE call, so the hold continues normally.
-YDOTOOL_ENTER = ["28:1", "28:0"]
-YDOTOOL_F4_WITHOUT_ALT = ["56:0", "62:1", "62:0", "56:1"]
-YDOTOOL_F11_WITHOUT_ALT = ["56:0", "87:1", "87:0", "56:1"]
-
 
 def _run_best_effort(argv):
     try:
@@ -149,33 +136,6 @@ def send_tab(reverse):
         _run_best_effort([XDOTOOL_BIN, "key", "shift+Tab" if reverse else "Tab"])
     elif shutil.which("ydotool"):
         _run_best_effort(["ydotool", "key", *(YDOTOOL_SHIFT_TAB if reverse else YDOTOOL_TAB)])
-
-
-def send_alt_enter():
-    """Alt is already held by the combo hold, so sending only Enter gives Alt+Enter.
-    (Sending "alt+Return" would release Alt at the end and break the hold.)"""
-    if SESSION_KIND == "x11" and XDOTOOL_BIN:
-        _run_best_effort([XDOTOOL_BIN, "key", "Return"])
-    elif shutil.which("ydotool"):
-        _run_best_effort(["ydotool", "key", *YDOTOOL_ENTER])
-
-
-def send_key_without_alt(x11_name, ydotool_sequence):
-    """Send a key ALONE (F4, F11...) while Alt is held by the combo: Alt is released for
-    the press then restored, otherwise F4 would become Alt+F4 (closing the window).
-    xdotool "--clearmodifiers" does exactly this (removes then restores modifiers)."""
-    if SESSION_KIND == "x11" and XDOTOOL_BIN:
-        _run_best_effort([XDOTOOL_BIN, "key", "--clearmodifiers", x11_name])
-    elif shutil.which("ydotool"):
-        _run_best_effort(["ydotool", "key", *ydotool_sequence])
-
-
-def send_f4():
-    send_key_without_alt("F4", YDOTOOL_F4_WITHOUT_ALT)
-
-
-def send_f11():
-    send_key_without_alt("F11", YDOTOOL_F11_WITHOUT_ALT)
 
 
 # --- Pausing AntiMicro(X) during the hold ---
@@ -272,19 +232,6 @@ def dpad_direction(pads):
     return 0
 
 
-# Single-press keys during the hold: SDL2 button -> action. An action fires on the rising
-# edge (released to pressed), never repeating while the button stays held.
-ONE_SHOT_ACTIONS = (
-    (SDL_CONTROLLER_BUTTON_DPAD_UP, send_f4),
-    (SDL_CONTROLLER_BUTTON_DPAD_DOWN, send_alt_enter),
-    (SDL_CONTROLLER_BUTTON_BACK, send_f11),
-)
-
-
-def button_down(pads, code):
-    return any(sdl.SDL_GameControllerGetButton(pad, code) for pad in pads)
-
-
 class AltTabLoop:
     """State of the watcher: connected pads, whether Alt is held, previous button states."""
 
@@ -297,7 +244,6 @@ class AltTabLoop:
         self.loops_since_rescan = 0
         self.alt_is_held = False
         self.prev_dpad_dir = 0
-        self.prev_one_shot = {}  # button -> was pressed on the previous tick (ONE_SHOT_ACTIONS)
         self.antimicro_paused_pids = []  # see _pause_antimicro()/_resume_antimicro() above
 
     def _close_pads(self):
@@ -322,9 +268,6 @@ class AltTabLoop:
             alt_down()
             self.alt_is_held = True
             self.prev_dpad_dir = 0  # restart from zero on each new hold
-            # A button already held when the combo completes triggers nothing: only a NEW
-            # press during the hold counts.
-            self.prev_one_shot = {code: button_down(self.pads, code) for code, _ in ONE_SHOT_ACTIONS}
             self.antimicro_paused_pids = _pause_antimicro()
         elif not active and self.alt_is_held:
             alt_up()
@@ -338,11 +281,6 @@ class AltTabLoop:
         if direction != self.prev_dpad_dir and direction != 0:
             send_tab(reverse=(direction < 0))
         self.prev_dpad_dir = direction
-        for code, action in ONE_SHOT_ACTIONS:
-            pressed = button_down(self.pads, code)
-            if pressed and not self.prev_one_shot.get(code, False):
-                action()
-            self.prev_one_shot[code] = pressed
 
     def tick(self):
         sdl.SDL_GameControllerUpdate()
