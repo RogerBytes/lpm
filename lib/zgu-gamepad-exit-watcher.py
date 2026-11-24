@@ -41,6 +41,7 @@ import time
 # lib/ is the folder of this script: zgu_common.py sits next to it, whatever the way it is started.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zgu_common import (
+    close_keyboard_if_running,
     SDL_CONTROLLER_BUTTON_DPAD_DOWN,
     SDL_CONTROLLER_BUTTON_DPAD_UP,
     SDL_CONTROLLER_AXIS_TRIGGERLEFT,
@@ -489,8 +490,11 @@ def main():
                 up = bool(sdl.SDL_GameControllerGetButton(hold_pad, SDL_CONTROLLER_BUTTON_DPAD_UP))
                 down = bool(sdl.SDL_GameControllerGetButton(hold_pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN))
                 if down and not prev_down:  # down: the keyboard appears at the bottom of the screen
-                    log("virtual keyboard requested by gamepad")
-                    start_detached(KEYBOARD_SCRIPT)
+                    if close_keyboard_if_running():
+                        log("virtual keyboard closed by gamepad")
+                    else:
+                        log("virtual keyboard requested by gamepad")
+                        start_detached(KEYBOARD_SCRIPT)
                 if up and not prev_up:
                     mouse.toggle()
                 prev_up, prev_down = up, down

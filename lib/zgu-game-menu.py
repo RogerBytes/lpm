@@ -54,6 +54,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from zgu_common import (
+    close_keyboard_if_running,
     GAMEPAD_AXIS_THRESHOLD,
     GAMEPAD_POLL_MS,
     SDL_CONTROLLER_AXIS_LEFTY,
@@ -132,7 +133,9 @@ def toggle_gamepad_mouse():
 
 
 def start_keyboard():
-    """Starts the virtual keyboard (it keeps running after this menu has exited)."""
+    """Starts the virtual keyboard (it keeps running after this menu has exited); closes it when it is already open."""
+    if close_keyboard_if_running():
+        return
     try:
         subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                         "zgu-virtual-keyboard.py"), SESSION_KIND, PREFIX_DIR],
@@ -198,7 +201,7 @@ window.lpm-menu, window.lpm-menu.background, window.lpm-menu.csd {
     background-color: rgba(26, 26, 26, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
-    box-shadow: 0 0 40px rgba(58, 110, 165, 0.35), 0 8px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 40px rgba(58, 110, 165, 0.10), 0 8px 30px rgba(0, 0, 0, 0.5);
     min-width: 520px;
 }
 /* Compact mode (no compositing): the small window itself is the opaque card. */

@@ -3,7 +3,7 @@
 #
 # Usage: zgu-virtual-keyboard.py <x11|wayland> <prefix_folder>
 #
-# Opened from the LPM menu ("Virtual keyboard") or with L1+L2+R1+R2+R3 held then D-pad down
+# Opened (and closed again) from the LPM menu ("Virtual keyboard") or with L1+L2+R1+R2+R3 held then D-pad down
 # (zgu-gamepad-exit-watcher.py). Stays open until closed (Select, the close key, Esc on a real
 # keyboard, a click outside the card, or the end of the game).
 #
@@ -161,10 +161,10 @@ window.lpm-kb, window.lpm-kb.background, window.lpm-kb.csd {
 }
 .lpm-kb-veil { background-color: rgba(0, 0, 0, 0.25); }
 .lpm-kb-card {
-    background-color: rgba(26, 26, 26, 0.92);
+    background-color: rgba(26, 26, 26, 0.78);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
-    box-shadow: 0 0 40px rgba(58, 110, 165, 0.35), 0 8px 30px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 40px rgba(58, 110, 165, 0.10), 0 8px 30px rgba(0, 0, 0, 0.5);
     padding: 14px;
 }
 window.lpm-kb.lpm-compact, window.lpm-kb.lpm-compact.background, window.lpm-kb.lpm-compact.csd {
@@ -174,7 +174,7 @@ window.lpm-compact .lpm-kb-veil, window.lpm-compact .lpm-kb-card {
     background-color: transparent; border: none; box-shadow: none;
 }
 button.lpm-kb-key {
-    background: rgba(70, 70, 70, 0.95); color: #ffffff; border: none; border-radius: 10px;
+    background: rgba(70, 70, 70, 0.80); color: #ffffff; border: none; border-radius: 10px;
     font-size: 20px; min-height: 48px; padding: 0; box-shadow: none;
 }
 button.lpm-kb-key.lpm-kb-on { background: #5a8f5a; }
@@ -558,11 +558,15 @@ def on_activate(application):
 def single_instance():
     """Only one keyboard at a time (menu entry and D-pad shortcut could both start one)."""
     base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    handle = open(os.path.join(base, "lpm-virtual-keyboard.lock-%d" % os.getuid()), "w")
+    handle = open(os.path.join(base, "lpm-virtual-keyboard.lock-%d" % os.getuid()), "a+")  # not "w": keep the pid of the running one
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         return None
+    handle.seek(0)
+    handle.truncate()
+    handle.write(str(os.getpid()))  # so that the shortcut can close this keyboard
+    handle.flush()
     return handle
 
 

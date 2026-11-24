@@ -69,7 +69,7 @@ When the LPM Launcher is enabled, two small watchers run for the whole play sess
 
 **Window switch** (`lib/zgu-gamepad-alttab-watcher.py`): hold **L1 + L2 + R1 + R2 + R3**, then D-pad left / right sends Shift+Tab / Tab, as with Alt held: the window switcher moves back / forward. Releasing the combo validates the selection.
 
-**Shortcuts while holding the window-switch combo**: D-pad down opens the virtual keyboard (it appears at the bottom), D-pad up turns the gamepad mouse on or off (same as the two menu entries).
+**Shortcuts while holding the window-switch combo**: D-pad down opens the virtual keyboard (it appears at the bottom; the same shortcut closes it again), D-pad up turns the gamepad mouse on or off (same as the two menu entries).
 
 **LPM menu** (`lib/zgu-gamepad-exit-watcher.py` opens `lib/zgu-game-menu.py`): press **L1 + L2 + R1 + R2 + L3 + R3** together (or **Ctrl+Shift+M** on the keyboard) and a menu appears over the game. The game is not paused. Move with the D-pad (or the arrows), validate with A (or Enter or a click), go back with B (or Esc). The menu closes by itself when it loses the focus (a click on the game, Alt+Tab...) and when the game ends.
 

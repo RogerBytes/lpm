@@ -334,7 +334,26 @@ def _mouse_suspend_check():
     return good
 
 
+def _keyboard_pid_check():
+    import fcntl, tempfile
+    os.environ["XDG_RUNTIME_DIR"] = tempfile.mkdtemp()
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+    import zgu_common
+    none_before = zgu_common.running_keyboard_pid() == 0
+    handle = open(zgu_common.runtime_file("virtual-keyboard.lock"), "a+")
+    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    handle.write("4242"); handle.flush()
+    held = zgu_common.running_keyboard_pid() == 4242
+    handle.close()
+    released = zgu_common.running_keyboard_pid() == 0
+    good = none_before and held and released and not zgu_common.close_keyboard_if_running()
+    print(("OK: " if good else "FAIL: ") + "keyboard: the running keyboard is found by its lock (toggle)")
+    return good
+
+
 try:
+    if not _keyboard_pid_check():
+        ok = False
     if not _mouse_suspend_check():
         ok = False
     _mouse_checks()

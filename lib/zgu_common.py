@@ -399,3 +399,33 @@ def runtime_file(name):
     "gamepad-mouse": exists while the gamepad mouse is on)."""
     base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
     return os.path.join(base, "lpm-%s-%d" % (name, os.getuid()))
+
+
+def running_keyboard_pid():
+    """Process id of the running virtual keyboard, or 0. The keyboard holds a lock on a file in the
+    runtime dir for its whole life and writes its pid in it."""
+    import fcntl
+    path = runtime_file("virtual-keyboard.lock")
+    try:
+        with open(path, "r") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return 0  # nobody holds it
+            except OSError:
+                pass
+            return int((handle.read() or "0").strip() or 0)
+    except (OSError, ValueError):
+        return 0
+
+
+def close_keyboard_if_running():
+    """True (and the keyboard is asked to close) when the virtual keyboard was open."""
+    pid = running_keyboard_pid()
+    if pid <= 0:
+        return False
+    import signal
+    try:
+        os.kill(pid, signal.SIGTERM)
+        return True
+    except OSError:
+        return False
