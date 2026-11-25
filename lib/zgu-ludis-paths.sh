@@ -40,6 +40,8 @@ zgu_ludis_rel() {
     loading_message)  new="settings/loading-message.txt"; legacy="lpm-loading-message.txt" ;;
     ignore_windows)   new="settings/ignore-windows.txt"; legacy="lpm-ignore-windows.txt" ;;
     overlay_fps)      new="settings/overlay-fps";       legacy="lpm-overlay-fps" ;;
+    saves_auto)       new="settings/saves-auto";        legacy="saves-auto" ;;
+    saves_folders)    new="settings/saves-folders.txt"; legacy="saves-folders.txt" ;;
     saves_extra)      new="settings/saves-extra.txt";   legacy="saves-extra.txt" ;;
     scripts)          new="scripts";                    legacy="scripts" ;;
     gamepad)          new="gamepad";                    legacy="lpm_gamepad" ;;
@@ -278,4 +280,36 @@ zgu_ludis_migrate_home() {
   old="${XDG_DATA_HOME:-${HOME}/.local/share}/ludis"
   [[ -f "${old}/lpm.log" && ! -e "${old}/ludis.log" ]] && mv -- "${old}/lpm.log" "${old}/ludis.log" 2>/dev/null
   return 0
+}
+
+
+# --- Saves: automatic mode (see lib/zgp-game-saves.sh) ---
+# Global: <XDG config>/ludis/saves.conf keys "sync_dir", "auto" (on|off, default on) and "interval"
+# (minutes, 0 = no periodic copy, default 10). Per game: "<prefix>/ludis/settings/saves-auto"
+# holding "on" or "off"; no file = follow the global setting.
+
+zgu_saves_conf_get() {
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/saves.conf" 2>/dev/null | tail -n 1
+}
+
+# zgu_saves_auto_wanted <prefix>: exit status 0 when the automatic mode must run for this game
+# (a sync folder is set AND the game setting, else the global one, is on).
+zgu_saves_auto_wanted() {
+  local game value
+  [[ -n "$(zgu_saves_conf_get sync_dir)" ]] || return 1
+  game="$(tr -d '[:space:]' < "$(zgu_ludis_find "$1" saves_auto)" 2>/dev/null)"
+  case "${game,,}" in
+    on) return 0 ;;
+    off) return 1 ;;
+  esac
+  value="$(zgu_saves_conf_get auto | tr -d '[:space:]')"
+  [[ "${value,,}" != "off" ]]
+}
+
+# zgu_saves_interval: minutes between two copies while playing (0 = none).
+zgu_saves_interval() {
+  local v
+  v="$(zgu_saves_conf_get interval | tr -d '[:space:]')"
+  [[ "${v}" =~ ^[0-9]+$ ]] && (( v <= 60 )) || v=10
+  printf '%s' "${v}"
 }

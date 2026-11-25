@@ -53,9 +53,27 @@ source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
+# --- Automatic saves (see lib/zgp-game-saves.sh): when a sync folder is set and the mode is on for
+# this game, bring a newer backup (another machine or session) BEFORE the game starts, then let a
+# detached monitor copy the saves every N minutes and once more when the game has ended. The local
+# saves are always kept in previous/ first. Never blocks the launch for long (60 s at most).
+# Called by launch_lutris, which every path of this script ends with, so no launch escapes it. ---
+saves_auto_start() {
+  local out
+  [[ -n "${slug:-}" && -n "${game_dir:-}" && -d "${game_dir}" ]] || return 0
+  pkill -f "zgu-saves-monitor.py" 2>/dev/null
+  zgu_saves_auto_wanted "${game_dir}" && command -v python3 >/dev/null 2>&1 || return 0
+  out="$(timeout 60 bash "${script_dir}/zgp-game-saves.sh" "${slug}" pull 2>&1 </dev/null | tail -n 1)"
+  zgu_log "launcher-orchestrator" "INFO" "slug=${slug} saves ${out:-pull=nothing}"
+  python3 "${script_dir}/zgu-saves-monitor.py" "${game_dir}" "${slug}" "$(zgu_saves_interval)" >/dev/null 2>&1 </dev/null &
+  disown $! 2>/dev/null
+  return 0
+}
+
 # --- Final Lutris command: the same as the one used in Exec= before the orchestrator ---
 overlay_flatpak_env=()
 launch_lutris() {
+  saves_auto_start
   if [[ "${version}" = "flatpak" ]]; then
     exec env LUTRIS_SKIP_INIT=1 flatpak run ${overlay_flatpak_env[@]+"${overlay_flatpak_env[@]}"} net.lutris.Lutris "lutris:rungameid/${game_id}"
   else

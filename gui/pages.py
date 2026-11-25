@@ -5,10 +5,11 @@ from pages_lifecycle import LifecyclePages
 from pages_media import MediaPages
 from pages_runners import RunnerPages
 from pages_system import SystemPages
+from pages_saves import SavesPages
 from pages_vsync import VsyncPages
 
 
-class CommandPages(HomePages, LifecyclePages, MediaPages, RunnerPages, SystemPages, VsyncPages):
+class CommandPages(HomePages, LifecyclePages, MediaPages, RunnerPages, SavesPages, SystemPages, VsyncPages):
     """Builds each command screen (one page_<command>() method per screen, spread across
     the pages_*.py modules by theme). MainWindow.BUILDER_NAMES maps each sidebar entry id
     to the matching method."""

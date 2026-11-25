@@ -88,6 +88,40 @@ check "saves: import" 0 'imported' saves zelda import "${HOME}/zelda-test.zgs"
 expect "saves: import put the exported content back (slot2)" bash -c '[ "$(cat "$1")" = slot2 ]' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat"
 expect "saves: forged archive with ../ or a link is refused" bash -c 'd=$(mktemp -d); mkdir -p "$d/x"; echo m > "$d/x/.ludis-saves"; ln -s /etc "$d/x/AppData"; tar -C "$d/x" -cf - . | zstd -q -o "$d/bad.zgs"; ! bash "$1" saves zelda import "$d/bad.zgs" </dev/null >/dev/null 2>&1; rc=$?; rm -rf "$d"; exit $rc' _ "${R}"
 expect "saves: random file is not a saves archive" bash -c 'echo hello > "$2/notzgs.zgs"; ! bash "$1" saves zelda import "$2/notzgs.zgs" </dev/null >/dev/null 2>&1' _ "${R}" "${HOME}"
+check "saves: global auto defaults to on" 0 '^on$' saves auto
+check "saves: game auto follows the global setting" 0 'game=follow global=on' saves zelda auto
+check "saves: push is quiet and makes a backup when files changed" 0 '^$' saves zelda push
+echo slot4 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; touch -d '-1 minute' "${sv_user}/AppData/Roaming/Zelda/save1.dat"
+check "saves: push (changed)" 0 '^$' saves zelda push
+expect "saves: push copied the new content" bash -c '[ "$(cat "$1/syncsaves/zelda/current/AppData/Roaming/Zelda/save1.dat")" = slot4 ]' _ "${HOME}"
+check "saves: pull right after our own push: up to date" 0 'pull=up-to-date' saves zelda pull
+# another machine pushes a newer backup
+echo remote5 > "${HOME}/syncsaves/zelda/current/AppData/Roaming/Zelda/save1.dat"; echo "$(( $(date +%s) + 100 )) otherpc" > "${HOME}/syncsaves/zelda/stamp"
+check "saves: pull brings the newer backup (local copy kept)" 0 'pull=restored' saves zelda pull
+expect "saves: pull restored the remote content and kept slot4 in previous/" bash -c '[ "$(cat "$1")" = remote5 ] && grep -rq slot4 "$2"/syncsaves/zelda/previous' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat" "${HOME}"
+check "saves: pull again: up to date" 0 'pull=up-to-date' saves zelda pull
+check "saves: per-game auto off" 0 '' saves zelda auto off
+expect "saves: per-game off wins over the global on" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; ! zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
+check "saves: per-game follow" 0 '' saves zelda auto follow
+expect "saves: auto wanted again (sync folder set, global on)" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
+check "saves: global auto off" 0 '' saves auto off
+expect "saves: global off -> not wanted" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; ! zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
+check "saves: global auto on" 0 '' saves auto on
+check "saves: interval default" 0 '^10$' saves interval
+check "saves: interval set" 0 'minute' saves interval 25
+check "saves: interval refused above 60" 1 '' saves interval 99
+# custom folders (stored in the prefix, replace the defaults)
+check "saves: folders list = defaults" 0 'AppData' saves zelda folders list
+check "saves: folders add" 0 '' saves zelda folders add "AppData/Roaming/Zelda"
+check "saves: folders add refuses .." 1 '' saves zelda folders add "../x"
+check "saves: folders remove" 0 '' saves zelda folders remove AppData
+check "saves: folders remove Documents" 0 '' saves zelda folders remove Documents
+check "saves: folders remove Saved Games" 0 '' saves zelda folders remove "Saved Games"
+expect "saves: the choice is a file in the prefix" bash -c '[ -f "$1/Games/zelda/ludis/settings/saves-folders.txt" ] && [ "$(cat "$1/Games/zelda/ludis/settings/saves-folders.txt")" = "AppData/Roaming/Zelda" ]' _ "${HOME}"
+check "saves: backup with custom folders" 0 'backed up|unchanged' saves zelda backup
+expect "saves: only the chosen folder is in the backup" bash -c 'c="$1/syncsaves/zelda/current"; [ -f "$c/AppData/Roaming/Zelda/save1.dat" ] && [ ! -e "$c/Documents" ]' _ "${HOME}"
+check "saves: folders reset" 0 '' saves zelda folders reset
+expect "saves: monitor stops by itself when the game never shows up" bash -c 'LUDIS_SAVES_GIVEUP=2 timeout 20 python3 "$1/lib/zgu-saves-monitor.py" "$2" zelda 10; [ $? -eq 0 ]' _ "${repo}" "${HOME}/Games/zelda"
 check "saves: unknown game" 1 '' saves nogame status
 
 check "list-runner" 0 'GE-Test' list-runner

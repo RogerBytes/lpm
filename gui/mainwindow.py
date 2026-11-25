@@ -53,6 +53,7 @@ class MainWindow(Adw.ApplicationWindow):
                 ("backup", t("gui.category.backup"), "package-x-generic-symbolic", [
                     ("pack", t("gui.pack.page_title"), "package-x-generic-symbolic"),
                     ("isolate", t("gui.isolate.page_title"), "security-high-symbolic"),
+                    ("saves", t("gui.saves.page_title"), "document-save-symbolic"),
                 ]),
                 ("runners", t("gui.category.runners"), "view-list-symbolic", [
                     ("download-runner", t("gui.download_runner.page_title"), "folder-download-symbolic"),
@@ -83,6 +84,7 @@ class MainWindow(Adw.ApplicationWindow):
         "lsfg": "page_lsfg",
         "pack": "page_pack",
         "isolate": "page_isolate",
+        "saves": "page_saves",
         "download-runner": "page_download_runner",
         "install-runner": "page_install_runner",
         "uninstall-runner": "page_uninstall_runner",
