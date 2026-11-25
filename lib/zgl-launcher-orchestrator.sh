@@ -774,6 +774,7 @@ disown $! 2>/dev/null
 overlay_armed_file="${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-armed-$(id -u)"
 rm -f "${overlay_armed_file}" "${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-visible-$(id -u)" 2>/dev/null
 overlay_reason=""
+overlay_arm_pending=false
 if [[ "${has_display}" != true ]]; then
   overlay_reason="no_display"
 elif ! zgu_overlay_fps_wanted "${game_dir}"; then
@@ -793,7 +794,7 @@ else
     overlay_config="read_cfg,no_display,toggle_hud=Shift_R+F12"
     export MANGOHUD=1 MANGOHUD_CONFIG="${overlay_config}"
     overlay_flatpak_env=("--env=MANGOHUD=1" "--env=MANGOHUD_CONFIG=${overlay_config}")
-    printf '%s\n' "${game_dir}" > "${overlay_armed_file}" 2>/dev/null
+    overlay_arm_pending=true  # the file is written below, once the previous watcher is gone
     zgu_log "launcher-orchestrator" "OK" "slug=${slug} overlay=armed hidden config=${overlay_config} lutris=${version}"
   else
     overlay_reason="mangohud_not_found (lutris=${version})"
@@ -803,6 +804,10 @@ fi
 
 if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   pkill -f "zgu-gamepad-exit-watcher.py" 2>/dev/null
+  # The previous watcher (still running when the game is relaunched at once) removes the
+  # "overlay-armed" file as it stops: wait for it to be gone, THEN write ours.
+  for _ in $(seq 1 30); do pgrep -f "zgu-gamepad-exit-watcher.py" >/dev/null 2>&1 || break; sleep 0.1; done
+  [[ "${overlay_arm_pending}" = true ]] && printf '%s\n' "${game_dir}" > "${overlay_armed_file}" 2>/dev/null
   LPM_MENU_TITLE="$(t launcher.menu_title)" LPM_MENU_HINT="$(t launcher.menu_hint)" \
     LPM_MENU_WINDOW="$(t launcher.menu_window)" LPM_MENU_ALTENTER="$(t launcher.menu_altenter)" \
     LPM_MENU_ESCAPE="$(t launcher.menu_escape)" LPM_MENU_QUIT="$(t launcher.menu_quit)" LPM_MENU_FORCE="$(t launcher.menu_force)" LPM_MENU_ALTF4_CONFIRM="$(t launcher.menu_altf4_confirm)" \
