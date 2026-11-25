@@ -396,10 +396,13 @@ class MenuWindow(Gtk.Window):
         self.listbox.add_css_class("lpm-menu-list")
         self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.listbox.set_activate_on_single_click(True)
+        self.listbox.connect("row-selected", lambda *_a: self.update_hint() if hasattr(self, "hint") else None)
         self.listbox.connect("row-activated", lambda _lb, row: self.activate_index(row.get_index()))
         self.listbox.set_vexpand(True)
         box.append(self.listbox)
         hint = Gtk.Label(label=label("HINT", "A: validate    B: back"), xalign=0)
+        self.hint = hint
+        self.hint_default = hint.get_text()
         hint.add_css_class("lpm-menu-hint")
         box.append(hint)
         if self.veil:
@@ -463,18 +466,8 @@ class MenuWindow(Gtk.Window):
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
             lbl = Gtk.Label(label=entry_label, xalign=0)
             lbl.add_css_class("lpm-menu-entry")
-            if kind == "segment":
-                text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-                text_box.set_hexpand(True)
-                text_box.append(lbl)
-                note = Gtk.Label(label=value[4], xalign=0)
-                note.add_css_class("lpm-menu-note")
-                note.set_visible(False)
-                text_box.append(note)
-                box.append(text_box)
-            else:
-                lbl.set_hexpand(True)
-                box.append(lbl)
+            lbl.set_hexpand(True)
+            box.append(lbl)
             info = {}
             if kind == "submenu":
                 chevron = Gtk.Label(label="›")
@@ -501,7 +494,7 @@ class MenuWindow(Gtk.Window):
                     pill.add_controller(click)
                     seg.append(pill)
                     pills.append(pill)
-                info.update(pills=pills, note=note, index=int(value[0]()))
+                info.update(pills=pills, note=False, index=int(value[0]()))
                 box.append(seg)
                 self.show_segment(info, info["index"], bool(value[2]()))
             elif kind == "slider":
@@ -535,15 +528,24 @@ class MenuWindow(Gtk.Window):
         info["pct"].set_text("%d %%" % new)
         self.entries[idx][2][1](new)
 
-    @staticmethod
-    def show_segment(info, index, note):
+    def show_segment(self, info, index, note):
         info["index"] = index
         for number, pill in enumerate(info["pills"]):
             if number == index:
                 pill.add_css_class("lpm-seg-active")
             else:
                 pill.remove_css_class("lpm-seg-active")
-        info["note"].set_visible(bool(note))
+        info["note"] = bool(note)
+        self.update_hint()
+
+    def update_hint(self):
+        """The footer says "next launch" instead of the usual help, only while the selected row is a
+        choice whose new state only applies at the next launch."""
+        idx = self.selected_index()
+        text = self.hint_default
+        if idx < len(self.rows) and self.entries[idx][1] == "segment" and self.rows[idx].get("note"):
+            text = "\u21bb " + self.entries[idx][2][4]
+        self.hint.set_text(text)
 
     def set_segment(self, idx, index):
         info = self.rows[idx]
