@@ -5,7 +5,10 @@
 #   ludis saves dir [path]                  show or set the sync folder (one subfolder per game)
 #   ludis saves <slug> status               what is saved where (local / sync folder)
 #   ludis saves <slug> backup               copy the game's saves to <sync>/<slug>/current/
-#   ludis saves <slug> restore              copy <sync>/<slug>/current/ back into the prefix
+#   ludis saves <slug> restore [snapshot]   copy <sync>/<slug>/current/ (or an older snapshot of
+#                                           "history") back into the prefix
+#   ludis saves <slug> history              the older snapshots kept in previous/ (compressed)
+#   ludis saves <slug> path                 the Windows user folder of the prefix
 #   ludis saves <slug> export [file.zgs]    make a shareable archive of the saves
 #   ludis saves <slug> import <file.zgs>    put the saves of an archive into the prefix
 #   ludis saves <slug> pull | push          what the automatic mode does at launch / during and
@@ -31,7 +34,7 @@
 #
 # Safety: nothing outside the prefix's user folder is ever written; links found in a backup or
 # an archive are deleted (never followed); the local saves are copied to "previous/" before any
-# restore or import overwrites them; "previous/" keeps the 5 latest snapshots.
+# restore or import overwrites them; "previous/" keeps 3 compressed snapshots at most (see saves_rotate).
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -203,30 +206,35 @@ saves_unpack() {
   return 0
 }
 
-# saves_rotate <previous_dir>: grandfather-father-son rotation of the snapshots in previous/.
-# Kept: the newest one of each of the last 3 hours, of each of the last 3 days and of each of the
-# last 2 weeks (8 at most); everything older is deleted. The safety copies made before a restore,
+# saves_compress <dir> <dest.tar.zst>: one compressed file from the content of <dir>.
+saves_compress() {
+  tar -C "$1" -cf - . 2>/dev/null | zstd -q -3 -f -o "$2.tmp" 2>/dev/null && mv -f -- "$2.tmp" "$2" || { rm -f -- "$2.tmp"; return 1; }
+}
+
+# saves_rotate <previous_dir>: what previous/ keeps (3 snapshots at most): the newest one of the
+# last hour, the newest one of the last day (older than that hour) and the newest one of the last
+# week (older than that day). Everything else is deleted. The safety copies made before a restore,
 # a pull or an import ("before-*", "conflict") are also kept for 7 days whatever the rule says.
-# Snapshot folders are named YYYYmmdd-HHMMSS-<label>.
+# Snapshots are named YYYYmmdd-HHMMSS-<label>.tar.zst (older versions made plain folders: same rule).
 saves_rotate() {
   local d name stamp epoch age keep now key
   declare -A seen=()
   now="$(date +%s)"
   while IFS= read -r d; do
-    name="$(basename -- "${d}")"
+    name="$(basename -- "${d}")"; name="${name%.tar.zst}"
     stamp="${name:0:8} ${name:9:2}:${name:11:2}:${name:13:2}"
     epoch="$(date -d "${stamp}" +%s 2>/dev/null)" || epoch=""
     [[ "${epoch}" =~ ^[0-9]+$ ]] || continue       # not one of ours: never touched
     age=$(( now - epoch ))
     keep=false
-    if (( age < 3 * 3600 )); then key="h$(( age / 3600 ))"
-    elif (( age < 3 * 86400 )); then key="d$(( age / 86400 ))"
-    elif (( age < 14 * 86400 )); then key="w$(( age / (7 * 86400) ))"
+    if (( age < 3600 )); then key="hour"
+    elif (( age < 86400 )); then key="day"
+    elif (( age < 7 * 86400 )); then key="week"
     else key=""; fi
     if [[ -n "${key}" && -z "${seen[${key}]:-}" ]]; then seen[${key}]=1; keep=true; fi
     if [[ "${keep}" = false && "${name}" =~ -(before-|conflict) ]] && (( age < 7 * 86400 )); then keep=true; fi
     [[ "${keep}" = true ]] || rm -rf -- "${d}"
-  done < <(find "$1" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -r)
+  done < <(find "$1" -mindepth 1 -maxdepth 1 \( -type f -name '*.tar.zst' -o -type d \) 2>/dev/null | sort -r)
   return 0
 }
 
@@ -234,7 +242,11 @@ saves_rotate() {
 saves_snapshot_local() {
   local snap="${game_sync}/previous/$(date +%Y%m%d-%H%M%S)-$1"
   [[ -n "$(saves_items)" ]] || return 0
-  mkdir -p -- "${game_sync}/previous" && saves_pack "${snap}" || return 1
+  mkdir -p -- "${game_sync}/previous" && saves_pack "${work}/snap" || return 1
+  if ! saves_compress "${work}/snap" "${snap}.tar.zst"; then
+    mv -- "${work}/snap" "${snap}" || return 1        # no zstd: keep a plain folder
+  fi
+  rm -rf -- "${work}/snap"
   saves_rotate "${game_sync}/previous"
 }
 
@@ -247,14 +259,57 @@ saves_need_sync_dir() {
   return 0
 }
 
-# saves_do_restore <label>: local saves kept in previous/<date>-<label>, then <sync>/current restored.
+# saves_norm_folder <arg>: a folder given as a path relative to the Windows user folder, as
+# "drive_c:<path relative to drive_c>", or as an absolute path inside the prefix (what a folder
+# picker returns). Prints "U<tab>relative path" (inside the user folder) or "X<tab>relative path"
+# (elsewhere in drive_c); fails for anything else (outside the prefix, "..").
+saves_norm_folder() {
+  local p="${1%/}" abs u_real d_real
+  [[ -n "${p}" && "${p}" != *..* && "${p}" != *$'\n'* ]] || return 1
+  case "${p}" in
+    drive_c:*)
+      p="${p#drive_c:}"
+      [[ -n "${p}" && "${p}" != /* ]] || return 1
+      printf 'X\t%s' "${p}"
+      ;;
+    /*)
+      abs="$(realpath -m -- "${p}")"
+      u_real="$(realpath -- "${user_dir}")"; d_real="$(realpath -- "${prefix_dir}/drive_c")"
+      case "${abs}" in
+        "${u_real}"/*) printf 'U\t%s' "${abs#"${u_real}"/}" ;;
+        "${d_real}"/*) printf 'X\t%s' "${abs#"${d_real}"/}" ;;
+        *) return 1 ;;
+      esac
+      ;;
+    *) printf 'U\t%s' "${p}" ;;
+  esac
+}
+
+# saves_do_restore <label> [snapshot]: local saves kept in previous/<date>-<label>, then <sync>/current
+# (or the named snapshot of previous/) restored.
 saves_do_restore() {
-  if [[ ! -d "${game_sync}/current" ]]; then
+  local snap="${2:-}" found
+  if [[ -n "${snap}" ]]; then
+    found="$(find "${game_sync}/previous" -mindepth 1 -maxdepth 1 -name "*${snap}*" 2>/dev/null | sort -r | head -n 1)"
+    if [[ -z "${found}" ]]; then
+      zgu_cli_error "$(t saves.no_snapshot_cli "${snap}")"
+      return 1
+    fi
+  elif [[ ! -d "${game_sync}/current" ]]; then
     zgu_cli_error "$(t saves.no_backup_cli "${target_name}")"
     return 1
   fi
+  # Prepare the saves to bring BEFORE keeping the local ones: that step rotates previous/ and could
+  # delete the very snapshot being restored.
+  if [[ -z "${snap}" ]]; then
+    cp -a -- "${game_sync}/current" "${work}/src" || return 1
+  elif [[ -d "${found}" ]]; then
+    cp -a -- "${found}" "${work}/src" || return 1
+  else
+    mkdir -p -- "${work}/src" && zstd -dcq -- "${found}" | tar -C "${work}/src" -xf - --no-same-owner 2>/dev/null \
+      || { zgu_cli_error "$(t saves.restore_failed_cli "${target_name}")"; return 1; }
+  fi
   saves_snapshot_local "$1" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; return 1; }
-  cp -a -- "${game_sync}/current" "${work}/src" || return 1
   if ! saves_unpack "${work}/src"; then
     zgu_cli_error "$(t saves.restore_failed_cli "${target_name}")"
     return 1
@@ -325,7 +380,7 @@ if [[ "${cli_slug}" = "dir" ]]; then
 fi
 
 case "${cli_action}" in
-  status|backup|restore|export|import|pull|push|auto|folders|exclude) ;;
+  status|backup|restore|export|import|pull|push|auto|folders|exclude|history|path) ;;
   "") cli_action="status" ;;
   *)
     zgu_cli_error "$(t saves.invalid_action_cli "${cli_action}")"
@@ -369,7 +424,7 @@ case "${cli_action}" in
     n_local=$(saves_items | wc -l)
     echo "local=${n_local} sync_dir=${sync_dir:-none}"
     if [[ -n "${game_sync}" && -d "${game_sync}/current" ]]; then
-      echo "backup=$(date -d "@$(cut -d' ' -f1 "${game_sync}/stamp" 2>/dev/null || echo 0)" '+%Y-%m-%d %H:%M:%S' 2>/dev/null) previous=$(find "${game_sync}/previous" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)"
+      echo "backup=$(date -d "@$(cut -d' ' -f1 "${game_sync}/stamp" 2>/dev/null || echo 0)" '+%Y-%m-%d %H:%M:%S' 2>/dev/null) previous=$(find "${game_sync}/previous" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)"
     else
       echo "backup=none"
     fi
@@ -400,7 +455,12 @@ case "${cli_action}" in
     fi
     if [[ -d "${game_sync}/current" ]]; then
       mkdir -p -- "${game_sync}/previous"
-      mv -- "${game_sync}/current" "${game_sync}/previous/$(date +%Y%m%d-%H%M%S)-backup"
+      old="${game_sync}/previous/$(date +%Y%m%d-%H%M%S)-backup"
+      if saves_compress "${game_sync}/current" "${old}.tar.zst"; then
+        rm -rf -- "${game_sync}/current"
+      else
+        mv -- "${game_sync}/current" "${old}"
+      fi
       saves_rotate "${game_sync}/previous"
     fi
     mv -- "${game_sync}/.current.tmp" "${game_sync}/current"
@@ -412,8 +472,17 @@ case "${cli_action}" in
 
   restore)
     saves_need_sync_dir || exit 1
-    saves_do_restore "before-restore" || exit 1
+    saves_do_restore "before-restore" "${cli_arg}" || exit 1
     zgu_cli_ok "$(t saves.restore_ok_cli "${target_name}")"
+    ;;
+
+  history)
+    saves_need_sync_dir || exit 1
+    find "${game_sync}/previous" -mindepth 1 -maxdepth 1 2>/dev/null | sed 's#.*/##; s#\.tar\.zst$##' | sort -r
+    ;;
+
+  path)
+    printf '%s\n' "${user_dir}"
     ;;
 
   pull)
@@ -495,24 +564,29 @@ case "${cli_action}" in
 
   folders)
     ff="$(zgu_ludis_path "${prefix_dir}" saves_folders)"
+    xf_extra="$(zgu_ludis_path "${prefix_dir}" saves_extra)"
     sub="${cli_arg:-list}"; path_arg="${4:-}"
     case "${sub}" in
-      list) saves_folder_lines ;;
+      list)
+        saves_folder_lines
+        saves_extra_lines | sed 's/^/drive_c:/'
+        ;;
       reset)
-        zgu_ludis_remove "${prefix_dir}" saves_folders; zgu_ludis_prune "${prefix_dir}"
+        zgu_ludis_remove "${prefix_dir}" saves_folders; zgu_ludis_remove "${prefix_dir}" saves_extra
+        zgu_ludis_prune "${prefix_dir}"
         zgu_cli_ok "$(t saves.folders_reset_cli "${target_name}")"
         ;;
       add|remove)
-        path_arg="${path_arg%/}"
-        if [[ -z "${path_arg}" || "${path_arg}" = /* || "${path_arg}" = *..* || "${path_arg}" = *$'\n'* ]]; then
-          zgu_cli_error "$(t saves.folder_invalid_cli "${path_arg}")"; exit 1
-        fi
-        mkdir -p -- "$(dirname "${ff}")" || exit 1
-        if [[ ! -f "${ff}" ]]; then printf '%s\n' "${saves_dirs[@]}" > "${ff}"; fi
+        norm="$(saves_norm_folder "${path_arg}")" || { zgu_cli_error "$(t saves.folder_invalid_cli "${path_arg}")"; exit 1; }
+        kind="${norm%%$'\t'*}"; rel="${norm#*$'\t'}"
+        if [[ "${kind}" = X ]]; then target_file="${xf_extra}"; else target_file="${ff}"; fi
+        mkdir -p -- "$(dirname "${target_file}")" || exit 1
+        if [[ "${kind}" = U && ! -f "${ff}" ]]; then printf '%s\n' "${saves_dirs[@]}" > "${ff}"; fi
+        touch "${target_file}"
         if [[ "${sub}" = add ]]; then
-          grep -qxF -- "${path_arg}" "${ff}" || printf '%s\n' "${path_arg}" >> "${ff}"
+          grep -qxF -- "${rel}" "${target_file}" || printf '%s\n' "${rel}" >> "${target_file}"
         else
-          grep -vxF -- "${path_arg}" "${ff}" > "${ff}.tmp" ; mv -f -- "${ff}.tmp" "${ff}"
+          grep -vxF -- "${rel}" "${target_file}" > "${target_file}.tmp"; mv -f -- "${target_file}.tmp" "${target_file}"
         fi
         zgu_cli_ok "$(t saves.folders_updated_cli "${target_name}")"
         ;;

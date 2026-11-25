@@ -78,7 +78,7 @@ expect "saves: files copied, Temp and links left out" bash -c 'c="$1/syncsaves/z
 check "saves: second backup without change" 0 'unchanged' saves zelda backup
 echo slot2 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"
 check "saves: changed backup rotates the old one" 0 'backed up' saves zelda backup
-expect "saves: previous/ holds the old snapshot with the old content" bash -c 'p=$(ls -d "$1"/syncsaves/zelda/previous/*-backup | head -1); [ "$(cat "$p/AppData/Roaming/Zelda/save1.dat")" = slot1 ]' _ "${HOME}"
+expect "saves: previous/ holds the old state as a compressed archive with the old content" bash -c 'p=$(ls "$1"/syncsaves/zelda/previous/*-backup.tar.zst | head -1); [ "$(zstd -dcq "$p" | tar -xOf - ./AppData/Roaming/Zelda/save1.dat)" = slot1 ]' _ "${HOME}"
 check "saves: restore" 0 'restored' saves zelda restore
 expect "saves: restore brought back the last backup (slot2) and kept the local copy" bash -c '[ "$(cat "$1")" = slot2 ] && ls "$2"/syncsaves/zelda/previous | grep -q before-restore' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat" "${HOME}"
 check "saves: export" 0 'exported' saves zelda export "${HOME}/zelda-test"
@@ -101,7 +101,7 @@ check "saves: pull right after our own push: up to date" 0 'pull=up-to-date' sav
 # another machine pushes a newer backup
 echo remote5 > "${HOME}/syncsaves/zelda/current/AppData/Roaming/Zelda/save1.dat"; echo "$(( $(date +%s) + 100 )) otherpc" > "${HOME}/syncsaves/zelda/stamp"
 check "saves: pull brings the newer backup (local copy kept)" 0 'pull=restored' saves zelda pull
-expect "saves: pull restored the remote content and kept slot4 in previous/" bash -c '[ "$(cat "$1")" = remote5 ] && grep -rq slot4 "$2"/syncsaves/zelda/previous' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat" "${HOME}"
+expect "saves: pull restored the remote content and kept slot4 in previous/" bash -c '[ "$(cat "$1")" = remote5 ] && for f in "$2"/syncsaves/zelda/previous/*-before-pull.tar.zst "$2"/syncsaves/zelda/previous/*-conflict.tar.zst; do [ -f "$f" ] && zstd -dcq "$f" | tar -xOf - ./AppData/Roaming/Zelda/save1.dat | grep -q slot4 && exit 0; done; exit 1' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat" "${HOME}"
 check "saves: pull again: up to date" 0 'pull=up-to-date' saves zelda pull
 check "saves: per-game auto off" 0 '' saves zelda auto off
 expect "saves: per-game off wins over the global on" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; ! zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
@@ -143,14 +143,31 @@ check "saves: backup with exclusions" 0 'backed up|unchanged' saves zelda backup
 expect "saves: built-in and per-game exclusions applied, real save kept" bash -c 'c="$1/syncsaves/zelda/current/AppData"; [ -f "$c/LocalLow/Studio/Game/SaveData.json" ] && [ ! -e "$c/Local/dxvk" ] && [ ! -e "$c/Roaming/Microsoft" ] && [ ! -e "$c/LocalLow/Studio/Game/Player.log" ] && [ ! -e "$c/LocalLow/Studio/Game/Unity" ] && [ ! -e "$c/LocalLow/Studio/Game/big.cache2" ]' _ "${HOME}"
 check "saves: exclude reset" 0 '' saves zelda exclude reset
 check "saves: exclude list empty after reset" 0 '^$' saves zelda exclude list
-# rotation: fake snapshots of known ages, then a real change triggers it
+# rotation: fake snapshots of known ages (compressed files), then a real change triggers it
 rp="${HOME}/syncsaves/zelda/previous"; rm -rf "${rp}"; mkdir -p "${rp}"
-mk() { mkdir -p "${rp}/$(date -d "$1 ago" +%Y%m%d-%H%M%S)-$2"; }
+mk() { touch "${rp}/$(date -d "$1 ago" +%Y%m%d-%H%M%S)-$2.tar.zst"; }
 mk "10 minutes" a; mk "20 minutes" b; mk "100 minutes" c; mk "170 minutes" d; mk "5 hours" e; mk "6 hours" f
 mk "2 days" g; mk "10 days" h; mk "20 days" i; mk "4 days" j; mk "5 days" conflict
 echo rot > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
 check "saves: backup triggers the rotation" 0 'backed up' saves zelda backup
-expect "saves: rotation keeps 1/hour, 1/day, 1/week and the safety copies (a,b,f,i gone)" bash -c 'cd "$1"; n=$(ls | wc -l); for l in a b f i; do ls | grep -q -- "-$l$" && exit 1; done; for l in c d e g h j conflict backup; do ls | grep -q -- "-$l$" || { echo "missing $l" >&2; exit 1; }; done; [ "$n" -eq 8 ]' _ "${rp}"
+expect "saves: rotation keeps 1 per hour / day / week (+ safety copies): only the new one, c, g, conflict" bash -c 'cd "$1"; n=$(ls | wc -l); for l in a b d e f h i j; do ls | grep -q -- "-$l.tar.zst$" && { echo "kept $l" >&2; exit 1; }; done; for l in c g conflict backup; do ls | grep -q -- "-$l.tar.zst$" || { echo "missing $l" >&2; exit 1; }; done; [ "$n" -eq 4 ]' _ "${rp}"
+expect "saves: the snapshot made by the backup is a real compressed archive of the old state" bash -c 'f=$(ls "$1"/*-backup.tar.zst | head -1); zstd -dcq "$f" | tar -t | grep -q "AppData"' _ "${rp}"
+check "saves: history lists the snapshots" 0 'backup' saves zelda history
+check "saves: path prints the Windows user folder" 0 'users/steamuser' saves zelda path
+echo tampered > "${sv_user}/AppData/Roaming/Zelda/save1.dat"
+check "saves: restore from an older snapshot by name" 0 'restored' saves zelda restore backup
+expect "saves: that restore overwrote save1.dat with the snapshot content" bash -c '[ "$(cat "$1")" != tampered ]' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat"
+check "saves: restore from an unknown snapshot fails" 1 '' saves zelda restore nosuchsnapshot
+# manual folder: absolute path from a folder picker (inside the user folder, and elsewhere in drive_c)
+mkdir -p "${sv_user}/AppData/Roaming/Zelda/Slot" "${HOME}/Games/zelda/drive_c/Games/Zelda/save"; echo extra > "${HOME}/Games/zelda/drive_c/Games/Zelda/save/s1.sav"
+check "saves: folders add (absolute path inside the user folder)" 0 '' saves zelda folders add "${sv_user}/AppData/Roaming/Zelda/Slot"
+check "saves: folders add (absolute path elsewhere in drive_c)" 0 '' saves zelda folders add "${HOME}/Games/zelda/drive_c/Games/Zelda/save"
+check "saves: folders add refuses a path outside the prefix" 1 '' saves zelda folders add "${HOME}/elsewhere"
+check "saves: folders list shows both kinds" 0 'AppData/Roaming/Zelda/Slot' saves zelda folders list
+check "saves: folders list shows the drive_c entry" 0 'drive_c:Games/Zelda/save' saves zelda folders list
+check "saves: backup with an extra folder" 0 'backed up|unchanged' saves zelda backup
+expect "saves: the extra folder is in the backup under _extra/" bash -c '[ -f "$1/syncsaves/zelda/current/_extra/Games/Zelda/save/s1.sav" ]' _ "${HOME}"
+check "saves: folders reset clears both" 0 '' saves zelda folders reset
 expect "saves: monitor stops by itself when the game never shows up" bash -c 'LUDIS_SAVES_GIVEUP=2 timeout 20 python3 "$1/lib/zgu-saves-monitor.py" "$2" zelda 10; [ $? -eq 0 ]' _ "${repo}" "${HOME}/Games/zelda"
 check "saves: unknown game" 1 '' saves nogame status
 

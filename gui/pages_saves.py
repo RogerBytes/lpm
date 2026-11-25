@@ -72,11 +72,15 @@ class SavesPage:
         self.folders_label.add_css_class("heading")
         self.folders_hint = Gtk.Label(label=t("gui.saves.folders_hint"), xalign=0, wrap=True)
         self.folders_hint.add_css_class("dim-label")
+        self.folders_add = Gtk.Button(label=t("gui.saves.folders_add"))
+        self.folders_add.add_css_class("suggested-action")
+        self.folders_add.connect("clicked", self.on_folders_add)
         self.folders_save = Gtk.Button(label=t("gui.saves.folders_save"))
         self.folders_default = Gtk.Button(label=t("gui.saves.folders_default"))
         self.folders_save.connect("clicked", self.on_folders_save)
         self.folders_default.connect("clicked", self.on_folders_default)
         folders_buttons = Gtk.Box(spacing=8, halign=Gtk.Align.END)
+        folders_buttons.append(self.folders_add)
         folders_buttons.append(self.folders_default)
         folders_buttons.append(self.folders_save)
         folders_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=8)
@@ -149,6 +153,7 @@ class SavesPage:
             button.set_sensitive(game and (has_dir if index < 2 else True))
         self.game_auto_row.set_sensitive(game)
         self.folders_save.set_sensitive(game)
+        self.folders_add.set_sensitive(game)
         self.folders_default.set_sensitive(game)
         self.exclude_save.set_sensitive(game)
 
@@ -391,6 +396,24 @@ class SavesPage:
                 chain(rest[1:])
             backend.run_ludis_async(rest[0], on_done=done)
         chain(commands)
+
+    def on_folders_add(self, *_):
+        """Pick a folder INSIDE the prefix (the picker opens in the game's Windows user folder);
+        the CLI turns the chosen path into the right entry (user folder, or elsewhere in drive_c)."""
+        slug = self.state["slug"]
+        if not slug or self.state["busy"]:
+            return
+
+        def got_path(result):
+            def open_picker():
+                start = result.stdout.strip() if result.returncode == 0 else None
+
+                def chosen(path):
+                    if path:
+                        self.game_run(["folders", "add", path], t("gui.saves.toast_folders"))
+                pick_folder(self.window, t("gui.saves.folders_add_title"), chosen, initial_folder=start)
+            _run_on_main(open_picker)
+        backend.run_ludis_async(["saves", slug, "path"], on_done=got_path)
 
     def on_folders_default(self, *_):
         self.game_run(["folders", "reset"], t("gui.saves.toast_folders_default"))
