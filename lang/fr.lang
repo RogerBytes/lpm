@@ -1636,3 +1636,4 @@ gui.rename.intro=Change le nom que Lutris affiche pour un jeu (le dossier du jeu
 gui.rename.entry_title=Nouveau nom
 gui.rename.button=Renommer
 gui.rename.done=Jeu renommé.
+game_tools.winetricks_died_cli=Erreur : winetricks s'est arrêté immédiatement, voir %s

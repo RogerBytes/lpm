@@ -154,7 +154,7 @@ class LutrisDefaultsPage:
                 if gen != self.state["gen"]:
                     return
                 if result.returncode != 0:
-                    self.current_row.set_subtitle(t("gui.lutris_version.status_unknown"))
+                    self.current_row.set_subtitle(t("lutris_version.status_unknown"))
                     return
                 values = dict(ln.split("=", 1) for ln in result.stdout.splitlines() if "=" in ln)
                 runner = values.get("runner", "default")

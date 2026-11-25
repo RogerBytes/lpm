@@ -646,7 +646,7 @@ run_winetricks() {
   disown
   sleep 2
   if ! kill -0 "${wt_pid}" 2>/dev/null; then
-    zgu_cli_error "winetricks s'est arrêté immédiatement, voir ${wt_log}"
+    zgu_cli_error "$(t game_tools.winetricks_died_cli "${wt_log}")"
     return 1
   fi
   zgu_cli_ok "$(t game_tools.launched_cli "${target_name}")"
