@@ -516,10 +516,16 @@ class MenuWindow(Gtk.Window):
             self.was_active = True
             self.busy = False
         elif self.was_active and not self.busy and not self.closing:
-            # Focus went elsewhere (click on the game, Alt+Tab...): close the menu.
+            # Focus went elsewhere (click on the game, Alt+Tab...): close the menu -- unless it comes
+            # back within a moment (the notice of the gamepad mouse takes the focus for an instant).
+            GLib.timeout_add(700, self.close_if_still_unfocused)
+
+    def close_if_still_unfocused(self):
+        if not self.is_active() and not self.closing:
             self.closing = True
             self.close()
             app.quit()
+        return False
 
     def on_close_request(self, _win):
         self.closing = True

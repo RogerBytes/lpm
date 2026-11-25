@@ -225,8 +225,27 @@ def start_detached(script):
         return None
 
 
+def menu_is_open():
+    """True while the LPM menu runs (it holds a lock on its file for its whole life)."""
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "lpm-game-menu.lock-%d" % os.getuid())
+    try:
+        import fcntl
+        with open(path, "r") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return False
+            except OSError:
+                return True
+    except OSError:
+        return False
+
+
 def show_toast(on):
-    """Brief notice (top right) that the gamepad mouse was turned on / off."""
+    """Brief notice (top right) that the gamepad mouse was turned on / off. Not while the LPM menu
+    is open: the notice takes the focus for an instant and the menu closes when it loses it (the
+    menu's own switch already shows the state)."""
+    if menu_is_open():
+        return
     label = os.environ.get("LPM_MENU_MOUSE", "").strip() or "Gamepad mouse"
     state = (os.environ.get("LPM_MENU_ON", "").strip() or "on") if on else (os.environ.get("LPM_MENU_OFF", "").strip() or "off")
     try:
