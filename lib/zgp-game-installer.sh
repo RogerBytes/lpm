@@ -47,6 +47,7 @@ desktop_dir_override=""
 loadingscreen_enabled=true
 list_hooks_only=false
 list_existing_only=false
+list_versions_only=false
 replace_existing=false
 cli_targets=()
 while [[ $# -gt 0 ]]; do
@@ -69,6 +70,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list-hooks)
       list_hooks_only=true
+      shift
+      ;;
+    --list-versions)
+      list_versions_only=true
       shift
       ;;
     --list-existing)
@@ -171,6 +176,23 @@ zgp_installed_version() {
   f="$(zgu_ludis_find "${games_dir}/$1" game_version)"
   [[ -f "${f}" ]] && tr -d '\r\n' < "${f}" | head -c 64
 }
+
+# --list-versions (used by the GUI file list): "VERSION<US>file<US>version" for each archive that
+# has a version number in its first-member YAML. Read-only, nothing is extracted.
+if [[ "${list_versions_only}" = true ]]; then
+  for target in "${cli_targets[@]}"; do
+    [[ -f "${target}" ]] || continue
+    ver=$(zgu_archive_config "${target}" 2>/dev/null | python3 -c '
+import sys, yaml
+try:
+    print(str((yaml.safe_load(sys.stdin.read()) or {}).get("game_version", "") or "").replace("\n", " ")[:64])
+except Exception:
+    pass
+' 2>/dev/null)
+    [[ -n "${ver}" ]] && printf 'VERSION\x1f%s\x1f%s\n' "${target}" "${ver}"
+  done
+  exit 0
+fi
 
 # --list-existing (used by the GUI before installing): for each archive whose game is ALREADY
 # installed, one line "EXISTS<US>name<US>file<US>slug<US>installed version<US>new version<US>",

@@ -199,10 +199,18 @@ class FileMultiSelect(_CheckListExpander):
         # since only a subset can be pre-checked.
         self.select_all_check.set_active(bool(paths) and checked_set == set(paths))
 
+        self._row_by_path = {}
         for path in paths:
-            self._add_check_row(path, os.path.basename(path), path, active=path in checked_set)
+            _check, row = self._add_check_row(path, os.path.basename(path), path, active=path in checked_set)
+            self._row_by_path[path] = row
 
         self._update_title()
+
+    def set_versions(self, versions: dict[str, str]):
+        """Shows "(Vx.y.z)" after the file name of the packages that have a version number."""
+        for path, row in getattr(self, "_row_by_path", {}).items():
+            if versions.get(path):
+                row.set_title(_escape_markup(f"{os.path.basename(path)} (V{versions[path]})"))
 
     def _empty_title(self) -> str:
         # While files are listed, the "selected/total" counter is shown even at 0 selected

@@ -287,6 +287,10 @@ try:
     import pages_lifecycle
     rows = pages_lifecycle.InstallPage._parse_existing("EXISTS\x1fMario\x1fMario.zgp\x1fmario\x1f3.1\x1f\n")
     assert rows == [("Mario", "3.1", "")], rows
+    fs = widgets_select.FileMultiSelect("t")
+    fs.set_paths(["/x/Mario.zgp"])
+    fs.set_versions({"/x/Mario.zgp": "3.1"})
+    assert "Mario.zgp (V3.1)" in fs._row_by_path["/x/Mario.zgp"].get_title()
     print("game version page: OK")
 except Exception:
     errors.append("game version page:\n" + traceback.format_exc())

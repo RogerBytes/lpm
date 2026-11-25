@@ -272,6 +272,7 @@ class InstallPage:
         # without going back to the file picker.
         all_in_dir = sibling_files(chosen_paths, ".zgp")
         self.file_selector.set_paths(all_in_dir, checked_paths=chosen_paths)
+        self._load_versions(all_in_dir)
 
     def choose(self):
         def got(paths):
@@ -393,6 +394,22 @@ class InstallPage:
         dialog.set_close_response("cancel")
         dialog.connect("response", lambda _d, r: on_choice({"without": False, "allow": True}.get(r)))
         dialog.present(self.window)
+
+    def _load_versions(self, paths: list[str]):
+        """Version numbers of the packages (read from their first-member YAML), shown in the list."""
+        if not paths:
+            return
+
+        def done(result):
+            versions = {}
+            for line in result.stdout.splitlines():
+                f = line.split("\x1f")
+                if f[0] == "VERSION" and len(f) >= 3:
+                    versions[f[1]] = f[2]
+            if versions:
+                _run_on_main(self.file_selector.set_versions, versions)
+
+        backend.run_ludis_async(["install", "-y", "--list-versions", *paths], on_done=done)
 
     @staticmethod
     def _parse_existing(stdout: str) -> list[tuple[str, str, str]]:
