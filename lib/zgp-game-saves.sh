@@ -297,6 +297,13 @@ saves_write_config() {
   } > "$1" 2>/dev/null
 }
 
+# saves_refresh_config: after the folder choice or the exclusions changed, the "config" of the backup
+# is rewritten at once (only if this game already has a folder in the sync folder).
+saves_refresh_config() {
+  [[ -n "${game_sync}" && -d "${game_sync}" ]] && saves_write_config "${game_sync}/config"
+  return 0
+}
+
 # saves_adopt_config <file>: when this prefix has NO saves settings of its own, takes the ones
 # recorded in <file> (a backup's "config" or the marker of a .zgs). Settings the prefix already
 # has are never replaced. Only plain relative paths are accepted (no "..", no leading "/").
@@ -581,6 +588,7 @@ case "${cli_action}" in
       defaults) printf '%s\n' "${saves_excludes[@]}" ;;
       reset)
         zgu_ludis_remove "${prefix_dir}" saves_exclude; zgu_ludis_prune "${prefix_dir}"
+        saves_refresh_config
         zgu_cli_ok "$(t saves.exclude_reset_cli "${target_name}")"
         ;;
       add|remove)
@@ -595,6 +603,7 @@ case "${cli_action}" in
         else
           grep -vxF -- "${pat_arg}" "${xf}" > "${xf}.tmp"; mv -f -- "${xf}.tmp" "${xf}"
         fi
+        saves_refresh_config
         zgu_cli_ok "$(t saves.exclude_updated_cli "${target_name}")"
         ;;
       *) zgu_cli_error "$(t saves.invalid_action_cli "${sub}")"; exit 1 ;;
@@ -613,6 +622,7 @@ case "${cli_action}" in
       reset)
         zgu_ludis_remove "${prefix_dir}" saves_folders; zgu_ludis_remove "${prefix_dir}" saves_extra
         zgu_ludis_prune "${prefix_dir}"
+        saves_refresh_config
         zgu_cli_ok "$(t saves.folders_reset_cli "${target_name}")"
         ;;
       add|remove)
@@ -627,6 +637,7 @@ case "${cli_action}" in
         else
           grep -vxF -- "${rel}" "${target_file}" > "${target_file}.tmp"; mv -f -- "${target_file}.tmp" "${target_file}"
         fi
+        saves_refresh_config
         zgu_cli_ok "$(t saves.folders_updated_cli "${target_name}")"
         ;;
       *) zgu_cli_error "$(t saves.invalid_action_cli "${sub}")"; exit 1 ;;

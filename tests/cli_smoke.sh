@@ -177,13 +177,11 @@ check "saves: backup records the choice" 0 'backed up|unchanged' saves zelda bac
 expect "saves: <sync>/<slug>/config holds folder= and exclude= lines" bash -c 'c="$1/syncsaves/zelda/config"; grep -qx "folder=AppData/Roaming/Zelda/Slot" "$c" && grep -qx "exclude=\*.zzz" "$c"' _ "${HOME}"
 check "saves: export (with the choice)" 0 'exported' saves zelda export "${HOME}/zelda-cfg"
 expect "saves: the .zgs marker carries the choice" bash -c 'zstd -dcq "$1" | tar -xOf - ./.ludis-saves | grep -qx "folder=AppData/Roaming/Zelda/Slot"' _ "${HOME}/zelda-cfg.zgs"
-check "saves: forget this prefix's own settings (an old prefix)" 0 '' saves zelda folders reset
-check "saves: forget exclusions too" 0 '' saves zelda exclude reset
+expect "saves: simulate an old prefix: no saves settings of its own" bash -c 'rm -f "$1"/saves-folders.txt "$1"/saves-exclude.txt "$1"/saves-extra.txt' _ "${zs}"
 expect "saves: no settings left in the prefix" bash -c '[ ! -e "$1/saves-folders.txt" ] && [ ! -e "$1/saves-exclude.txt" ]' _ "${zs}"
 check "saves: restore on an old prefix" 0 'restored' saves zelda restore
 expect "saves: the old prefix adopted the folders and the exclusions from the backup" bash -c 'grep -qx "AppData/Roaming/Zelda/Slot" "$1/saves-folders.txt" && grep -qx "\*.zzz" "$1/saves-exclude.txt"' _ "${zs}"
-check "saves: reset again, then import the .zgs" 0 '' saves zelda folders reset
-check "saves: exclusions reset again" 0 '' saves zelda exclude reset
+expect "saves: again an old prefix, then import the .zgs" bash -c 'rm -f "$1"/saves-folders.txt "$1"/saves-exclude.txt "$1"/saves-extra.txt' _ "${zs}"
 check "saves: import on an old prefix" 0 'imported' saves zelda import "${HOME}/zelda-cfg.zgs"
 expect "saves: the import adopted the choice too" bash -c 'grep -qx "AppData/Roaming/Zelda/Slot" "$1/saves-folders.txt"' _ "${zs}"
 check "saves: own settings are never replaced (add another folder, restore)" 0 '' saves zelda folders add "Documents/Other"
@@ -191,6 +189,16 @@ check "saves: restore keeps them" 0 'restored' saves zelda restore
 expect "saves: own list kept as is" bash -c 'grep -qx "Documents/Other" "$1/saves-folders.txt"' _ "${zs}"
 check "saves: cleanup" 0 '' saves zelda folders reset
 check "saves: cleanup exclusions" 0 '' saves zelda exclude reset
+# the backup's config follows the folder choice at once (no new backup needed)
+check "saves: change the folders after a backup" 0 '' saves zelda folders add "AppData/Roaming/Zelda/OnlyThis"
+expect "saves: config in the sync folder updated at once" bash -c 'grep -qx "folder=AppData/Roaming/Zelda/OnlyThis" "$1/syncsaves/zelda/config"' _ "${HOME}"
+check "saves: remove the default folders" 0 '' saves zelda folders remove AppData
+expect "saves: config follows the removal too" bash -c 'grep -qx "folder=AppData/Roaming/Zelda/OnlyThis" "$1/syncsaves/zelda/config" && ! grep -qx "folder=AppData" "$1/syncsaves/zelda/config"' _ "${HOME}"
+check "saves: exclusion change is recorded at once" 0 '' saves zelda exclude add "*.qqq"
+expect "saves: config holds the new exclusion" bash -c 'grep -qx "exclude=\*.qqq" "$1/syncsaves/zelda/config"' _ "${HOME}"
+check "saves: cleanup 3" 0 '' saves zelda folders reset
+check "saves: cleanup 4" 0 '' saves zelda exclude reset
+expect "saves: config emptied by the reset" bash -c '! grep -q "^folder=\|^exclude=" "$1/syncsaves/zelda/config"' _ "${HOME}"
 check "saves: unknown game" 1 '' saves nogame status
 
 check "list-runner" 0 'GE-Test' list-runner
