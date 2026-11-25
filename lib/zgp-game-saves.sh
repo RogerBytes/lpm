@@ -476,6 +476,10 @@ case "${cli_action}" in
 
   backup)
     saves_need_sync_dir || exit 1
+    # A prefix with no saves settings of its own (a game just reinstalled, an old prefix) learns the
+    # folder choice recorded in this game's backup BEFORE copying anything: otherwise it would copy
+    # the default folders and replace the backup (and its config) made with the chosen ones.
+    saves_adopt_config "${game_sync}/config"
     if [[ -z "$(saves_items)" ]]; then
       zgu_cli_error "$(t saves.nothing_cli "${target_name}")"
       exit 1
@@ -538,8 +542,16 @@ case "${cli_action}" in
     [[ -n "${game_sync}" && -d "${game_sync}/current" ]] || { echo "pull=no-backup"; exit 0; }
     remote="$(cut -d' ' -f1 "${game_sync}/stamp" 2>/dev/null)"
     [[ "${remote}" =~ ^[0-9]+$ ]] || remote="$(stat -c %Y "${game_sync}/current" 2>/dev/null || echo 0)"
+    saves_adopt_config "${game_sync}/config"
     last="$(saves_last_sync "${target_slug}")"
     local_new="$(saves_local_newest)"
+    # Nothing to lose locally (game just reinstalled, prefix recreated): always bring the backup, even
+    # if this machine "synced" this game before (that memory outlives an uninstall).
+    if (( local_new == 0 )); then
+      saves_do_restore "before-pull" || { echo "pull=failed"; exit 1; }
+      echo "pull=restored label=empty-prefix"
+      exit 0
+    fi
     if (( remote <= last )); then echo "pull=up-to-date"; exit 0; fi
     if (( last == 0 && local_new > remote )); then echo "pull=local-newer"; exit 0; fi
     label="before-pull"

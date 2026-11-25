@@ -199,6 +199,23 @@ expect "saves: config holds the new exclusion" bash -c 'grep -qx "exclude=\*.qqq
 check "saves: cleanup 3" 0 '' saves zelda folders reset
 check "saves: cleanup 4" 0 '' saves zelda exclude reset
 expect "saves: config emptied by the reset" bash -c '! grep -q "^folder=\|^exclude=" "$1/syncsaves/zelda/config"' _ "${HOME}"
+# reinstall scenario: the game is uninstalled and installed again (empty prefix, settings gone)
+check "saves: custom folder for the reinstall scenario" 0 '' saves zelda folders add "AppData/Roaming/Zelda/Slot"
+check "saves: remove the default folders (scenario)" 0 '' saves zelda folders remove AppData
+check "saves: remove Documents (scenario)" 0 '' saves zelda folders remove Documents
+check "saves: remove Saved Games (scenario)" 0 '' saves zelda folders remove "Saved Games"
+echo precious > "${sv_user}/AppData/Roaming/Zelda/Slot/slot.sav"
+check "saves: backup of only the chosen folder" 0 'backed up|unchanged' saves zelda backup
+expect "saves: only the chosen folder is in current" bash -c 'c="$1/syncsaves/zelda/current"; [ "$(cat "$c/AppData/Roaming/Zelda/Slot/slot.sav")" = precious ] && [ ! -e "$c/Documents" ]' _ "${HOME}"
+rm -rf "${sv_user}/AppData" "${sv_user}/Documents" "${sv_user}/Saved Games"; rm -f "${zs}"/saves-folders.txt "${zs}"/saves-exclude.txt "${zs}"/saves-extra.txt
+mkdir -p "${sv_user}/AppData/Local/Junk" "${sv_user}/Documents/Fresh"; echo new > "${sv_user}/Documents/Fresh/first-run.ini"
+check "saves: a manual backup on the fresh prefix does not replace the chosen-folder backup" 1 '' saves zelda backup
+expect "saves: the backup still holds the precious save and the chosen folder" bash -c 'c="$1/syncsaves/zelda"; [ "$(cat "$c/current/AppData/Roaming/Zelda/Slot/slot.sav")" = precious ] && grep -qx "folder=AppData/Roaming/Zelda/Slot" "$c/config"' _ "${HOME}"
+expect "saves: the fresh prefix adopted the chosen folder" bash -c 'grep -qx "AppData/Roaming/Zelda/Slot" "$1/saves-folders.txt"' _ "${zs}"
+rm -f "${zs}"/saves-folders.txt; rm -rf "${sv_user}/AppData" "${sv_user}/Documents"; mkdir -p "${sv_user}/Documents"
+check "saves: pull on the empty fresh prefix brings the backup back (state of the old install kept)" 0 'pull=restored label=empty-prefix' saves zelda pull
+expect "saves: the precious save is back" bash -c '[ "$(cat "$1")" = precious ]' _ "${sv_user}/AppData/Roaming/Zelda/Slot/slot.sav"
+check "saves: scenario cleanup" 0 '' saves zelda folders reset
 check "saves: unknown game" 1 '' saves nogame status
 
 check "list-runner" 0 'GE-Test' list-runner
