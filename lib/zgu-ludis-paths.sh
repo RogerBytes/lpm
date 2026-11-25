@@ -284,7 +284,7 @@ zgu_ludis_migrate_home() {
 
 
 # --- Saves: automatic mode (see lib/zgp-game-saves.sh) ---
-# Global: <XDG config>/ludis/saves.conf keys "sync_dir", "auto" (on|off, default on) and "interval"
+# Global: <XDG config>/ludis/saves.conf keys "sync_dir", "auto" (on|off, default OFF) and "interval"
 # (minutes, 0 = no periodic copy, default 10). Per game: "<prefix>/ludis/settings/saves-auto"
 # holding "on" or "off"; no file = follow the global setting.
 
@@ -303,7 +303,7 @@ zgu_saves_auto_wanted() {
     off) return 1 ;;
   esac
   value="$(zgu_saves_conf_get auto | tr -d '[:space:]')"
-  [[ "${value,,}" != "off" ]]
+  [[ "${value,,}" = "on" ]]
 }
 
 # zgu_saves_interval: minutes between two copies while playing (0 = none).

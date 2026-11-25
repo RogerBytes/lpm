@@ -41,6 +41,9 @@ class SavesPage:
         self.page.page.add(self.game_group)
         self.global_group = Adw.PreferencesGroup(title=t("gui.saves.global_title"))
         self.dir_row = Adw.ActionRow(title=t("gui.saves.dir_title"), subtitle=t("gui.saves.dir_none"))
+        default_button = Gtk.Button(label=t("gui.saves.dir_default"), valign=Gtk.Align.CENTER)
+        default_button.connect("clicked", self.on_default_dir)
+        self.dir_row.add_suffix(default_button)
         choose = Gtk.Button(label=t("gui.saves.dir_choose"), valign=Gtk.Align.CENTER)
         choose.connect("clicked", self.on_choose_dir)
         self.dir_row.add_suffix(choose)
@@ -142,7 +145,7 @@ class SavesPage:
 
         def got_auto(result):
             def apply():
-                self.auto_row.set_active(result.stdout.strip() != "off")
+                self.auto_row.set_active(result.stdout.strip() == "on")
             _run_on_main(apply)
 
         def got_interval(result):
@@ -158,8 +161,13 @@ class SavesPage:
         backend.run_ludis_async(["saves", "auto"], on_done=got_auto)
         backend.run_ludis_async(["saves", "interval"], on_done=got_interval)
 
+    def on_default_dir(self, *_):
+        self.run(["dir", "default"], ok_toast=t("gui.saves.toast_dir"), on_ok=lambda _r: self.load_global())
+
     def on_choose_dir(self, *_):
         current = self.dir_row.get_subtitle()
+        if not os.path.isdir(current):
+            current = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOCUMENTS) or os.path.expanduser("~")
 
         def chosen(path):
             if path:

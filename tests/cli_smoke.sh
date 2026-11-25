@@ -88,7 +88,10 @@ check "saves: import" 0 'imported' saves zelda import "${HOME}/zelda-test.zgs"
 expect "saves: import put the exported content back (slot2)" bash -c '[ "$(cat "$1")" = slot2 ]' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat"
 expect "saves: forged archive with ../ or a link is refused" bash -c 'd=$(mktemp -d); mkdir -p "$d/x"; echo m > "$d/x/.ludis-saves"; ln -s /etc "$d/x/AppData"; tar -C "$d/x" -cf - . | zstd -q -o "$d/bad.zgs"; ! bash "$1" saves zelda import "$d/bad.zgs" </dev/null >/dev/null 2>&1; rc=$?; rm -rf "$d"; exit $rc' _ "${R}"
 expect "saves: random file is not a saves archive" bash -c 'echo hello > "$2/notzgs.zgs"; ! bash "$1" saves zelda import "$2/notzgs.zgs" </dev/null >/dev/null 2>&1' _ "${R}" "${HOME}"
-check "saves: global auto defaults to on" 0 '^on$' saves auto
+check "saves: global auto is off by default" 0 '^off$' saves auto
+check "saves: game follows the global setting (off)" 0 'game=follow global=off' saves zelda auto
+expect "saves: sync folder set but global off: nothing automatic" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; ! zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
+check "saves: global auto on" 0 '' saves auto on
 check "saves: game auto follows the global setting" 0 'game=follow global=on' saves zelda auto
 check "saves: push is quiet and makes a backup when files changed" 0 '^$' saves zelda push
 echo slot4 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; touch -d '-1 minute' "${sv_user}/AppData/Roaming/Zelda/save1.dat"
@@ -106,7 +109,13 @@ check "saves: per-game follow" 0 '' saves zelda auto follow
 expect "saves: auto wanted again (sync folder set, global on)" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
 check "saves: global auto off" 0 '' saves auto off
 expect "saves: global off -> not wanted" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; ! zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
-check "saves: global auto on" 0 '' saves auto on
+check "saves: per-game on wins over the global off" 0 '' saves zelda auto on
+expect "saves: per-game on -> wanted" bash -c 'source "$1/lib/zgu-ludis-paths.sh"; zgu_saves_auto_wanted "$2"' _ "${repo}" "${HOME}/Games/zelda"
+check "saves: per-game follow again" 0 '' saves zelda auto follow
+check "saves: global auto on again" 0 '' saves auto on
+check "saves: dir default is Documents/Ludis-saves" 0 'Ludis-saves' saves dir default
+expect "saves: default folder created" test -d "${HOME}/Documents/Ludis-saves"
+check "saves: back to the test sync folder" 0 '' saves dir "${HOME}/syncsaves"
 check "saves: interval default" 0 '^10$' saves interval
 check "saves: interval set" 0 'minute' saves interval 25
 check "saves: interval refused above 60" 1 '' saves interval 99

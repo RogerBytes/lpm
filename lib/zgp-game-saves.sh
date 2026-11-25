@@ -14,7 +14,7 @@
 #   ludis saves <slug> folders [list|add <path>|remove <path>|reset]
 #                                           choose the folders (relative to the Windows user folder)
 #                                           instead of the default ones; stored in the prefix
-#   ludis saves auto [on|off]               global automatic mode (default: on once a sync folder is set)
+#   ludis saves auto [on|off]               global automatic mode (default: off)
 #   ludis saves interval [minutes]          copy every N minutes while playing (0 = off, 1-60, default 10)
 #
 # What counts as "saves": the folders AppData, Documents and "Saved Games" of the Windows user
@@ -247,7 +247,7 @@ fi
 
 # "ludis saves auto [on|off]" and "ludis saves interval [minutes]": global automatic mode.
 if [[ "${cli_slug}" = "auto" ]]; then
-  if [[ -z "${cli_action}" ]]; then saves_conf_get "" auto | grep -qi '^off' && echo off || echo on; exit 0; fi
+  if [[ -z "${cli_action}" ]]; then saves_conf_get "" auto | grep -qi '^on' && echo on || echo off; exit 0; fi
   [[ "${cli_action}" = on || "${cli_action}" = off ]] || { zgu_cli_error "$(t saves.invalid_action_cli "${cli_action}")"; exit 1; }
   saves_conf_set "${cli_action}" auto || { zgu_cli_error "$(t saves.dir_write_failed_cli)"; exit 1; }
   zgu_cli_ok "$(t saves.auto_global_cli "${cli_action}")"
@@ -274,6 +274,11 @@ if [[ "${cli_slug}" = "dir" ]]; then
   fi
   target="${cli_action}"
   [[ "${target}" = "none" ]] && target=""
+  if [[ "${target}" = "default" ]]; then
+    docs="$(xdg-user-dir DOCUMENTS 2>/dev/null)"
+    [[ -n "${docs}" && "${docs}" != "${HOME}" && -d "${docs}" ]] || docs="${HOME}/Documents"
+    target="${docs}/Ludis-saves"
+  fi
   if [[ -n "${target}" ]]; then
     [[ "${target}" = "~"* ]] && target="${HOME}${target#\~}"
     if [[ "${target}" != /* ]] || ! mkdir -p -- "${target}" 2>/dev/null || [[ ! -w "${target}" ]]; then
@@ -415,7 +420,7 @@ case "${cli_action}" in
       "")
         cur="$(tr -d '[:space:]' < "$(zgu_ludis_find "${prefix_dir}" saves_auto)" 2>/dev/null)"
         case "${cur,,}" in on|off) ;; *) cur="follow" ;; esac
-        glob="$(saves_conf_get "" auto)"; [[ "${glob,,}" = off ]] || glob=on
+        glob="$(saves_conf_get "" auto)"; [[ "${glob,,}" = on ]] || glob=off
         echo "game=${cur} global=${glob}"
         ;;
       follow)

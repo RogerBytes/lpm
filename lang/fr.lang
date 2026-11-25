@@ -1200,10 +1200,11 @@ gui.saves.intro=Sauvegarde les saves d'un jeu dans un dossier de ton choix (doss
 gui.saves.global_title=Tous les jeux
 gui.saves.dir_title=Dossier de synchro
 gui.saves.dir_none=Non défini
+gui.saves.dir_default=Utiliser ~/Documents/Ludis-saves
 gui.saves.dir_choose=Choisir...
 gui.saves.dir_choose_title=Dossier de synchro des saves
 gui.saves.auto_title=Saves automatiques
-gui.saves.auto_sub=Au lancement, récupère une sauvegarde plus récente ; puis copie pendant le jeu et à la fin. Un jeu peut choisir autrement.
+gui.saves.auto_sub=Désactivé par défaut. Activé : au lancement, récupère une sauvegarde plus récente ; puis copie pendant le jeu et à la fin. Un jeu peut choisir autrement.
 gui.saves.interval_title=Copier toutes les (minutes)
 gui.saves.interval_sub=Pendant le jeu ; 0 = seulement au lancement et à la fin.
 gui.saves.game_title=Ce jeu

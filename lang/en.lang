@@ -1200,10 +1200,11 @@ gui.saves.intro=Back up the saves of a game to a folder you choose (a cloud fold
 gui.saves.global_title=All games
 gui.saves.dir_title=Sync folder
 gui.saves.dir_none=Not set
+gui.saves.dir_default=Use ~/Documents/Ludis-saves
 gui.saves.dir_choose=Choose...
 gui.saves.dir_choose_title=Sync folder for the saves
 gui.saves.auto_title=Automatic saves
-gui.saves.auto_sub=At launch, bring a newer backup; then copy while playing and at the end of the game. A game can choose otherwise.
+gui.saves.auto_sub=Off by default. When on: at launch, bring a newer backup; then copy while playing and at the end of the game. A game can choose otherwise.
 gui.saves.interval_title=Copy every (minutes)
 gui.saves.interval_sub=While playing; 0 = only at launch and at the end.
 gui.saves.game_title=This game
