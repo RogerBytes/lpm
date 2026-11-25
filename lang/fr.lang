@@ -1053,7 +1053,6 @@ gui.common.desktop_path_browse_tooltip=Choisir un autre dossier
 gui.common.desktop_path_browse_title=Choisir le dossier du raccourci
 
 gui.home.title=Ludis
-gui.home.description=Ludis
 
 gui.game_select.default_title=Jeux concernés
 gui.file_select.default_title=Fichiers sélectionnés

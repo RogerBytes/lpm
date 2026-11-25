@@ -48,7 +48,6 @@ class HomePage:
         self.status_page = Adw.StatusPage(
             icon_name="ludis",
             title=t("gui.home.title"),
-            description=t("gui.home.description"),
         )
 
     def _add_tagline_and_version(self):
@@ -61,8 +60,7 @@ class HomePage:
         tagline_label.add_css_class("caption")
         self.extra_box.append(tagline_label)
 
-        # Same size as the StatusPage description ("Ludis", just above), so
-        # no "caption" class (it would shrink the font), only "dim-label".
+        # No "caption" class (it would shrink the font), only "dim-label".
         self.version_button = Gtk.LinkButton(
             uri="https://github.com/RogerBytes/ludis",
             label=backend.get_ludis_version(),

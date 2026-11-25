@@ -1053,7 +1053,6 @@ gui.common.desktop_path_browse_tooltip=Choose a different folder
 gui.common.desktop_path_browse_title=Choose the shortcut folder
 
 gui.home.title=Ludis
-gui.home.description=Ludis
 
 gui.game_select.default_title=Games concerned
 gui.file_select.default_title=Selected file(s)
