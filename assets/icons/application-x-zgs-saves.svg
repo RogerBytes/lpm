@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <!--
+    Icône du type MIME application/x-zgs-saves (fichiers .zgs ; saves de jeux exportées par ludis).
+    Nom de fichier = nom d'icône attendu par shared-mime-info pour ce type MIME
+    ("/" du type MIME remplacé par "-").
+    Forme : même silhouette de carton que application-x-zgp-game.svg et
+    application-x-zgr-runner.svg (Mint-L-Blue, GPLv3), recolorée avec un dégradé vert
+    pour se distinguer des deux autres (jaune->orange : jeux, orange->rouge : runners).
+    Glyphe : disquette (Tabler Icons "device-floppy", licence MIT), blanche et plate,
+    centrée sur la zone utile du carton comme dans application-x-zgr-runner.svg.
+
+    LICENCE : ce fichier reprend un tracé GPLv3 (Mint-L-Blue), distribué sous GPLv3, PAS
+    sous la licence MIT du reste du projet ludis. Voir packaging/debian/copyright.
+  -->
+  <defs>
+    <linearGradient id="savesGreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="#3DBE6F"/>
+      <stop offset="0.24" stop-color="#3DBE6F"/>
+      <stop offset="1"    stop-color="#1E8449"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="scale(2.5)">
+    <path d="m 9.01,8.5 29.498,0 c 1.722,0 2.497,-0.287 2.992,1 l 3.002,8 0,25.674 c 0,1.553 0.103,1.316 -1.62,1.316 l -37.765,0 c -1.722,0 -1.619,0.237 -1.619,-1.316 l 0,-25.674 3.002,-8 c 0.48,-1.26 0.789,-1 2.51,-1 z"
+          fill="url(#savesGreen)" stroke="#000000" stroke-opacity="0.4" stroke-width="0.14"/>
+    <path d="m 22,8 4,0 0,14 C 25.606,22 25.213,21.229 24.819,21.229 24.416,21.229 24.013,22 23.609,22 23.285,22 22.96,21.325 22.636,21.325 22.424,21.325 22.212,22 22,22 L 22,8 Z"
+          fill="#000000" fill-opacity="0.18"/>
+    <path d="M4.5,17.5 L43.5,17.5" stroke="#000000" stroke-opacity="0.22" stroke-width="0.14"/>
+  </g>
+
+  <g transform="translate(33,53.34) scale(2.250)" fill="none" stroke="#FFFFFF" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 4h10l4 4v10a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2" />
+    <path d="M12 14m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0" />
+    <path d="M14 4l0 4l-6 0l0 -4" />
+  </g>
+</svg>

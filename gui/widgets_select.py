@@ -312,6 +312,7 @@ class SingleGameSelect(Adw.ExpanderRow):
         self._rows: list[Adw.ActionRow] = []
         self._selected_slug: str | None = None
         self._on_change = None  # see connect_changed()
+        self._wanted_slug: str | None = None  # see select_slug()
         # Shared set (mutable, updated by the caller) of slugs to show in bold -- e.g.
         # page_launcher uses it to highlight games that already have Ludis Launcher active (see
         # repaint_titles()). Empty by default (page_tools does not need this highlighting).
@@ -333,7 +334,8 @@ class SingleGameSelect(Adw.ExpanderRow):
         # Restore the SAME selection as before the refresh if that game still exists (e.g.
         # another game was just installed/uninstalled elsewhere, see _refresh_game_lists) --
         # never a new selection, never lost without reason.
-        previous_slug = self._selected_slug
+        previous_slug = self._wanted_slug or self._selected_slug
+        self._wanted_slug = None
 
         for row in self._rows:
             self._listbox.remove(row)
@@ -380,6 +382,15 @@ class SingleGameSelect(Adw.ExpanderRow):
 
     def selected_slug(self) -> str | None:
         return self._selected_slug
+
+    def select_slug(self, slug: str) -> bool:
+        """Select this game now if it is in the list (True), otherwise remember it for the
+        next time the list arrives (False is returned: it may simply not be loaded yet)."""
+        if slug in self._slugs:
+            self._listbox.select_row(self._rows[self._slugs.index(slug)])
+            return True
+        self._wanted_slug = slug
+        return False
 
     def connect_changed(self, callback):
         """callback() with no argument, called on each selection change -- substitute for

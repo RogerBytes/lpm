@@ -38,7 +38,7 @@ print_help() {
     echo ""
     t help.usage_header
     printf "  %-38s %s\n" "ludis" "$(t help.usage_menu)"
-    printf "  %-38s %s\n" "ludis-gui [file.zgp|.zgr]" "$(t help.usage_direct)"
+    printf "  %-38s %s\n" "ludis-gui [file.zgp|.zgr|.zgs]" "$(t help.usage_direct)"
     echo ""
     t help.games_header
     printf "  %-42s %s\n" "ludis install [-y] <files.zgp...>" "$(t help.games_install)"

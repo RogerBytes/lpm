@@ -19,6 +19,7 @@ ICON_THEME_DIR="/usr/share/icons/hicolor"
 ICON_APP_FILE="${ICON_THEME_DIR}/scalable/apps/ludis.svg"
 ICON_ZGP_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgp-game.svg"
 ICON_ZGR_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgr-runner.svg"
+ICON_ZGS_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgs-saves.svg"
 
 echo "=== Uninstalling ludis ==="
 
@@ -45,11 +46,11 @@ fi
 [[ -L "$(dirname "${INSTALL_LIB_DIR}")/lpm" ]] && rm -f "$(dirname "${INSTALL_LIB_DIR}")/lpm"
 [[ -L "${INSTALL_BIN_DIR}/lpm" ]] && rm -f "${INSTALL_BIN_DIR}/lpm"
 
-# 3. Remove the MIME types (.zgp and .zgr) and update the database
+# 3. Remove the MIME types (.zgp, .zgr and .zgs) and update the database
 if [[ -f "${MIME_FILE}" ]]; then
   rm -f "${MIME_FILE}"
   update-mime-database /usr/share/mime 2>/dev/null || true
-  echo "[OK] MIME types (.zgp and .zgr) removed from the system."
+  echo "[OK] MIME types (.zgp, .zgr and .zgs) removed from the system."
 else
   echo "[Info] No associated MIME type found."
 fi
@@ -65,7 +66,7 @@ fi
 
 # 5. Remove ludis icons (hicolor theme)
 ICONS_REMOVED=false
-for icon_file in "${ICON_APP_FILE}" "${ICON_ZGP_FILE}" "${ICON_ZGR_FILE}"; do
+for icon_file in "${ICON_APP_FILE}" "${ICON_ZGP_FILE}" "${ICON_ZGR_FILE}" "${ICON_ZGS_FILE}"; do
   if [[ -f "${icon_file}" ]]; then
     rm -f "${icon_file}"
     ICONS_REMOVED=true

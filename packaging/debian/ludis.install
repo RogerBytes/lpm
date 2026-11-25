@@ -12,5 +12,6 @@ assets/icons/ludis.svg usr/share/icons/hicolor/scalable/apps
 assets/icons/ludis-game-generic.svg usr/share/icons/hicolor/scalable/apps
 assets/icons/application-x-zgp-game.svg usr/share/icons/hicolor/scalable/mimetypes
 assets/icons/application-x-zgr-runner.svg usr/share/icons/hicolor/scalable/mimetypes
+assets/icons/application-x-zgs-saves.svg usr/share/icons/hicolor/scalable/mimetypes
 packaging/common/ludis.desktop usr/share/applications
 packaging/common/ludis.xml usr/share/mime/packages

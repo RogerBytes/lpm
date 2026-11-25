@@ -89,6 +89,8 @@ install -Dm644 assets/icons/ludis.svg %{buildroot}/usr/share/icons/hicolor/scala
 install -Dm644 assets/icons/ludis-game-generic.svg %{buildroot}/usr/share/icons/hicolor/scalable/apps/ludis-game-generic.svg
 install -Dm644 assets/icons/application-x-zgp-game.svg %{buildroot}/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgp-game.svg
 install -Dm644 assets/icons/application-x-zgr-runner.svg %{buildroot}/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgr-runner.svg
+/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgs-saves.svg
+install -Dm644 assets/icons/application-x-zgs-saves.svg %{buildroot}/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgs-saves.svg
 
 install -Dm644 packaging/common/ludis.desktop %{buildroot}/usr/share/applications/ludis.desktop
 install -Dm644 packaging/common/ludis.xml %{buildroot}/usr/share/mime/packages/ludis.xml
@@ -112,6 +114,7 @@ ln -s ludis %{buildroot}/usr/bin/lpm
 /usr/share/icons/hicolor/scalable/apps/ludis-game-generic.svg
 /usr/share/icons/hicolor/scalable/mimetypes/application-x-zgp-game.svg
 /usr/share/icons/hicolor/scalable/mimetypes/application-x-zgr-runner.svg
+/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgs-saves.svg
 /usr/share/applications/ludis.desktop
 /usr/share/mime/packages/ludis.xml
 

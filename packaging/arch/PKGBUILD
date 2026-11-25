@@ -63,6 +63,7 @@ package() {
   install -Dm644 assets/icons/ludis-game-generic.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/ludis-game-generic.svg"
   install -Dm644 assets/icons/application-x-zgp-game.svg "$pkgdir/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgp-game.svg"
   install -Dm644 assets/icons/application-x-zgr-runner.svg "$pkgdir/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgr-runner.svg"
+  install -Dm644 assets/icons/application-x-zgs-saves.svg "$pkgdir/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgs-saves.svg"
 
   install -Dm644 packaging/common/ludis.desktop "$pkgdir/usr/share/applications/ludis.desktop"
   install -Dm644 packaging/common/ludis.xml "$pkgdir/usr/share/mime/packages/ludis.xml"

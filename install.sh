@@ -90,11 +90,12 @@ fi
 # .zgp/.zgr MIME type icons). assets/icons/lutris-bg-template.svg and
 # assets/icons/box-bg-template.svg are intentionally not copied: they are reserves for
 # future icons, not runtime assets.
-if [[ -f "assets/icons/ludis.svg" ]] && [[ -f "assets/icons/ludis-game-generic.svg" ]] && [[ -f "assets/icons/application-x-zgp-game.svg" ]] && [[ -f "assets/icons/application-x-zgr-runner.svg" ]]; then
+if [[ -f "assets/icons/ludis.svg" ]] && [[ -f "assets/icons/ludis-game-generic.svg" ]] && [[ -f "assets/icons/application-x-zgp-game.svg" ]] && [[ -f "assets/icons/application-x-zgr-runner.svg" ]] && [[ -f "assets/icons/application-x-zgs-saves.svg" ]]; then
   cp assets/icons/ludis.svg "${ICON_APPS_DIR}/ludis.svg"
   cp assets/icons/ludis-game-generic.svg "${ICON_APPS_DIR}/ludis-game-generic.svg"
   cp assets/icons/application-x-zgp-game.svg "${ICON_MIMETYPES_DIR}/application-x-zgp-game.svg"
   cp assets/icons/application-x-zgr-runner.svg "${ICON_MIMETYPES_DIR}/application-x-zgr-runner.svg"
+  cp assets/icons/application-x-zgs-saves.svg "${ICON_MIMETYPES_DIR}/application-x-zgs-saves.svg"
   if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t "${ICON_THEME_DIR}" 2>/dev/null || true
   elif [[ -f "${ICON_THEME_DIR}/icon-theme.cache" ]]; then
@@ -108,7 +109,7 @@ else
   exit 1
 fi
 
-# 4. Register the MIME types (.zgp and .zgr). No <icon> tag: it does not exist in the
+# 4. Register the MIME types (.zgp, .zgr and .zgs). No <icon> tag: it does not exist in the
 # shared-mime-info spec. Declare <generic-icon> pointing to our own icon instead; this is
 # required for Nemo/Cinnamon: otherwise the default fallback name "application-x-generic"
 # stays among the candidates, and a known Nemo bug (linuxmint/nemo issue #3062) makes it
@@ -131,6 +132,12 @@ cat << EOF > "${MIME_FILE}"
     <glob pattern="*.zgr"/>
     <generic-icon name="application-x-zgr-runner"/>
   </mime-type>
+  <mime-type type="application/x-zgs-saves">
+    <comment>ludis saves</comment>
+    <comment xml:lang="fr">Saves ludis</comment>
+    <glob pattern="*.zgs"/>
+    <generic-icon name="application-x-zgs-saves"/>
+  </mime-type>
 </mime-info>
 EOF
 
@@ -151,7 +158,7 @@ Icon=ludis
 Categories=Game;Utility;
 Terminal=false
 StartupNotify=true
-MimeType=application/x-zgp-game;application/x-zgr-runner;
+MimeType=application/x-zgp-game;application/x-zgr-runner;application/x-zgs-saves;
 EOF
 
 chmod +x "${DESKTOP_FILE}"
@@ -211,5 +218,5 @@ echo "[OK] Old name 'lpm' kept as a link to ludis (existing shortcuts keep worki
 
 echo "========================================"
 echo " Installation completed successfully!"
-echo " You can now run 'ludis' or open your .zgp / .zgr files directly!"
+echo " You can now run 'ludis' or open your .zgp / .zgr / .zgs files directly!"
 echo "========================================"

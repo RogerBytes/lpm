@@ -12,4 +12,10 @@
     <glob pattern="*.zgr"/>
     <generic-icon name="application-x-zgr-runner"/>
   </mime-type>
+  <mime-type type="application/x-zgs-saves">
+    <comment>ludis saves</comment>
+    <comment xml:lang="fr">Saves ludis</comment>
+    <glob pattern="*.zgs"/>
+    <generic-icon name="application-x-zgs-saves"/>
+  </mime-type>
 </mime-info>

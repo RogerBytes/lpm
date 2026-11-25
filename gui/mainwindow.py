@@ -294,7 +294,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.title_widget.set_title(label_by_id.get(cmd_id, ""))
 
     def open_install_for(self, path: str):
-        """Open the right install page directly (game or runner, depending on the extension)
+        """Open the right page directly (install a game or a runner, or import saves, depending on the extension)
         with "path" pre-filled. Replaces the former zenity-driven "click" mode (see bin/ludis,
         section 2: double-clicking a .zgp/.zgr now delegates here)."""
         if operations.is_busy():
@@ -302,6 +302,11 @@ class MainWindow(Adw.ApplicationWindow):
             operations.show_busy_dialog(self)
             return
         extension = os.path.splitext(path)[1].lower()
+        if extension == ".zgs":
+            # Saves archive: the Saves page, with a confirmation before the import.
+            self.show_page("saves")
+            self._built_pages["saves"].offer_import(path)
+            return
         cmd_id = "install-runner" if extension == ".zgr" else "install"
 
         # Same reset of the page being left as in show_page() (see the comment there).

@@ -1,6 +1,7 @@
 """Page: back up, restore, export and import the saves of a game (and the automatic mode)."""
 
 import os
+import subprocess
 
 import gi
 
@@ -125,6 +126,7 @@ class SavesPage:
 
         self.game_row.connect_changed(self.load_game)
         self.page.reset_selection = self.reset_fields
+        self.page.offer_import = self.offer_import  # called by MainWindow for a .zgs opened from the file manager
         self.load_global()
         self.refresh_sensitivity()
         return self.page
@@ -328,6 +330,46 @@ class SavesPage:
             if f and f.get_path():
                 self.game_run(["export", f.get_path()], t("gui.saves.toast_export"))
         dialog.save(self.window, None, on_result)
+
+    def offer_import(self, path):
+        """A .zgs opened from the file manager: select the game named in the archive and ask
+        before importing (the saves of the game are replaced, the current ones are kept)."""
+        info = {}
+        try:
+            proc = subprocess.run(["bash", "-c", 'zstd -dcq -- "$1" 2>/dev/null | tar -xOf - ./.ludis-saves 2>/dev/null', "_", path],
+                                  capture_output=True, text=True, timeout=60)
+            for line in proc.stdout.splitlines():
+                if "=" in line:
+                    k, _, v = line.partition("=")
+                    info.setdefault(k, v)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        slug, name = info.get("slug", ""), info.get("name", "")
+        if info.get("ludis-saves") != "1" or not slug:
+            self.page.toast(t("gui.saves.open_invalid"))
+            return
+        self.game_row.select_slug(slug)
+        dialog = Adw.AlertDialog(heading=t("gui.saves.open_title", name or slug),
+                                 body=t("gui.saves.open_body", os.path.basename(path)))
+        dialog.add_response("cancel", t("gui.common.cancel"))
+        dialog.add_response("import", t("gui.saves.btn_import"))
+        dialog.set_response_appearance("import", Adw.ResponseAppearance.SUGGESTED)
+
+        def answered(_d, response):
+            if response != "import":
+                return
+            # The game list may still be loading: wait for the selection to be effective.
+            def go(tries=0):
+                if self.game_row.selected_slug() == slug and self.state["slug"] == slug and not self.state["busy"]:
+                    self.game_run(["import", path], t("gui.saves.toast_import"))
+                elif tries < 50:
+                    GLib.timeout_add(200, lambda: go(tries + 1) and False)
+                else:
+                    self.page.toast(t("gui.saves.open_missing", slug))
+                return False
+            go()
+        dialog.connect("response", answered)
+        dialog.present(self.window)
 
     def on_import(self, *_):
         slug = self.state["slug"]
