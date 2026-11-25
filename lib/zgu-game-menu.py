@@ -348,6 +348,7 @@ window.lpm-menu.lpm-compact, window.lpm-menu.lpm-compact.background, window.lpm-
 window.lpm-compact .lpm-veil, window.lpm-compact .lpm-card { background-color: transparent; background-image: none; border: none; box-shadow: none; }
 .lpm-menu-title { font-size: 22px; font-weight: bold; padding: 18px 24px 6px 24px; color: #ffffff; }
 .lpm-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #bdbdbd; }
+.lpm-menu-hint.lpm-menu-hint-icon { padding-left: 8px; }
 list.lpm-menu-list { background-color: transparent; }
 list.lpm-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color: transparent; color: #ffffff; border-radius: 10px; }
 list.lpm-menu-list row:selected { background-color: #3a6ea5; color: #ffffff; }
@@ -404,7 +405,21 @@ class MenuWindow(Gtk.Window):
         self.hint = hint
         self.hint_default = hint.get_text()
         hint.add_css_class("lpm-menu-hint")
-        box.append(hint)
+        # Footer = [icon] + text. The icon is a real image (not a glyph of the text: a font without it
+        # falls back to a taller one and the footer, then the whole menu, would move). The height is
+        # fixed to the one of the usual help line.
+        self.hint_icon = Gtk.Image.new_from_icon_name("view-refresh-symbolic")
+        self.hint_icon.set_pixel_size(14)
+        self.hint_icon.set_margin_start(24)
+        self.hint_icon.set_margin_bottom(8)
+        self.hint_icon.set_visible(False)
+        hint_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        hint_box.append(self.hint_icon)
+        hint_box.append(hint)
+        _min, natural, _a, _b = hint.measure(Gtk.Orientation.VERTICAL, -1)
+        hint_box.set_size_request(-1, natural)
+        hint_box.set_overflow(Gtk.Overflow.HIDDEN)
+        box.append(hint_box)
         if self.veil:
             veil = Gtk.Box()
             veil.add_css_class("lpm-veil")
@@ -543,9 +558,15 @@ class MenuWindow(Gtk.Window):
         choice whose new state only applies at the next launch."""
         idx = self.selected_index()
         text = self.hint_default
-        if idx < len(self.rows) and self.entries[idx][1] == "segment" and self.rows[idx].get("note"):
-            text = "\u21bb " + self.entries[idx][2][4]
+        note = idx < len(self.rows) and self.entries[idx][1] == "segment" and self.rows[idx].get("note")
+        if note:
+            text = self.entries[idx][2][4]
         self.hint.set_text(text)
+        self.hint_icon.set_visible(bool(note))
+        if note:
+            self.hint.add_css_class("lpm-menu-hint-icon")
+        else:
+            self.hint.remove_css_class("lpm-menu-hint-icon")
 
     def set_segment(self, idx, index):
         info = self.rows[idx]
