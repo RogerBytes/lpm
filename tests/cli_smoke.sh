@@ -65,6 +65,31 @@ check "unknown command" 1 'Unknown command' bogus
 check "no argument: help, exit code 0" 0 'ludis vsync' 
 check "list" 0 'mario +Mario' list
 check "list (zelda)" 0 'zelda +Zelda' list
+
+# --- Saves (backup / restore / export / import)
+sv_user="${HOME}/Games/zelda/drive_c/users/steamuser"
+mkdir -p "${sv_user}/AppData/Roaming/Zelda" "${sv_user}/AppData/Local/Temp" "${sv_user}/Documents/My Games" "${sv_user}/Saved Games" "${HOME}/Games/zelda/drive_c/users/Public"
+echo slot1 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; echo tmp > "${sv_user}/AppData/Local/Temp/junk"; echo doc > "${sv_user}/Documents/My Games/a.ini"
+ln -s /etc/passwd "${sv_user}/Documents/evil-link"
+check "saves: backup without sync folder is refused" 1 'ludis saves dir' saves zelda backup
+check "saves: dir set" 0 '' saves dir "${HOME}/syncsaves"
+check "saves: backup" 0 'backed up' saves zelda backup
+expect "saves: files copied, Temp and links left out" bash -c 'c="$1/syncsaves/zelda/current"; [ "$(cat "$c/AppData/Roaming/Zelda/save1.dat")" = slot1 ] && [ -f "$c/Documents/My Games/a.ini" ] && [ ! -e "$c/AppData/Local/Temp/junk" ] && [ ! -e "$c/Documents/evil-link" ] && [ ! -L "$c/Documents/evil-link" ]' _ "${HOME}"
+check "saves: second backup without change" 0 'unchanged' saves zelda backup
+echo slot2 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"
+check "saves: changed backup rotates the old one" 0 'backed up' saves zelda backup
+expect "saves: previous/ holds the old snapshot with the old content" bash -c 'p=$(ls -d "$1"/syncsaves/zelda/previous/*-backup | head -1); [ "$(cat "$p/AppData/Roaming/Zelda/save1.dat")" = slot1 ]' _ "${HOME}"
+check "saves: restore" 0 'restored' saves zelda restore
+expect "saves: restore brought back the last backup (slot2) and kept the local copy" bash -c '[ "$(cat "$1")" = slot2 ] && ls "$2"/syncsaves/zelda/previous | grep -q before-restore' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat" "${HOME}"
+check "saves: export" 0 'exported' saves zelda export "${HOME}/zelda-test"
+expect "saves: archive name .zgs and marker inside" bash -c 'zstd -dcq "$1" | tar -tf - | grep -q "ludis-saves$\|\.ludis-saves"' _ "${HOME}/zelda-test.zgs"
+echo slot3 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"
+check "saves: import" 0 'imported' saves zelda import "${HOME}/zelda-test.zgs"
+expect "saves: import put the exported content back (slot2)" bash -c '[ "$(cat "$1")" = slot2 ]' _ "${sv_user}/AppData/Roaming/Zelda/save1.dat"
+expect "saves: forged archive with ../ or a link is refused" bash -c 'd=$(mktemp -d); mkdir -p "$d/x"; echo m > "$d/x/.ludis-saves"; ln -s /etc "$d/x/AppData"; tar -C "$d/x" -cf - . | zstd -q -o "$d/bad.zgs"; ! bash "$1" saves zelda import "$d/bad.zgs" </dev/null >/dev/null 2>&1; rc=$?; rm -rf "$d"; exit $rc' _ "${R}"
+expect "saves: random file is not a saves archive" bash -c 'echo hello > "$2/notzgs.zgs"; ! bash "$1" saves zelda import "$2/notzgs.zgs" </dev/null >/dev/null 2>&1' _ "${R}" "${HOME}"
+check "saves: unknown game" 1 '' saves nogame status
+
 check "list-runner" 0 'GE-Test' list-runner
 check "list-isolable" 0 'No isolable|Nothing' list-isolable
 check "isolate without shared store" 0 'Nothing to isolate' isolate
@@ -790,6 +815,7 @@ expect "install-runner: runner files present" test -f "${HOME}/.local/share/lutr
 rm -rf "${HOME}/.local/share/lutris/runners/wine/GE-Fake" "${HOME}/GE-Fake.zgr" "${HOME}/zgrsrc"
 check "uninstall-runner" 0 '\[REMOVED\] GE-Test' uninstall-runner -y GE-Test
 check "list-runner empty" 0 'No runner' list-runner
+
 
 echo "CLI: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

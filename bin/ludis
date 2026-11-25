@@ -60,6 +60,7 @@ print_help() {
     printf "  %-42s %s\n" "ludis sync-media <slugs...|--all>" "$(t help.games_sync_media)"
     printf "  %-42s %s\n" "ludis tools <slug> <tool> [args]" "$(t help.games_tools)"
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
+    printf "  %-42s %s\n" "ludis saves dir [path] | <slug> <action>" "$(t help.games_saves)"
     printf "  %-42s %s\n" "ludis vsync status | <slug> on|off [setting...]" "$(t help.games_vsync)"
     printf "  %-42s %s\n" "" "$(t help.games_vsync_cont)"
     printf "  %-42s %s\n" "ludis lsfg <slugs...> on|off" "$(t help.games_lsfg)"
@@ -199,6 +200,9 @@ if [[ $# -gt 0 ]]; then
             ;;
         tools)
             exec bash "${LIB_DIR}/zgp-game-tools.sh" "$@"
+            ;;
+        saves)
+            exec bash "${LIB_DIR}/zgp-game-saves.sh" "$@"
             ;;
         vsync)
             exec bash "${LIB_DIR}/zgp-game-vsync.sh" "$@"

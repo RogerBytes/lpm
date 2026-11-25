@@ -40,6 +40,7 @@ zgu_ludis_rel() {
     loading_message)  new="settings/loading-message.txt"; legacy="lpm-loading-message.txt" ;;
     ignore_windows)   new="settings/ignore-windows.txt"; legacy="lpm-ignore-windows.txt" ;;
     overlay_fps)      new="settings/overlay-fps";       legacy="lpm-overlay-fps" ;;
+    saves_extra)      new="settings/saves-extra.txt";   legacy="saves-extra.txt" ;;
     scripts)          new="scripts";                    legacy="scripts" ;;
     gamepad)          new="gamepad";                    legacy="lpm_gamepad" ;;
     splash)           new="images/splash";              legacy="splash" ;;

@@ -54,6 +54,7 @@ _ludis_commands() {
     'list-runner:List installed runners'
     'list-remote-runners:List runners available for download'
     'check:Check ludis system dependencies'
+    'saves:Back up, restore, export and import the saves of a game'
     'lutris-version:Show/force the Lutris version (Flatpak or native) used by ludis'
     'self-update:Check for / install a newer ludis release (deb, rpm or Arch package installs)'
     'log:View the ludis action log'
