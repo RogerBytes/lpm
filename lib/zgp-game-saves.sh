@@ -14,6 +14,9 @@
 #   ludis saves <slug> folders [list|add <path>|remove <path>|reset]
 #                                           choose the folders (relative to the Windows user folder)
 #                                           instead of the default ones; stored in the prefix
+#   ludis saves <slug> exclude [list|add <pattern>|remove <pattern>|reset]
+#                                           more files/folders NOT to take, on top of the built-in
+#                                           exclusions (caches, logs, Windows profile leftovers...)
 #   ludis saves auto [on|off]               global automatic mode (default: off)
 #   ludis saves interval [minutes]          copy every N minutes while playing (0 = off, 1-60, default 10)
 #
@@ -44,10 +47,18 @@ saves_conf="${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/saves.conf"
 saves_dirs=(AppData Documents "Saved Games")
 saves_keep=5
 saves_excludes=(
-  "AppData/Local/Temp" "AppData/Local/Temp/*" "AppData/LocalLow/Temp"
-  "*/CrashDumps" "*/CrashDumps/*" "*/D3DSCache" "*/D3DSCache/*" "*/GPUCache" "*/GPUCache/*"
-  "*/ShaderCache" "*/ShaderCache/*" "*/NVIDIA/DXCache" "*/NVIDIA/GLCache"
-  "*/NVIDIA/DXCache/*" "*/NVIDIA/GLCache/*" "*/Code Cache" "*/Code Cache/*"
+  # temporary files and caches that are rebuilt by themselves
+  "AppData/Local/Temp" "AppData/LocalLow/Temp"
+  "*/CrashDumps" "*/Crashes" "*/D3DSCache" "*/GPUCache" "*/ShaderCache" "*/Code Cache"
+  "*/NVIDIA/DXCache" "*/NVIDIA/GLCache" "*/Cache" "*/cache" "*/INetCache" "*/INetCookies"
+  "AppData/Local/dxvk" "AppData/Local/vkd3d*" "AppData/Local/mesa_shader_cache*"
+  "*.dxvk-cache" "*.dxvk.bin" "*.dxvk.lut"
+  # what Windows itself puts in every profile (shortcuts, history, thumbnails): not game data
+  "AppData/Local/Microsoft" "AppData/Roaming/Microsoft"
+  # logs and engine telemetry
+  "*.log" "*.log.*" "*/Logs" "*/logs" "*/Unity" "*/Analytics"
+  # empty folders Wine creates inside Documents
+  "Documents/Downloads" "Documents/Music" "Documents/Pictures" "Documents/Videos" "Documents/Templates"
 )
 
 saves_conf_get() {
@@ -157,6 +168,7 @@ saves_pack() {
   local dest="$1" item args=() x
   mkdir -p -- "${dest}" || return 1
   for x in "${saves_excludes[@]}"; do args+=(--exclude="${x}"); done
+  while IFS= read -r x; do args+=(--exclude="${x}"); done < <(saves_list_file_lines "$(zgu_ludis_find "${prefix_dir}" saves_exclude)")
   while IFS= read -r item; do
     [[ -n "${item}" ]] || continue
     if [[ "${item}" = _extra/* ]]; then
@@ -191,12 +203,29 @@ saves_unpack() {
   return 0
 }
 
-# saves_rotate <previous_dir>: keeps the newest ${saves_keep} snapshots.
+# saves_rotate <previous_dir>: grandfather-father-son rotation of the snapshots in previous/.
+# Kept: the newest one of each of the last 3 hours, of each of the last 3 days and of each of the
+# last 2 weeks (8 at most); everything older is deleted. The safety copies made before a restore,
+# a pull or an import ("before-*", "conflict") are also kept for 7 days whatever the rule says.
+# Snapshot folders are named YYYYmmdd-HHMMSS-<label>.
 saves_rotate() {
-  local d n=0
+  local d name stamp epoch age keep now key
+  declare -A seen=()
+  now="$(date +%s)"
   while IFS= read -r d; do
-    n=$((n + 1))
-    if (( n > saves_keep )); then rm -rf -- "${d}"; fi
+    name="$(basename -- "${d}")"
+    stamp="${name:0:8} ${name:9:2}:${name:11:2}:${name:13:2}"
+    epoch="$(date -d "${stamp}" +%s 2>/dev/null)" || epoch=""
+    [[ "${epoch}" =~ ^[0-9]+$ ]] || continue       # not one of ours: never touched
+    age=$(( now - epoch ))
+    keep=false
+    if (( age < 3 * 3600 )); then key="h$(( age / 3600 ))"
+    elif (( age < 3 * 86400 )); then key="d$(( age / 86400 ))"
+    elif (( age < 14 * 86400 )); then key="w$(( age / (7 * 86400) ))"
+    else key=""; fi
+    if [[ -n "${key}" && -z "${seen[${key}]:-}" ]]; then seen[${key}]=1; keep=true; fi
+    if [[ "${keep}" = false && "${name}" =~ -(before-|conflict) ]] && (( age < 7 * 86400 )); then keep=true; fi
+    [[ "${keep}" = true ]] || rm -rf -- "${d}"
   done < <(find "$1" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -r)
   return 0
 }
@@ -296,7 +325,7 @@ if [[ "${cli_slug}" = "dir" ]]; then
 fi
 
 case "${cli_action}" in
-  status|backup|restore|export|import|pull|push|auto|folders) ;;
+  status|backup|restore|export|import|pull|push|auto|folders|exclude) ;;
   "") cli_action="status" ;;
   *)
     zgu_cli_error "$(t saves.invalid_action_cli "${cli_action}")"
@@ -433,6 +462,34 @@ case "${cli_action}" in
         zgu_cli_ok "$(t saves.auto_game_cli "${target_name}" "${cli_arg}")"
         ;;
       *) zgu_cli_error "$(t saves.invalid_action_cli "${cli_arg}")"; exit 1 ;;
+    esac
+    ;;
+
+  exclude)
+    xf="$(zgu_ludis_path "${prefix_dir}" saves_exclude)"
+    sub="${cli_arg:-list}"; pat_arg="${4:-}"
+    case "${sub}" in
+      list) saves_list_file_lines "$(zgu_ludis_find "${prefix_dir}" saves_exclude)" ;;
+      defaults) printf '%s\n' "${saves_excludes[@]}" ;;
+      reset)
+        zgu_ludis_remove "${prefix_dir}" saves_exclude; zgu_ludis_prune "${prefix_dir}"
+        zgu_cli_ok "$(t saves.exclude_reset_cli "${target_name}")"
+        ;;
+      add|remove)
+        pat_arg="${pat_arg%/}"
+        if [[ -z "${pat_arg}" || "${pat_arg}" = /* || "${pat_arg}" = *..* || "${pat_arg}" = *$'\n'* ]]; then
+          zgu_cli_error "$(t saves.folder_invalid_cli "${pat_arg}")"; exit 1
+        fi
+        mkdir -p -- "$(dirname "${xf}")" || exit 1
+        touch "${xf}"
+        if [[ "${sub}" = add ]]; then
+          grep -qxF -- "${pat_arg}" "${xf}" || printf '%s\n' "${pat_arg}" >> "${xf}"
+        else
+          grep -vxF -- "${pat_arg}" "${xf}" > "${xf}.tmp"; mv -f -- "${xf}.tmp" "${xf}"
+        fi
+        zgu_cli_ok "$(t saves.exclude_updated_cli "${target_name}")"
+        ;;
+      *) zgu_cli_error "$(t saves.invalid_action_cli "${sub}")"; exit 1 ;;
     esac
     ;;
 

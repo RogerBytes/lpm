@@ -84,6 +84,25 @@ class SavesPage:
             folders_box.append(w)
         self.game_group.add(folders_box)
 
+        # Extra exclusions of this game (on top of the built-in ones): one pattern per line.
+        self.exclude_buffer = Gtk.TextBuffer()
+        xview = Gtk.TextView(buffer=self.exclude_buffer, monospace=True, wrap_mode=Gtk.WrapMode.NONE,
+                             top_margin=6, bottom_margin=6, left_margin=8, right_margin=8)
+        xscroller = Gtk.ScrolledWindow(min_content_height=70, max_content_height=140, child=xview)
+        xscroller.add_css_class("card")
+        xlabel = Gtk.Label(label=t("gui.saves.exclude_title"), xalign=0)
+        xlabel.add_css_class("heading")
+        xhint = Gtk.Label(label=t("gui.saves.exclude_hint"), xalign=0, wrap=True)
+        xhint.add_css_class("dim-label")
+        self.exclude_save = Gtk.Button(label=t("gui.saves.exclude_save"))
+        self.exclude_save.connect("clicked", self.on_exclude_save)
+        xbuttons = Gtk.Box(halign=Gtk.Align.END)
+        xbuttons.append(self.exclude_save)
+        exclude_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=8)
+        for w in (xlabel, xhint, xscroller, xbuttons):
+            exclude_box.append(w)
+        self.game_group.add(exclude_box)
+
         self.buttons = []
         action_box = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=2,
                                  column_spacing=8, row_spacing=8, homogeneous=True, margin_top=8)
@@ -131,6 +150,7 @@ class SavesPage:
         self.game_auto_row.set_sensitive(game)
         self.folders_save.set_sensitive(game)
         self.folders_default.set_sensitive(game)
+        self.exclude_save.set_sensitive(game)
 
     # --- global ---
     def load_global(self):
@@ -198,7 +218,7 @@ class SavesPage:
             def apply():
                 if token != self.state["token"]:
                     return
-                auto, folders, status = results
+                auto, folders, status, excludes = results
                 if auto.returncode != 0:
                     self.page.toast(t("gui.saves.toast_load_failed"))
                     return
@@ -206,6 +226,7 @@ class SavesPage:
                 value = dict(p.split("=", 1) for p in auto.stdout.split() if "=" in p).get("game", "follow")
                 self.game_auto_row.set_selected(AUTO_CHOICES.index(value) if value in AUTO_CHOICES else 0)
                 self.folders_buffer.set_text(folders.stdout.strip())
+                self.exclude_buffer.set_text(excludes.stdout.strip())
                 self.state["loading"] = False
                 self.status_label.set_label(self.describe(status.stdout))
                 self.state["slug"] = slug
@@ -216,7 +237,7 @@ class SavesPage:
 
         def collect(result):
             results.append(result)
-            if len(results) == 3:
+            if len(results) == 4:
                 apply_all(results)
 
         # run in order so that results[0..2] are auto, folders, status
@@ -225,7 +246,8 @@ class SavesPage:
                 return
             args, rest = commands[0], commands[1:]
             backend.run_ludis_async(args, on_done=lambda r: (collect(r), chain(rest)))
-        chain([["saves", slug, "auto"], ["saves", slug, "folders", "list"], ["saves", slug, "status"]])
+        chain([["saves", slug, "auto"], ["saves", slug, "folders", "list"], ["saves", slug, "status"],
+               ["saves", slug, "exclude", "list"]])
 
     @staticmethod
     def describe(status_out):
@@ -333,6 +355,32 @@ class SavesPage:
                 def finish():
                     self.busy(False)
                     self.page.toast(t("gui.saves.folders_invalid") if failed else t("gui.saves.toast_folders"))
+                    self.load_game()
+                _run_on_main(finish)
+                return
+
+            def done(result):
+                if result.returncode != 0:
+                    failed.append(rest[0])
+                chain(rest[1:])
+            backend.run_ludis_async(rest[0], on_done=done)
+        chain(commands)
+
+    def on_exclude_save(self, *_):
+        slug = self.state["slug"]
+        if not slug or self.state["busy"]:
+            return
+        start, end = self.exclude_buffer.get_bounds()
+        lines = [ln.strip() for ln in self.exclude_buffer.get_text(start, end, False).splitlines() if ln.strip()]
+        self.busy(True)
+        commands = [["saves", slug, "exclude", "reset"]] + [["saves", slug, "exclude", "add", ln] for ln in lines]
+        failed = []
+
+        def chain(rest):
+            if not rest:
+                def finish():
+                    self.busy(False)
+                    self.page.toast(t("gui.saves.folders_invalid") if failed else t("gui.saves.toast_exclude"))
                     self.load_game()
                 _run_on_main(finish)
                 return

@@ -130,6 +130,27 @@ expect "saves: the choice is a file in the prefix" bash -c '[ -f "$1/Games/zelda
 check "saves: backup with custom folders" 0 'backed up|unchanged' saves zelda backup
 expect "saves: only the chosen folder is in the backup" bash -c 'c="$1/syncsaves/zelda/current"; [ -f "$c/AppData/Roaming/Zelda/save1.dat" ] && [ ! -e "$c/Documents" ]' _ "${HOME}"
 check "saves: folders reset" 0 '' saves zelda folders reset
+# exclusions (built-in + per game) and rotation
+mkdir -p "${sv_user}/AppData/Local/dxvk" "${sv_user}/AppData/Roaming/Microsoft/Windows/Recent" "${sv_user}/AppData/LocalLow/Studio/Game/Unity"
+echo bin > "${sv_user}/AppData/Local/dxvk/a.dxvk.bin"; echo r > "${sv_user}/AppData/Roaming/Microsoft/Windows/Recent/r.lnk"
+echo log > "${sv_user}/AppData/LocalLow/Studio/Game/Player.log"; echo u > "${sv_user}/AppData/LocalLow/Studio/Game/Unity/analytics"
+echo keep > "${sv_user}/AppData/LocalLow/Studio/Game/SaveData.json"; echo skipme > "${sv_user}/AppData/LocalLow/Studio/Game/big.cache2"
+check "saves: exclude add" 0 '' saves zelda exclude add "*.cache2"
+check "saves: exclude list" 0 'cache2' saves zelda exclude list
+check "saves: exclude defaults are listed" 0 'dxvk' saves zelda exclude defaults
+check "saves: exclude refuses .." 1 '' saves zelda exclude add "../x"
+check "saves: backup with exclusions" 0 'backed up|unchanged' saves zelda backup
+expect "saves: built-in and per-game exclusions applied, real save kept" bash -c 'c="$1/syncsaves/zelda/current/AppData"; [ -f "$c/LocalLow/Studio/Game/SaveData.json" ] && [ ! -e "$c/Local/dxvk" ] && [ ! -e "$c/Roaming/Microsoft" ] && [ ! -e "$c/LocalLow/Studio/Game/Player.log" ] && [ ! -e "$c/LocalLow/Studio/Game/Unity" ] && [ ! -e "$c/LocalLow/Studio/Game/big.cache2" ]' _ "${HOME}"
+check "saves: exclude reset" 0 '' saves zelda exclude reset
+check "saves: exclude list empty after reset" 0 '^$' saves zelda exclude list
+# rotation: fake snapshots of known ages, then a real change triggers it
+rp="${HOME}/syncsaves/zelda/previous"; rm -rf "${rp}"; mkdir -p "${rp}"
+mk() { mkdir -p "${rp}/$(date -d "$1 ago" +%Y%m%d-%H%M%S)-$2"; }
+mk "10 minutes" a; mk "20 minutes" b; mk "100 minutes" c; mk "170 minutes" d; mk "5 hours" e; mk "6 hours" f
+mk "2 days" g; mk "10 days" h; mk "20 days" i; mk "4 days" j; mk "5 days" conflict
+echo rot > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
+check "saves: backup triggers the rotation" 0 'backed up' saves zelda backup
+expect "saves: rotation keeps 1/hour, 1/day, 1/week and the safety copies (a,b,f,i gone)" bash -c 'cd "$1"; n=$(ls | wc -l); for l in a b f i; do ls | grep -q -- "-$l$" && exit 1; done; for l in c d e g h j conflict backup; do ls | grep -q -- "-$l$" || { echo "missing $l" >&2; exit 1; }; done; [ "$n" -eq 8 ]' _ "${rp}"
 expect "saves: monitor stops by itself when the game never shows up" bash -c 'LUDIS_SAVES_GIVEUP=2 timeout 20 python3 "$1/lib/zgu-saves-monitor.py" "$2" zelda 10; [ $? -eq 0 ]' _ "${repo}" "${HOME}/Games/zelda"
 check "saves: unknown game" 1 '' saves nogame status
 

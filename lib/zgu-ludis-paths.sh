@@ -41,6 +41,7 @@ zgu_ludis_rel() {
     ignore_windows)   new="settings/ignore-windows.txt"; legacy="lpm-ignore-windows.txt" ;;
     overlay_fps)      new="settings/overlay-fps";       legacy="lpm-overlay-fps" ;;
     saves_auto)       new="settings/saves-auto";        legacy="saves-auto" ;;
+    saves_exclude)    new="settings/saves-exclude.txt"; legacy="saves-exclude.txt" ;;
     saves_folders)    new="settings/saves-folders.txt"; legacy="saves-folders.txt" ;;
     saves_extra)      new="settings/saves-extra.txt";   legacy="saves-extra.txt" ;;
     scripts)          new="scripts";                    legacy="scripts" ;;
