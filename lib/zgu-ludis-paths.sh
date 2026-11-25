@@ -315,3 +315,17 @@ zgu_saves_interval() {
   [[ "${v}" =~ ^[0-9]+$ ]] && (( v <= 60 )) || v=10
   printf '%s' "${v}"
 }
+
+# zgu_game_version <prefix>: the version number of a game ("" if none).
+zgu_game_version() {
+  cat -- "$(zgu_ludis_find "$1" game_version)" 2>/dev/null | head -n 1 | tr -d '\r' | head -c 64
+}
+
+# zgu_version_suffix <prefix>: " (v1.2.3)" when the game has a version number, nothing otherwise.
+# Used in the name of the exported .zgp.
+zgu_version_suffix() {
+  local v
+  v="$(zgu_game_version "$1")"
+  [[ -n "${v}" ]] && printf ' (v%s)' "${v}"
+  return 0
+}

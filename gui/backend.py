@@ -150,12 +150,19 @@ def run_ludis_async(
 # --- Listers: parsing the text already produced by lib/zg*-lister.sh ---
 
 _SLUG_NAME_RE = re.compile(r"^(\S+)\s+(.*)$")
+_VERSION_SUFFIX_RE = re.compile(r"^(.*\S) \(v([^()]+)\)$")
 
 
 @dataclass
 class GameEntry:
     slug: str
     name: str
+    version: str = ""
+
+    @property
+    def label(self) -> str:
+        """Name for lists: "Name (v1.2.3)" when the game has a version number."""
+        return f"{self.name} (v{self.version})" if self.version else self.name
 
 
 @dataclass
@@ -171,7 +178,13 @@ def list_games() -> list[GameEntry]:
     for line in result.stdout.splitlines():
         m = _SLUG_NAME_RE.match(line.strip())
         if m:
-            entries.append(GameEntry(slug=m.group(1), name=m.group(2)))
+            name, version = m.group(2), ""
+            # "ludis list" appends " (vX)" to a game that has a version number: kept apart, so
+            # that the name stays the clean one (image search, etc.).
+            vm = _VERSION_SUFFIX_RE.match(name)
+            if vm:
+                name, version = vm.group(1), vm.group(2)
+            entries.append(GameEntry(slug=m.group(1), name=name, version=version))
     return entries
 
 

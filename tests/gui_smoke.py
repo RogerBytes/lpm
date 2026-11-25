@@ -290,7 +290,7 @@ try:
     fs = widgets_select.FileMultiSelect("t")
     fs.set_paths(["/x/Mario.zgp"])
     fs.set_versions({"/x/Mario.zgp": "3.1"})
-    assert "Mario.zgp (V3.1)" in fs._row_by_path["/x/Mario.zgp"].get_title()
+    assert "Mario.zgp (v3.1)" in fs._row_by_path["/x/Mario.zgp"].get_title()
     print("game version page: OK")
 except Exception:
     errors.append("game version page:\n" + traceback.format_exc())

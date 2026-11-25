@@ -10,6 +10,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 
 # Lutris path configuration
 
@@ -54,7 +56,15 @@ printed_any=0
 while IFS=$'\x1f' read -r slug name; do
   [[ -z "${slug}" ]] && continue
   [[ -n "${blacklisted_slugs[${slug}]:-}" ]] && continue
-  echo "${slug}  ${name}"
+  # Version number (if the game has one) after the name: "Name (v1.2.3)".
+  list_version=""
+  list_prefix=$(zgu_resolve_prefix_dir_by_slug "${slug}" "${lutris_db}" "${games_dir}" 2>/dev/null)
+  [[ -n "${list_prefix}" ]] && list_version="$(zgu_game_version "${list_prefix}")"
+  if [[ -n "${list_version}" ]]; then
+    echo "${slug}  ${name} (v${list_version})"
+  else
+    echo "${slug}  ${name}"
+  fi
   printed_any=1
 done <<< "${games_list}"
 

@@ -177,7 +177,7 @@ for target_slug_raw in "${cli_games[@]}"; do
   game_real_name="${game_real_name//\//-}"
 
   # Anti-overwrite check in CLI
-  archive_path="${OUTPUT_DIR}/${game_real_name}.zgp"
+  archive_path="${OUTPUT_DIR}/${game_real_name}$(zgu_version_suffix "${resolved_dir}").zgp"
   if [[ -f "${archive_path}" ]]; then
     zgu_cli_error "$(t pack_game.archive_exists_cli "${game_real_name}" "${OUTPUT_DIR}")"
     zgu_cli_error "$(t pack_game.archive_exists_hint)"
@@ -268,7 +268,7 @@ for game_real_name in "${games_to_export[@]}"; do
   fi
 
   ARCHIVE_NAME="${game_real_name}"
-  archive_path="${OUTPUT_DIR}/${ARCHIVE_NAME}.zgp"
+  archive_path="${OUTPUT_DIR}/${ARCHIVE_NAME}$(zgu_version_suffix "${WINEPREFIX_DIR}").zgp"
 
   # Robust search for the inner game subfolder (2>/dev/null: if "drive_c/Games" does not exist
   # for this prefix, fall back silently below instead of printing a useless "find: No such

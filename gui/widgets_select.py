@@ -133,7 +133,7 @@ class GameMultiSelect(_CheckListExpander):
         self.select_all_check.set_active(False)
 
         for entry in entries:
-            self._add_check_row(entry.slug, entry.name, entry.slug)
+            self._add_check_row(entry.slug, entry.label, entry.slug)
             self._name_by_slug[entry.slug] = entry.name
 
         self._update_title()
@@ -210,7 +210,7 @@ class FileMultiSelect(_CheckListExpander):
         """Shows "(Vx.y.z)" after the file name of the packages that have a version number."""
         for path, row in getattr(self, "_row_by_path", {}).items():
             if versions.get(path):
-                row.set_title(_escape_markup(f"{os.path.basename(path)} (V{versions[path]})"))
+                row.set_title(_escape_markup(f"{os.path.basename(path)} (v{versions[path]})"))
 
     def _empty_title(self) -> str:
         # While files are listed, the "selected/total" counter is shown even at 0 selected
@@ -354,12 +354,12 @@ class SingleGameSelect(Adw.ExpanderRow):
 
         restored_row = None
         for entry in entries:
-            action_row = Adw.ActionRow(title=self._row_title(entry.name, entry.slug), subtitle=_escape_markup(entry.slug))
+            action_row = Adw.ActionRow(title=self._row_title(entry.label, entry.slug), subtitle=_escape_markup(entry.slug))
             action_row.set_activatable(True)
             self._listbox.append(action_row)
             self._rows.append(action_row)
             self._slugs.append(entry.slug)
-            self._names.append(entry.name)
+            self._names.append(entry.label)
             if entry.slug == previous_slug:
                 restored_row = action_row
 

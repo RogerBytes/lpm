@@ -875,8 +875,11 @@ check "install --list-existing: nothing for a game that is not installed" 0 '^$'
 check "install --list-existing: archive without number, game installed (2.0)" 0 'EXISTS.Mario.Mario.zgp.mario.2.0.' install -y --list-existing "${HOME}/Mario.zgp"
 rm -f "${HOME}/Mario.zgp"
 check "pack with a version" 0 '\[EXPORTED\]' pack -3 mario
+expect "pack: the version is in the file name" test -s "${HOME}/Mario (v2.0).zgp"
+mv -f "${HOME}/Mario (v2.0).zgp" "${HOME}/Mario.zgp"
 expect "pack: game_version written in the first-member YAML" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"game_version\"]==\"2.0\""' _ "${HOME}/Mario.zgp"
 check "install --list-versions: version of the archive, without extracting" 0 "VERSION.*Mario.zgp.2.0" install -y --list-versions "${HOME}/Mario.zgp"
+check "list: version after the name" 0 'mario +Mario \(v2.0\)' list
 check "game-version: clear" 0 'removed' game-version mario --clear
 check "game-version: empty after clear" 0 '^$' game-version mario
 check "install --list-existing: installed none / new 2.0" 0 'EXISTS.Mario.Mario.zgp.mario..2.0' install -y --list-existing "${HOME}/Mario.zgp"
