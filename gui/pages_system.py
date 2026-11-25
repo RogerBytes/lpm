@@ -14,6 +14,7 @@ from i18n import t
 from commandpage import CommandPage
 from guilog import _clear_log_files, _read_log_lines
 from util import _escape_markup, _run_on_main
+from widgets_select import RunnerCombo
 
 
 class LutrisVersionPage:
@@ -114,6 +115,68 @@ class LutrisVersionPage:
             return
         self.page.run_command(["lutris-version", self.state["values"][idx]], t("gui.lutris_version.done"))
 
+
+
+class LutrisDefaultsPage:
+    """Lutris-wide Wine defaults: the default runner and which winetricks games use by default."""
+    WINETRICKS = ("runner", "system")
+
+    def __init__(self, owner):
+        self.owner = owner
+        self.window = owner.window
+        self.state = {"gen": 0, "loaded": False}
+
+    def build(self):
+        self.page = CommandPage(t("gui.lutris_defaults.page_title"))
+        self.page.group.set_description(t("gui.lutris_defaults.intro"))
+        self.current_row = Adw.ActionRow(title=t("gui.lutris_defaults.current_runner"), subtitle=t("gui.lutris_version.loading"))
+        self.page.add_row(self.current_row)
+        self.runner_row = RunnerCombo(title=t("gui.lutris_defaults.runner_title"), placeholder=t("gui.lutris_defaults.runner_placeholder"))
+        self.page.add_row(self.runner_row)
+        self.winetricks_row = Adw.ComboRow(title=t("gui.lutris_defaults.winetricks_title"))
+        self.winetricks_row.set_model(Gtk.StringList.new([t("gui.lutris_defaults.winetricks_runner"), t("gui.lutris_defaults.winetricks_system")]))
+        self.winetricks_row.set_sensitive(False)
+        self.page.add_row(self.winetricks_row)
+        self.page.reset_selection = self.load
+        self.page.run_button.connect("clicked", self.on_run)
+        self.load()
+        return self.page
+
+    def load(self):
+        self.state["gen"] += 1
+        gen = self.state["gen"]
+        self.state["loaded"] = False
+        self.winetricks_row.set_sensitive(False)
+        self.runner_row.refresh()
+
+        def done(result):
+            def apply():
+                if gen != self.state["gen"]:
+                    return
+                if result.returncode != 0:
+                    self.current_row.set_subtitle(t("gui.lutris_version.status_unknown"))
+                    return
+                values = dict(ln.split("=", 1) for ln in result.stdout.splitlines() if "=" in ln)
+                runner = values.get("runner", "default")
+                self.current_row.set_subtitle(_escape_markup(t("gui.lutris_defaults.runner_not_set") if runner == "default" else runner))
+                choice = values.get("winetricks", "runner")
+                self.winetricks_row.set_selected(self.WINETRICKS.index(choice) if choice in self.WINETRICKS else 0)
+                self.winetricks_row.set_sensitive(True)
+                self.state["loaded"] = True
+
+            _run_on_main(apply)
+
+        backend.run_ludis_async(["lutris-defaults", "status"], on_done=done)
+
+    def on_run(self, *_):
+        if not self.state["loaded"]:
+            self.page.toast(t("gui.common.command_failed", "?"))
+            return
+        args = ["lutris-defaults", "apply", "winetricks=" + self.WINETRICKS[self.winetricks_row.get_selected()]]
+        runner = self.runner_row.explicit_runner()
+        if runner:
+            args.append("runner=" + runner)
+        self.page.run_command(args, t("gui.lutris_defaults.done"), refresh=None)
 
 
 class LogsPage:
@@ -385,6 +448,9 @@ class SystemPages:
 
     def page_logs(self):
         return LogsPage(self).build_page()
+
+    def page_lutris_defaults(self):
+        return LutrisDefaultsPage(self).build()
 
     def page_lutris_version(self):
         return LutrisVersionPage(self).build()

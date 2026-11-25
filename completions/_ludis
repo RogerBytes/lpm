@@ -56,6 +56,7 @@ _ludis_commands() {
     'doctor:Diagnose Lutris, runners and tools (changes nothing)'
     'check:Check ludis system dependencies'
     'saves:Back up, restore, export and import the saves of a game'
+    'lutris-defaults:Show/set the default Wine runner and winetricks of Lutris'
     'lutris-version:Show/force the Lutris version (Flatpak or native) used by ludis'
     'self-update:Check for / install a newer ludis release (deb, rpm or Arch package installs)'
     'log:View the ludis action log'
@@ -291,6 +292,9 @@ _ludis() {
       ;;
     self-update)
       _values 'action' 'check' 'install'
+      ;;
+    lutris-defaults)
+      _values 'action' 'status' 'runner' 'winetricks'
       ;;
     lutris-version)
       # No argument: show the state. Otherwise force a choice or clear it -- no other

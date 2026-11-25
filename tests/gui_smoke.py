@@ -176,7 +176,7 @@ try:
     ttool = next(w for w in walk(tpage) if type(w).__name__ == "SingleChoiceSelect")
     tgame._listbox.select_row(tgame._rows[tgame._slugs.index("mario")])
     pump(0.8)
-    runner_idx = ttool.n_items() - 4
+    runner_idx = ttool.n_items() - 5
     ttool.set_selected(runner_idx)
     pump(0.5)
     assert trunner.get_visible(), "runner selector hidden"
@@ -194,6 +194,57 @@ try:
     print("runner tool: OK")
 except Exception:
     errors.append("runner tool:\n" + traceback.format_exc())
+
+# --- Tools page: "Launch options" tool (GameMode, Gamescope, Esync...) ------------------
+try:
+    # a successful run resets the page (game selection included): choose the game again
+    tgame._listbox.select_row(tgame._rows[tgame._slugs.index("mario")])
+    pump(0.8)
+    ttool.set_selected(ttool.n_items() - 1)
+    pump(3.0)
+    from gi.repository import Adw
+    def by_title(key):
+        title = i18n.t("gui.tools.opt_" + key)
+        return next(w for w in walk(tpage) if isinstance(w, (Adw.ComboRow, Adw.EntryRow)) and w.get_title() == title)
+    orow = {k: by_title(k) for k in ("gamemode", "esync", "gamescope-fps")}
+    import backend
+    _r = backend.run_ludis(["tools", "mario", "options", "status"])
+    assert _r.returncode == 0, "status failed: rc=%s out=%r err=%r" % (_r.returncode, _r.stdout, _r.stderr)
+    assert orow["gamemode"].get_visible(), "options rows hidden"
+    assert orow["gamemode"].get_sensitive(), "options not loaded (sensitive=%s)" % orow["gamemode"].get_sensitive()
+    assert orow["gamemode"].get_selected() == 0, "gamemode should start on Default"
+    orow["gamemode"].set_selected(1)      # On
+    orow["esync"].set_selected(2)         # Off
+    orow["gamescope-fps"].set_text("60")
+    tpage.run_button.emit("clicked")
+    pump(2.5)
+    import yaml as _yaml
+    d = _yaml.safe_load(open(os.path.join(os.environ["HOME"], ".config/lutris/games/mario-1.yml")))
+    assert d["system"]["gamemode"] is True, d
+    assert d["wine"]["esync"] is False, d
+    assert d["system"]["gamescope_fps_limiter"] == "60", d
+    assert d["wine"]["version"] == "GE-Other", d
+    print("launch options tool: OK")
+except Exception:
+    errors.append("launch options tool:\n" + traceback.format_exc())
+
+# --- Lutris defaults page -----------------------------------------------------------------
+try:
+    win.show_page("lutris-defaults")
+    pump(1.5)
+    dpage = win._built_pages["lutris-defaults"]
+    import yaml as _yaml
+    from gi.repository import Adw
+    dwine = next(w for w in walk(dpage) if isinstance(w, Adw.ComboRow) and not isinstance(w, widgets_select.RunnerCombo))
+    assert dwine.get_sensitive(), "winetricks choice not loaded"
+    dwine.set_selected(1)  # system
+    dpage.run_button.emit("clicked")
+    pump(2.5)
+    d = _yaml.safe_load(open(os.path.join(os.environ["HOME"], ".config/lutris/runners/wine.yml")))
+    assert d["wine"]["system_winetricks"] is True, d
+    print("Lutris defaults page: OK")
+except Exception:
+    errors.append("Lutris defaults page:\n" + traceback.format_exc())
 
 # --- Home page: update button (hidden unless a newer version is known) -------------------
 try:

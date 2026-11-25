@@ -38,6 +38,7 @@ class ToolsPage:
         self._add_mangohud_row()
         self._add_overlay_rows()
         self._add_gamepad_rows()
+        self._add_options_rows()
         self._add_env_row()
         self._wire_visibility()
         self._wire_reset_and_run()
@@ -53,7 +54,7 @@ class ToolsPage:
         # in the dropdown, in the same order -- the two lists are decoupled (as for
         # "flatpak"/"native"/"reset" in page_lutris_version), so translating the display never
         # touches the arguments sent to bin/ludis.
-        self.tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud", "overlay", "gamepad"]
+        self.tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud", "overlay", "gamepad", "options"]
         tool_labels = [
             t("gui.tools.tool_winetricks"),
             t("gui.tools.tool_regedit"),
@@ -67,6 +68,7 @@ class ToolsPage:
             t("gui.tools.tool_mangohud"),
             t("gui.tools.tool_overlay"),
             t("gui.tools.tool_gamepad"),
+            t("gui.tools.tool_options"),
         ]
         # Same list style as the game selector (scrolls inside the page): a classic dropdown
         # hid the last tools when the window was not tall enough.
@@ -238,6 +240,71 @@ class ToolsPage:
         self.gamepad_edit_button.connect("clicked", self._on_gamepad_edit)
 
         self.gamepad_row.connect("notify::active", self._on_gamepad_toggled)
+
+    # Launch options kept in the game's Lutris config (tool "options"): yes/no ones have three
+    # states (Lutris default / on / off), the others are free text (empty = Lutris default).
+    OPTION_BOOLS = ("gamemode", "gamescope", "esync", "fsync", "dxvk", "system-winetricks")
+    OPTION_ENTRIES = ("gamescope-output", "gamescope-game", "gamescope-fps", "resolution")
+    OPTION_STATES = ("default", "on", "off")
+
+    def _add_options_rows(self):
+        self.options_rows = {}
+        for opt in self.OPTION_BOOLS:
+            row = Adw.ComboRow(title=t("gui.tools.opt_" + opt))
+            row.set_model(Gtk.StringList.new([t("gui.tools.opt_default"), t("gui.tools.opt_on"), t("gui.tools.opt_off")]))
+            row.set_sensitive(False)
+            self.page.add_row(row)
+            self.options_rows[opt] = row
+        for opt in self.OPTION_ENTRIES:
+            row = Adw.EntryRow(title=t("gui.tools.opt_" + opt))
+            row.set_sensitive(False)
+            self.page.add_row(row)
+            self.options_rows[opt] = row
+        self.options_state = {"slug": None, "token": 0}
+
+    def _load_options(self):
+        slug = self.game_row.selected_slug()
+        self.options_state["token"] += 1
+        token = self.options_state["token"]
+        self.options_state["slug"] = None
+        for row in self.options_rows.values():
+            row.set_sensitive(False)
+        if not slug or self.tool_row.get_selected() != self.tools.index("options"):
+            return
+
+        def done(result):
+            def apply():
+                if token != self.options_state["token"]:
+                    return  # another game / tool chosen in the meantime
+                if result.returncode != 0:
+                    self.page.toast(t("gui.common.command_failed", result.returncode))
+                    return
+                values = dict(ln.split("=", 1) for ln in result.stdout.splitlines() if "=" in ln)
+                for opt in self.OPTION_BOOLS:
+                    state = values.get(opt, "default")
+                    self.options_rows[opt].set_selected(self.OPTION_STATES.index(state) if state in self.OPTION_STATES else 0)
+                for opt in self.OPTION_ENTRIES:
+                    value = values.get(opt, "default")
+                    self.options_rows[opt].set_text("" if value == "default" else value)
+                self.options_state["slug"] = slug
+                for row in self.options_rows.values():
+                    row.set_sensitive(True)
+
+            _run_on_main(apply)
+
+        backend.run_ludis_async(["tools", slug, "options", "status"], on_done=done)
+
+    def _options_arguments(self, slug):
+        # Not read yet (or read failed): never write values that were not loaded.
+        if self.options_state["slug"] != slug:
+            self.page.toast(t("gui.common.command_failed", "?"))
+            return None
+        args = ["apply"]
+        for opt in self.OPTION_BOOLS:
+            args.append("%s=%s" % (opt, self.OPTION_STATES[self.options_rows[opt].get_selected()]))
+        for opt in self.OPTION_ENTRIES:
+            args.append("%s=%s" % (opt, self.options_rows[opt].get_text().strip() or "default"))
+        return args
 
     def _add_env_row(self):
         # Environment variables editor -- visible only for the "env" tool. One game at a
@@ -417,7 +484,10 @@ class ToolsPage:
         self.overlay_game_row.set_visible(idx == self.tools.index("overlay"))
         self.gamepad_row.set_visible(idx == self.tools.index("gamepad"))
         self.gamepad_edit_row.set_visible(idx == self.tools.index("gamepad"))
+        for row in self.options_rows.values():
+            row.set_visible(idx == self.tools.index("options"))
         self.page.run_button.set_visible(idx != self.tools.index("gamepad"))
+        self._load_options()
         self._load_env()
         self._load_mangohud()
         self._load_overlay()
@@ -452,7 +522,7 @@ class ToolsPage:
 
     # Message shown after a successful run, for the tools that have their own.
     _DONE_MESSAGES = {"runner": "gui.tools.runner_done", "mangohud": "gui.tools.mangohud_done",
-                      "overlay": "gui.tools.overlay_done",
+                      "overlay": "gui.tools.overlay_done", "options": "gui.tools.options_done",
                       "env": "gui.tools.env_done"}
 
     def _tool_arguments(self, tool, slug):
@@ -479,6 +549,8 @@ class ToolsPage:
                 self.page.toast(t("gui.common.command_failed", "?"))
                 return None
             return [self.OVERLAY_CHOICES[self.overlay_game_row.get_selected()]]
+        if tool == "options":
+            return self._options_arguments(slug)
         if tool == "env":
             return self._env_arguments(slug)
         return []

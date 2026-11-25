@@ -490,6 +490,46 @@ rm -f "${HOME}/Games/mario/ludis/launcher.yml"
 check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
 check "tools env set empty" 0 '' tools mario env set FOO ""
+# Lutris-wide defaults (runners/wine.yml)
+check "lutris-defaults: status" 0 'runner=.*' lutris-defaults status
+check "lutris-defaults: winetricks defaults to the runner's" 0 '^runner$' lutris-defaults winetricks
+check "lutris-defaults: winetricks system" 0 'winetricks of Lutris: system' lutris-defaults winetricks system
+check "lutris-defaults: winetricks read back" 0 '^system$' lutris-defaults winetricks
+check "lutris-defaults: winetricks rejects junk" 1 'Invalid value' lutris-defaults winetricks maybe
+check "lutris-defaults: runner must be installed" 1 'not installed' lutris-defaults runner Nope-1.0
+check "lutris-defaults: runner set" 0 'set to GE-Test' lutris-defaults runner GE-Test
+check "lutris-defaults: runner read back" 0 '^GE-Test$' lutris-defaults runner
+expect "lutris-defaults: runners/wine.yml is valid and holds both" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/.config/lutris/runners/wine.yml')); sys.exit(0 if d['wine']['version']=='GE-Test' and d['wine']['system_winetricks'] is True else 1)"
+check "lutris-defaults: apply both at once" 0 'set to GE-Test' lutris-defaults apply winetricks=runner runner=GE-Test
+check "lutris-defaults: apply wrote winetricks too" 0 '^runner$' lutris-defaults winetricks
+check "lutris-defaults: unknown action" 1 'Unknown action' lutris-defaults bogus
+
+# Launch options of a game (GameMode, Gamescope, resolution, Esync/Fsync, DXVK, system winetricks)
+check "options: nothing set = default" 0 '^default$' tools mario gamemode status
+check "options: gamemode off is an explicit false" 0 'gamemode set to off' tools mario gamemode off
+expect "options: system.gamemode is false in the YAML" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml')); sys.exit(0 if d['system']['gamemode'] is False and d['game']['exe']=='/x.exe' else 1)"
+check "options: gamemode status off" 0 '^off$' tools mario gamemode status
+check "options: gamemode default removes the key" 0 'back to the Lutris default' tools mario gamemode default
+check "options: esync off (wine section)" 0 'esync set to off' tools mario esync off
+expect "options: wine.esync is false and the runner is kept" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml')); sys.exit(0 if d['wine']['esync'] is False and d['wine']['version']=='GE-Test' else 1)"
+check "options: dxvk on" 0 'dxvk set to on' tools mario dxvk on
+check "options: system winetricks on" 0 'system-winetricks set to on' tools mario system-winetricks on
+check "options: gamescope output resolution" 0 'gamescope-output set to 1920x1080' tools mario gamescope-output 1920x1080
+check "options: gamescope output rejects junk" 1 'Invalid value' tools mario gamescope-output 19x
+check "options: gamescope fps" 0 'gamescope-fps set to 60' tools mario gamescope-fps 60
+check "options: gamescope fps rejects 0" 1 'Invalid value' tools mario gamescope-fps 0
+check "options: gamescope status" 0 '^default$' tools mario gamescope status
+check "options: gamescope on warns when missing" 0 'no effect' tools mario gamescope on
+check "options: resolution off is read back as off" 0 'resolution set to off' tools mario resolution off
+check "options: resolution status off" 0 '^off$' tools mario resolution status
+check "options: unknown action is refused" 1 'Invalid value' tools mario esync maybe
+check "options: status lists every option" 0 'gamescope-fps=60' tools mario options status
+check "options: status also shows esync" 0 'esync=off' tools mario options status
+check "options: apply several at once" 0 'fsync set to off' tools mario options apply fsync=off esync=default gamescope-fps=default
+check "options: apply leaves an unchanged value alone" 0 '^$' tools mario options apply fsync=off
+check "options: apply rejects an unknown option" 1 'Invalid value' tools mario options apply bogus=on
+expect "options: the YAML is still valid and complete" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml')); sys.exit(0 if d['wine']['fsync'] is False and 'esync' not in d['wine'] and d['wine']['dxvk'] is True and d['system']['gamescope_output_res']=='1920x1080' and 'gamescope_fps_limiter' not in d['system'] else 1)"
+
 # MangoHud: Lutris option system.mangohud (on = true, off = key removed, status prints on/off)
 check "tools mangohud status (default off)" 0 '^off$' tools mario mangohud status
 check "tools mangohud on" 0 'MangoHud enabled' tools mario mangohud on

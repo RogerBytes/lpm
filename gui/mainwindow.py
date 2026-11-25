@@ -66,6 +66,7 @@ class MainWindow(Adw.ApplicationWindow):
                 ("system", t("gui.category.system"), "preferences-system-symbolic", [
                     ("check", t("gui.check.page_title"), "emblem-ok-symbolic"),
                     ("lutris-version", t("gui.lutris_version.sidebar_label"), "preferences-system-symbolic"),
+                    ("lutris-defaults", t("gui.lutris_defaults.page_title"), "preferences-other-symbolic"),
                     ("logs", t("gui.logs.page_title"), "text-x-generic-symbolic"),
                     ("killwine", t("gui.killwine.page_title"), "process-stop-symbolic"),
                 ]),
@@ -93,6 +94,7 @@ class MainWindow(Adw.ApplicationWindow):
         "pack-runner": "page_pack_runner",
         "check": "page_check",
         "lutris-version": "page_lutris_version",
+        "lutris-defaults": "page_lutris_defaults",
         "logs": "page_logs",
         "killwine": "page_killwine",
     }

@@ -133,6 +133,8 @@ def main():
     before = yaml.safe_load("".join(lines)) or {}
     if not isinstance(before, dict):
         sys.exit("root is not a mapping")
+    if section in before and before[section] is None:
+        before[section] = {}  # "section:" with nothing under it is an empty mapping
     if section in before and not isinstance(before[section], dict):
         sys.exit("section is not a mapping")
 

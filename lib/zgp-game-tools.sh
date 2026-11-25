@@ -35,7 +35,7 @@ source "${script_dir}/zgu-ludis-paths.sh"
 # --- Arguments ---
 # $1 = target slug (required)
 # $2 = target tool (required):
-#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud | overlay | gamepad
+#      winetricks | regedit | winecfg | console | exe | folder | favorite | env | runner | mangohud | overlay | gamepad | options | gamemode | gamescope | gamescope-output | gamescope-game | gamescope-fps | resolution | esync | fsync | dxvk | system-winetricks
 # $3 = executable path (only for $2=exe), favorite folder (only for $2=favorite), action (list|set|unset|apply, only for $2=env, with $4/$5 = key/value or KEY=VALUE file), runner name (only for $2=runner), or on|off|status (only for $2=mangohud or gamepad (gamepad also has edit), default status); also required for those tools
 cli_slug="${1:-}"
 cli_tool="${2:-}"
@@ -208,6 +208,16 @@ run_mangohud() {
 
 if [[ "${cli_tool}" = "mangohud" ]]; then
   run_mangohud "${cli_exe_path}"
+  exit $?
+fi
+
+# --- Launch options kept in the game's Lutris YAML (GameMode, Gamescope, screen resolution,
+# Esync/Fsync, DXVK, system winetricks): handled HERE too, only the YAML is touched. ---
+# shellcheck source=./zgu-game-options.sh
+source "${script_dir}/zgu-game-options.sh"
+if [[ "${cli_tool}" = "options" ]] || go_is_option "${cli_tool}"; then
+  shift 2
+  run_game_option "${cli_tool}" "$@"
   exit $?
 fi
 

@@ -86,6 +86,7 @@ print_help() {
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont1)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont2)"
     printf "  %-36s %s\n" "ludis lutris-version [flatpak|native|reset]" "$(t help.lutris_version)"
+    printf "  %-36s %s\n" "ludis lutris-defaults [runner|winetricks] [value]" "$(t help.lutris_defaults)"
     printf "  %-36s %s\n" "ludis self-update [check|install]" "$(t help.self_update)"
     echo ""
     t help.log_header
@@ -234,6 +235,9 @@ if [[ $# -gt 0 ]]; then
             ;;
         check)
             exec bash "${LIB_DIR}/zgc-dependency-checker.sh" "cli" "${confirm_flag}"
+            ;;
+        lutris-defaults)
+            exec bash "${LIB_DIR}/zgc-lutris-defaults.sh" "cli" "$@"
             ;;
         lutris-version)
             exec bash "${LIB_DIR}/zgc-lutris-version-checker.sh" "cli" "$@"
