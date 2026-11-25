@@ -53,6 +53,7 @@ _ludis_commands() {
     'killwine:Immediately kill any running Wine/Winetricks/umu-run/Proton process'
     'list-runner:List installed runners'
     'list-remote-runners:List runners available for download'
+    'game-version:Show/set the version number of a game'
     'doctor:Diagnose Lutris, runners and tools (changes nothing)'
     'check:Check ludis system dependencies'
     'saves:Back up, restore, export and import the saves of a game'

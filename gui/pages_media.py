@@ -5,11 +5,15 @@ from pages_launcher import LauncherPage
 from pages_lsfg import LsfgPage
 from pages_shortcut import ShortcutPage
 from pages_tools import ToolsPage
+from pages_version import VersionPage
 
 
 class MediaPages:
     def page_shortcut(self):
         return ShortcutPage(self.window).build()
+
+    def page_game_version(self):
+        return VersionPage(self.window).build()
 
     def page_images(self):
         return ImagesPage(self.window).build()

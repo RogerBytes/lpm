@@ -864,6 +864,31 @@ check "install" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario.zgp"
 expect "install: first-member YAML is not extracted into the games folder" bash -c '[ ! -e "$1/.lpm-config.yml" ] && [ ! -e "$1/mario/.lpm-config.yml" ]' _ "${HOME}/Games"
 check "list after reinstall" 0 'mario +Mario' list
 
+# --- Game version number + replacing an installed game
+cp "${HOME}/Mario.zgp" "${HOME}/Mario-orig.zgp"
+check "game-version: none yet" 0 '^$' game-version mario
+check "game-version: invalid value refused" 1 'invalid version' game-version mario 'bad;value'
+check "game-version: set" 0 'set to: 2.0' game-version mario 2.0
+check "game-version: read back" 0 '^2.0$' game-version mario
+expect "game-version: stored in the prefix settings" test -s "${HOME}/Games/mario/ludis/settings/game-version"
+check "install --list-existing: nothing for a game that is not installed" 0 '^$' install -y --list-existing /nonexistent.zgp
+check "install --list-existing: archive without number, game installed (2.0)" 0 'EXISTS.Mario.Mario.zgp.mario.2.0.' install -y --list-existing "${HOME}/Mario.zgp"
+rm -f "${HOME}/Mario.zgp"
+check "pack with a version" 0 '\[EXPORTED\]' pack -3 mario
+expect "pack: game_version written in the first-member YAML" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"game_version\"]==\"2.0\""' _ "${HOME}/Mario.zgp"
+check "game-version: clear" 0 'removed' game-version mario --clear
+check "game-version: empty after clear" 0 '^$' game-version mario
+check "install --list-existing: installed none / new 2.0" 0 'EXISTS.Mario.Mario.zgp.mario..2.0' install -y --list-existing "${HOME}/Mario.zgp"
+check "install over an installed game, no terminal, no --replace: refused" 1 'already installed' install -y "${HOME}/Mario.zgp" </dev/null
+expect "refused install changed nothing" test -d "${HOME}/Games/mario"
+mkdir -p "${HOME}/Games/mario/drive_c/users/steamuser/Documents/Mario"; echo keepme > "${HOME}/Games/mario/drive_c/users/steamuser/Documents/Mario/slot.sav"
+check "install --replace: uninstalls then installs" 0 'INSTALLED. mario' install -y --replace "${HOME}/Mario.zgp"
+check "install --replace: shows the removal" 0 'mario' list
+expect "install --replace: the saves were backed up before and put back after" bash -c '[ "$(cat "$1/Games/mario/drive_c/users/steamuser/Documents/Mario/slot.sav")" = keepme ] && [ "$(cat "$1/syncsaves/mario/current/Documents/Mario/slot.sav")" = keepme ]' _ "${HOME}"
+expect "install --replace: version of the package kept" bash -c '[ "$(cat "$1/ludis/settings/game-version")" = "2.0" ]' _ "${HOME}/Games/mario"
+expect "install: game_version never leaks into the Lutris YAML" bash -c '! grep -rq game_version "$1"' _ "${HOME}/.config/lutris/games" 
+mv -f "${HOME}/Mario-orig.zgp" "${HOME}/Mario.zgp"
+
 # --- Install removes Proton's "version" file from archives made before the export did it
 mkdir -p "${HOME}/old-archive"
 zstd -dc "${HOME}/Mario.zgp" | tar -x -C "${HOME}/old-archive"

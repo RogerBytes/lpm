@@ -46,6 +46,8 @@ shortcut_mode="both"
 desktop_dir_override=""
 loadingscreen_enabled=true
 list_hooks_only=false
+list_existing_only=false
+replace_existing=false
 cli_targets=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -67,6 +69,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list-hooks)
       list_hooks_only=true
+      shift
+      ;;
+    --list-existing)
+      list_existing_only=true
+      shift
+      ;;
+    --replace)
+      # The user already confirmed (GUI dialog): replace the games that are already installed.
+      replace_existing=true
       shift
       ;;
     *)
@@ -123,6 +134,62 @@ print(res.replace("$GAMEDIR", os.environ["PFX_DIR"]))
     printf 'HOOK\x1f%s\x1f%s\x1f%s\x1f%s\n' "${hook_path}" "${hook_value}" "${hook_full}" "${hook_short}"
   done <<< "${hooks}"
 }
+
+# Identity of an archive, read from its first member (nothing is extracted): prints
+# "slug<US>name<US>game_version" (US = \x1f). The slug is the folder the game will have; the version
+# is the optional "game_version" key of the archive's YAML (empty if none).
+zgp_archive_slug() {
+  # tar (not bsdtar): a quick look at the first member names, nothing else.
+  zstd -dc -- "$1" 2>/dev/null | head -c 2097152 | tar -tf - 2>/dev/null | awk -F/ '$1 != ".lpm-config.yml" && $1 != "" { print $1; exit }'
+}
+
+zgp_archive_identity() {
+  local filepath="$1" cfg slug fields
+  slug=$(zgp_archive_slug "${filepath}")
+  # The YAML (name, version) is only read for a game that is really installed.
+  if [[ -z "${slug}" || ! -d "${games_dir}/${slug}" ]]; then
+    printf '%s\x1f\x1f\n' "${slug}"
+    return
+  fi
+  cfg=$(zgu_archive_config "${filepath}") || cfg=""
+  fields=$(printf '%s\n' "${cfg}" | python3 -c '
+import sys, yaml
+try:
+    d = yaml.safe_load(sys.stdin.read()) or {}
+    name = str(d.get("name", "") or "")
+    ver = str(d.get("game_version", "") or "")
+except Exception:
+    name = ver = ""
+print(name.replace("\n", " ").replace("\r", " ") + "\x1f" + ver.replace("\n", " ").replace("\r", " "))
+' 2>/dev/null)
+  printf '%s\x1f%s\n' "${slug}" "${fields}"
+}
+
+# Version of a game that is already installed ("" if none was set).
+zgp_installed_version() {
+  local f
+  f="$(zgu_ludis_find "${games_dir}/$1" game_version)"
+  [[ -f "${f}" ]] && tr -d '\r\n' < "${f}" | head -c 64
+}
+
+# --list-existing (used by the GUI before installing): for each archive whose game is ALREADY
+# installed, one line "EXISTS<US>name<US>file<US>slug<US>installed version<US>new version<US>",
+# nothing otherwise. Read-only.
+if [[ "${list_existing_only}" = true ]]; then
+  zgu_set_lutris_paths native
+  if [[ ! -f "${lutris_system_file}" ]]; then
+    zgu_set_lutris_paths flatpak
+    [[ -f "${lutris_system_file}" ]] || zgu_set_lutris_paths native
+  fi
+  for target in "${cli_targets[@]}"; do
+    [[ -f "${target}" ]] || continue
+    IFS=$'\x1f' read -r ex_slug ex_name ex_version <<< "$(zgp_archive_identity "${target}")"
+    [[ -n "${ex_slug}" && -d "${games_dir}/${ex_slug}" ]] || continue
+    [[ -z "${ex_name}" ]] && ex_name="$(basename "${target}" .zgp)"
+    printf 'EXISTS\x1f%s\x1f%s\x1f%s\x1f%s\x1f%s\n' "${ex_name}" "$(basename "${target}")" "${ex_slug}" "$(zgp_installed_version "${ex_slug}")" "${ex_version}"
+  done
+  exit 0
+fi
 
 # --list-hooks (used by the GUI before installing): lists the scripts embedded in the given
 # archives and exits. Read-only: Lutris is not touched, nothing is extracted or installed.
@@ -344,6 +411,69 @@ if [[ "${batch_hooks_decision}" != "yes" ]]; then
   fi
 fi
 
+# --- Games that are ALREADY installed: replacing one (uninstall it, then install the archive) is
+# never automatic. ONE question for the batch, before anything is touched, unless the caller
+# already asked (--replace, the GUI dialog). Not -y: -y skips the install confirmation, not this
+# one. Without a terminal and without --replace, nothing is replaced. ---
+declare -A replace_approved=()
+declare -A replace_slug_by_name=()
+declare -A saves_to_restore=()
+replace_report=""
+replace_count=0
+for name in "${games_to_install[@]}"; do
+  IFS=$'\x1f' read -r ex_slug ex_name ex_version <<< "$(zgp_archive_identity "${filepath_by_name[${name}]}")"
+  [[ -n "${ex_slug}" && -d "${games_dir}/${ex_slug}" ]] || continue
+  [[ -z "${ex_name}" ]] && ex_name="${name}"
+  replace_count=$((replace_count + 1))
+  ex_old="$(zgp_installed_version "${ex_slug}")"
+  replace_report+="$(t install_game.replace_item_cli "${ex_name}" "${ex_old:-$(t install_game.version_none)}" "${ex_version:-$(t install_game.version_none)}")"$'\n'
+  replace_slug_by_name["${name}"]="${ex_slug}"
+done
+if [[ "${replace_count}" -gt 0 ]]; then
+  if [[ "${replace_existing}" = true ]]; then
+    for name in "${!replace_slug_by_name[@]}"; do replace_approved["${name}"]=1; done
+  elif [[ -t 0 ]]; then
+    t install_game.replace_header_cli
+    printf '%s' "${replace_report}"
+    read -r -p "$(t install_game.replace_prompt_cli)" replace_response || replace_response="n"
+    case "${replace_response}" in
+      [oOyY]) for name in "${!replace_slug_by_name[@]}"; do replace_approved["${name}"]=1; done ;;
+    esac
+    zgu_log "install" "INFO" "reason=replace_decision count=${replace_count} decision=${replace_response:-n}"
+  fi
+fi
+
+# zgp_replace_existing <slug>: uninstalls the game that is already there. When a saves folder is
+# set, its saves are backed up first (and put back after the install, see below): replacing must
+# never cost the player a save. Returns 1 (nothing removed) if that backup fails.
+zgp_replace_existing() {
+  local old_slug="$1" old_prefix lutris_slug out saves_done=no
+  old_prefix="${games_dir}/${old_slug}"
+  lutris_slug=$(sqlite3 "${lutris_db}" "SELECT slug FROM games WHERE directory='${old_prefix//\'/\'\'}' LIMIT 1;" 2>/dev/null)
+  if [[ -z "${lutris_slug}" ]]; then
+    zgu_cli_error "$(t install_game.replace_unmanaged_cli "${old_slug}")"
+    return 1
+  fi
+  if [[ -n "$(zgu_saves_conf_get sync_dir)" ]]; then
+    if out=$(bash "${script_dir}/zgp-game-saves.sh" "${lutris_slug}" backup 2>&1); then
+      saves_done=yes
+    elif ! printf '%s' "${out}" | grep -q 'AppData'; then
+      zgu_cli_error "$(t install_game.replace_saves_failed_cli "${old_slug}")"
+      zgu_log "install" "ERROR" "slug=${old_slug} reason=replace_saves_backup_failed"
+      return 1
+    fi
+  fi
+  t install_game.replace_removing_cli "${old_slug}"
+  if ! out=$(bash "${script_dir}/zgp-game-uninstaller.sh" yes "${lutris_slug}" 2>&1) || [[ -d "${old_prefix}" ]]; then
+    zgu_cli_error "$(t install_game.replace_failed_cli "${old_slug}")"
+    zgu_log "install" "ERROR" "slug=${old_slug} reason=replace_uninstall_failed out=${out//$'\n'/ }"
+    return 1
+  fi
+  zgu_log "install" "INFO" "slug=${old_slug} reason=replaced_existing saves_backup=${saves_done}"
+  [[ "${saves_done}" = yes ]] && saves_to_restore["${old_slug}"]="${lutris_slug}"
+  return 0
+}
+
 # ---------------------------------------------------------------------------------------------
 
 install_idx=0
@@ -416,6 +546,12 @@ for name in "${games_to_install[@]}"; do
   filepath="${filepath_by_name[${name}]}"
 
   file_size=$(stat -c %s "${filepath}" 2>/dev/null || stat -f %z "${filepath}" 2>/dev/null)
+
+  # 00. The game is already installed and the replacement was confirmed: uninstall it now (its
+  # saves backed up first), the normal install below then puts the archive in its place.
+  if [[ -n "${replace_slug_by_name[${name}]:-}" ]] && [[ -n "${replace_approved[${name}]:-}" ]]; then
+    zgp_replace_existing "${replace_slug_by_name[${name}]}" || continue
+  fi
 
   # 0. Free space check BEFORE extracting anything. Archives made by recent versions start with
   # a tiny ".lpm-size" file giving the exact extracted size (read without decompressing the
@@ -713,6 +849,7 @@ try:
         data.pop("script", None)
         data.pop("version", None)
         data.pop("lpm_archive", None)
+        data.pop("game_version", None)
 
         def update_paths(obj):
             if isinstance(obj, dict):
@@ -832,6 +969,29 @@ EOF
     if [[ "${loadingscreen_enabled}" = false ]]; then
       mkdir -p "$(dirname "$(zgu_ludis_path "${prefix_dir}" no_loadingscreen)")" 2>/dev/null
       : > "$(zgu_ludis_path "${prefix_dir}" no_loadingscreen)" 2>/dev/null
+    fi
+
+    # Version number of the package (optional "game_version" of its YAML): kept in the prefix's
+    # settings so that a later install of another archive of this game can show both.
+    if [[ -n "${game_cfg_file}" ]] && [[ -f "${game_cfg_file}" ]]; then
+      pkg_version=$(python3 -c '
+import sys, yaml
+try:
+    v = (yaml.safe_load(open(sys.argv[1])) or {}).get("game_version", "")
+    print(str(v or "").replace("\n", " ").replace("\r", " ")[:64])
+except Exception:
+    pass
+' "${game_cfg_file}" 2>/dev/null)
+      if [[ -n "${pkg_version}" ]]; then
+        mkdir -p "$(dirname "$(zgu_ludis_path "${prefix_dir}" game_version)")" 2>/dev/null
+        printf '%s\n' "${pkg_version}" > "$(zgu_ludis_path "${prefix_dir}" game_version)" 2>/dev/null
+      fi
+    fi
+    # A game that was replaced gets its own saves back (they were backed up before the removal).
+    if [[ -n "${saves_to_restore[${slug}]:-}" ]]; then
+      t install_game.replace_restoring_saves_cli "${game_real_name}"
+      bash "${script_dir}/zgp-game-saves.sh" "${slug}" restore >/dev/null 2>&1 \
+        || zgu_cli_error "$(t install_game.replace_restore_failed_cli "${slug}" "${slug}")"
     fi
 
     zgu_log "install" "OK" "slug=${slug} name=${game_real_name}"

@@ -42,6 +42,7 @@ class MainWindow(Adw.ApplicationWindow):
                     # "images" (former "Visual"/"assets" category, merged here): icon/splash/
                     # logo are PER-GAME settings like the other entries, not a separate
                     # category. A single page/entry (see page_images) with checkable types.
+                    ("game-version", t("gui.game_version.page_title"), "tag-symbolic"),
                     ("images", t("gui.images.sidebar_label"), "image-x-generic-symbolic"),
                     ("lsfg", t("gui.lsfg.page_title"), "video-display-symbolic"),
                     ("tools", t("gui.sidebar.tools"), "applications-utilities-symbolic"),
@@ -81,6 +82,7 @@ class MainWindow(Adw.ApplicationWindow):
         "exe-install": "page_exe_install",
         "shortcut": "page_shortcut",
         "images": "page_images",
+        "game-version": "page_game_version",
         "tools": "page_tools",
         "vsync": "page_vsync",
         "launcher": "page_launcher",

@@ -81,6 +81,7 @@ print_help() {
     printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"
     echo ""
     t help.deps_header
+    printf "  %-36s %s\n" "ludis game-version <slug> [value|--clear]" "$(t help.game_version)"
     printf "  %-36s %s\n" "ludis doctor" "$(t help.doctor)"
     printf "  %-36s %s\n" "ludis check" "$(t help.deps_check)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont1)"
@@ -202,6 +203,9 @@ if [[ $# -gt 0 ]]; then
             ;;
         tools)
             exec bash "${LIB_DIR}/zgp-game-tools.sh" "$@"
+            ;;
+        game-version)
+            exec bash "${LIB_DIR}/zgp-game-tools.sh" "${1:-}" game-version "${@:2}"
             ;;
         saves)
             exec bash "${LIB_DIR}/zgp-game-saves.sh" "$@"

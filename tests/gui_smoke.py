@@ -268,6 +268,29 @@ try:
 except Exception:
     errors.append("Lutris defaults page:\n" + traceback.format_exc())
 
+# --- Game version page + install replace dialog ---------------------------------------------
+try:
+    win.show_page("game-version")
+    pump(1.5)
+    vpage = win._built_pages["game-version"]
+    vsel = next(w for w in walk(vpage) if isinstance(w, widgets_select.SingleGameSelect))
+    vsel.select_slug("mario")
+    pump(1.5)
+    from gi.repository import Adw
+    ventry = next(w for w in walk(vpage) if isinstance(w, Adw.EntryRow))
+    assert ventry.get_sensitive(), "version entry not enabled"
+    ventry.set_text("3.1")
+    vpage.run_button.emit("clicked")
+    pump(2.5)
+    vfile = os.path.join(os.environ["HOME"], "Games/mario/ludis/settings/game-version")
+    assert open(vfile).read().strip() == "3.1", "version not saved"
+    import pages_lifecycle
+    rows = pages_lifecycle.InstallPage._parse_existing("EXISTS\x1fMario\x1fMario.zgp\x1fmario\x1f3.1\x1f\n")
+    assert rows == [("Mario", "3.1", "")], rows
+    print("game version page: OK")
+except Exception:
+    errors.append("game version page:\n" + traceback.format_exc())
+
 # --- Home page: update button (hidden unless a newer version is known) -------------------
 try:
     import pages_home

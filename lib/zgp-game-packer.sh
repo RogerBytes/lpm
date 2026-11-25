@@ -576,7 +576,11 @@ except Exception as e:
   source_size=$(du -sb "${WINEPREFIX_DIR}" 2>/dev/null | cut -f1)
   [[ -z "${source_size}" ]] && source_size=0
   # The exact size goes INTO the first-member YAML ("lpm_archive: size").
-  LUDIS_SIZE="${source_size}" YML_PATH="${lpm_meta_dir}/.lpm-config.yml" python3 -c '
+  # The game's version number (set in the Ludis menu, never asked here) goes in too, if any.
+  pack_version=""
+  pack_version_file="$(zgu_ludis_find "${WINEPREFIX_DIR}" game_version)"
+  [[ -f "${pack_version_file}" ]] && pack_version=$(head -n 1 "${pack_version_file}" | tr -d '\r' | head -c 64)
+  LUDIS_VERSION="${pack_version}" LUDIS_SIZE="${source_size}" YML_PATH="${lpm_meta_dir}/.lpm-config.yml" python3 -c '
 import os, yaml
 
 path = os.environ["YML_PATH"]
@@ -585,6 +589,10 @@ with open(path, "r") as f:
 if not isinstance(data, dict):
     data = {}
 data["lpm_archive"] = {"format": 2, "size": int(os.environ["LUDIS_SIZE"])}
+if os.environ.get("LUDIS_VERSION"):
+    data["game_version"] = os.environ["LUDIS_VERSION"]
+else:
+    data.pop("game_version", None)
 with open(path, "w") as f:
     yaml.dump(data, f, sort_keys=False)
 ' 2>/dev/null

@@ -299,10 +299,12 @@ class InstallPage:
             return "desktop"
         return "none"
 
-    def _install_args(self, selected: list[str], allow_scripts: bool) -> list[str]:
+    def _install_args(self, selected: list[str], allow_scripts: bool, replace: bool = False) -> list[str]:
         args = ["install", "-y"]
         if allow_scripts:
             args.append("--allow-scripts")
+        if replace:
+            args.append("--replace")
         desktop_on = self.desktop_shortcut_row.get_active()
         args.append(f"--shortcut={self._shortcut_mode()}")
         if desktop_on:
@@ -392,10 +394,53 @@ class InstallPage:
         dialog.connect("response", lambda _d, r: on_choice({"without": False, "allow": True}.get(r)))
         dialog.present(self.window)
 
-    def _start_install(self, selected: list[str], allow_scripts: bool):
+    @staticmethod
+    def _parse_existing(stdout: str) -> list[tuple[str, str, str]]:
+        """Output of "ludis install --list-existing": [(game name, installed version, new version)]."""
+        games = []
+        for line in stdout.splitlines():
+            fields = line.split("\x1f")
+            if fields[0] == "EXISTS" and len(fields) >= 6:
+                games.append((fields[1], fields[4], fields[5]))
+        return games
+
+    def _ask_replace(self, games, on_choice):
+        """Games already installed: replacing (uninstall, then install) is never automatic.
+        Only the version numbers are shown, never a newer/older verdict."""
+        none = t("gui.install.version_none")
+        lines = [t("gui.install.replace_item", n, old or none, new or none) for n, old, new in games[:HOOKS_DIALOG_MAX_GAMES]]
+        if len(games) > HOOKS_DIALOG_MAX_GAMES:
+            lines.append("…")
+        dialog = Adw.AlertDialog(
+            heading=t("gui.install.replace_heading", len(games)),
+            body=t("gui.install.replace_body") + "\n\n" + "\n".join(lines))
+        dialog.add_response("cancel", t("gui.common.cancel"))
+        dialog.add_response("replace", t("gui.install.replace_button"))
+        dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", lambda _d, r: on_choice(r == "replace"))
+        dialog.present(self.window)
+
+    def _check_existing(self, selected: list[str], allow_scripts: bool):
+        self.page.run_button.set_sensitive(False)
+
+        def done(result):
+            self.page.run_button.set_sensitive(True)
+            games = self._parse_existing(result.stdout) if result.returncode == 0 else []
+            if not games:
+                self._start_install(selected, allow_scripts)
+                return
+            self._ask_replace(games, lambda ok: self._start_install(selected, allow_scripts, True) if ok else None)
+
+        backend.run_ludis_async(
+            ["install", "-y", "--list-existing", *selected],
+            on_done=lambda result: _run_on_main(done, result))
+
+    def _start_install(self, selected: list[str], allow_scripts: bool, replace: bool = False):
         batch_desktop_dir = self.desktop_path_row.value() if self.desktop_shortcut_row.get_active() else ""
         self.page.run_command(
-            self._install_args(selected, allow_scripts), t("gui.common.install_done"), refresh="games",
+            self._install_args(selected, allow_scripts, replace), t("gui.common.install_done"), refresh="games",
             cancellable=True, undoable=True,
             on_cancelled=lambda slugs: self._on_cancelled(slugs, batch_desktop_dir))
 
@@ -403,12 +448,12 @@ class InstallPage:
         self.page.run_button.set_sensitive(True)
         games = self._parse_hooks(result.stdout) if result.returncode == 0 else []
         if not games:
-            self._start_install(selected, False)
+            self._check_existing(selected, False)
             return
 
         def on_choice(allow):
             if allow is not None:
-                self._start_install(selected, allow)
+                self._check_existing(selected, allow)
 
         self._ask_hooks(games, len(selected), on_choice)
 

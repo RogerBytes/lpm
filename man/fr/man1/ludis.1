@@ -15,8 +15,8 @@ ludis \- gestionnaire de préfixes et de runners Wine/Proton pour une bibliothè
 Cette page est un résumé. La documentation complète de chaque commande (arguments, options, comportement, codes de sortie, notes pour les scripts, exemples) est dans le dossier \fIdocs/commands/\fR du dépôt du projet, en anglais.
 .SH COMMANDES \(em JEUX
 .TP
-.B install [\-y] [\-\-allow\-scripts] [\-\-ignore\-hash] <files.zgp...>
-Installe des jeux depuis des archives .zgp.
+.B install [\-y] [\-\-allow\-scripts] [\-\-replace] [\-\-ignore\-hash] <files.zgp...>
+Installe des jeux depuis des archives .zgp. Si un jeu est déjà installé, ludis demande à le remplacer (désinstallation puis installation ; ses sauvegardes sont mises de côté puis remises si un dossier de sauvegardes est défini) ; \-\-replace répond oui d'avance, sans terminal rien n'est remplacé.
 .TP
 .B uninstall [\-y] <slugs...>
 Désinstalle des jeux.
@@ -81,6 +81,9 @@ Empaquette des runners en archives .zgr.
 .TP
 .B list\-runner, list\-remote\-runners
 Liste les runners installés / disponibles à distance.
+.TP
+.B game\-version <slug> [valeur|\-\-clear]
+Affiche, définit ou supprime le numéro de version d'un jeu (texte libre, 32 caractères au plus). Il est écrit dans le paquet à l'export et affiché quand un autre paquet du jeu est installé par-dessus.
 .SH COMMANDES \(em SYSTÈME
 .TP
 .B doctor

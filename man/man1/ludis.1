@@ -15,8 +15,8 @@ ludis \- prefix manager for Wine/Proton runners and a Lutris game library
 This page is a summary. The complete documentation of every command (arguments, options, behavior, exit status, scripting notes, examples) is in the \fIdocs/commands/\fR folder of the project repository.
 .SH COMMANDS \(em GAMES
 .TP
-.B install [\-y] [\-\-allow\-scripts] [\-\-ignore\-hash] <files.zgp...>
-Installs games from .zgp archives.
+.B install [\-y] [\-\-allow\-scripts] [\-\-replace] [\-\-ignore\-hash] <files.zgp...>
+Installs games from .zgp archives. If a game is already installed, ludis asks to replace it (uninstall, then install; its saves are put aside and put back if a saves folder is set); \-\-replace answers yes in advance, without a terminal nothing is replaced.
 .TP
 .B uninstall [\-y] <slugs...>
 Uninstalls games.
@@ -81,6 +81,9 @@ Packages runners as .zgr archives.
 .TP
 .B list\-runner, list\-remote\-runners
 Lists installed / remotely available runners.
+.TP
+.B game\-version <slug> [value|\-\-clear]
+Shows, sets or removes the version number of a game (free text, 32 characters at most). It is written into the package at export and shown when another package of the game is installed over it.
 .SH COMMANDS \(em SYSTEM
 .TP
 .B doctor

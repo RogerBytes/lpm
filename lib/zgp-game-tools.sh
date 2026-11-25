@@ -227,6 +227,32 @@ if [[ -z "${prefix_dir}" ]]; then
   exit 1
 fi
 
+# --- Version number of the game (free text kept in the prefix settings; written into the .zgp YAML
+# at export, shown when another archive of the game is installed over it). Nothing else uses it. ---
+if [[ "${cli_tool}" = "game-version" ]]; then
+  gv_file="$(zgu_ludis_path "${prefix_dir}" game_version)"
+  case "${cli_exe_path}" in
+    ""|status|get)
+      cat "$(zgu_ludis_find "${prefix_dir}" game_version)" 2>/dev/null | tr -d '\r' | head -n 1
+      exit 0
+      ;;
+    --clear|clear)
+      rm -f -- "$(zgu_ludis_find "${prefix_dir}" game_version)" "${gv_file}"
+      t game_tools.game_version_cleared_cli "${target_name}"
+      exit 0
+      ;;
+    *)
+      if [[ ! "${cli_exe_path}" =~ ^[A-Za-z0-9._+\ -]{1,32}$ ]]; then
+        zgu_cli_error "$(t game_tools.game_version_invalid_cli)"
+        exit 1
+      fi
+      mkdir -p "$(dirname "${gv_file}")" && printf '%s\n' "${cli_exe_path}" > "${gv_file}" || exit 1
+      t game_tools.game_version_set_cli "${target_name}" "${cli_exe_path}"
+      exit 0
+      ;;
+  esac
+fi
+
 # --- Gamepad: AntiMicroX profile for a game ---
 # Lutris itself launches AntiMicroX with a profile for the game when its YAML has
 # "system.antimicro_config: <profile file>". ludis creates a blank profile in

@@ -40,6 +40,7 @@ zgu_ludis_rel() {
     loading_message)  new="settings/loading-message.txt"; legacy="lpm-loading-message.txt" ;;
     ignore_windows)   new="settings/ignore-windows.txt"; legacy="lpm-ignore-windows.txt" ;;
     overlay_fps)      new="settings/overlay-fps";       legacy="lpm-overlay-fps" ;;
+    game_version)     new="settings/game-version";      legacy="game-version" ;;
     saves_auto)       new="settings/saves-auto";        legacy="saves-auto" ;;
     saves_exclude)    new="settings/saves-exclude.txt"; legacy="saves-exclude.txt" ;;
     saves_folders)    new="settings/saves-folders.txt"; legacy="saves-folders.txt" ;;
@@ -298,7 +299,7 @@ zgu_saves_conf_get() {
 zgu_saves_auto_wanted() {
   local game value
   [[ -n "$(zgu_saves_conf_get sync_dir)" ]] || return 1
-  game="$(tr -d '[:space:]' < "$(zgu_ludis_find "$1" saves_auto)" 2>/dev/null)"
+  game="$(cat -- "$(zgu_ludis_find "$1" saves_auto)" 2>/dev/null | tr -d '[:space:]')"
   case "${game,,}" in
     on) return 0 ;;
     off) return 1 ;;
