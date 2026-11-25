@@ -107,11 +107,26 @@ class _CheckListExpander(Adw.ExpanderRow):
 
 
 # ---------------------------------------------------------------------------------------
+def human_size(n: int) -> str:
+    """Binary units like the CLI ("12.3 GiB")."""
+    value = float(n)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+
+
 # --- Multi-game selector (checked/unchecked), filled from "ludis list" ---
 class GameMultiSelect(_CheckListExpander):
-    def __init__(self, title: str | None = None):
+    def __init__(self, title: str | None = None, show_sizes: bool = False):
         super().__init__(title or t("gui.game_select.default_title"))
         self._name_by_slug: dict[str, str] = {}
+        # With show_sizes, the disk size of each game is added to its row once known (loaded
+        # apart: measuring big prefixes takes a moment).
+        self._show_sizes = show_sizes
+        self._label_by_slug: dict[str, str] = {}
+        self._row_by_slug: dict = {}
+        self._sizes_gen = 0
 
         self.refresh()
         # Registration for global refresh (see _refresh_game_lists and
@@ -132,14 +147,45 @@ class GameMultiSelect(_CheckListExpander):
         self._name_by_slug.clear()
         self.select_all_check.set_active(False)
 
+        self._label_by_slug.clear()
+        self._row_by_slug.clear()
         for entry in entries:
-            self._add_check_row(entry.slug, entry.label, entry.slug)
+            _check, row = self._add_check_row(entry.slug, entry.label, entry.slug)
             self._name_by_slug[entry.slug] = entry.name
+            self._label_by_slug[entry.slug] = entry.label
+            self._row_by_slug[entry.slug] = row
 
         self._update_title()
+        if self._show_sizes and entries:
+            self._load_sizes()
 
     def selected_slugs(self) -> list[str]:
         return self._checked_keys()
+
+    def _load_sizes(self):
+        import backend
+        from util import _run_on_main
+        self._sizes_gen += 1
+        gen = self._sizes_gen
+
+        def done(result):
+            sizes = {}
+            for line in result.stdout.splitlines():
+                slug, _, value = line.partition("\x1f")
+                if value.strip().isdigit():
+                    sizes[slug] = int(value)
+
+            def apply():
+                if gen != self._sizes_gen:
+                    return
+                for slug, size in sizes.items():
+                    row = self._row_by_slug.get(slug)
+                    if row is not None:
+                        row.set_title(_escape_markup(f"{self._label_by_slug[slug]} — {human_size(size)}"))
+
+            _run_on_main(apply)
+
+        backend.run_ludis_async(["list", "--sizes-raw"], on_done=done)
 
     def selected_entries(self) -> list[tuple[str, str]]:
         """Like selected_slugs(), but with each game's display name (Lutris) -- used by the
@@ -206,11 +252,16 @@ class FileMultiSelect(_CheckListExpander):
 
         self._update_title()
 
-    def set_versions(self, versions: dict[str, str]):
-        """Shows "(Vx.y.z)" after the file name of the packages that have a version number."""
+    def set_versions(self, versions: dict[str, str], sizes: dict[str, int] | None = None):
+        """Shows "(vx.y.z)" and the installed size after the file name of the packages."""
+        sizes = sizes or {}
         for path, row in getattr(self, "_row_by_path", {}).items():
+            title = os.path.basename(path)
             if versions.get(path):
-                row.set_title(_escape_markup(f"{os.path.basename(path)} (v{versions[path]})"))
+                title += f" (v{versions[path]})"
+            if sizes.get(path):
+                title += f" — {human_size(sizes[path])}"
+            row.set_title(_escape_markup(title))
 
     def _empty_title(self) -> str:
         # While files are listed, the "selected/total" counter is shown even at 0 selected

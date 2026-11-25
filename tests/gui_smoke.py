@@ -295,6 +295,34 @@ try:
 except Exception:
     errors.append("game version page:\n" + traceback.format_exc())
 
+# --- Rename page + sizes in the uninstall list --------------------------------------------
+try:
+    win.show_page("rename")
+    pump(1.5)
+    rpage = win._built_pages["rename"]
+    rsel = next(w for w in walk(rpage) if isinstance(w, widgets_select.SingleGameSelect))
+    rsel.select_slug("mario")
+    pump(1.5)
+    from gi.repository import Adw
+    rentry = next(w for w in walk(rpage) if isinstance(w, Adw.EntryRow))
+    rentry.set_text("Mario GUI")
+    rpage.run_button.emit("clicked")
+    pump(2.5)
+    import subprocess
+    out = subprocess.run([backend.BIN_Ludis, "list"], capture_output=True, text=True).stdout
+    assert "Mario GUI" in out, out
+    subprocess.run([backend.BIN_Ludis, "rename", "mario", "Mario"], capture_output=True)
+    assert widgets_select.human_size(1536) == "1.5 KiB" and widgets_select.human_size(5 * 1024 ** 3) == "5.0 GiB"
+    win.show_page("uninstall")
+    pump(3)
+    upage = win._built_pages["uninstall"]
+    usel = next(w for w in walk(upage) if isinstance(w, widgets_select.GameMultiSelect))
+    titles = [r.get_title() for r in usel._row_by_slug.values()]
+    assert any(" — " in x for x in titles), titles
+    print("rename page + sizes: OK")
+except Exception:
+    errors.append("rename page + sizes:\n" + traceback.format_exc())
+
 # --- Home page: update button (hidden unless a newer version is known) -------------------
 try:
     import pages_home

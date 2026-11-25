@@ -401,13 +401,15 @@ class InstallPage:
             return
 
         def done(result):
-            versions = {}
+            versions, sizes = {}, {}
             for line in result.stdout.splitlines():
                 f = line.split("\x1f")
                 if f[0] == "VERSION" and len(f) >= 3:
                     versions[f[1]] = f[2]
-            if versions:
-                _run_on_main(self.file_selector.set_versions, versions)
+                    if len(f) >= 4 and f[3].isdigit():
+                        sizes[f[1]] = int(f[3])
+            if versions or sizes:
+                _run_on_main(self.file_selector.set_versions, versions, sizes)
 
         backend.run_ludis_async(["install", "-y", "--list-versions", *paths], on_done=done)
 
@@ -509,7 +511,7 @@ class LifecyclePages:
 
     def page_uninstall(self):
         page = CommandPage(t("gui.uninstall.page_title"))
-        selector = GameMultiSelect()
+        selector = GameMultiSelect(show_sizes=True)
         page.add_row(selector)
         page.reset_selection = selector.refresh
 
@@ -541,7 +543,7 @@ class LifecyclePages:
     def page_pack(self):
         page = CommandPage(t("gui.pack.page_title"))
         # Same selector as install/uninstall (dropdown, "check all", counter in the title).
-        selector = GameMultiSelect(t("gui.pack.games_installed_label"))
+        selector = GameMultiSelect(t("gui.pack.games_installed_label"), show_sizes=True)
         page.add_row(selector)
 
         level_row, hash_row = add_compression_rows(page)

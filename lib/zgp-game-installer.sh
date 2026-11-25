@@ -177,19 +177,22 @@ zgp_installed_version() {
   [[ -f "${f}" ]] && tr -d '\r\n' < "${f}" | head -c 64
 }
 
-# --list-versions (used by the GUI file list): "VERSION<US>file<US>version" for each archive that
-# has a version number in its first-member YAML. Read-only, nothing is extracted.
+# --list-versions (used by the GUI file list): "VERSION<US>file<US>version<US>size in bytes" for each
+# archive that has a version number or a size in its first-member YAML. Read-only, nothing is extracted.
 if [[ "${list_versions_only}" = true ]]; then
   for target in "${cli_targets[@]}"; do
     [[ -f "${target}" ]] || continue
-    ver=$(zgu_archive_config "${target}" 2>/dev/null | python3 -c '
+    info=$(zgu_archive_config "${target}" 2>/dev/null | python3 -c '
 import sys, yaml
 try:
-    print(str((yaml.safe_load(sys.stdin.read()) or {}).get("game_version", "") or "").replace("\n", " ")[:64])
+    d = yaml.safe_load(sys.stdin.read()) or {}
+    ver = str(d.get("game_version", "") or "").replace("\n", " ")[:64]
+    size = str(int((d.get("lpm_archive") or {}).get("size", 0) or 0))
+    print(ver + "\x1f" + size)
 except Exception:
     pass
 ' 2>/dev/null)
-    [[ -n "${ver}" ]] && printf 'VERSION\x1f%s\x1f%s\n' "${target}" "${ver}"
+    [[ -n "${info}" && "${info}" != $'\x1f0' ]] && printf 'VERSION\x1f%s\x1f%s\n' "${target}" "${info}"
   done
   exit 0
 fi

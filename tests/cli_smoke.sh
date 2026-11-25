@@ -880,6 +880,14 @@ mv -f "${HOME}/Mario (v2.0).zgp" "${HOME}/Mario.zgp"
 expect "pack: game_version written in the first-member YAML" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"game_version\"]==\"2.0\""' _ "${HOME}/Mario.zgp"
 check "install --list-versions: version of the archive, without extracting" 0 "VERSION.*Mario.zgp.2.0" install -y --list-versions "${HOME}/Mario.zgp"
 check "list: version after the name" 0 'mario +Mario \(v2.0\)' list
+check "list --sizes: size of each game" 0 'mario +Mario .v2.0. \[[0-9.]+[KMG]?i?B\]' list --sizes
+check "list --sizes-raw: slug and bytes" 0 '^mario.[0-9]+$' list --sizes-raw
+check "install --list-versions: size of the archive" 0 'Mario.zgp.2.0.[0-9]+$' install -y --list-versions "${HOME}/Mario.zgp"
+check "rename: empty name refused" 1 'invalid name' rename mario ' '
+check "rename: unknown game" 1 'not found' rename nosuch Foo
+check "rename: ok" 0 "Renamed: 'Mario' -> 'Super Mario'" rename mario "Super Mario"
+check "rename: list shows the new name" 0 'mario +Super Mario' list
+check "rename: back" 0 'Renamed' rename mario Mario
 check "game-version: clear" 0 'removed' game-version mario --clear
 check "game-version: empty after clear" 0 '^$' game-version mario
 check "install --list-existing: installed none / new 2.0" 0 'EXISTS.Mario.Mario.zgp.mario..2.0' install -y --list-existing "${HOME}/Mario.zgp"

@@ -13,6 +13,14 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-ludis-paths.sh
 source "${script_dir}/zgu-ludis-paths.sh"
 
+# Options: --sizes appends the disk size of each game ("[12.3GiB]"), --sizes-raw prints only
+# "slug<US>bytes" lines (used by the GUI, which loads them apart because du can take a while).
+list_mode=""
+case "${1:-}" in
+  --sizes) list_mode="human" ;;
+  --sizes-raw) list_mode="raw" ;;
+esac
+
 # Lutris path configuration
 
 # 1. sqlite3 check
@@ -56,14 +64,25 @@ printed_any=0
 while IFS=$'\x1f' read -r slug name; do
   [[ -z "${slug}" ]] && continue
   [[ -n "${blacklisted_slugs[${slug}]:-}" ]] && continue
+  if [[ "${list_mode}" = "raw" ]]; then
+    list_prefix=$(zgu_resolve_prefix_dir_by_slug "${slug}" "${lutris_db}" "${games_dir}" 2>/dev/null)
+    [[ -n "${list_prefix}" ]] && printf '%s\x1f%s\n' "${slug}" "$(du -sb -- "${list_prefix}" 2>/dev/null | cut -f1)"
+    printed_any=1
+    continue
+  fi
+  list_size=""
+  if [[ "${list_mode}" = "human" ]]; then
+    list_prefix=$(zgu_resolve_prefix_dir_by_slug "${slug}" "${lutris_db}" "${games_dir}" 2>/dev/null)
+    [[ -n "${list_prefix}" ]] && list_size=" [$(zgu_human_size "$(du -sb -- "${list_prefix}" 2>/dev/null | cut -f1)")]"
+  fi
   # Version number (if the game has one) after the name: "Name (v1.2.3)".
   list_version=""
   list_prefix=$(zgu_resolve_prefix_dir_by_slug "${slug}" "${lutris_db}" "${games_dir}" 2>/dev/null)
   [[ -n "${list_prefix}" ]] && list_version="$(zgu_game_version "${list_prefix}")"
   if [[ -n "${list_version}" ]]; then
-    echo "${slug}  ${name} (v${list_version})"
+    echo "${slug}  ${name} (v${list_version})${list_size}"
   else
-    echo "${slug}  ${name}"
+    echo "${slug}  ${name}${list_size}"
   fi
   printed_any=1
 done <<< "${games_list}"
