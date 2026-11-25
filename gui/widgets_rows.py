@@ -70,7 +70,7 @@ class PrefixEntryRow(Gtk.Box):
 
     def target_spec(self) -> str | None:
         """"Name" or "Name|slug" (if the slug was edited by hand AND differs from the
-        automatic preview), in the format expected by "bin/lpm create-prefix" -- None if the
+        automatic preview), in the format expected by "bin/ludis create-prefix" -- None if the
         name is empty (row to ignore at creation)."""
         name = self.name_entry.get_text().strip()
         if not name:
@@ -95,7 +95,7 @@ class PrefixEntryRow(Gtk.Box):
 
 
 class LauncherEntryRow(Gtk.Box):
-    """One input row for an entry of the "LPM Launcher" picker: label, executable (native
+    """One input row for an entry of the "Ludis Launcher" picker: label, executable (native
     picker restricted to the chosen game's "drive_c" -- never typed by hand, see
     self.exe_entry.set_editable(False) below), working directory (pre-filled from the
     executable's folder, editable by hand or via its own picker -- same "until manually
@@ -425,7 +425,7 @@ def _resolve_default_runner() -> str:
     """Python version of zgu_get_default_runner() (lib/zgu-lutris-utils.sh): reads the
     "version:" key of runners/wine.yml (Flatpak or native package), or falls back to
     "proton-cachyos-x86_64" if not found. Used by the "create an empty prefix" page to show
-    WHICH runner "(Lutris default)" actually means. A plain local file read (never a bin/lpm
+    WHICH runner "(Lutris default)" actually means. A plain local file read (never a bin/ludis
     call), so no impact on GUI response time even when creating several prefixes at once."""
     home = GLib.get_home_dir()
     for runners_path in (
@@ -506,8 +506,8 @@ def add_compression_rows(page):
 def add_shortcut_rows(page, window, with_loadingscreen=True):
     """Shortcut settings shared by install and the "Shortcut" page: menu shortcut (on by
     default, the convention for installed software), file shortcut (also on by default), its
-    path (visible only if the file shortcut is on) and the lpm loading screen (on by
-    default; only effective through a shortcut created by lpm, so hidden when menu and file
+    path (visible only if the file shortcut is on) and the ludis loading screen (on by
+    default; only effective through a shortcut created by ludis, so hidden when menu and file
     are both unchecked).
     "with_loadingscreen=False" (install page): no loading screen row, the loading screen stays
     on (it is changed afterwards on the "Shortcut" page); loadingscreen_row is then None.

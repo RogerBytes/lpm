@@ -107,7 +107,7 @@ class _CheckListExpander(Adw.ExpanderRow):
 
 
 # ---------------------------------------------------------------------------------------
-# --- Multi-game selector (checked/unchecked), filled from "lpm list" ---
+# --- Multi-game selector (checked/unchecked), filled from "ludis list" ---
 class GameMultiSelect(_CheckListExpander):
     def __init__(self, title: str | None = None):
         super().__init__(title or t("gui.game_select.default_title"))
@@ -120,7 +120,7 @@ class GameMultiSelect(_CheckListExpander):
         _GAME_LIST_WIDGETS.append(self)
 
     def refresh(self):
-        # backend.list_games() launches a subprocess ("bin/lpm list") -- never called
+        # backend.list_games() launches a subprocess ("bin/ludis list") -- never called
         # directly here, see _make_coalesced_refresher: several close refresh() calls (e.g.
         # the "back" button, which triggers one per built page) share ONE subprocess, the
         # result being applied asynchronously via _apply_entries below, always on the main
@@ -144,7 +144,7 @@ class GameMultiSelect(_CheckListExpander):
     def selected_entries(self) -> list[tuple[str, str]]:
         """Like selected_slugs(), but with each game's display name (Lutris) -- used by the
         SteamGridDB visual picker (gui.SgdbPickerWindow) to show "Game X/Y -- <name>"
-        without rerunning "bin/lpm list" itself."""
+        without rerunning "bin/ludis list" itself."""
         return [(slug, self._name_by_slug.get(slug, slug)) for slug in self.selected_slugs()]
 
 
@@ -258,7 +258,7 @@ class RemoteRunnerMultiSelect(_CheckListExpander):
         gen = self._gen
         self._clear()
         self.set_subtitle(t("gui.download_runner.loading"))
-        backend.run_lpm_async(
+        backend.run_ludis_async(
             ["list-remote-runners"],
             on_done=lambda result: _run_on_main(self._apply_result, gen, result),
         )
@@ -313,7 +313,7 @@ class SingleGameSelect(Adw.ExpanderRow):
         self._selected_slug: str | None = None
         self._on_change = None  # see connect_changed()
         # Shared set (mutable, updated by the caller) of slugs to show in bold -- e.g.
-        # page_launcher uses it to highlight games that already have LPM Launcher active (see
+        # page_launcher uses it to highlight games that already have Ludis Launcher active (see
         # repaint_titles()). Empty by default (page_tools does not need this highlighting).
         self._highlighted_slugs = highlighted_slugs if highlighted_slugs is not None else set()
 
@@ -407,7 +407,7 @@ class SingleGameSelect(Adw.ExpanderRow):
     def repaint_titles(self):
         """Reapply the title (bold or not) of each already-built row from the current
         self._highlighted_slugs -- without any CLI/subprocess call or rebuilding the rows
-        (unlike refresh()). See page_launcher: called after each update of the "LPM Launcher
+        (unlike refresh()). See page_launcher: called after each update of the "Ludis Launcher
         active" status."""
         for slug, name, row in zip(self._slugs, self._names, self._rows):
             row.set_title(self._row_title(name, slug))
@@ -460,7 +460,7 @@ class RunnerCombo(Adw.ComboRow):
             # If it is NOT installed (absent from "runners"), the selection is NOT forced onto
             # the first runner of the (alphabetically sorted) list: that value has nothing to
             # do with the real default. "_default_runner_missing" stays true in that case, and
-            # selected_runner() lets bin/lpm resolve the default itself (as on the CLI when
+            # selected_runner() lets bin/ludis resolve the default itself (as on the CLI when
             # "-r" is omitted), UNLESS the user explicitly selects that first displayed runner
             # (see "_user_touched" in selected_runner()).
             if self._placeholder:

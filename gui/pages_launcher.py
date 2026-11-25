@@ -1,4 +1,4 @@
-"""Page 'LPM Launcher': enables the launcher and edits its picker entries for ONE game."""
+"""Page 'Ludis Launcher': enables the launcher and edits its picker entries for ONE game."""
 
 import json
 import os
@@ -19,15 +19,15 @@ from widgets_select import SingleGameSelect
 
 
 class LauncherPage:
-    """"LPM Launcher": one game at a time (unlike most other "enable/disable" pages, see
+    """"Ludis Launcher": one game at a time (unlike most other "enable/disable" pages, see
     page_lsfg), since the picker entries (label, executable, working directory,
     arguments) are edited here too and only make sense for one specific game.
 
     NO "Enable/Disable" choice on this page: the active/inactive state is an automatic
-    CONSEQUENCE of the form content, never a separate choice. Empty form -> "lpm launcher
+    CONSEQUENCE of the form content, never a separate choice. Empty form -> "ludis launcher
     <slug> off" (disabled, nothing relevant in the YAML); at least one filled entry
-    (label + executable) -> "lpm launcher-entries <slug> set" (writes the entries) THEN
-    "lpm launcher <slug> on" (enables). In both cases the "on"/"off" call goes through
+    (label + executable) -> "ludis launcher-entries <slug> set" (writes the entries) THEN
+    "ludis launcher <slug> on" (enables). In both cases the "on"/"off" call goes through
     "--if-needed" (see lib/zgl-launcher-manager.sh): a game already in the requested
     state must NEVER make "Run" fail (a forced "on" on each click used to refuse to
     re-enable an already active launcher, AFTER the entries were saved successfully)."""
@@ -45,8 +45,8 @@ class LauncherPage:
     def _add_game_row(self):
         self.page = CommandPage(t("gui.launcher.page_title"))
 
-        # Set (mutable, updated in place) of slugs that already have LPM Launcher active
-        # (bolded in the game list), read via "lpm launcher status" (see
+        # Set (mutable, updated in place) of slugs that already have Ludis Launcher active
+        # (bolded in the game list), read via "ludis launcher status" (see
         # lib/zgl-launcher-manager.sh, point 7) and reapplied by game_row.repaint_titles() --
         # never hard-coded in the game list itself: display (bold) and data (game list) are
         # two separate refreshes, neither waits for the other.
@@ -89,7 +89,7 @@ class LauncherPage:
         self.game_row.repaint_titles()
 
     def refresh_active_status(self):
-        backend.run_lpm_async(["launcher", "status"], on_done=lambda result: _run_on_main(self._apply_active_status, result))
+        backend.run_ludis_async(["launcher", "status"], on_done=lambda result: _run_on_main(self._apply_active_status, result))
 
     def iter_rows(self):
         child = self.rows_box.get_first_child()
@@ -110,7 +110,7 @@ class LauncherPage:
         # always stays visible) but CLEARS that row instead. A row's executable can only
         # be changed via the native picker (never typed, see LauncherEntryRow), so
         # otherwise an executable already chosen on the single remaining row could never
-        # be erased, which also prevented reaching a truly empty form to disable LPM
+        # be erased, which also prevented reaching a truly empty form to disable Ludis
         # Launcher from "Run". The button therefore stays ALWAYS active (see
         # LauncherEntryRow.__init__, remove_btn is never disabled).
         if len(list(self.iter_rows())) <= 1:
@@ -171,7 +171,7 @@ class LauncherPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["launcher-entries", slug, "get"], on_done=on_get_done)
+        backend.run_ludis_async(["launcher-entries", slug, "get"], on_done=on_get_done)
 
     # Reset (see CommandPage.reset_selection) -- the entry rows must never fall back to
     # the state of a previous session.
@@ -236,4 +236,4 @@ class LauncherPage:
 
             _run_on_main(finish)
 
-        backend.run_lpm_async(["launcher-entries", slug, "set", tmp_path], on_done=on_set_done)
+        backend.run_ludis_async(["launcher-entries", slug, "set", tmp_path], on_done=on_set_done)

@@ -29,12 +29,12 @@ class MainWindow(Adw.ApplicationWindow):
         if cls._CATEGORIES_CACHE is None:
             cls._CATEGORIES_CACHE = [
                 ("games", t("gui.category.games"), "applications-games-symbolic", [
-                    # Order: "launcher" (loading screen / LPM Launcher), "shortcut"
+                    # Order: "launcher" (loading screen / Ludis Launcher), "shortcut"
                     # (launch settings) and "lsfg" (frame generation) come from the former
                     # "launch"/"Display" category, which was removed; these settings are
                     # per game like the other entries here.
                     ("install", t("gui.install.page_title"), "list-add-symbolic"),
-                    # Dedicated icon (not the screen icon shared with lsfg below): LPM Launcher
+                    # Dedicated icon (not the screen icon shared with lsfg below): Ludis Launcher
                     # is an executable selection MENU, not a display setting.
                     # "view-grid-symbolic" is the standard GNOME application-launcher icon.
                     ("launcher", t("gui.launcher.page_title"), "view-grid-symbolic"),
@@ -94,7 +94,7 @@ class MainWindow(Adw.ApplicationWindow):
     }
 
     def __init__(self, app: Adw.Application):
-        super().__init__(application=app, title="lpm", default_width=980, default_height=680)
+        super().__init__(application=app, title="Ludis", default_width=980, default_height=680)
 
         self.pages = CommandPages(self)
         self._built_pages: dict[str, Gtk.Widget] = {}
@@ -132,7 +132,7 @@ class MainWindow(Adw.ApplicationWindow):
         content_header.set_title_widget(self.title_widget)
         content_box.append(content_header)
         content_box.append(self.stack)
-        return Adw.NavigationPage(title="lpm", child=content_box)
+        return Adw.NavigationPage(title="Ludis", child=content_box)
 
     def _build_sidebar_header(self) -> Adw.HeaderBar:
         """Sidebar header: category name (centered, empty at the root) and back button."""
@@ -151,8 +151,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.sidebar_back_button = Gtk.Button(
             icon_name="go-previous-symbolic", tooltip_text=t("gui.common.back_to_categories_tooltip")
         )
-        # Frame forced by CSS (see _BACK_BUTTON_CSS, loaded in LpmApp.do_activate).
-        self.sidebar_back_button.add_css_class("lpm-back-button")
+        # Frame forced by CSS (see _BACK_BUTTON_CSS, loaded in LudisApp.do_activate).
+        self.sidebar_back_button.add_css_class("ludis-back-button")
         self.sidebar_back_button.connect("clicked", lambda _b: self._on_back_to_categories())
         self.sidebar_back_button.set_visible(False)
         header.pack_end(self.sidebar_back_button)
@@ -171,7 +171,7 @@ class MainWindow(Adw.ApplicationWindow):
         sidebar_box.append(sidebar_scroller)
 
         self.sidebar_list.connect("row-activated", self._on_sidebar_row_activated)
-        return Adw.NavigationPage(title="lpm", child=sidebar_box)
+        return Adw.NavigationPage(title="Ludis", child=sidebar_box)
 
     def _on_sidebar_row_activated(self, _listbox, row):
         if self._sidebar_mode == "root":
@@ -291,7 +291,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def open_install_for(self, path: str):
         """Open the right install page directly (game or runner, depending on the extension)
-        with "path" pre-filled. Replaces the former zenity-driven "click" mode (see bin/lpm,
+        with "path" pre-filled. Replaces the former zenity-driven "click" mode (see bin/ludis,
         section 2: double-clicking a .zgp/.zgr now delegates here)."""
         if operations.is_busy():
             # Nothing is replaced while an operation runs: the file waits for the user.

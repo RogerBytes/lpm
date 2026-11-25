@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# --- lpm self-update ---
+# --- ludis self-update ---
 #
-# Checks whether a newer lpm version is published on GitHub and, for a package install (.deb / .rpm /
+# Checks whether a newer ludis version is published on GitHub and, for a package install (.deb / .rpm /
 # Arch .pkg.tar.zst), downloads it, verifies its SHA-256 and installs it with privilege elevation
 # (pkexec = system password dialog).
-#   lpm self-update check    -> "[UPDATE-INFO] <latest version>|<release url>|<method>"
-#   lpm self-update install  -> downloads, verifies, installs; "[UPDATED] <version>" on success
+#   ludis self-update check    -> "[UPDATE-INFO] <latest version>|<release url>|<method>"
+#   ludis self-update install  -> downloads, verifies, installs; "[UPDATED] <version>" on success
 # Method: deb / rpm / pkg (package) or manual (install.sh, dev mode, unknown: never installed
-# automatically -- lpm cannot know where or how the user installed it).
+# automatically -- ludis cannot know where or how the user installed it).
 # Lines read by the GUI: "[STEP] n total label", "[PROGRESS] pct" (download).
 
-# $1 = installed version (LPM_VERSION from bin/lpm, with or without "v"), $2 = check | install
+# $1 = installed version (LUDIS_VERSION from bin/ludis, with or without "v"), $2 = check | install
 current_version="${1#v}"
 sub_arg="${2:-check}"
 
@@ -47,13 +47,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-# Install origin, based on the owner of THIS script: only a package installed in /usr/lib/lpm is
-# managed by a package manager. /usr/local/lib/lpm (install.sh), dev mode or any other location
+# Install origin, based on the owner of THIS script: only a package installed in /usr/lib/ludis is
+# managed by a package manager. /usr/local/lib/ludis (install.sh), dev mode or any other location
 # -> "manual".
 detect_method() {
-  if [[ "${script_dir}" = "/usr/lib/lpm" ]]; then
+  if [[ "${script_dir}" = "/usr/lib/ludis" ]]; then
     local self="${script_dir}/zgc-self-update.sh"
-    if command -v dpkg >/dev/null 2>&1 && dpkg -S "${self}" 2>/dev/null | grep -q '^lpm:'; then
+    if command -v dpkg >/dev/null 2>&1 && dpkg -S "${self}" 2>/dev/null | grep -q '^ludis:'; then
       echo deb; return
     fi
     if command -v rpm >/dev/null 2>&1 && rpm -qf "${self}" >/dev/null 2>&1; then
@@ -74,7 +74,7 @@ if [[ -z "${release_json}" ]]; then
   exit 1
 fi
 
-# Latest lpm release: tag like "v0.9.4" (the special runners release "zgr-pkg", drafts and
+# Latest ludis release: tag like "v0.9.4" (the special runners release "zgr-pkg", drafts and
 # pre-releases are ignored), highest by version number. Output: version, page url, and the
 # name/url/size/digest of the package matching the method.
 release_info=$(python3 -c '

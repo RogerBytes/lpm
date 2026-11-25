@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # --- List isolable games (living in a shared-store "giga prefix") ---
-# Output: <slug>  <game name>  <store to target for "lpm isolate">
+# Output: <slug>  <game name>  <store to target for "ludis isolate">
 #
 # Dedicated CLI command to inspect/script this list without opening a window. Lists ONLY
 # games whose store is actually recognised by zgu_detect_isolation_store (i.e. really
-# isolable via "lpm isolate <slug>"): a game blacklisted by the generic detection (shared
+# isolable via "ludis isolate <slug>"): a game blacklisted by the generic detection (shared
 # prefix but unrecognised store, e.g. Steam) does not appear, so that no slug is listed
-# that "lpm isolate" would then refuse with "unknown store".
+# that "ludis isolate" would then refuse with "unknown store".
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -44,7 +44,7 @@ while IFS= read -r bl_slug; do
   IFS=$'\x1f' read -r bl_name bl_dir <<< "${row}"
   [[ -z "${bl_name}" ]] && continue
 
-  # "directory" comes from the Lutris DB as everywhere else in lpm: resolved to a real path
+  # "directory" comes from the Lutris DB as everywhere else in ludis: resolved to a real path
   # before any use (same caution as zgp-game-isolator.sh), even though here it is only
   # read/displayed.
   real_dir=$(realpath -e "${bl_dir}" 2>/dev/null)
@@ -55,7 +55,7 @@ while IFS= read -r bl_slug; do
 
   # The store launcher itself (Battle.net, Epic Games Store, ...) is never an isolable game
   # -- see zgu_is_store_launcher_name in zgu-lutris-utils.sh -- so it is never listed here,
-  # consistent with "lpm isolate" not trying to isolate it either.
+  # consistent with "ludis isolate" not trying to isolate it either.
   zgu_is_store_launcher_name "${store}" "${bl_name}" && continue
 
   store_label=$(zgu_store_display_name "${store}")

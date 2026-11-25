@@ -1,30 +1,30 @@
 #!/bin/bash
 
-# --- lpm launcher: runs at every game launch, via system.prelaunch_command ---
+# --- ludis launcher: runs at every game launch, via system.prelaunch_command ---
 #
-# Called by the orchestrator (lib/zgl-launcher-orchestrator.sh, entry point of every lpm
+# Called by the orchestrator (lib/zgl-launcher-orchestrator.sh, entry point of every ludis
 # shortcut), on the host, BEFORE Lutris starts; never directly by the user. (Games in the old
-# format, lpm <= 0.9.5, still have a relay $GAMEDIR/scripts/lpm-launcher.sh that calls it from
+# format, ludis <= 0.9.5, still have a relay $GAMEDIR/scripts/lpm-launcher.sh that calls it from
 # Lutris' prelaunch command until the orchestrator has converted them, see
 # lib/zgl-launcher-legacy.sh.)
 #
 # Usage: zgl-launcher-runtime.sh <gamedir>
 #
 # Steps, in order:
-#   1. Reads lpm/launcher.yml (the only hardcoded path: passed as argument).
+#   1. Reads ludis/launcher.yml (the only hardcoded path: passed as argument).
 #   2. If the YAML has several entries: shows the picker. A single entry: no menu, direct
 #      launch.
 #   3. Rewrites lpm-launch.bat (emptied then rewritten) with the chosen entry.
 #
 # Background/splash, "loading" indicator, gamepad lock and game window detection are handled
 # by the orchestrator (lib/zgl-launcher-orchestrator.sh), the single entry point of all
-# lpm .desktop shortcuts; normally it is already running when this script starts. This
+# ludis .desktop shortcuts; normally it is already running when this script starts. This
 # script only finds the already-open control file (fixed path derived from "gamedir",
 # identical to the orchestrator's computation) to write IND_HIDE/IND_SHOW around the picker;
 # it never creates nor closes it. With several entries, it also writes the chosen entry label
 # on line 4 of the control file (subtitle under the game name, which stays; no subtitle if the
-# label is exactly the game name). If the control file does not exist (game not started via the lpm shortcut, or
-# loading screen disabled with "lpm/settings/no-loadingscreen"), the picker still works, without a
+# label is exactly the game name). If the control file does not exist (game not started via the ludis shortcut, or
+# loading screen disabled with "ludis/settings/no-loadingscreen"), the picker still works, without a
 # background.
 #
 # This script ALWAYS returns control (exit 0), even on error (missing YAML, etc.):
@@ -43,8 +43,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 
 bail() {
   local msg="$1"
@@ -57,7 +57,7 @@ bail() {
 [[ -n "${gamedir}" ]] || bail "gamedir_manquant"
 [[ -d "${gamedir}" ]] || bail "gamedir_introuvable"
 
-yaml_path="$(zgu_lpm_find "${gamedir}" launcher)"
+yaml_path="$(zgu_ludis_find "${gamedir}" launcher)"
 [[ -f "${yaml_path}" ]] || bail "yaml_introuvable"
 
 # --- 1. Read the YAML (title, prompt, active entries; entries commented with "#" are
@@ -92,7 +92,7 @@ for e in entries:
     workdir = str(e.get("workdir") or "").replace("\x1f", " ").replace("\n", " ")
     exe = str(e.get("exe") or "").replace("\x1f", " ").replace("\n", " ")
     # "args" (launch arguments, appended after the executable in lpm-launch.bat): optional,
-    # empty string by default, absent from older lpm/launcher.yml files.
+    # empty string by default, absent from older ludis/launcher.yml files.
     args = str(e.get("args") or "").replace("\x1f", " ").replace("\n", " ")
     if not label or not workdir or not exe:
         continue
@@ -123,7 +123,7 @@ done <<< "${parsed}"
 # Every lpm-launch.bat to write. Normally only "bat_path" (the .bat Lutris really runs). When
 # the YAML has no "bat_path" (hand-written file, or restored from a .zgp), the ones that
 # already exist in the game's prefix ("drive_c/Games/<folder>/lpm-launch.bat", created by
-# "lpm launcher ... on") are written instead: otherwise the choice would go to a file Lutris
+# "ludis launcher ... on") are written instead: otherwise the choice would go to a file Lutris
 # never runs and the first entry would always start. NEVER at the root of the prefix: Wine only
 # reaches files inside "drive_c".
 bat_targets=()
@@ -156,7 +156,7 @@ read_ctrl_lines() {
 }
 
 set_indicator() {
-  # Best-effort: the control file may not exist (game not started via the lpm shortcut, or
+  # Best-effort: the control file may not exist (game not started via the ludis shortcut, or
   # loading screen disabled); then do nothing, the picker still shows without a background.
   [[ -f "${control_file}" ]] || return 0
   local ctrl_bg_line ctrl_title_line ctrl_label_line
@@ -206,7 +206,7 @@ write_noop_bat() {
 }
 
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
-  # Choice already made by the orchestrator (normal case, launch via the lpm shortcut; see
+  # Choice already made by the orchestrator (normal case, launch via the ludis shortcut; see
   # zgl-launcher-orchestrator.sh): it shows the picker on the host BEFORE launching Lutris, not
   # this script, which runs inside the sandbox with Flatpak Lutris where neither gamepad nor
   # mouse reliably reached Zenity.
@@ -215,7 +215,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
   # vice versa (and "/run/host/tmp" does not exist, unlike "/run/host/usr"). The choice file
   # must live in "${gamedir}", visible from both sides: Lutris must read/write there to launch
   # the game, with or without Flatpak.
-  choice_file="$(zgu_lpm_path "${gamedir}" launcher_choice)"
+  choice_file="$(zgu_ludis_path "${gamedir}" launcher_choice)"
 
   if [[ -f "${choice_file}" ]]; then
     selection=$(cat "${choice_file}" 2>/dev/null)
@@ -239,7 +239,7 @@ if [[ ${#entry_labels[@]} -gt 1 ]]; then
       exit 0
     fi
   else
-    # --- Fallback: the orchestrator did not run (lpm shortcut bypassed, game launched another
+    # --- Fallback: the orchestrator did not run (ludis shortcut bypassed, game launched another
     # way); this script shows its own picker (zgu-launcher-picker.py, GTK4, NOT Zenity; see
     # zgl-launcher-orchestrator.sh). Unlike the orchestrator picker (embedded in its single
     # window, see zgu-launcher-screen.py), this one is a normal DECORATED window since there is
@@ -289,7 +289,7 @@ chosen_exe="${entry_exes[${chosen_idx}]}"
 chosen_args="${entry_args[${chosen_idx}]:-}"
 
 # Subtitle of the loading screen (see zgu-launcher-screen.py): the chosen entry label, ONLY if
-# the game has several active LPM Launcher entries and the label differs from the game name;
+# the game has several active Ludis Launcher entries and the label differs from the game name;
 # a "normal" game (single entry, no picker) shows the game name alone.
 if [[ ${#entry_labels[@]} -gt 1 ]]; then
   set_entry_label "${entry_labels[${chosen_idx}]}"

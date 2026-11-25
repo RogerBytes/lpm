@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- lpm lsfg [slug...] [on|off] ---
+# --- ludis lsfg [slug...] [on|off] ---
 #
 # Enables/disables lsfg-vk ("Lossless Scaling" frame generation) for one or more Lutris
 # Wine/Proton games.
@@ -8,15 +8,15 @@
 #   1. lsfg-vk detection (Flatpak: VulkanLayer extension installed; native: Vulkan
 #      implicit_layer.d manifest present). The lsfg-vk project documents no version check, so
 #      this only detects presence, not the 2.0+ scheme. With an old 1.0 install (LSFG_LEGACY
-#      scheme, gone), activation looks successful in lpm but has no effect in game; there is no
+#      scheme, gone), activation looks successful in ludis but has no effect in game; there is no
 #      reliable way to detect it.
 #   2. Install missing:
-#        - Flatpak: lpm installs the VulkanLayer.lsfgvk extension itself (with consent), no
+#        - Flatpak: ludis installs the VulkanLayer.lsfgvk extension itself (with consent), no
 #          sudo (--user), for the SAME runtime version as the detected Flatpak Lutris. No
 #          "flatpak override" is needed: a freedesktop VulkanLayer extension is exposed to every
 #          app using that runtime (same mechanism as MangoHud). The official lsfg-vk override
 #          example (LSFGVK_CONFIG) only concerns a config path OUTSIDE the wineprefix, unused
-#          here (lpm sets everything through the Lutris YAML system.env variables, which point
+#          here (ludis sets everything through the Lutris YAML system.env variables, which point
 #          inside the game's wineprefix).
 #        - Native: no auto-install (no universal package); AUR link if Arch is detected
 #          (pacman present), otherwise the generic link of the official docs. The link is shown
@@ -27,14 +27,14 @@
 #      > lsfg-vk). The "Lossless.dll" of the public branch is NOT ACCEPTED: it lacks the
 #      "mipmaps" shader needed by the lsfg-vk 2.0 scheme (error "Unable to find base shader
 #      'mipmaps' in DLL" at launch, also with a renamed copy of it). Copied as-is to
-#      ~/.config/lpm/lsfg-vk/lsfg-vk.dll.
+#      ~/.config/ludis/lsfg-vk/lsfg-vk.dll.
 #   4. Enable/Disable screen, listing ONLY relevant games (enable: games without
 #      LSFGVK_ENV=1 in their YAML; disable: games that have it). The YAML of each game is
 #      re-read on every run, with no separate tracking file (single source of truth, stays in
 #      sync if the user edits the YAML in Lutris).
 #   5. Wine/Proton games only (runner='wine' in pga.db; Lutris does not distinguish them
 #      otherwise, native Linux games have another runner). Shared prefixes
-#      (Epic/EA/Ubisoft/Battle.net) INCLUDED: non-destructive, same principle as "lpm tools".
+#      (Epic/EA/Ubisoft/Battle.net) INCLUDED: non-destructive, same principle as "ludis tools".
 #   6. Enable: copies lsfg-vk.dll to the prefix root (overwrites without confirmation, the
 #      reference copy wins), then merges into the YAML system.env: LSFGVK_ENV=1,
 #      LSFGVK_DLL_PATH=<path>, and LSFGVK_MULTIPLIER=2 ONLY if that key does not exist yet
@@ -53,17 +53,17 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-games-cli.sh
 source "${script_dir}/zgu-games-cli.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-lsfg-utils.sh
 source "${script_dir}/zgu-lsfg-utils.sh"
 
-# --- "lpm lsfg status": NON-interactive check of the lsfg-vk Vulkan layer presence
+# --- "ludis lsfg status": NON-interactive check of the lsfg-vk Vulkan layer presence
 # (zgu_lsfg_vk_present, see zgu-lsfg-utils.sh), used by gui/*.py (page_lsfg) to show or hide
 # the "file required" warning, without going through the interactive install flow
-# ("read -p") below, reserved for "lpm lsfg <slug...> on|off". Placed before the
+# ("read -p") below, reserved for "ludis lsfg <slug...> on|off". Placed before the
 # "<slug...> on|off" syntax validation so this status needs no slug. Never a blocking error
 # here (an impossible Lutris detection is reported as "installed": false).
 if [[ "${#cli_args[@]}" -eq 1 ]] && [[ "${cli_args[0]}" = "status" ]]; then
@@ -78,7 +78,7 @@ if [[ "${#cli_args[@]}" -eq 1 ]] && [[ "${cli_args[0]}" = "status" ]]; then
   exit 0
 fi
 
-# --- "lpm lsfg install-info": NON-interactive info needed to offer the lsfg-vk install
+# --- "ludis lsfg install-info": NON-interactive info needed to offer the lsfg-vk install
 # from the GUI (optional button of "page_lsfg", shown when "lsfg status" says
 # "installed": false). Never installs here, detection only. Flatpak: also resolves the
 # freedesktop runtime version (zgu_lsfg_resolve_freedesktop_runtime_version, see
@@ -108,10 +108,10 @@ print(json.dumps({"flatpak": False, "link": os.environ.get("LINK", ""), "link_la
   exit 0
 fi
 
-# --- "lpm lsfg install-flatpak <runtime_version>": real NON-interactive Flatpak install of
+# --- "ludis lsfg install-flatpak <runtime_version>": real NON-interactive Flatpak install of
 # the lsfg-vk extension, for a runtime version already confirmed by the user in the GUI
 # ("install-info" above + confirmation window). No "read -p" here, unlike
-# zgp_lsfg_install_flatpak() below (CLI usage of "lpm lsfg <slug...> on|off"). Reuses
+# zgp_lsfg_install_flatpak() below (CLI usage of "ludis lsfg <slug...> on|off"). Reuses
 # zgu_lsfg_install_flatpak_do (see zgu-lsfg-utils.sh).
 if [[ "${#cli_args[@]}" -eq 2 ]] && [[ "${cli_args[0]}" = "install-flatpak" ]]; then
   _lsfg_doinstall_runtime="${cli_args[1]}"
@@ -127,7 +127,7 @@ print(json.dumps({"ok": False, "error": os.environ.get("ERR", "")}))
   exit 0
 fi
 
-# --- 0. CLI syntax validation (bin/lpm has no interactive entry point: no menu/Zenity
+# --- 0. CLI syntax validation (bin/ludis has no interactive entry point: no menu/Zenity
 # selection, only this explicit terminal command) ---
 cli_action=""
 cli_slugs=()
@@ -173,7 +173,7 @@ if [[ ! -f "${lutris_db}" ]]; then
 fi
 
 # --- 2. Detect installed lsfg-vk (presence only, see the warning in the file header).
-# Functions shared with "lpm check", see zgu-lsfg-utils.sh (sourced above). ---
+# Functions shared with "ludis check", see zgu-lsfg-utils.sh (sourced above). ---
 zgp_lsfg_vk_present() {
   zgu_lsfg_vk_present "${lutris_is_flatpak}"
 }
@@ -219,7 +219,7 @@ zgp_lsfg_install_native() {
   return 0
 }
 
-lsfg_dll_master="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/lsfg-vk/lsfg-vk.dll"
+lsfg_dll_master="${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/lsfg-vk/lsfg-vk.dll"
 
 zgp_lsfg_ensure_dll() {
   [[ -f "${lsfg_dll_master}" ]] && return 0
@@ -297,7 +297,7 @@ zgp_games_toggle_targets lsfg zgp_lsfg_is_active
 # wrong DLL file (see item 3 of the file header).
 
 # Line-based text editing (zgu-env-edit.py): a yaml.dump round-trip would destroy the Lutris
-# YAML comments, including hooks disabled by LPM ("# lpm:hook-disabled"). Args: yml_file
+# YAML comments, including hooks disabled by Ludis ("# lpm:hook-disabled"). Args: yml_file
 # prefix_dir mode. Returns non-zero if targeted editing is not possible.
 zgp_lsfg_edit_env_lines() {
   local yml_file="$1" prefix_dir="$2" mode="$3"
@@ -305,7 +305,7 @@ zgp_lsfg_edit_env_lines() {
   {
     if [[ "${mode}" = "on" ]]; then
       python3 "${edit_py}" "${yml_file}" set LSFGVK_ENV 1 &&
-      python3 "${edit_py}" "${yml_file}" set LSFGVK_DLL_PATH "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" &&
+      python3 "${edit_py}" "${yml_file}" set LSFGVK_DLL_PATH "$(zgu_ludis_path "${prefix_dir}" lsfg)/lsfg-vk.dll" &&
       { python3 "${edit_py}" "${yml_file}" list | grep -q '^LSFGVK_MULTIPLIER=' ||
         python3 "${edit_py}" "${yml_file}" set LSFGVK_MULTIPLIER 2; }
     else
@@ -319,7 +319,7 @@ zgp_lsfg_edit_env_lines() {
 # Fallback: full YAML rewrite (loses comments). Args: yml_file prefix_dir mode.
 zgp_lsfg_edit_env_rewrite() {
   local yml_file="$1" prefix_dir="$2" mode="$3"
-  YML_PATH="${yml_file}" DLL_PATH="$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll" LSFG_MODE="${mode}" python3 -c '
+  YML_PATH="${yml_file}" DLL_PATH="$(zgu_ludis_path "${prefix_dir}" lsfg)/lsfg-vk.dll" LSFG_MODE="${mode}" python3 -c '
 import os, yaml
 
 yml_path = os.environ["YML_PATH"]
@@ -366,8 +366,8 @@ zgp_lsfg_edit_env() {
 # Copies the master lsfg-vk.dll into the prefix. Args: slug prefix_dir. Returns 1 on failure.
 zgp_lsfg_install_dll() {
   local slug="$1" prefix_dir="$2"
-  mkdir -p "$(zgu_lpm_path "${prefix_dir}" lsfg)"
-  if ! cp -f -- "${lsfg_dll_master}" "$(zgu_lpm_path "${prefix_dir}" lsfg)/lsfg-vk.dll"; then
+  mkdir -p "$(zgu_ludis_path "${prefix_dir}" lsfg)"
+  if ! cp -f -- "${lsfg_dll_master}" "$(zgu_ludis_path "${prefix_dir}" lsfg)/lsfg-vk.dll"; then
     zgp_lsfg_report_error_early "$(t lsfg.dll_copy_failed_for "${slug}")"
     zgu_log "lsfg" "ERROR" "slug=${slug} reason=dll_copy_failed"
     return 1

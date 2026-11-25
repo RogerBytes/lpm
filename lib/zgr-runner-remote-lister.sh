@@ -58,7 +58,7 @@ except Exception:
 
 if [[ -z "${remote_runners}" ]]; then
   # On stderr, not stdout: gui/backend.py::list_remote_runners() treats EVERY non-empty stdout line
-  # of "lpm list-remote-runners" as a remote runner name (same fix as zgp-game-lister.sh).
+  # of "ludis list-remote-runners" as a remote runner name (same fix as zgp-game-lister.sh).
   t list_remote.none_available >&2
   exit 0
 fi

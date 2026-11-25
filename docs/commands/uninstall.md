@@ -1,18 +1,18 @@
-# lpm uninstall
+# ludis uninstall
 
 Removes one or more installed Wine games: their prefix folder, their Lutris entry and their shortcuts.
 
 ## Synopsis
 
 ```
-lpm uninstall [-y] [--desktop-dir=<dir>] <slug>...
+ludis uninstall [-y] [--desktop-dir=<dir>] <slug>...
 ```
 
 ## Description
 
-For each slug, `lpm uninstall` deletes the game's Wine prefix from disk, deletes its Lutris configuration file and its row in the Lutris database, and removes the menu and desktop shortcuts. The deletion of the prefix is **permanent** (no trash). Get the slugs from [`lpm list`](list.md).
+For each slug, `ludis uninstall` deletes the game's Wine prefix from disk, deletes its Lutris configuration file and its row in the Lutris database, and removes the menu and desktop shortcuts. The deletion of the prefix is **permanent** (no trash). Get the slugs from [`ludis list`](list.md).
 
-Only games with the `wine` runner are considered. Games living in a prefix shared with a store launcher (Epic Games Store, EA App, Ubisoft Connect, Battle.net, ...) are refused: removing them would break the other games of that shared prefix (see [`lpm isolate`](isolate.md)).
+Only games with the `wine` runner are considered. Games living in a prefix shared with a store launcher (Epic Games Store, EA App, Ubisoft Connect, Battle.net, ...) are refused: removing them would break the other games of that shared prefix (see [`ludis isolate`](isolate.md)).
 
 Lutris is **killed** (`SIGKILL`) first so that its database is not locked.
 
@@ -20,23 +20,23 @@ Lutris is **killed** (`SIGKILL`) first so that its database is not locked.
 
 | Argument | Meaning |
 |---|---|
-| `<slug>...` | Slugs of installed games, as printed by `lpm list`. At least one is required: with none, lpm prints `Error: nothing to do, no target given to 'lpm uninstall'` and exits 1. |
+| `<slug>...` | Slugs of installed games, as printed by `ludis list`. At least one is required: with none, ludis prints `Error: nothing to do, no target given to 'ludis uninstall'` and exits 1. |
 
 ## Options
 
-`-y` is read by `bin/lpm` and must come directly after `uninstall` (before the first slug). `--desktop-dir=` is read by the script and may appear anywhere.
+`-y` is read by `bin/ludis` and must come directly after `uninstall` (before the first slug). `--desktop-dir=` is read by the script and may appear anywhere.
 
 | Option | Meaning |
 |---|---|
 | `-y` | Does not ask for confirmation. |
-| `--desktop-dir=<dir>` | Also removes the game's desktop shortcut (and its "Bonus" link) from this folder, in addition to the default desktop folder. Meant for shortcuts created with `lpm install --desktop-dir`. |
+| `--desktop-dir=<dir>` | Also removes the game's desktop shortcut (and its "Bonus" link) from this folder, in addition to the default desktop folder. Meant for shortcuts created with `ludis install --desktop-dir`. |
 
 ## Behavior
 
 1. `sqlite3` is required (otherwise exit 1). Lutris is closed (Flatpak `kill`, then `pkill -9 lutris`).
-2. The Lutris flavour (Flatpak or native) is resolved as for [`lpm install`](install.md) (environment variable `LPM_LUTRIS_VERSION`, saved choice in `~/.config/lpm/lutris-version`, else a one-time question if both are installed). The database must exist (`Error: Lutris database not found: <path>`, exit 1).
+2. The Lutris flavour (Flatpak or native) is resolved as for [`ludis install`](install.md) (environment variable `LUDIS_LUTRIS_VERSION`, saved choice in `~/.config/ludis/lutris-version`, else a one-time question if both are installed). The database must exist (`Error: Lutris database not found: <path>`, exit 1).
 3. The games folder is `~/Games` or the `game_path:` of Lutris' `system.yml`.
-4. All `runner='wine'` rows are loaded, minus the shared-store ones (a prefix folder shared by several rows, or a game whose name contains one of the store names as a whole word, see [`lpm list`](list.md)). If there are none: `No Wine game found in the Lutris database.` (on stderr) and **exit 0**, whatever the slugs given.
+4. All `runner='wine'` rows are loaded, minus the shared-store ones (a prefix folder shared by several rows, or a game whose name contains one of the store names as a whole word, see [`ludis list`](list.md)). If there are none: `No Wine game found in the Lutris database.` (on stderr) and **exit 0**, whatever the slugs given.
 5. **Every slug is validated first.** The first unknown slug aborts the command with exit 1 (`Error: Game not found in Lutris with slug: <slug>`, or the shared-prefix error) and nothing is deleted.
 6. Unless `-y`, the list of ` - <name> (<folder>)` is shown and `Are you sure you want to delete these games? [Y/n]` is asked. Pressing Enter (or any answer other than `n`/`N`) confirms. `n`/`N`, or end of input (no terminal, empty stdin), cancels (`Uninstallation cancelled.`, exit 0). Games are tracked by slug throughout, so two games with the same name are never confused.
 7. For each game, in order:
@@ -71,9 +71,9 @@ The first two lines are printed only without `-y`. The final line is green on a 
 
 ## Scripting notes
 
-- The only prompt is the `[Y/n]` confirmation (plus the one-time Flatpak/native question if both Lutris flavours are installed; avoid it with `LPM_LUTRIS_VERSION=flatpak|native`).
-- With stdin empty or not a terminal and no `-y`, the confirmation is **cancelled** (nothing is deleted, exit 0): `lpm uninstall slug </dev/null` deletes nothing. Use `-y` explicitly in scripts.
-- `lpm uninstall slug -y` does not work: `-y` would be read as a slug and fail with "Game not found ... slug: -y".
+- The only prompt is the `[Y/n]` confirmation (plus the one-time Flatpak/native question if both Lutris flavours are installed; avoid it with `LUDIS_LUTRIS_VERSION=flatpak|native`).
+- With stdin empty or not a terminal and no `-y`, the confirmation is **cancelled** (nothing is deleted, exit 0): `ludis uninstall slug </dev/null` deletes nothing. Use `-y` explicitly in scripts.
+- `ludis uninstall slug -y` does not work: `-y` would be read as a slug and fail with "Game not found ... slug: -y".
 - Validation is all-or-nothing for slugs (one bad slug, nothing deleted), but per-game failures during deletion do not change the exit status.
 - Set `LC_ALL=C` to get the English messages.
 
@@ -81,26 +81,26 @@ The first two lines are printed only without `-y`. The final line is green on a 
 
 ```
 # Interactive
-lpm uninstall mariovania
+ludis uninstall mariovania
 
 # No confirmation, several games
-lpm uninstall -y mariovania papers-please
+ludis uninstall -y mariovania papers-please
 
 # Also clean a shortcut created in a custom folder
-lpm uninstall -y --desktop-dir=/home/me/Shortcuts mariovania
+ludis uninstall -y --desktop-dir=/home/me/Shortcuts mariovania
 
 # Remove every game whose name contains "demo"
-lpm list | awk 'tolower($0) ~ /demo/ {print $1}' | xargs -r lpm uninstall -y
+ludis list | awk 'tolower($0) ~ /demo/ {print $1}' | xargs -r ludis uninstall -y
 ```
 
 ## Files and data touched
 
 - Deletes: `<games folder>/<slug>/` (recursively), `<Lutris games config dir>/<configpath>.yml` (or `<slug>-<digits>.yml` files, see Behavior), the shortcuts listed above.
 - Modifies: table `games` of `pga.db` (Flatpak: `~/.var/app/net.lutris.Lutris/data/lutris/pga.db`; native: `~/.local/share/lutris/pga.db`).
-- Writes: `~/.local/share/lpm/lpm.log`.
+- Writes: `~/.local/share/ludis/ludis.log`.
 - Kills: running Lutris processes.
 - Does not touch: the original `.zgp`, Lutris' downloaded cover/banner/icon files.
 
 ## See also
 
-[`lpm install`](install.md), [`lpm list`](list.md), [`lpm info`](info.md), [`lpm isolate`](isolate.md); `lpm log`.
+[`ludis install`](install.md), [`ludis list`](list.md), [`ludis info`](info.md), [`ludis isolate`](isolate.md); `ludis log`.

@@ -1,5 +1,5 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: lpm
+Upstream-Name: ludis
 Source: https://rogerbytes.com
 
 Files: *
@@ -17,7 +17,7 @@ Files: assets/icons/application-x-zgp-game.svg
 Comment: Silhouette de carton "package-x-generic" reprise telle quelle (tracé non
  modifié, seule la couleur change) du thème d'icônes Mint-L-Blue, dépôt public
  linuxmint/mint-l-icons (src/mimetypes/48/package-x-generic.svg). Reste sous la licence
- d'origine du thème, distincte de la licence MIT du reste du projet lpm.
+ d'origine du thème, distincte de la licence MIT du reste du projet ludis.
 Copyright: Linux Mint / Clement Lefebvre et contributeurs (thème d'icônes Mint-L-Blue)
 License: GPL-3.0-or-later
  On Debian systems, the complete text of the GNU General Public License

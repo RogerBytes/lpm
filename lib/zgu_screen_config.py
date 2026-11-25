@@ -49,16 +49,16 @@ ENTRY_LABEL_FONT_SIZE = 30
 # detected and the picker is not on screen. Icons drawn in cairo (no image file).
 # Translated labels are passed by the orchestrator (env variables). ---
 # Prefix folder of the game: what Alt+F4 on the loading screen stops (see on_close_request).
-PREFIX_DIR = os.environ.get("LPM_PREFIX_DIR", "").strip()
-HELP_ALTTAB_TEXT = os.environ.get("LPM_HELP_ALTTAB", "").strip()
-HELP_QUIT_TEXT = os.environ.get("LPM_HELP_QUIT", "").strip()
-# --- Per-game messages at the bottom center (text of <game dir>/lpm/settings/loading-message.txt, passed
-# by the orchestrator in LPM_LOADING_MESSAGE): explain a long loading (mods, shaders...). One
+PREFIX_DIR = os.environ.get("LUDIS_PREFIX_DIR", "").strip()
+HELP_ALTTAB_TEXT = os.environ.get("LUDIS_HELP_ALTTAB", "").strip()
+HELP_QUIT_TEXT = os.environ.get("LUDIS_HELP_QUIT", "").strip()
+# --- Per-game messages at the bottom center (text of <game dir>/ludis/settings/loading-message.txt, passed
+# by the orchestrator in LUDIS_LOADING_MESSAGE): explain a long loading (mods, shaders...). One
 # line of the file = one message; ONE message at a time (a long one is wrapped on up to
 # LOADING_MESSAGE_MAX_LINES lines); several messages alternate in file order with the same
 # fades and black gap as the gamepad tips, each shown a bit longer (LOADING_MESSAGE_PERIOD_S).
 # Not translated: it is the user's own text. Hidden while the picker is on screen. ---
-LOADING_MESSAGES = [" ".join(l.split()) for l in os.environ.get("LPM_LOADING_MESSAGE", "").split("\n")]
+LOADING_MESSAGES = [" ".join(l.split()) for l in os.environ.get("LUDIS_LOADING_MESSAGE", "").split("\n")]
 LOADING_MESSAGES = [m for m in LOADING_MESSAGES if m]
 LOADING_MESSAGE_PERIOD_S = 6.0
 message_start = [None]
@@ -155,7 +155,7 @@ PICKER_CARD_HEIGHT = 660
 # Size AND color of the list labels use direct Pango markup (span size=..., foreground=...),
 # never CSS: a user gtk.css (USER priority) can override an application CSS "font-size" but
 # never a Pango attribute set on the text. Same for color: these Gtk.Labels have no CSS
-# class of their own and only inherit "color" from ".lpm-picker-card listbox row", and
+# class of their own and only inherit "color" from ".ludis-picker-card listbox row", and
 # inheritance loses to any explicit rule the system theme sets on the "label" node (seen as
 # black text on white despite the "row" rule).
 ENTRY_FONT_SIZE_PX = 25
@@ -170,7 +170,7 @@ title_text = [""]
 entry_label_text = [""]
 
 CSS = b"""
-.lpm-picker-card {
+.ludis-picker-card {
     background-color: #1a1a1a;
     color: #ffffff;
     border: 2px solid #2f2f2f;
@@ -181,26 +181,26 @@ CSS = b"""
 /* Noeud CSS "list", PAS "listbox" -- le widget est "Gtk.ListBox" mais son noeud CSS en
    GTK4 s'appelle "list" ; le selecteur "listbox" ne correspondait a rien du tout, d'ou le
    fond reste blanc malgre les regles ci-dessous (symptome observe). */
-.lpm-picker-card list {
+.ludis-picker-card list {
     background-color: transparent;
 }
-.lpm-picker-card list row {
+.ludis-picker-card list row {
     padding: 20px 32px 22px 32px;
     background-color: transparent;
     color: #ffffff;
 }
-.lpm-picker-card list row:selected {
+.ludis-picker-card list row:selected {
     background-color: #3a6ea5;
     border-radius: 8px;
     color: #ffffff;
 }
-.lpm-picker-button {
+.ludis-picker-button {
     font-size: 20px;
     min-height: 34px;
 }
 /* Always-visible scrollbar (no overlay): tells at once that the list scrolls. Every
    border/shadow/image of the theme is removed (a light line showed on its left side). */
-.lpm-picker-card scrollbar {
+.ludis-picker-card scrollbar {
     background: none;
     background-color: transparent;
     border: none;
@@ -208,7 +208,7 @@ CSS = b"""
     outline: none;
     padding: 0 2px;
 }
-.lpm-picker-card scrollbar trough {
+.ludis-picker-card scrollbar trough {
     background: none;
     background-color: #2a2a2a;
     border: none;
@@ -216,7 +216,7 @@ CSS = b"""
     border-radius: 5px;
     min-width: 10px;
 }
-.lpm-picker-card scrollbar slider {
+.ludis-picker-card scrollbar slider {
     background: none;
     background-color: #9a9a9a;
     border: none;
@@ -225,14 +225,14 @@ CSS = b"""
     min-height: 48px;
     border-radius: 5px;
 }
-.lpm-picker-button.lpm-pad-flat,
-.lpm-picker-button.lpm-pad-flat:hover {
+.ludis-picker-button.ludis-pad-flat,
+.ludis-picker-button.ludis-pad-flat:hover {
     background: none;
     background-color: transparent;
     border: none;
     box-shadow: none;
 }
-.lpm-pad-icon {
+.ludis-pad-icon {
     color: #ffffff;
     font-weight: bold;
     font-size: 18px;
@@ -240,8 +240,8 @@ CSS = b"""
     min-height: 30px;
     border-radius: 15px;
 }
-.lpm-pad-icon-a { background-color: #2e9e3a; }
-.lpm-pad-icon-b { background-color: #c62828; }
+.ludis-pad-icon-a { background-color: #2e9e3a; }
+.ludis-pad-icon-b { background-color: #c62828; }
 """ + PICKER_BUTTON_CSS + b"""
 """
 

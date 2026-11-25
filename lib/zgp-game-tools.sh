@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# --- lpm tools: Wine tools menu for a game (winetricks, registry editor, winecfg, DOS console,
+# --- ludis tools: Wine tools menu for a game (winetricks, registry editor, winecfg, DOS console,
 # run an .exe, open the prefix folder, add a favorite folder to the Windows Open/Save dialogs)
 # ---
 #
 # Goal: reproduce EXACTLY what Lutris does for these tools (same wine binary, same environment
 # variables), checked against its source (lutris/runners/commands/wine.py and
 # lutris/util/wine/wine.py):
-#   - No flatpak-spawn/host-spawn: Lutris calls the wine binary directly, whether Lutris (and thus lpm) runs as Flatpak or native package.
+#   - No flatpak-spawn/host-spawn: Lutris calls the wine binary directly, whether Lutris (and thus ludis) runs as Flatpak or native package.
 #   - The binary used is the one of the runner CONFIGURED FOR THIS GAME (wine.version in its YAML), never a generic "wine" from PATH: winecfg/regedit/winetricks running a different version than the game would behave inconsistently (registry keys, builtin DLLs...).
 #   - WINEDLLOVERRIDES is rebuilt with the SAME algorithm as Lutris get_overrides_env() (buckets by normalized value, "winemenubuilder" always disabled).
 #   - Winetricks: the binary bundled by Lutris (RUNTIME_DIR/winetricks/winetricks) is preferred, unless the game has "system_winetricks" enabled, exactly the choice Lutris would make for THIS game.
@@ -18,7 +18,7 @@
 # (DXVK/VKD3D/etc.), not basic Win32 utilities like winecfg/regedit/cmd. It is therefore NOT
 # reproduced here; revisit with a concrete case if an issue shows up on an exotic distro.
 #
-# WINEARCH is not forced either: the prefix already exists (created by Lutris or lpm) and Wine
+# WINEARCH is not forced either: the prefix already exists (created by Lutris or ludis) and Wine
 # detects its architecture from system.reg by itself. Forcing it could break a prefix if the
 # value read differs from reality.
 
@@ -29,8 +29,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 
 # --- Arguments ---
 # $1 = target slug (required)
@@ -126,7 +126,7 @@ fi
 # --- "mangohud" tool: handled HERE too (only the game's Lutris YAML is read/written, neither the
 # prefix nor the runner is needed). Lutris option "system.mangohud" ("Enable MangoHud", FPS overlay):
 # "on" sets it to true, "off" REMOVES the key (Lutris default = off), "status" (default action)
-# prints "on" or "off" on stdout. MangoHud itself is not installed by lpm: when it cannot be found
+# prints "on" or "off" on stdout. MangoHud itself is not installed by ludis: when it cannot be found
 # for this Lutris, "on" still writes the setting but says it will have no effect until it is
 # installed (native: "mangohud" in PATH; Flatpak: the MangoHud Vulkan layer extension). ---
 # Checks the environment (config file, python yaml). Arg: yml_file. Returns 1 with an error
@@ -219,8 +219,8 @@ fi
 
 # --- Gamepad: AntiMicroX profile for a game ---
 # Lutris itself launches AntiMicroX with a profile for the game when its YAML has
-# "system.antimicro_config: <profile file>". lpm creates a blank profile in
-# <prefix>/lpm/gamepad/ (never overwritten once it exists, so the user's settings are safe),
+# "system.antimicro_config: <profile file>". ludis creates a blank profile in
+# <prefix>/ludis/gamepad/ (never overwritten once it exists, so the user's settings are safe),
 # points that option to it, and can open it in AntiMicroX for editing (nothing is watched).
 # An antimicro_config that points elsewhere belongs to the user and is never replaced.
 # Actions: on | off | edit | status (default status; status prints on, off or other).
@@ -338,7 +338,7 @@ gp_on() {
 run_gamepad() {
   local action="${1:-status}"
   gp_yml="${lutris_config_dir}/${target_configpath}.yml"
-  gp_profile_dir="$(zgu_lpm_find "${prefix_dir}" gamepad)"
+  gp_profile_dir="$(zgu_ludis_find "${prefix_dir}" gamepad)"
   gp_profile_file="${gp_profile_dir}/lpm-gamepad.gamecontroller.amgp"
   case "${action}" in
     on|off|edit|status) ;;
@@ -362,9 +362,9 @@ if [[ "${cli_tool}" = "gamepad" ]]; then
   exit $?
 fi
 
-# --- "overlay" tool: the FPS overlay (MangoHud) that the in-game LPM menu shows / hides. NOT the
+# --- "overlay" tool: the FPS overlay (MangoHud) that the in-game Ludis menu shows / hides. NOT the
 # Lutris "Enable MangoHud" option above (that one displays it all the time and lives in the
-# game's Lutris config): this one is loaded hidden at launch and kept in lpm's own files.
+# game's Lutris config): this one is loaded hidden at launch and kept in ludis's own files.
 # Actions: status (default; prints "game=<follow|on|off> global=<on|off>"), follow | on | off
 # (this game: follow the global setting, or force on / off), global-on | global-off. ---
 run_overlay() {
@@ -472,7 +472,7 @@ else
 fi
 
 # --- 4. Launch in the background, detached from this script (setsid), for the 5 tools that open
-# a window (winetricks/regedit/winecfg/console/exe): lpm must never block waiting for them to
+# a window (winetricks/regedit/winecfg/console/exe): ludis must never block waiting for them to
 # close. ---
 zgt_launch_detached() {
   setsid "$@" >/dev/null 2>&1 </dev/null &
@@ -482,9 +482,9 @@ zgt_launch_detached() {
 
 # zgt_launch_wine <wine args...>: launches "<wine> args" detached. Proton runner (toolmanifest.vdf at its
 # root): through umu-run (its wine alone fails from the host, "could not load kernel32.dll"); output
-# kept in ~/.local/share/lpm/tools-launch.log instead of /dev/null.
+# kept in ~/.local/share/ludis/tools-launch.log instead of /dev/null.
 zgt_launch_wine() {
-  local proton_root umu_bin="" tl_log="${XDG_DATA_HOME:-${HOME}/.local/share}/lpm/tools-launch.log"
+  local proton_root umu_bin="" tl_log="${XDG_DATA_HOME:-${HOME}/.local/share}/ludis/tools-launch.log"
   mkdir -p "$(dirname "${tl_log}")" 2>/dev/null
   proton_root="$(dirname "$(dirname "$(dirname "${wine_bin}")")")"
   if [[ -f "${proton_root}/toolmanifest.vdf" ]]; then
@@ -534,7 +534,7 @@ run_winetricks() {
   fi
   # Output is kept in a log (not /dev/null): winetricks often exits at once (no zenity/yad, wrong
   # WINE, 64-bit prefix...) and, without a trace, "launched" would be a lie.
-  local wt_log="${XDG_DATA_HOME:-${HOME}/.local/share}/lpm/winetricks-launch.log" wt_pid
+  local wt_log="${XDG_DATA_HOME:-${HOME}/.local/share}/ludis/winetricks-launch.log" wt_pid
   mkdir -p "$(dirname "${wt_log}")" 2>/dev/null
   {
     printf '=== %s ===\nbin=%s\nWINE=%s\nWINEPREFIX=%s\nDISPLAY=%s WAYLAND_DISPLAY=%s\nzenity=%s yad=%s\n' \
@@ -593,7 +593,7 @@ run_console() {
   # explicitly rather than relying on an undocumented default.
   # Start directory: Wine maps its Windows current directory to the process's UNIX one, so we cd
   # into "<prefix>/drive_c" first (the prefix root if it is missing), otherwise the console would
-  # open wherever lpm was started.
+  # open wherever ludis was started.
   local console_start_dir="${prefix_dir}/drive_c"
   [[ -d "${console_start_dir}" ]] || console_start_dir="${prefix_dir}"
   (

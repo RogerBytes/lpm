@@ -20,7 +20,7 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 # One scenario inside the Xvfb: $1 = expected keys, $2 = expected state (exited/running), rest = keys to press.
 cat > "${work}/driver.sh" <<DRV
 #!/bin/bash
-rm -f "${work}/keys.log" "${work}"/run/lpm-gamepad-cmd-*
+rm -f "${work}/keys.log" "${work}"/run/ludis-gamepad-cmd-*
 if [ -n "\${FAKE_GAME:-}" ]; then
   ln -sf /bin/sleep "${work}/wineserver"
   WINEPREFIX="${work}/prefix" "${work}/wineserver" "\${FAKE_GAME}" &
@@ -29,7 +29,7 @@ fi
 "${py}" "${repo}/lib/zgu-game-menu.py" x11 "${work}/prefix" >/dev/null 2>&1 &
 pid=\$!
 sleep 2
-wid=\$("${real_xdotool}" search --name LPM | head -1)
+wid=\$("${real_xdotool}" search --name Ludis | head -1)
 [ -n "\${wid}" ] && "${real_xdotool}" windowfocus "\${wid}"
 for k in "\$@"; do
   if [ "\${k}" = "click-corner" ]; then "${real_xdotool}" mousemove 5 5 click 1; else "${real_xdotool}" key "\${k}"; fi
@@ -49,7 +49,7 @@ fi
 sleep "\${WAIT:-1.5}"
 if kill -0 \${pid} 2>/dev/null; then echo "running"; kill \${pid}; else echo "exited"; fi
 cat "${work}/keys.log" 2>/dev/null
-[ -f "${work}/run/lpm-gamepad-cmd-\$(id -u)" ] && echo "cmd: \$(cat "${work}/run/lpm-gamepad-cmd-\$(id -u)")"
+[ -f "${work}/run/ludis-gamepad-cmd-\$(id -u)" ] && echo "cmd: \$(cat "${work}/run/ludis-gamepad-cmd-\$(id -u)")"
 DRV
 chmod +x "${work}/driver.sh"
 
@@ -71,16 +71,16 @@ check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Down D
 check "menu: Gamepad mouse is a switch: asks the watcher to toggle it, menu stays open" $'running\ncmd: mouse-toggle' Down Down Return
 # FPS overlay entry (3 states Off / Hidden / On): shown only when the launcher left its "overlay-armed" file
 # (prefix + "armed"|"available"); the menu stays open and the choice is saved in the prefix.
-ovl() { printf '%s\n%s\n' "${work}/prefix" "$1" > "${work}/run/lpm-overlay-armed-$(id -u)"; }
-ovl armed; LPM_INJECT_LOG="${work}/inject.log" check "menu: overlay armed: Right = On, menu stays open" "running" Down Down Down Right
-if [ "$(tr -d '[:space:]' < "${work}/prefix/lpm/settings/overlay-fps" 2>/dev/null)" = "on" ] && grep -q "hold 54 88" "${work}/inject.log" 2>/dev/null; then echo "OK: menu: overlay On is saved and the key is sent"; else echo "FAILED: menu: overlay On is saved and the key is sent"; status=1; fi
-rm -rf "${work}/prefix/lpm" "${work}/inject.log"
-ovl available; LPM_INJECT_LOG="${work}/inject.log" check "menu: overlay available (not loaded): Right = Hidden, saved for the next launch" "running" Down Down Down Right
-if [ "$(tr -d '[:space:]' < "${work}/prefix/lpm/settings/overlay-fps" 2>/dev/null)" = "on" ] && [ ! -s "${work}/inject.log" ]; then echo "OK: menu: nothing is sent when MangoHud is not loaded"; else echo "FAILED: menu: nothing is sent when MangoHud is not loaded"; status=1; fi
-rm -rf "${work}/prefix/lpm" "${work}/inject.log" "${work}/run/lpm-overlay-armed-$(id -u)"
+ovl() { printf '%s\n%s\n' "${work}/prefix" "$1" > "${work}/run/ludis-overlay-armed-$(id -u)"; }
+ovl armed; LUDIS_INJECT_LOG="${work}/inject.log" check "menu: overlay armed: Right = On, menu stays open" "running" Down Down Down Right
+if [ "$(tr -d '[:space:]' < "${work}/prefix/ludis/settings/overlay-fps" 2>/dev/null)" = "on" ] && grep -q "hold 54 88" "${work}/inject.log" 2>/dev/null; then echo "OK: menu: overlay On is saved and the key is sent"; else echo "FAILED: menu: overlay On is saved and the key is sent"; status=1; fi
+rm -rf "${work}/prefix/ludis" "${work}/inject.log"
+ovl available; LUDIS_INJECT_LOG="${work}/inject.log" check "menu: overlay available (not loaded): Right = Hidden, saved for the next launch" "running" Down Down Down Right
+if [ "$(tr -d '[:space:]' < "${work}/prefix/ludis/settings/overlay-fps" 2>/dev/null)" = "on" ] && [ ! -s "${work}/inject.log" ]; then echo "OK: menu: nothing is sent when MangoHud is not loaded"; else echo "FAILED: menu: nothing is sent when MangoHud is not loaded"; status=1; fi
+rm -rf "${work}/prefix/ludis" "${work}/inject.log" "${work}/run/ludis-overlay-armed-$(id -u)"
 FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down
 OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Return
-LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
-LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): a click on the veil closes it" "exited" click-corner
+LUDIS_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
+LUDIS_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): a click on the veil closes it" "exited" click-corner
 check "menu: Escape goes back, then closes" "exited" Return Escape Escape
 exit "${status}"

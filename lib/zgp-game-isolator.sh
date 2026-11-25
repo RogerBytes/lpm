@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- lpm isolate ---
+# --- ludis isolate ---
 #
 # Isolates a WHOLE store at once: splits every game living in a shared giga-prefix (Epic Games
 # Store, EA App/EA Desktop, Ubisoft Connect, Battle.net) into its own independent wineprefix,
@@ -10,7 +10,7 @@
 # folder" (subfolder specific to one game, included only in its instance and excluded from all
 # others).
 #
-# --- Arguments from the lpm router ---
+# --- Arguments from the ludis router ---
 # $1 = confirm_flag ("yes" if -y): skips the final confirmation (number of games to isolate) in strict CLI mode, same convention as the other lib/ scripts.
 # $2 = store to isolate entirely (optional): internal code (egs/ea/ubisoft/battlenet), common alias (e.g. "epic", "blizzard"), or slug of a game currently detected in that giga-prefix (only used to find the store to target; ALL games of that store are isolated, not just the named one). Empty => no store found/selected: clean error (see below).
 confirm_flag="${1:-}"
@@ -78,7 +78,7 @@ fi
 # ---------------------------------------------------------------------------------------------
 # --- Store detection (Epic/EA/Ubisoft/Battle.net) for a given giga-prefix ---
 # See zgu_detect_isolation_store in zgu-lutris-utils.sh (sourced above): shared with
-# zgp-isolable-lister.sh ("lpm list-isolable") so both commands always agree on the detected
+# zgp-isolable-lister.sh ("ludis list-isolable") so both commands always agree on the detected
 # store.
 
 # Turns a free-form game name into a safe slug identifier (lowercase, [a-z0-9-] only, collapsed
@@ -274,7 +274,7 @@ done < <(
 
 # ---------------------------------------------------------------------------------------------
 # --- Group blacklisted games by detected store ---
-# "lpm isolate" works per STORE, never per single game: all games currently living in a store's
+# "ludis isolate" works per STORE, never per single game: all games currently living in a store's
 # giga-prefix are isolated in one pass, each getting its own independent prefix (200 games in
 # the store = 200 prefixes). A store can in theory be spread over several giga-prefixes
 # (distinct "directory" in the database); they are all merged under the same store code so
@@ -394,7 +394,7 @@ zgp_iso_fail() {
 # path). Returns 1 with an error otherwise.
 zgp_iso_check_giga_dir() {
   # Security: giga_dir comes from the Lutris database, possibly hand-edited or from a game
-  # added outside lpm. Same guard as zgu_resolve_prefix_dir_by_slug (zgu-lutris-utils.sh) and
+  # added outside ludis. Same guard as zgu_resolve_prefix_dir_by_slug (zgu-lutris-utils.sh) and
   # safe_delete_prefix_dir (zgp-game-uninstaller.sh): the real path must stay a subfolder of
   # games_dir.
   local real_giga_dir

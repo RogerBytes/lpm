@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# --- lpm sgdb-key get|set <key> ---
+# --- ludis sgdb-key get|set <key> ---
 #
-# Manages the SteamGridDB API key used by "lpm icon"/"splash"/"logo" (lib/zgp-game-icon.sh,
+# Manages the SteamGridDB API key used by "ludis icon"/"splash"/"logo" (lib/zgp-game-icon.sh,
 # zgp-game-splash.sh, zgp-game-logo.sh: same storage file and validation). Added for
 # gui/*.py (page_images): the key is entered directly on the page, masked but editable, and
 # revalidated by a REAL API call on every change.
 #
 # "get": prints on stdout a JSON object {"key": "<stored key, or "" if none>"}. Never retested
 # here (simple read to prefill the GUI field): the API is only called when a key is
-# edited/added ("set"), not each time the page opens or resets. "lpm icon"/"splash"/"logo"
+# edited/added ("set"), not each time the page opens or resets. "ludis icon"/"splash"/"logo"
 # revalidate the key on each real use anyway (see their zgp_sgdb_key_valid).
 #
 # "set" <key>: tests the key with a real SteamGridDB API call before saving it (never saved

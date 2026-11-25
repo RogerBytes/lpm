@@ -153,7 +153,7 @@ class SgdbTitleResolverWindow(Adw.Window):
     choices. Shared by both page_images modes ("Automatic download" checked or not): Phase B
     (SgdbPickerWindow) receives each game's identity and does no further search.
 
-    Relies on "lpm sgdb-images title <slug>" (lib/zgl-sgdb-images.sh, type "title": same
+    Relies on "ludis sgdb-images title <slug>" (lib/zgl-sgdb-images.sh, type "title": same
     SteamGridDB search as icon/splash/logo but WITHOUT fetching any image/thumbnail; one
     identity per slug is enough, however many types are checked). Never interactive on the
     bash side (same non-interactive JSON protocol as the other "sgdb-images" calls):
@@ -263,7 +263,7 @@ class SgdbTitleResolverWindow(Adw.Window):
                 continue
             self._requested.add(i)
             self._inflight.add(i)
-            backend.run_lpm_async(
+            backend.run_ludis_async(
                 ["sgdb-images", "title", self._queue[i][0]],
                 on_done=lambda result, i=i: _run_on_main(self._on_fetched, i, result),
             )
@@ -339,8 +339,8 @@ class SgdbPickerWindow(Adw.Window):
     modes -- manual (grid of thumbnails to pick from) or automatic (first image taken
     directly, "auto_pick=True"). Each game's identity (game_id/game_name) is already
     resolved by SgdbTitleResolverWindow (Phase A) and carried by each "queue" item, so this
-    window does no title search or disambiguation, only fetches image candidates (see "lpm
-    sgdb-images", lib/zgl-sgdb-images.sh) and then downloads/applies the image via "lpm
+    window does no title search or disambiguation, only fetches image candidates (see "ludis
+    sgdb-images", lib/zgl-sgdb-images.sh) and then downloads/applies the image via "ludis
     icon/splash/logo <slug> --url <url>".
 
     Downloads must NEVER block the following choices: as soon as an image is chosen ("Next"
@@ -348,7 +348,7 @@ class SgdbPickerWindow(Adw.Window):
     download starts in the background (_launch_download, reusing all the existing
     download/convert/apply/shortcut-regeneration code) and the window IMMEDIATELY advances to
     the next item. Several downloads may run at once (no file conflict possible: a slug
-    writes <prefix>/lpm/images/icon for the icon and <game>/lpm/images/splash/{splash,logo}.png for splash/logo,
+    writes <prefix>/ludis/images/icon for the icon and <game>/ludis/images/splash/{splash,logo}.png for splash/logo,
     never the same file). The window closes and shows the final result only once ALL items
     are processed AND ALL in-flight downloads are done (see "_pending_downloads"/
     "_all_choices_done" and _maybe_finish_after_downloads), so it never closes on a
@@ -510,7 +510,7 @@ class SgdbPickerWindow(Adw.Window):
             args = ["sgdb-images", item["type"], item["slug"], item["game_id"], item["game_name"] or ""]
             self._requested.add(i)
             self._inflight.add(i)
-            backend.run_lpm_async(args, on_done=lambda result, i=i: _run_on_main(self._on_fetched, i, result))
+            backend.run_ludis_async(args, on_done=lambda result, i=i: _run_on_main(self._on_fetched, i, result))
 
     def _on_fetched(self, index: int, result: backend.CommandResult):
         self._inflight.discard(index)
@@ -548,7 +548,7 @@ class SgdbPickerWindow(Adw.Window):
         if self._auto_pick:
             # No grid to show: the first candidate image (already the best found by
             # lib/zgl-sgdb-images.sh, see its comment) is taken directly, like the former
-            # "lpm icon/splash/logo" without "--url". In automatic mode the only remaining
+            # "ludis icon/splash/logo" without "--url". In automatic mode the only remaining
             # choice is the game identity (Phase A), never the image.
             first_url = str((images[0] if images else {}).get("url", ""))
             self._cleanup_current_thumb_dir()
@@ -621,7 +621,7 @@ class SgdbPickerWindow(Adw.Window):
 
     def _launch_download(self, item: dict, url: str):
         self._pending_downloads += 1
-        _GUI_LOGGER.info("$ bin/lpm " + " ".join([item["type"], item["slug"], "--url", url]))
+        _GUI_LOGGER.info("$ bin/ludis " + " ".join([item["type"], item["slug"], "--url", url]))
 
         def on_done(result: backend.CommandResult):
             def apply():
@@ -631,7 +631,7 @@ class SgdbPickerWindow(Adw.Window):
                 self._maybe_finish_after_downloads()
             _run_on_main(apply)
 
-        backend.run_lpm_async([item["type"], item["slug"], "--url", url], on_done=on_done)
+        backend.run_ludis_async([item["type"], item["slug"], "--url", url], on_done=on_done)
 
     def _maybe_finish_after_downloads(self):
         """Called after each choice (queue exhausted) and after each download that ends. It

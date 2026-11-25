@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# --- lpm lsfg-dll get|set <path> ---
+# --- ludis lsfg-dll get|set <path> ---
 #
 # Non-interactive counterpart of zgp_lsfg_ensure_dll (see zgl-lsfg-manager.sh, item 3 of its
 # header). It ONLY reads/writes the reference DLL lsfg-vk.dll stored at
-# "~/.config/lpm/lsfg-vk/lsfg-vk.dll", never the activation itself ("lpm lsfg <slug...> on|off").
+# "~/.config/ludis/lsfg-vk/lsfg-vk.dll", never the activation itself ("ludis lsfg <slug...> on|off").
 # Added for gui/*.py (page_lsfg): the terminal prompt ("read -p") of zgp_lsfg_ensure_dll
 # cannot work when the GUI runs the command (no TTY attached).
 #
@@ -22,7 +22,7 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 
 action="${1:-}"
-lsfg_dll_master="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/lsfg-vk/lsfg-vk.dll"
+lsfg_dll_master="${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/lsfg-vk/lsfg-vk.dll"
 
 case "${action}" in
   get)

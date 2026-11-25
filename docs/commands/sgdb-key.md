@@ -1,18 +1,18 @@
-# lpm sgdb-key
+# ludis sgdb-key
 
-Advanced command: reads, saves or clears the personal SteamGridDB API key used by `lpm icon`, `lpm splash`, `lpm logo` and `lpm sgdb-images`. Not listed in `lpm --help`; it exists mainly for the graphical interface and for scripting.
+Advanced command: reads, saves or clears the personal SteamGridDB API key used by `ludis icon`, `ludis splash`, `ludis logo` and `ludis sgdb-images`. Not listed in `ludis --help`; it exists mainly for the graphical interface and for scripting.
 
 ## Synopsis
 
 ```
-lpm sgdb-key get
-lpm sgdb-key set <key>
-lpm sgdb-key set ""
+ludis sgdb-key get
+ludis sgdb-key set <key>
+ludis sgdb-key set ""
 ```
 
 ## Description
 
-The key is personal and never shipped with lpm. You obtain it by creating a free SteamGridDB account and copying the key from https://www.steamgriddb.com/profile/preferences/api. It is stored in a single-line file, `${XDG_CONFIG_HOME:-$HOME/.config}/lpm/steamgriddb.key`, with mode 600. This command is the non-interactive way to manage that file; `icon`, `splash` and `logo` otherwise ask for the key themselves on first use.
+The key is personal and never shipped with ludis. You obtain it by creating a free SteamGridDB account and copying the key from https://www.steamgriddb.com/profile/preferences/api. It is stored in a single-line file, `${XDG_CONFIG_HOME:-$HOME/.config}/ludis/steamgriddb.key`, with mode 600. This command is the non-interactive way to manage that file; `icon`, `splash` and `logo` otherwise ask for the key themselves on first use.
 
 ## Arguments
 
@@ -44,7 +44,7 @@ None.
 Errors (stderr):
 
 ```
-Usage: lpm sgdb-key get|set <key>
+Usage: ludis sgdb-key get|set <key>
 Error: invalid or unreachable SteamGridDB API key.
 ```
 
@@ -67,17 +67,17 @@ Error: invalid or unreachable SteamGridDB API key.
 ## Examples
 
 ```
-lpm sgdb-key set "$STEAMGRIDDB_KEY"
-lpm sgdb-key get
-lpm sgdb-key set ""
+ludis sgdb-key set "$STEAMGRIDDB_KEY"
+ludis sgdb-key get
+ludis sgdb-key set ""
 ```
 
 ## Files and data touched
 
-- `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read, written, or deleted).
+- `${XDG_CONFIG_HOME:-~/.config}/ludis/steamgriddb.key` (read, written, or deleted).
 - Network: steamgriddb.com (only for `set`).
-- Error lines are appended to `~/.local/share/lpm/lpm.log`.
+- Error lines are appended to `~/.local/share/ludis/ludis.log`.
 
 ## See also
 
-`lpm icon`, `lpm splash`, `lpm logo`, `lpm sgdb-images`
+`ludis icon`, `ludis splash`, `ludis logo`, `ludis sgdb-images`

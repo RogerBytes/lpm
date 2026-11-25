@@ -1,25 +1,25 @@
-# lpm lutris-version
+# ludis lutris-version
 
-Shows which Lutris installations lpm detects (Flatpak and/or native package) and lets you force, or reset, the one lpm uses when both are installed.
+Shows which Lutris installations ludis detects (Flatpak and/or native package) and lets you force, or reset, the one ludis uses when both are installed.
 
 ## Synopsis
 
 ```
-lpm lutris-version
-lpm lutris-version flatpak
-lpm lutris-version native
-lpm lutris-version reset
+ludis lutris-version
+ludis lutris-version flatpak
+ludis lutris-version native
+ludis lutris-version reset
 ```
 
 ## Description
 
-Most lpm commands need to know whether to work with the Flatpak Lutris (data under `~/.var/app/net.lutris.Lutris/`) or the native one (data under `~/.local/share/lutris/` and `~/.config/lutris/`). When only one is installed, lpm uses it silently. When **both** are installed, lpm resolves the choice in this order:
+Most ludis commands need to know whether to work with the Flatpak Lutris (data under `~/.var/app/net.lutris.Lutris/`) or the native one (data under `~/.local/share/lutris/` and `~/.config/lutris/`). When only one is installed, ludis uses it silently. When **both** are installed, ludis resolves the choice in this order:
 
-1. the environment variable `LPM_LUTRIS_VERSION` (`flatpak` or `native`), for the current run only and never saved;
-2. the saved choice in `~/.config/lpm/lutris-version` (a one-word file), if it names a version that is still installed; a saved choice pointing to a version no longer installed is silently deleted;
-3. otherwise lpm asks once, and saves the answer.
+1. the environment variable `LUDIS_LUTRIS_VERSION` (`flatpak` or `native`), for the current run only and never saved;
+2. the saved choice in `~/.config/ludis/lutris-version` (a one-word file), if it names a version that is still installed; a saved choice pointing to a version no longer installed is silently deleted;
+3. otherwise ludis asks once, and saves the answer.
 
-`lpm lutris-version` (this command) displays the detected versions and manages the saved choice. It does not itself apply `LPM_LUTRIS_VERSION`: the listing always shows both installations.
+`ludis lutris-version` (this command) displays the detected versions and manages the saved choice. It does not itself apply `LUDIS_LUTRIS_VERSION`: the listing always shows both installations.
 
 Detection: Flatpak Lutris is detected with `flatpak list` (any installed application whose line contains "lutris"). Native Lutris is detected by an executable `lutris` in `PATH`, or at `/usr/bin/lutris`, `/usr/local/bin/lutris`, `/usr/games/lutris` or `/opt/lutris/bin/lutris`. Leftover data folders alone do not count as an installation.
 
@@ -46,8 +46,8 @@ None. Global options are consumed by the router and have no effect (see [Global 
    - native: the package version from `dpkg-query` (epoch and Debian revision removed), else `rpm`, else `pacman`, whichever answers first. If none answers, the version is shown as "unknown version".
 3. Looks up the newest upstream version (best effort, never fatal): `https://api.github.com/repos/lutris/lutris/releases/latest`, using `curl` or `wget` and `python3`. If that fails, the listing simply has no status.
 4. **No argument**: prints the list, then either the hint line (both installed) or "Only <Flatpak|Native package> is installed on this machine. Nothing to configure."
-5. **`flatpak` / `native`**: writes the word to `~/.config/lpm/lutris-version` (creating `~/.config/lpm/`) and prints "Choice saved: lpm will now use <Flatpak|Native package>."
-6. **`reset`**: removes the file and prints "Forced choice cleared. lpm will automatically determine which version to use again.", or "No forced choice was saved." if there was none.
+5. **`flatpak` / `native`**: writes the word to `~/.config/ludis/lutris-version` (creating `~/.config/ludis/`) and prints "Choice saved: ludis will now use <Flatpak|Native package>."
+6. **`reset`**: removes the file and prints "Forced choice cleared. ludis will automatically determine which version to use again.", or "No forced choice was saved." if there was none.
 
 ## Output
 
@@ -56,7 +56,7 @@ Detected Lutris versions:
   - Flatpak       : 0.5.18 (outdated)
   - Native package: 0.5.19 (up to date)
 
-To force a choice: 'lpm lutris-version flatpak' or 'lpm lutris-version native'. To clear it: 'lpm lutris-version reset'.
+To force a choice: 'ludis lutris-version flatpak' or 'ludis lutris-version native'. To clear it: 'ludis lutris-version reset'.
 ```
 
 The status in parentheses is one of: `up to date`; `outdated` (Flatpak); `outdated -- consider Flatpak` (native); `could not check if up to date` (upstream version unavailable). It is omitted when the installed version is unknown or newer than the latest upstream tag. The comparison uses version ordering (`sort -V`).
@@ -71,26 +71,26 @@ The status in parentheses is one of: `up to date`; `outdated` (Flatpak); `outdat
 ## Scripting notes
 
 - This command never asks a question.
-- The listing is human-oriented (translated, padded); do not parse it. To know which Lutris lpm will use in a script, set `LPM_LUTRIS_VERSION` yourself, or save the choice once with `lpm lutris-version native|flatpak`.
-- Other lpm commands (`install`, `check`, `list-runner`, ...) **do** prompt when both Lutris installs exist and nothing is saved: `Use [1] Flatpak (default) or [2] the native package?`. An empty answer or closed input selects Flatpak and saves it; any other answer than `1` or `2` selects Flatpak for this run only without saving; `2` selects and saves native. Running `lpm lutris-version flatpak|native` first removes the prompt.
+- The listing is human-oriented (translated, padded); do not parse it. To know which Lutris ludis will use in a script, set `LUDIS_LUTRIS_VERSION` yourself, or save the choice once with `ludis lutris-version native|flatpak`.
+- Other ludis commands (`install`, `check`, `list-runner`, ...) **do** prompt when both Lutris installs exist and nothing is saved: `Use [1] Flatpak (default) or [2] the native package?`. An empty answer or closed input selects Flatpak and saves it; any other answer than `1` or `2` selects Flatpak for this run only without saving; `2` selects and saves native. Running `ludis lutris-version flatpak|native` first removes the prompt.
 - The latest-version lookup makes one anonymous request to `api.github.com` each time the listing is shown; it fails silently when offline.
-- Errors are appended to the lpm log ([`lpm log`](log.md)).
+- Errors are appended to the ludis log ([`ludis log`](log.md)).
 
 ## Examples
 
 ```
-lpm lutris-version
-lpm lutris-version flatpak
-lpm lutris-version reset
-LPM_LUTRIS_VERSION=native lpm list-runner
+ludis lutris-version
+ludis lutris-version flatpak
+ludis lutris-version reset
+LUDIS_LUTRIS_VERSION=native ludis list-runner
 ```
 
 ## Files and data touched
 
-- Reads: `~/.config/lpm/lutris-version`; package databases through `dpkg-query`/`rpm`/`pacman`; `flatpak info`.
-- Writes: `~/.config/lpm/lutris-version` (`flatpak`, `native`, `reset`); `~/.local/share/lpm/lpm.log` (errors).
+- Reads: `~/.config/ludis/lutris-version`; package databases through `dpkg-query`/`rpm`/`pacman`; `flatpak info`.
+- Writes: `~/.config/ludis/lutris-version` (`flatpak`, `native`, `reset`); `~/.local/share/ludis/ludis.log` (errors).
 - Network: `api.github.com` (listing only, optional).
 
 ## See also
 
-[`lpm check`](check.md), [`lpm list-runner`](list-runner.md), [`lpm install-runner`](install-runner.md), [Global options](options.md)
+[`ludis check`](check.md), [`ludis list-runner`](list-runner.md), [`ludis install-runner`](install-runner.md), [Global options](options.md)

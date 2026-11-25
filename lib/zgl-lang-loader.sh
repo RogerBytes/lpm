@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- Language loader for lpm ---
+# --- Language loader for ludis ---
 #
 # Fills the associative array STRINGS[]:
 #   1. Loads lang/en.lang as the base (mandatory, must contain every key).
@@ -15,25 +15,25 @@
 # Language files are plain "key=value" text READ line by line, never sourced or executed,
 # so a community-contributed translation can never run code.
 
-# Same detection logic as bin/lpm (see the install-location comment there);
+# Same detection logic as bin/ludis (see the install-location comment there);
 # Keep in sync: install.sh vs .deb/.rpm/Arch package vs dev mode.
-_lpm_lang_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_ludis_lang_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-case "${_lpm_lang_script_dir}" in
-    /usr/local/lib/lpm)             LANG_DIR="/usr/local/lib/lpm/lang" ;;
-    /usr/lib/lpm)                   LANG_DIR="/usr/lib/lpm/lang" ;;
+case "${_ludis_lang_script_dir}" in
+    /usr/local/lib/ludis)             LANG_DIR="/usr/local/lib/ludis/lang" ;;
+    /usr/lib/ludis)                   LANG_DIR="/usr/lib/ludis/lang" ;;
     # Used when zgl-launcher-runtime.sh is run through the "/run/host/..." fallback
-    # ("lpm launcher ... on", Flatpak Lutris with lpm installed under /usr): same install
+    # ("ludis launcher ... on", Flatpak Lutris with ludis installed under /usr): same install
     # directory seen from inside the sandbox, so lang/ is again a direct subdirectory.
-    /run/host/usr/local/lib/lpm)    LANG_DIR="/run/host/usr/local/lib/lpm/lang" ;;
-    /run/host/usr/lib/lpm)          LANG_DIR="/run/host/usr/lib/lpm/lang" ;;
-    *)                              LANG_DIR="${_lpm_lang_script_dir}/../lang" ;;
+    /run/host/usr/local/lib/ludis)    LANG_DIR="/run/host/usr/local/lib/ludis/lang" ;;
+    /run/host/usr/lib/ludis)          LANG_DIR="/run/host/usr/lib/ludis/lang" ;;
+    *)                              LANG_DIR="${_ludis_lang_script_dir}/../lang" ;;
 esac
 
 declare -gA STRINGS=()
 
 # Load a "key=value" file into STRINGS (overwrites existing keys)
-_lpm_load_lang_file() {
+_ludis_load_lang_file() {
   local file="$1"
   [[ -f "${file}" ]] || return 1
 
@@ -57,20 +57,20 @@ _lpm_load_lang_file() {
 }
 
 # 1. Mandatory English base
-if ! _lpm_load_lang_file "${LANG_DIR}/en.lang"; then
+if ! _ludis_load_lang_file "${LANG_DIR}/en.lang"; then
   echo "Critical error: base language file not found: ${LANG_DIR}/en.lang" >&2
   exit 1
 fi
 
 # 2. Detect the system language, lowercase 2-letter code
-_lpm_detected_locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}"
-_lpm_detected_code="${_lpm_detected_locale%%[._]*}"
-_lpm_detected_code="${_lpm_detected_code,,}"
-[[ -z "${_lpm_detected_code}" ]] && _lpm_detected_code="en"
+_ludis_detected_locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}"
+_ludis_detected_code="${_ludis_detected_locale%%[._]*}"
+_ludis_detected_code="${_ludis_detected_code,,}"
+[[ -z "${_ludis_detected_code}" ]] && _ludis_detected_code="en"
 
 # 3. Override with the detected language if present (per-key fallback)
-if [[ "${_lpm_detected_code}" != "en" ]]; then
-  _lpm_load_lang_file "${LANG_DIR}/${_lpm_detected_code}.lang"
+if [[ "${_ludis_detected_code}" != "en" ]]; then
+  _ludis_load_lang_file "${LANG_DIR}/${_ludis_detected_code}.lang"
 fi
 
 # Translated-text accessor: t <key> [arguments for %s / %d...]

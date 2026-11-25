@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# --- lpm launcher: on-screen keyboard driven by the gamepad (or mouse), over the game -- GTK4 ---
+# --- ludis launcher: on-screen keyboard driven by the gamepad (or mouse), over the game -- GTK4 ---
 #
 # Usage: zgu-virtual-keyboard.py <x11|wayland> <prefix_folder>
 #
-# Opened (and closed again) from the LPM menu ("Virtual keyboard") or with L1+L2+R1+R2+R3 held then D-pad down
+# Opened (and closed again) from the Ludis menu ("Virtual keyboard") or with L1+L2+R1+R2+R3 held then D-pad down
 # (zgu-gamepad-exit-watcher.py). Stays open until closed (Select, the close key, Esc on a real
 # keyboard, a click outside the card, or the end of the game).
 #
@@ -77,13 +77,13 @@ if SESSION_KIND == "wayland" and load_menu_conf().get("keyboard_mode", "auto").s
         and xwayland_available():
     os.environ["GDK_BACKEND"] = "x11"
     WINDOW_KIND = "x11"
-TITLE = "LPM keyboard"
+TITLE = "Ludis keyboard"
 KEY_SHIFT, KEY_ALTGR = 42, 100
 UNIT = 58  # pixels of a normal key
 
 
 def text(name, default):
-    return os.environ.get("LPM_KB_" + name, "").strip() or default
+    return os.environ.get("LUDIS_KB_" + name, "").strip() or default
 
 
 # --- Physical layout. (kind, evdev code, width in key units). kinds: char, shift, altgr, key
@@ -156,37 +156,37 @@ class LayoutReader:
 
 
 CSS = b"""
-window.lpm-kb, window.lpm-kb.background, window.lpm-kb.csd {
+window.ludis-kb, window.ludis-kb.background, window.ludis-kb.csd {
     background-color: transparent; color: #ffffff; box-shadow: none;
 }
-.lpm-kb-veil { background-color: rgba(0, 0, 0, 0.25); }
-.lpm-kb-card {
+.ludis-kb-veil { background-color: rgba(0, 0, 0, 0.25); }
+.ludis-kb-card {
     background-color: rgba(26, 26, 26, 0.58);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
     box-shadow: 0 0 40px rgba(58, 110, 165, 0.10), 0 8px 30px rgba(0, 0, 0, 0.5);
     padding: 14px;
 }
-window.lpm-kb.lpm-compact, window.lpm-kb.lpm-compact.background, window.lpm-kb.lpm-compact.csd {
+window.ludis-kb.ludis-compact, window.ludis-kb.ludis-compact.background, window.ludis-kb.ludis-compact.csd {
     background-color: #1a1a1a; border-radius: 10px;
 }
-window.lpm-compact .lpm-kb-veil, window.lpm-compact .lpm-kb-card {
+window.ludis-compact .ludis-kb-veil, window.ludis-compact .ludis-kb-card {
     background-color: transparent; border: none; box-shadow: none;
 }
-button.lpm-kb-key {
+button.ludis-kb-key {
     background: rgba(38, 38, 38, 0.72); color: #ffffff; border: none; border-radius: 10px;
     font-size: 20px; min-height: 48px; padding: 0; box-shadow: none;
 }
-button.lpm-kb-key.lpm-kb-on { background: #5a8f5a; }
-button.lpm-kb-key.lpm-kb-sel { background: #3a6ea5; }
-.lpm-kb-hint { font-size: 14px; color: #bdbdbd; padding: 10px 6px 0 6px; }
+button.ludis-kb-key.ludis-kb-on { background: #5a8f5a; }
+button.ludis-kb-key.ludis-kb-sel { background: #3a6ea5; }
+.ludis-kb-hint { font-size: 14px; color: #bdbdbd; padding: 10px 6px 0 6px; }
 """
 
 
 class KeyboardWindow(Gtk.Window):
     def __init__(self, application):
         super().__init__(application=application)
-        self.add_css_class("lpm-kb")
+        self.add_css_class("ludis-kb")
         self.set_title(TITLE)
         self.set_decorated(False)
         self.injector = Injector(SESSION_KIND)
@@ -225,11 +225,11 @@ class KeyboardWindow(Gtk.Window):
             else:
                 self.fullscreen()
         else:
-            self.add_css_class("lpm-compact")
+            self.add_css_class("ludis-compact")
             self.set_resizable(False)
 
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        card.add_css_class("lpm-kb-card")
+        card.add_css_class("ludis-kb-card")
         self.card = card
         self.keys = []  # rows of dicts: kind, code, units, button
         for row_def in ROWS:
@@ -240,7 +240,7 @@ class KeyboardWindow(Gtk.Window):
                 kind, code, units = item[0], item[1], item[2]
                 fixed = item[3] if len(item) > 3 else ""
                 button = Gtk.Button()
-                button.add_css_class("lpm-kb-key")
+                button.add_css_class("ludis-kb-key")
                 button.set_focusable(False)
                 button.set_size_request(int(UNIT * units + 6 * (units - 1)), 52)
                 entry = {"kind": kind, "code": code, "units": units, "button": button, "fixed": fixed}
@@ -250,12 +250,12 @@ class KeyboardWindow(Gtk.Window):
             self.keys.append(row)
             card.append(row_box)
         self.hint = Gtk.Label(label="", xalign=0)
-        self.hint.add_css_class("lpm-kb-hint")
+        self.hint.add_css_class("ludis-kb-hint")
         card.append(self.hint)
 
         if self.veil:
             veil = Gtk.Box()
-            veil.add_css_class("lpm-kb-veil")
+            veil.add_css_class("ludis-kb-veil")
             veil.set_hexpand(True)
             veil.set_vexpand(True)
             card.set_hexpand(True)
@@ -294,7 +294,7 @@ class KeyboardWindow(Gtk.Window):
                 label = self.reader.label(entry["code"], self.level(entry["code"])) if entry["kind"] == "char" else entry["fixed"]
                 button.set_label(label or " ")
                 on = (entry["kind"] == "shift" and self.shift) or (entry["kind"] == "caps" and self.lock) or (entry["kind"] == "altgr" and self.altgr)
-                for cls, active in (("lpm-kb-on", on), ("lpm-kb-sel", [r, c] == self.sel)):
+                for cls, active in (("ludis-kb-on", on), ("ludis-kb-sel", [r, c] == self.sel)):
                     if active:
                         button.add_css_class(cls)
                     else:
@@ -308,7 +308,7 @@ class KeyboardWindow(Gtk.Window):
 
     @staticmethod
     def close_hotkey():
-        """The keyboard hotkey of the LPM menu as shown to the user ("Ctrl+Shift+M"), "" when turned off."""
+        """The keyboard hotkey of the Ludis menu as shown to the user ("Ctrl+Shift+M"), "" when turned off."""
         try:
             value = load_menu_conf().get("keyboard_hotkey", "ctrl+shift+m").strip()
         except Exception:
@@ -574,7 +574,7 @@ def on_activate(application):
 def single_instance():
     """Only one keyboard at a time (menu entry and D-pad shortcut could both start one)."""
     base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    handle = open(os.path.join(base, "lpm-virtual-keyboard.lock-%d" % os.getuid()), "a+")  # not "w": keep the pid of the running one
+    handle = open(os.path.join(base, "ludis-virtual-keyboard.lock-%d" % os.getuid()), "a+")  # not "w": keep the pid of the running one
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -589,6 +589,6 @@ def single_instance():
 _lock = single_instance()
 if _lock is None:
     sys.exit(0)
-app = Gtk.Application(application_id="org.lpm.VirtualKeyboard")
+app = Gtk.Application(application_id="org.ludis.VirtualKeyboard")
 app.connect("activate", on_activate)
 sys.exit(app.run([sys.argv[0]]))

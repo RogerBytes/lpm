@@ -8,7 +8,7 @@ source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
-# --- Arguments passed by the lpm router ---
+# --- Arguments passed by the ludis router ---
 # $1 = confirmation flag ("yes" if -y)
 # $2, $3, ... = runners to remove, given on the CLI
 confirm_flag="${1:-}"
@@ -36,10 +36,10 @@ cd "${runner_dir}" || exit 1
 declare -A path_by_runner
 runners_to_delete=()
 
-# 2. Runner selection: "lpm uninstall-runner" always requires names on the command line.
+# 2. Runner selection: "ludis uninstall-runner" always requires names on the command line.
 # No arguments: explicit error (not a false "completed successfully").
 if [[ ${#cli_runners[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t common.missing_target_cli "lpm uninstall-runner")"
+  zgu_cli_error "$(t common.missing_target_cli "ludis uninstall-runner")"
   exit 1
 fi
 
@@ -47,7 +47,7 @@ missing=()
 
 for target_runner_raw in "${cli_runners[@]}"; do
   # basename() neutralizes path traversal ("../", absolute path) in a CLI runner name; otherwise
-  # "lpm uninstall-runner ../../Games/x" could point r_path outside runner_dir and trigger an
+  # "ludis uninstall-runner ../../Games/x" could point r_path outside runner_dir and trigger an
   # rm -rf on an arbitrary folder.
   target_runner_arg=$(basename -- "${target_runner_raw}")
   r_path="${runner_dir}/${target_runner_arg}"

@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# --- lpm logo [slug...|--all] ---
+# --- ludis logo [slug...|--all] ---
 #
 # Fetches a transparent logo (SteamGridDB "Logo": the game title as a cut-out image meant to
 # be overlaid on a banner, NOT a full-screen background) for one or more installed games and
-# saves it as $GAMEDIR/lpm/images/splash/logo.png -- the image shown permanently on top of everything
-# (black screen, picker, banner) in the LPM Launcher (see zgl-launcher-orchestrator.sh /
+# saves it as $GAMEDIR/ludis/images/splash/logo.png -- the image shown permanently on top of everything
+# (black screen, picker, banner) in the Ludis Launcher (see zgl-launcher-orchestrator.sh /
 # zgu-launcher-screen.py).
 #
-# Separate command, never hooked into "lpm launcher ... on": it is the only feature that
+# Separate command, never hooked into "ludis launcher ... on": it is the only feature that
 # depends on a third-party service (network + API key), so a SteamGridDB outage or a missing
-# key must not block enabling the launcher. Without $GAMEDIR/lpm/images/splash/logo.png the
+# key must not block enabling the launcher. Without $GAMEDIR/ludis/images/splash/logo.png the
 # orchestrator simply draws no logo. Structure mirrors zgp-game-icon.sh and
-# zgp-game-splash.sh ("lpm icon"/"lpm splash").
+# zgp-game-splash.sh ("ludis icon"/"ludis splash").
 #
-# Independent of the launcher's activation state: $GAMEDIR/lpm/images/splash/ is created here if
+# Independent of the launcher's activation state: $GAMEDIR/ludis/images/splash/ is created here if
 # missing.
 #
 # $1, $2... = target game slugs (always non-empty in CLI), or "--all" for all eligible
@@ -33,15 +33,15 @@ source "${script_dir}/zgu-sgdb.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-games-cli.sh
 source "${script_dir}/zgu-games-cli.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
 zgp_parse_url_args "$@"
 
 # Same as zgp-game-icon.sh/zgp-game-splash.sh: strictly personal key, never shared or
-# bundled with lpm; uses the SAME key file as "lpm icon"/"lpm splash", so one SteamGridDB
+# bundled with ludis; uses the SAME key file as "ludis icon"/"ludis splash", so one SteamGridDB
 # account covers all three commands.
 sgdb_key=""
 
@@ -76,7 +76,7 @@ zgp_logo_save_from_url() {
   local slug="$1" game_dir="$2" chosen_url="$3"
 
   local splash_dir
-  splash_dir="$(zgu_lpm_path "${game_dir}" splash)"
+  splash_dir="$(zgu_ludis_path "${game_dir}" splash)"
   mkdir -p "${splash_dir}"
 
   local ext="${chosen_url%%[?#]*}"
@@ -87,7 +87,7 @@ zgp_logo_save_from_url() {
   # Unique temporary file: splash and logo of the same game share this directory and can run
   # at the same time; a shared name made them overwrite each other's download (corrupted PNGs).
   local raw_file
-  raw_file="$(mktemp "${splash_dir}/.lpm-download.XXXXXX.${ext}")" || return 1
+  raw_file="$(mktemp "${splash_dir}/.ludis-download.XXXXXX.${ext}")" || return 1
 
   if ! zgu_image_download "${chosen_url}" "${raw_file}"; then
     logo_fail_detail="download_failed url=${chosen_url} ${zgu_image_err}"

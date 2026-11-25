@@ -1,39 +1,39 @@
-# Ludis Prefix Manager - Français
+# Ludis - Français
 
-# --- Commun (bin/lpm) ---
+# --- Commun (bin/ludis) ---
 common.unknown_command=Commande inconnue : %s
-common.unknown_command_hint=Utilisez 'lpm --help' pour lister les commandes, ou 'lpm-gui' pour ouvrir l'interface graphique.
+common.unknown_command_hint=Utilisez 'ludis --help' pour lister les commandes, ou 'ludis-gui' pour ouvrir l'interface graphique.
 common.checklist_check_all=Tout cocher
 common.checklist_uncheck_all=Tout décocher
 
 # --- Détection Flatpak + paquet natif simultanés (voir zgu_resolve_lutris_version) ---
-common.dual_lutris_warning_cli=Attention : Lutris est installé à la fois en Flatpak et en paquet natif sur cette machine. lpm doit choisir laquelle utiliser.
+common.dual_lutris_warning_cli=Attention : Lutris est installé à la fois en Flatpak et en paquet natif sur cette machine. ludis doit choisir laquelle utiliser.
 common.dual_lutris_prompt_cli=Utiliser [1] Flatpak (par défaut) ou [2] le paquet natif ? :
-common.dual_lutris_warning_gui=Lutris est installé à la fois en Flatpak et en paquet natif sur cette machine. Choisissez celle que lpm doit utiliser.
+common.dual_lutris_warning_gui=Lutris est installé à la fois en Flatpak et en paquet natif sur cette machine. Choisissez celle que ludis doit utiliser.
 common.dual_lutris_select_title=Version Lutris à utiliser
 common.dual_lutris_select_text=Sélectionnez la version à utiliser :
 common.dual_lutris_select_col=Version
 common.dual_lutris_native_label=Paquet natif
 
-# --- lpm list (jeux) ---
+# --- ludis list (jeux) ---
 list_games.sqlite_missing=Erreur : 'sqlite3' n'est pas installé sur le système.
 list_games.lutris_missing=Erreur : Lutris n'est pas installé sur le système.
 list_games.db_missing=Erreur : Base de données Lutris introuvable : %s
 list_games.none_installed=Aucun jeu installé.
 
-# --- lpm list-runner ---
+# --- ludis list-runner ---
 list_runner.dir_missing=Erreur : Dossier de runners introuvable : %s
 list_runner.none_installed=Aucun runner installé.
 list_runner.lutris_missing=Erreur : Lutris n'est pas installé sur le système.
 
-# --- lpm list-remote-runners ---
+# --- ludis list-remote-runners ---
 list_remote.python_missing=Erreur : 'python3' n'est pas installé sur le système.
 list_remote.network_tool_missing=Erreur : 'curl' ou 'wget' est requis pour contacter le dépôt distant.
 list_remote.fetch_failed=Erreur : Impossible de contacter la release GitHub distante.
 list_remote.none_available=Aucun runner disponible sur le dépôt distant (ou réponse GitHub invalide).
 list_remote.already_installed_suffix=  (déjà installé)
 
-# --- lpm uninstall-runner ---
+# --- ludis uninstall-runner ---
 uninstall_runner.dir_missing_cli=Erreur : Dossier de runners introuvable : %s
 uninstall_runner.dir_missing_gui=Aucun dossier de runners Wine introuvable : %s
 uninstall_runner.zenity_missing=Erreur : 'zenity' n'est pas installé sur le système.
@@ -70,7 +70,7 @@ uninstall_runner.notify_body_partial=%d/%d runners ont été supprimés avec suc
 uninstall_runner.notify_title_none=Suppression échouée
 uninstall_runner.notify_body_none=Aucun runner n'a été supprimé. Consultez le journal pour plus de détails.
 
-# --- lpm check ---
+# --- ludis check ---
 check.cmd_missing=Erreur : '%s' n'est pas installé sur le système.
 check.zenity_missing_gui=Erreur : 'zenity' n'est pas installé pour l'interface graphique.
 check.network_tool_missing=Erreur : 'curl' ou 'wget' est requis pour contacter le dépôt distant.
@@ -81,9 +81,9 @@ check.no_games_reference_runner=Aucun jeu installé ne référence de runner Win
 check.all_runners_present=Tous les runners nécessaires sont déjà installés.
 check.missing_detected_header=Runners manquants détectés :
 check.missing_detected_item= - %s (requis par : %s)
-check.download_cli_start=Téléchargement de '%s' depuis le dépôt lpm :
+check.download_cli_start=Téléchargement de '%s' depuis le dépôt ludis :
 check.download_gui_title=Téléchargement de %s
-check.download_gui_text=Connexion au dépôt lpm...
+check.download_gui_text=Connexion au dépôt ludis...
 check.checksum_invalid=Erreur : Somme de contrôle SHA256 invalide pour '%s'. Le fichier téléchargé est corrompu ou a été altéré.
 check.checksum_missing=Avertissement : GitHub n'a fourni aucune somme de contrôle SHA256 pour '%s' — l'intégrité du téléchargement n'a pas été vérifiée.
 check.extract_cli_start=Décompression de '%s' :
@@ -93,21 +93,21 @@ check.runner_installed_success=Runner '%s' installé avec succès.
 check.batch_progress_title=Résolution de %d runners manquants
 check.batch_progress_item=%d/%d : %s — %s
 check.all_resolved=Vérification terminée : tous les runners manquants (%s) ont été installés automatiquement.
-check.unresolved_header_cli=Runners manquants non disponibles sur le dépôt lpm
-check.unresolved_header_gui=Runners manquants non disponibles sur le dépôt lpm :
+check.unresolved_header_cli=Runners manquants non disponibles sur le dépôt ludis
+check.unresolved_header_gui=Runners manquants non disponibles sur le dépôt ludis :
 check.detail_label=Détail :
 check.unresolved_detail_item= - %s : requis par %s
-check.manual_install_hint=Pour chacun : installez-le via un fichier .zgr (lpm install-runner <fichier>.zgr), ou via ProtonUp-Qt.
+check.manual_install_hint=Pour chacun : installez-le via un fichier .zgr (ludis install-runner <fichier>.zgr), ou via ProtonUp-Qt.
 check.unresolved_gui_title=Runners manquants
 check.lsfg_missing_cli=lsfg-vk n'est pas installé, mais il est activé pour : %s
 check.lsfg_missing_gui=lsfg-vk n'est pas installé, mais il est activé pour : %s
 check.lsfg_installed_success=lsfg-vk a été installé avec succès.
-check.lsfg_native_hint=Lancez 'lpm lsfg' pour obtenir les instructions d'installation adaptées à votre distribution.
+check.lsfg_native_hint=Lancez 'ludis lsfg' pour obtenir les instructions d'installation adaptées à votre distribution.
 check.antimicro_missing_cli=AntimicroX n'est pas installé, mais il est référencé par : %s. Installez-le via le gestionnaire de paquets de votre distribution, en Flatpak, ou consultez https://antimicrox.github.io/guide/installation.html
 check.antimicro_missing_gui=AntimicroX n'est pas installé, mais il est référencé par : %s. Installez-le via le gestionnaire de paquets de votre distribution, en Flatpak, ou consultez https://antimicrox.github.io/guide/installation.html
 check.xdotool_missing=Recommandé : 'xdotool' n'est pas installé. Il est utilisé pour les combos manette pendant une partie (alt-tab, quitter le jeu), et pour détecter quand la fenêtre d'un jeu lancé apparaît réellement (écran de chargement). Installez-le via le gestionnaire de paquets de votre distribution.
 
-# --- lpm lutris-version ---
+# --- ludis lutris-version ---
 lutris_version.zenity_missing=Erreur : 'zenity' n'est pas installé pour l'interface graphique.
 lutris_version.none_found=Erreur : Lutris n'est pas installé sur le système (ni Flatpak, ni paquet natif).
 lutris_version.header=Versions Lutris détectées :
@@ -119,17 +119,17 @@ lutris_version.status_outdated_flatpak=dépassée
 lutris_version.status_unknown=version inconnue
 lutris_version.status_check_unavailable=impossible de vérifier si à jour
 lutris_version.only_one_cli=Seule la version %s est installée sur cette machine. Rien à configurer.
-lutris_version.hint_cli=Pour forcer un choix : 'lpm lutris-version flatpak' ou 'lpm lutris-version native'. Pour annuler : 'lpm lutris-version reset'.
+lutris_version.hint_cli=Pour forcer un choix : 'ludis lutris-version flatpak' ou 'ludis lutris-version native'. Pour annuler : 'ludis lutris-version reset'.
 lutris_version.select_title=Version Lutris à utiliser
-lutris_version.select_text=Les deux versions sont installées. Choisissez celle que lpm doit utiliser :
+lutris_version.select_text=Les deux versions sont installées. Choisissez celle que ludis doit utiliser :
 lutris_version.select_col=Version
-lutris_version.forced_saved=Choix sauvegardé : lpm utilisera désormais %s.
+lutris_version.forced_saved=Choix sauvegardé : ludis utilisera désormais %s.
 lutris_version.target_not_installed=Erreur : %s n'est pas installée sur cette machine.
-lutris_version.reset_done=Choix forcé supprimé. lpm redéterminera automatiquement la version à utiliser.
+lutris_version.reset_done=Choix forcé supprimé. ludis redéterminera automatiquement la version à utiliser.
 lutris_version.reset_nothing=Aucun choix forcé n'était enregistré.
 lutris_version.invalid_arg=Argument invalide : %s (attendu : flatpak, native ou reset).
 
-# --- lpm install (jeux) ---
+# --- ludis install (jeux) ---
 install_game.cmd_missing=Erreur : '%s' n'est pas installé sur le système.
 install_game.zenity_missing=Erreur : 'zenity' n'est pas installé sur le système.
 install_game.pyyaml_missing_gui=Le module Python PyYAML n'est pas installé. Installez-le (ex : 'pip install pyyaml' ou le paquet python3-yaml de votre distribution) puis réessayez.
@@ -215,14 +215,14 @@ install_game.notify_body_partial=%d/%d jeux ont été installés avec succès. C
 install_game.notify_title_none=Installation échouée
 install_game.notify_body_none=Aucun jeu n'a été installé. Consultez le journal pour plus de détails.
 
-# --- lpm pack (jeux) ---
+# --- ludis pack (jeux) ---
 pack_game.zstd_missing=Erreur : 'zstd' n'est pas installé sur le système.
 pack_game.python3_missing=Erreur : 'python3' n'est pas installé sur le système.
 pack_game.pyyaml_missing_cli=Erreur : le module Python PyYAML n'est pas installé (nécessaire pour nettoyer le YAML embarqué du jeu).
 pack_game.pyyaml_missing_gui=Le module Python PyYAML n'est pas installé. Installez-le (ex : 'pip install pyyaml' ou le paquet python3-yaml de votre distribution) puis réessayez.
 pack_game.games_dir_missing=Erreur : Le dossier '%s' n'existe pas.
 pack_game.folder_not_found_cli=Erreur : Le slug de jeu '%s' est introuvable dans '%s'.
-pack_game.slug_blacklisted_cli=Erreur : '%s' fait partie d'un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...) et n'est pas géré par lpm.
+pack_game.slug_blacklisted_cli=Erreur : '%s' fait partie d'un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...) et n'est pas géré par ludis.
 pack_game.archive_exists_cli=Erreur : Un paquet nommé '%s.zgp' existe déjà dans '%s'.
 pack_game.archive_exists_hint=Supprimez-le ou déplacez-le avant de relancer l'exportation.
 pack_game.zenity_missing=Erreur : 'zenity' n'est pas installé sur le système.
@@ -260,13 +260,13 @@ pack_game.yaml_cleanup_error=Erreur nettoyage YAML
 pack_game.lutris_missing_cli=Erreur : Lutris n'est pas installé sur le système.
 pack_game.lutris_missing_gui=Lutris n'est pas installé sur le système.
 
-# --- lpm uninstall (jeux) ---
+# --- ludis uninstall (jeux) ---
 uninstall_game.sqlite_missing=Erreur : 'sqlite3' n'est pas installé sur le système.
 uninstall_game.lutris_missing=Erreur : Lutris n'est pas installé sur le système.
 uninstall_game.db_missing=Erreur : Base de données Lutris introuvable : %s
 uninstall_game.none_found=Aucun jeu Wine trouvé dans la base de données Lutris.
 uninstall_game.slug_not_found=Erreur : Jeu introuvable dans Lutris avec le slug : %s
-uninstall_game.slug_blacklisted=Erreur : '%s' fait partie d'un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...) et n'est pas géré par lpm.
+uninstall_game.slug_blacklisted=Erreur : '%s' fait partie d'un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...) et n'est pas géré par ludis.
 uninstall_game.unsafe_prefix_skip=Attention : le dossier de '%s' (%s) est hors de votre dossier de jeux, suppression physique ignorée par sécurité. L'entrée Lutris a quand même été retirée.
 uninstall_game.zenity_missing=Erreur : 'zenity' n'est pas installé sur le système.
 uninstall_game.select_title=Désinstalleur de Jeux Lutris
@@ -297,13 +297,13 @@ uninstall_game.notify_body_partial=%d/%d jeux ont été supprimés avec succès.
 uninstall_game.notify_title_none=Désinstallation échouée
 uninstall_game.notify_body_none=Aucun jeu n'a été supprimé. Consultez le journal pour plus de détails.
 
-# --- lpm shortcut ---
+# --- ludis shortcut ---
 shortcut.sqlite_missing=Erreur : 'sqlite3' n'est pas installé sur le système.
 shortcut.lutris_missing=Erreur : Lutris n'est pas installé sur le système.
 shortcut.db_missing=Erreur : Base de données Lutris introuvable : %s
 shortcut.none_found=Aucun jeu Wine trouvé dans la base de données Lutris.
 shortcut.slug_not_found=Erreur : Jeu introuvable dans Lutris avec le slug : %s
-shortcut.slug_blacklisted=Erreur : '%s' fait partie d'un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...) et n'est pas géré par lpm.
+shortcut.slug_blacklisted=Erreur : '%s' fait partie d'un préfixe de store partagé (Epic Games Store, EA App, Ubisoft Connect...) et n'est pas géré par ludis.
 shortcut.zenity_missing=Erreur : 'zenity' n'est pas installé sur le système.
 shortcut.select_title=Raccourcis de Jeux Lutris
 shortcut.select_text=Sélectionnez les jeux pour lesquels (re)créer un raccourci :
@@ -314,7 +314,7 @@ shortcut.locations_text=Choisissez où créer les raccourcis :
 shortcut.created_cli=Raccourci créé pour '%s'.
 shortcut.done_gui=%s raccourci(s) créé(s) avec succès !
 shortcut.invalid_shortcut_mode_cli=Erreur : valeur "%s" invalide pour --shortcut (valeurs acceptées : menu, desktop, both, none).
-shortcut.hook_disabled_comment=désactivé par lpm (sécurité) -- case "Autoriser les hooks de lancement"
+shortcut.hook_disabled_comment=désactivé par ludis (sécurité) -- case "Autoriser les hooks de lancement"
 pack_runner.zstd_missing=Erreur : 'zstd' n'est pas installé sur le système.
 pack_runner.dir_missing_cli=Erreur : Dossier de runners introuvable : %s
 pack_runner.dir_missing_gui=Aucun dossier de runners Wine introuvable : %s
@@ -425,7 +425,7 @@ install_runner.checksum_missing_gui=Avertissement : GitHub n'a fourni aucune som
 install_runner.cancel_title=Annulation
 install_runner.import_cancelled_text=L'importation a été annulée.
 install_runner.notify_body_final=Tous les runners sélectionnés ont été installés avec succès !
-menu.title=Ludis Prefix Manager
+menu.title=Ludis
 menu.text=Sélectionnez une action à effectuer :
 menu.col_choice=Choix
 menu.col_action=Action
@@ -440,7 +440,7 @@ menu.opt_pack_runner=📦 Empaqueter un runner (en .zgr)
 menu.opt_uninstall_runner=🗑️ Désinstaller un runner
 menu.opt_check=🔍 Vérifier les dépendances (runners)
 menu.opt_lutris_version=🎮 Version de Lutris utilisée
-help.title=Ludis Prefix Manager (lpm) — Gestionnaire de jeux et runners Wine pour Lutris
+help.title=Ludis (ludis) — Gestionnaire de jeux et runners Wine pour Lutris
 help.usage_header=Usage :
 help.usage_menu=Affiche cette aide
 help.usage_direct=Ouvre l'interface graphique (éventuellement sur un fichier)
@@ -466,15 +466,15 @@ help.runners_list_remote_cont=GitHub distant
 help.deps_header=Dépendances :
 help.deps_check=Vérifie que tous les runners requis par les jeux
 help.deps_check_cont1=installés sont bien présents, et tente de récupérer
-help.deps_check_cont2=les manquants depuis le dépôt GitHub de lpm
-help.lutris_version=Affiche les versions Lutris détectées (Flatpak/natif) et permet de forcer/réinitialiser celle utilisée par lpm si les deux sont installées
+help.deps_check_cont2=les manquants depuis le dépôt GitHub de ludis
+help.lutris_version=Affiche les versions Lutris détectées (Flatpak/natif) et permet de forcer/réinitialiser celle utilisée par ludis si les deux sont installées
 help.options_header=Options :
 help.opt_y=Confirme automatiquement (saute la confirmation interactive)
 help.opt_allow_scripts=Approuve automatiquement les scripts de lancement/fermeture embarqués (prelaunch_command...) trouvés dans les paquets .zgp installés, sans rien demander (à réserver aux paquets de confiance ou créés par vous-même)
 help.opt_ignore_hash=Ignore la vérification de signature (sha256) pour install / install-runner, même si un fichier de hash sidecar est présent
 help.opt_hash=Génère un fichier de hash sidecar (sha256) pour chaque archive créée par pack / pack-runner
 help.opt_level=Niveau de compression zstd (0 à 22) pour pack / pack-runner
-help.opt_version=Affiche la version de lpm
+help.opt_version=Affiche la version de ludis
 help.opt_help=Affiche cette aide
 
 create_prefix.cmd_missing=Commande requise manquante : %s
@@ -518,7 +518,7 @@ create_prefix.summary_title=Création de prefixes
 create_prefix.summary_created=%d prefix(es) créé(s).
 create_prefix.summary_skipped=%d ignoré(s) (un prefix avec ce slug existait déjà).
 create_prefix.summary_failed=%d échoué(s) (délai dépassé en attendant l'initialisation du prefix).
-create_prefix.notify_title=Ludis Prefix Manager
+create_prefix.notify_title=Ludis
 create_prefix.notify_body=%d prefix(es) vierge(s) créé(s).
 
 exe_install.browse_title=Choisir le fichier d'installation
@@ -529,7 +529,7 @@ exe_install.edit_title=Fichier et nom du jeu
 exe_install.edit_path_label=Chemin du fichier (.exe/.msi/.bat) :
 exe_install.edit_name_label=Nom d'affichage :
 exe_install.edit_slug_label=Slug (identifiant du prefix) :
-exe_install.no_path_error_cli=Erreur : aucun chemin de fichier fourni. Syntaxe : lpm exe-install [-y] "chemin/vers/setup.exe" ou "chemin/vers/setup.exe|Nom perso" ou "chemin/vers/setup.exe|Nom perso|slug-perso".
+exe_install.no_path_error_cli=Erreur : aucun chemin de fichier fourni. Syntaxe : ludis exe-install [-y] "chemin/vers/setup.exe" ou "chemin/vers/setup.exe|Nom perso" ou "chemin/vers/setup.exe|Nom perso|slug-perso".
 exe_install.exe_not_found_gui=Le fichier "%s" est introuvable.
 exe_install.exe_not_found_cli=Erreur : le fichier "%s" est introuvable.
 exe_install.prefix_exists_gui=Un prefix existe déjà à cet emplacement : %s
@@ -554,7 +554,7 @@ exe_install.pick_exe_prompt=Chemin du .exe du jeu (laisser vide pour l'ignorer) 
 exe_install.summary_title=Installation terminée
 exe_install.summary_done="%s" a été installé et enregistré dans Lutris.
 
-# --- lpm isolate ---
+# --- ludis isolate ---
 isolate.cmd_missing=Erreur : '%s' n'est pas installé sur ce système.
 isolate.zenity_missing=Erreur : 'zenity' n'est pas installé sur ce système.
 isolate.pyyaml_missing_gui=Le module Python PyYAML n'est pas installé. Installez-le (ex. 'pip install pyyaml' ou le paquet python3-yaml de votre distribution) et réessayez.
@@ -602,21 +602,21 @@ isolate.mkdir_failed=Erreur : impossible de créer le nouveau dossier de préfix
 isolate.errors_gui_title=Erreurs d'isolation
 isolate.errors_gui_intro=Un ou plusieurs jeux n'ont pas pu être isolés. Rien n'a été modifié pour eux :
 
-# --- lpm list-isolable ---
+# --- ludis list-isolable ---
 list_isolable.sqlite_missing=Erreur : 'sqlite3' n'est pas installé sur le système.
 list_isolable.lutris_missing=Erreur : Lutris n'est pas installé sur le système.
 list_isolable.db_missing=Erreur : Base de données Lutris introuvable : %s
 list_isolable.none_found=Aucun jeu isolable trouvé (aucun préfixe de store partagé détecté).
 
-# --- lpm info ---
-info.missing_slug=Erreur : indiquez un slug (usage : lpm info <slug>).
+# --- ludis info ---
+info.missing_slug=Erreur : indiquez un slug (usage : ludis info <slug>).
 info.sqlite_missing=Erreur : 'sqlite3' n'est pas installé sur le système.
 info.lutris_missing=Erreur : Lutris n'est pas installé sur le système.
 info.db_missing=Erreur : Base de données Lutris introuvable : %s
 info.not_found=Erreur : aucun jeu installé avec le slug '%s'.
 info.unknown=inconnu
 info.isolation_dedicated=préfixe dédié (un-jeu-un-préfixe)
-info.isolation_shared_known=préfixe partagé (%s) -- isolable via 'lpm isolate %s'
+info.isolation_shared_known=préfixe partagé (%s) -- isolable via 'ludis isolate %s'
 info.isolation_shared_unknown=préfixe partagé, store non reconnu
 info.field_name=Nom              : %s
 info.field_slug=Slug             : %s
@@ -626,7 +626,7 @@ info.field_runner_version=Runner Wine      : %s
 info.field_installed_at=Installé le      : %s
 info.field_isolation=Isolement        : %s
 
-# --- lpm log ---
+# --- ludis log ---
 log.bad_n_arg=Erreur : -n attend un nombre entier positif.
 log.missing_grep_arg=Erreur : --grep attend un motif.
 log.unknown_option=Erreur : option inconnue : '%s'
@@ -649,7 +649,7 @@ help.log_grep=Filtre le journal sur un motif (commande, slug, statut...)
 help.log_clear=Vide le journal (confirmation demandée)
 menu.opt_isolate=🧩 Isoler un store partagé entier (bêta)
 
-# --- lpm icon ---
+# --- ludis icon ---
 icon.cmd_missing=Erreur : '%s' n'est pas installé sur ce système.
 icon.zenity_missing=Erreur : 'zenity' n'est pas installé sur ce système.
 icon.imagemagick_missing=Erreur : ImageMagick ('convert'/'identify' ou 'magick') n'est pas installé sur ce système.
@@ -665,13 +665,13 @@ icon.select_col_fetch=Récupérer
 icon.select_col_game=Jeu
 icon.select_col_slug=Slug
 icon.key_title=Clé API SteamGridDB requise
-icon.key_text=Un onglet de navigateur a été ouvert vers les préférences de votre compte SteamGridDB. Créez un compte gratuit si besoin, copiez votre clé API personnelle, et collez-la ci-dessous. Cette clé n'appartient qu'à vous et reste sur cette machine -- elle n'est jamais partagée ni intégrée à lpm.
+icon.key_text=Un onglet de navigateur a été ouvert vers les préférences de votre compte SteamGridDB. Créez un compte gratuit si besoin, copiez votre clé API personnelle, et collez-la ci-dessous. Cette clé n'appartient qu'à vous et reste sur cette machine -- elle n'est jamais partagée ni intégrée à ludis.
 icon.key_text_cli=Une clé API SteamGridDB est requise. Créez un compte gratuit sur https://www.steamgriddb.com/profile/preferences/api pour obtenir votre clé personnelle. Cette clé n'appartient qu'à vous et reste sur cette machine.
 icon.key_prompt_cli=Collez votre clé API SteamGridDB : 
 icon.key_invalid=Clé API invalide ou injoignable. Veuillez réessayer.
 icon.no_key_cancelled=Aucune clé API valide n'a été fournie. Récupération d'icône annulée.
 sgdb_key.invalid=Erreur : clé API SteamGridDB invalide ou injoignable.
-sgdb_key.cli_usage=Usage : lpm sgdb-key get|set <clé>
+sgdb_key.cli_usage=Usage : ludis sgdb-key get|set <clé>
 icon.not_found_on_sgdb=Ignoré '%s' : introuvable sur SteamGridDB.
 icon.pick_game_title=Plusieurs correspondances trouvées — %s
 icon.pick_game_text=Plusieurs entrées SteamGridDB correspondent à '%s'. Choisissez la bonne :
@@ -694,7 +694,7 @@ help.games_icon=Récupère automatiquement une icône de jeu via SteamGridDB (n�
 menu.opt_icon=🖼️ Récupérer une icône de jeu (SteamGridDB)
 menu.opt_tools=🛠️ Outils Wine pour un jeu (winetricks, registre, winecfg...)
 
-# --- lpm sync-media ---
+# --- ludis sync-media ---
 sync_media.cmd_missing=Erreur : '%s' n'est pas installé sur ce système.
 sync_media.lutris_missing=Erreur : Lutris n'est pas installé sur ce système.
 sync_media.db_missing=Erreur : base de données Lutris introuvable : %s
@@ -706,7 +706,7 @@ sync_media.done_cli=Médias Lutris mis à jour pour '%s'.
 sync_media.nothing_found_cli=Rien à télécharger pour '%s' (déjà complet, ou introuvable sur lutris.net).
 help.games_sync_media=Télécharge les médias natifs de Lutris (bannière, icône, jaquette -- ceux de sa propre bibliothèque) pour les jeux qui n'en ont pas encore
 
-# --- lpm tools ---
+# --- ludis tools ---
 game_tools.zenity_missing=Erreur : 'zenity' n'est pas installé sur ce système.
 game_tools.sqlite3_missing=Erreur : 'sqlite3' n'est pas installé sur ce système.
 game_tools.lutris_missing_gui=Lutris n'est pas installé sur le système.
@@ -719,8 +719,8 @@ game_tools.select_text=Choisissez le jeu :
 game_tools.select_col_name=Jeu
 game_tools.prefix_not_found_gui=Erreur : le dossier du prefixe de '%s' est introuvable.
 game_tools.prefix_not_found_cli=Erreur : le dossier du prefixe de '%s' est introuvable.
-game_tools.runner_missing_gui=Erreur : le runner Wine '%s' configuré pour ce jeu n'est plus installé. Réinstallez-le avec 'lpm install-runner'.
-game_tools.runner_missing_cli=Erreur : le runner Wine '%s' configuré pour ce jeu n'est plus installé (lpm install-runner pour le réinstaller).
+game_tools.runner_missing_gui=Erreur : le runner Wine '%s' configuré pour ce jeu n'est plus installé. Réinstallez-le avec 'ludis install-runner'.
+game_tools.runner_missing_cli=Erreur : le runner Wine '%s' configuré pour ce jeu n'est plus installé (ludis install-runner pour le réinstaller).
 game_tools.winetricks_missing_gui=Erreur : winetricks est introuvable, ni embarqué par Lutris, ni installé sur le système.
 game_tools.winetricks_missing_cli=Erreur : winetricks est introuvable, ni embarqué par Lutris, ni installé sur le système.
 game_tools.already_running_gui=Déjà ouvert pour '%s'.
@@ -745,7 +745,7 @@ help.games_tools_cont=outil : winetricks|regedit|winecfg|console|exe|folder|favo
 help.games_killwine=Tue immédiatement tout process Wine/Winetricks/umu-run/Proton en cours (bouton panique pour un process bloqué)
 menu.opt_killwine=🛑 Tuer tous les process Wine/Proton en cours
 
-# --- lpm killwine ---
+# --- ludis killwine ---
 wine_killer.pgrep_missing=Erreur : 'pgrep' n'est pas installé sur ce système.
 wine_killer.confirm_title=Tuer tous les process Wine/Proton
 wine_killer.confirm_text=Ceci va tuer IMMÉDIATEMENT tous les process Wine, Winetricks, umu-run et Proton (lancé par Lutris) en cours, quel que soit le jeu. Toute progression non sauvegardée sera perdue. Continuer ?
@@ -753,15 +753,15 @@ wine_killer.confirm_cli_header=Ceci va tuer immédiatement tout process Wine/Win
 wine_killer.confirm_cli_prompt=Continuer ? [o/N]
 wine_killer.cancelled_cli=Annulé.
 wine_killer.done_gui=%s process tué(s).
-wine_killer.notify_title=lpm -- Wine
+wine_killer.notify_title=ludis -- Wine
 wine_killer.nothing_running_gui=Aucun process Wine/Proton en cours.
 wine_killer.done_cli=%s process tué(s).
 wine_killer.nothing_running_cli=Aucun process Wine/Proton en cours.
 help.games_lsfg=Active/désactive lsfg-vk (génération de frames) pour un ou plusieurs jeux
-help.games_lsfg_cont=(« lpm lsfg status » indique si lsfg-vk est installé)
+help.games_lsfg_cont=(« ludis lsfg status » indique si lsfg-vk est installé)
 menu.opt_lsfg=⚡ Configurer lsfg-vk (génération de frames)
-menu.opt_launcher=🎮 Configurer le LPM Launcher (écran de chargement + sélecteur)
-lsfg.cli_usage=Usage : lpm lsfg <slug...> on|off  (ou : lpm lsfg status)
+menu.opt_launcher=🎮 Configurer le Ludis Launcher (écran de chargement + sélecteur)
+lsfg.cli_usage=Usage : ludis lsfg <slug...> on|off  (ou : ludis lsfg status)
 lsfg.zenity_missing=Erreur : "zenity" est requis pour le mode graphique.
 lsfg.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
 lsfg.pyyaml_missing_gui=Erreur : le module Python PyYAML est requis (pip install pyyaml, ou le paquet python3-yaml de votre distribution).
@@ -788,8 +788,8 @@ lsfg.dll_wrong_name=Erreur : le fichier sélectionné ("%s") n'est pas "lsfg-vk.
 lsfg.dll_not_found=Erreur : fichier introuvable : %s
 lsfg.dll_copy_failed=Erreur : impossible de copier le DLL vers le dossier de stockage local.
 lsfg.dll_copy_failed_for=Erreur : impossible de copier le DLL pour "%s".
-lsfg.dll_cli_usage=Usage : lpm lsfg-dll get|set <chemin>
-lsfg.action_title=lpm -- lsfg-vk
+lsfg.dll_cli_usage=Usage : ludis lsfg-dll get|set <chemin>
+lsfg.action_title=ludis -- lsfg-vk
 lsfg.action_text=Que voulez-vous faire ?
 lsfg.action_col=Action
 lsfg.action_activate=Activer lsfg-vk
@@ -800,8 +800,8 @@ lsfg.already_active=Erreur : lsfg-vk est déjà activé pour "%s".
 lsfg.already_inactive=Erreur : lsfg-vk n'est pas activé pour "%s".
 lsfg.nothing_to_activate=Aucun jeu éligible : lsfg-vk est déjà activé pour tous.
 lsfg.nothing_to_deactivate=Aucun jeu n'a actuellement lsfg-vk activé.
-lsfg.select_title_activate=lpm -- Activer lsfg-vk
-lsfg.select_title_deactivate=lpm -- Désactiver lsfg-vk
+lsfg.select_title_activate=ludis -- Activer lsfg-vk
+lsfg.select_title_deactivate=ludis -- Désactiver lsfg-vk
 lsfg.select_text=Sélectionnez les jeux :
 lsfg.select_col_check=Sélection
 lsfg.select_col_game=Jeu
@@ -810,26 +810,26 @@ lsfg.yml_missing=Erreur : fichier de configuration Lutris manquant pour "%s".
 lsfg.yaml_patch_failed=Erreur : impossible de mettre à jour la configuration de "%s".
 lsfg.done_one_cli=%s : terminé.
 lsfg.done_gui=Terminé : lsfg-vk mis à jour pour %s jeu(x).
-launcher.cli_usage=Usage : lpm launcher <slug...> on|off
+launcher.cli_usage=Usage : ludis launcher <slug...> on|off
 launcher.zenity_missing=Erreur : "zenity" est requis pour le mode graphique.
 launcher.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
 launcher.pyyaml_missing_gui=Erreur : le module Python PyYAML est requis (pip install pyyaml, ou le paquet python3-yaml de votre distribution).
 launcher.pyyaml_missing_cli=Erreur : le module Python PyYAML est requis (pip install pyyaml, ou le paquet python3-yaml de votre distribution).
 launcher.lutris_missing=Erreur : Lutris introuvable sur cette machine.
 launcher.db_missing=Erreur : base de données Lutris introuvable à : %s
-launcher.action_title=lpm -- LPM Launcher
+launcher.action_title=ludis -- Ludis Launcher
 launcher.action_text=Que voulez-vous faire ?
 launcher.action_col=Action
-launcher.action_activate=Activer le LPM Launcher
-launcher.action_deactivate=Désactiver le LPM Launcher
+launcher.action_activate=Activer le Ludis Launcher
+launcher.action_deactivate=Désactiver le Ludis Launcher
 launcher.none_found=Aucun jeu Wine/Proton trouvé.
 launcher.slug_not_found=Erreur : jeu "%s" introuvable.
-launcher.already_active=Erreur : le LPM Launcher est déjà activé pour "%s".
-launcher.already_inactive=Erreur : le LPM Launcher n'est pas activé pour "%s".
-launcher.nothing_to_activate=Aucun jeu éligible : le LPM Launcher est déjà activé pour tous.
-launcher.nothing_to_deactivate=Aucun jeu n'a actuellement le LPM Launcher activé.
-launcher.select_title_activate=lpm -- Activer le LPM Launcher
-launcher.select_title_deactivate=lpm -- Désactiver le LPM Launcher
+launcher.already_active=Erreur : le Ludis Launcher est déjà activé pour "%s".
+launcher.already_inactive=Erreur : le Ludis Launcher n'est pas activé pour "%s".
+launcher.nothing_to_activate=Aucun jeu éligible : le Ludis Launcher est déjà activé pour tous.
+launcher.nothing_to_deactivate=Aucun jeu n'a actuellement le Ludis Launcher activé.
+launcher.select_title_activate=ludis -- Activer le Ludis Launcher
+launcher.select_title_deactivate=ludis -- Désactiver le Ludis Launcher
 launcher.select_text=Sélectionnez les jeux :
 launcher.select_col_check=Sélection
 launcher.select_col_game=Jeu
@@ -837,31 +837,31 @@ launcher.select_col_slug=Slug
 launcher.yml_missing=Erreur : fichier de configuration Lutris manquant pour "%s".
 launcher.no_current_exe=Erreur : "%s" n'a aucun exécutable actuellement configuré dans Lutris.
 launcher.winepath_failed=Erreur : impossible de résoudre le chemin Windows pour "%s" (winepath indisponible ou en échec).
-launcher.yaml_write_failed=Erreur : impossible d'écrire lpm/launcher.yml pour "%s".
+launcher.yaml_write_failed=Erreur : impossible d'écrire ludis/launcher.yml pour "%s".
 launcher.yaml_patch_failed=Erreur : impossible de mettre à jour la configuration Lutris de "%s".
 launcher.default_entry_label=Lancement
 launcher.default_prompt=Lequel voulez-vous lancer ?
 launcher.example_entry_comment=Décommentez et adaptez pour ajouter une autre entrée :
 launcher.example_entry_label=Exemple
-launcher.setup_done=LPM Launcher activé pour "%s".\nÉditez ce fichier pour ajouter ou modifier des entrées :\n%s
-launcher.setup_done_title=LPM Launcher activé
+launcher.setup_done=Ludis Launcher activé pour "%s".\nÉditez ce fichier pour ajouter ou modifier des entrées :\n%s
+launcher.setup_done_title=Ludis Launcher activé
 launcher.open_folder_button=Ouvrir le dossier
 launcher.close_button=Fermer
-launcher.launcher_yml_missing=Erreur : lpm/launcher.yml introuvable pour "%s" -- impossible de restaurer l'exécutable d'origine.
+launcher.launcher_yml_missing=Erreur : ludis/launcher.yml introuvable pour "%s" -- impossible de restaurer l'exécutable d'origine.
 launcher.no_original_exe=Erreur : aucun exécutable d'origine sauvegardé pour "%s".
 launcher.original_exe_fallback=%s : aucun exécutable d'origine n'était sauvegardé ; restauré depuis la première entrée du menu : %s
-launcher.teardown_done=LPM Launcher désactivé pour "%s". L'exécutable d'origine a été restauré -- vérifiez-le dans les réglages du jeu dans Lutris.
+launcher.teardown_done=Ludis Launcher désactivé pour "%s". L'exécutable d'origine a été restauré -- vérifiez-le dans les réglages du jeu dans Lutris.
 launcher.done_one_on_cli=%s : activé. Éditez %s pour ajouter ou modifier des entrées.
 launcher.done_one_off_cli=%s : désactivé.
 launcher.picker_column=Choisir
 launcher.picker_validate_button=Valider
 launcher.picker_cancel_button=Quitter
-launcher.runtime_error=Erreur LPM Launcher : %s
-launcher.runtime_sandbox_unreachable=Le LPM Launcher n'a pas pu démarrer : "%s" n'est pas visible depuis le bac à sable Flatpak de Lutris. Le jeu va se lancer sans le menu de choix. Corrigez avec :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
+launcher.runtime_error=Erreur Ludis Launcher : %s
+launcher.runtime_sandbox_unreachable=Le Ludis Launcher n'a pas pu démarrer : "%s" n'est pas visible depuis le bac à sable Flatpak de Lutris. Le jeu va se lancer sans le menu de choix. Corrigez avec :\nflatpak override --user net.lutris.Lutris --filesystem=host-os:ro
 launcher.loading_text=Chargement...
 launcher.help_alttab=Changer de fenêtre
-launcher.help_quit=Menu LPM
-launcher.menu_title=Menu LPM
+launcher.help_quit=Menu Ludis
+launcher.menu_title=Menu Ludis
 launcher.menu_hint=A : valider    B : retour    Gauche / Droite : régler
 launcher.menu_window=Fenêtre
 launcher.menu_altenter=Alt+Entrée
@@ -886,15 +886,15 @@ launcher.menu_force=Forcer à quitter le jeu
 launcher.menu_quit_confirm=Oui, forcer à quitter le jeu
 launcher.menu_quit_cancel=Non, retour
 launcher.launch_timeout_warning=Le lancement semble anormalement long -- vérifiez Lutris
-launcher_entries.cli_usage=Usage : lpm launcher-entries <slug> get|set <fichier.json>
+launcher_entries.cli_usage=Usage : ludis launcher-entries <slug> get|set <fichier.json>
 launcher_entries.json_missing=Erreur : fichier JSON introuvable.
-launcher_entries.read_failed=Erreur : impossible de lire les entrées du LPM Launcher pour "%s".
-launcher_entries.write_failed=Erreur : impossible d'écrire les entrées du LPM Launcher pour "%s".
-launcher_entries.write_done=Entrées du LPM Launcher mises à jour pour "%s".
+launcher_entries.read_failed=Erreur : impossible de lire les entrées du Ludis Launcher pour "%s".
+launcher_entries.write_failed=Erreur : impossible d'écrire les entrées du Ludis Launcher pour "%s".
+launcher_entries.write_done=Entrées du Ludis Launcher mises à jour pour "%s".
 help.games_launcher=Active/désactive un écran de chargement + sélecteur multi-exécutable pour un jeu
 help.games_launcher_cont=  (un seul exécutable ou plusieurs : épisodes, DLC, contenu bonus...)
-help.games_launcher_entries_get=Affiche en JSON les entrées du picker LPM Launcher d'un jeu
-help.games_launcher_entries_set=Remplace les entrées du picker LPM Launcher d'un jeu depuis un JSON
+help.games_launcher_entries_get=Affiche en JSON les entrées du picker Ludis Launcher d'un jeu
+help.games_launcher_entries_set=Remplace les entrées du picker Ludis Launcher d'un jeu depuis un JSON
 
 splash.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
 splash.zenity_missing=Erreur : "zenity" est requis pour le mode graphique.
@@ -911,7 +911,7 @@ splash.select_col_fetch=Récupérer
 splash.select_col_game=Jeu
 splash.select_col_slug=Slug
 splash.key_title=Clé API SteamGridDB requise
-splash.key_text=Un onglet de votre navigateur a été ouvert vers vos préférences de compte SteamGridDB. Créez un compte gratuit si besoin, copiez votre clé API personnelle, puis collez-la ci-dessous. Cette clé vous est strictement personnelle et reste sur cette machine -- elle n'est jamais partagée ni embarquée dans lpm.
+splash.key_text=Un onglet de votre navigateur a été ouvert vers vos préférences de compte SteamGridDB. Créez un compte gratuit si besoin, copiez votre clé API personnelle, puis collez-la ci-dessous. Cette clé vous est strictement personnelle et reste sur cette machine -- elle n'est jamais partagée ni embarquée dans ludis.
 splash.key_text_cli=Une clé API SteamGridDB est requise. Créez un compte gratuit sur https://www.steamgriddb.com/profile/preferences/api pour obtenir votre clé personnelle. Cette clé vous est strictement personnelle et reste sur cette machine.
 splash.key_prompt_cli=Collez votre clé API SteamGridDB : 
 splash.key_invalid=Clé API invalide ou injoignable. Veuillez réessayer.
@@ -949,7 +949,7 @@ logo.select_col_fetch=Récupérer
 logo.select_col_game=Jeu
 logo.select_col_slug=Slug
 logo.key_title=Clé API SteamGridDB requise
-logo.key_text=Un onglet de votre navigateur a été ouvert vers vos préférences de compte SteamGridDB. Créez un compte gratuit si besoin, copiez votre clé API personnelle, puis collez-la ci-dessous. Cette clé vous est strictement personnelle et reste sur cette machine -- elle n'est jamais partagée ni embarquée dans lpm.
+logo.key_text=Un onglet de votre navigateur a été ouvert vers vos préférences de compte SteamGridDB. Créez un compte gratuit si besoin, copiez votre clé API personnelle, puis collez-la ci-dessous. Cette clé vous est strictement personnelle et reste sur cette machine -- elle n'est jamais partagée ni embarquée dans ludis.
 logo.key_text_cli=Une clé API SteamGridDB est requise. Créez un compte gratuit sur https://www.steamgriddb.com/profile/preferences/api pour obtenir votre clé personnelle. Cette clé vous est strictement personnelle et reste sur cette machine.
 logo.key_prompt_cli=Collez votre clé API SteamGridDB :
 logo.key_invalid=Clé API invalide ou injoignable. Veuillez réessayer.
@@ -970,22 +970,22 @@ logo.done_cli=Logo défini pour %s.
 logo.errors_gui_title=Erreurs de récupération de logos
 logo.errors_gui_intro=Un ou plusieurs jeux n'ont pas pu obtenir de logo. Rien n'a été changé pour eux :
 logo.done_gui=Terminé : %s jeu(x) traité(s).
-sgdb_images.cli_usage=Usage : lpm sgdb-images <icon|splash|logo|title> <slug> [game_id] [game_name]
+sgdb_images.cli_usage=Usage : ludis sgdb-images <icon|splash|logo|title> <slug> [game_id] [game_name]
 sgdb_images.bad_type=Erreur : type "%s" invalide (attendu : icon, splash, logo ou title).
 sgdb_images.cmd_missing=Erreur : la commande "%s" est requise et introuvable.
 sgdb_images.imagemagick_missing=Erreur : ImageMagick ("convert"/"identify" ou "magick") est requis.
 sgdb_images.lutris_missing=Erreur : Lutris introuvable sur cette machine.
 sgdb_images.db_missing=Erreur : base de données Lutris introuvable à : %s
-help.games_splash=Récupère automatiquement une large bannière de chargement ("Hero") depuis SteamGridDB (nécessite une clé API personnelle gratuite) pour l'écran de chargement du LPM Launcher
-help.games_logo=Récupère automatiquement un logo transparent du jeu depuis SteamGridDB, avec repli sur Steam (nécessite une clé API personnelle gratuite) pour l'affichage permanent du LPM Launcher
+help.games_splash=Récupère automatiquement une large bannière de chargement ("Hero") depuis SteamGridDB (nécessite une clé API personnelle gratuite) pour l'écran de chargement du Ludis Launcher
+help.games_logo=Récupère automatiquement un logo transparent du jeu depuis SteamGridDB, avec repli sur Steam (nécessite une clé API personnelle gratuite) pour l'affichage permanent du Ludis Launcher
 menu.opt_splash=🏞️ Récupérer une bannière de chargement (SteamGridDB)
 menu.opt_logo=🔤 Récupérer un logo de jeu (SteamGridDB)
 
 # --- GUI (gui/*.py, GTK4/Libadwaita) ---
 gui.common.run=Exécuter
 gui.common.done=Terminé.
-gui.common.command_failed=Échec (code %s) -- voir ~/.local/share/lpm/lpm-gui.log
-gui.common.command_failed_detail=Échec (code %s) : %s -- voir ~/.local/share/lpm/lpm-gui.log
+gui.common.command_failed=Échec (code %s) -- voir ~/.local/share/ludis/ludis-gui.log
+gui.common.command_failed_detail=Échec (code %s) : %s -- voir ~/.local/share/ludis/ludis-gui.log
 gui.common.view_log=Voir le journal
 gui.common.cancel=Annuler
 gui.common.log_dialog_title=Journal des commandes
@@ -1004,8 +1004,8 @@ gui.common.desktop_path_title=Dossier du raccourci
 gui.common.desktop_path_browse_tooltip=Choisir un autre dossier
 gui.common.desktop_path_browse_title=Choisir le dossier du raccourci
 
-gui.home.title=LPM
-gui.home.description=Ludis Prefix Manager
+gui.home.title=Ludis
+gui.home.description=Ludis
 
 gui.game_select.default_title=Jeux concernés
 gui.file_select.default_title=Fichiers sélectionnés
@@ -1117,7 +1117,7 @@ game_tools.env_yaml_missing_cli=Erreur : python3 avec PyYAML est requis pour les
 game_tools.env_write_failed_cli=Erreur : impossible d'enregistrer les variables d'environnement de '%s' (configuration inchangée).
 game_tools.env_saved_cli=Variables d'environnement de '%s' enregistrées.
 game_tools.env_invalid_action_cli=Erreur : action inconnue '%s' (attendu : list, set, unset ou apply).
-game_tools.cli_usage=Usage : lpm tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud|overlay|gamepad> [chemin|action|runner] [clé|fichier] [valeur]
+game_tools.cli_usage=Usage : ludis tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud|overlay|gamepad> [chemin|action|runner] [clé|fichier] [valeur]
 game_tools.favorite_not_found_cli=Erreur : dossier introuvable : %s
 game_tools.favorite_winepath_missing_cli=Erreur : impossible de trouver "winepath" (ni à côté du runner Wine de ce jeu, ni dans le PATH).
 game_tools.favorite_winepath_failed_cli=Erreur : impossible de convertir le chemin %s en chemin Windows.
@@ -1128,7 +1128,7 @@ gui.toggle_feature.action_title=Action
 gui.toggle_feature.action_enable=Activer
 gui.toggle_feature.action_disable=Désactiver
 
-gui.launcher.page_title=LPM Launcher
+gui.launcher.page_title=Ludis Launcher
 gui.launcher_entries.toast_choose_game=Choisis un jeu.
 gui.launcher_entries.loading=Chargement des entrées...
 gui.launcher_entries.label_placeholder=Libellé
@@ -1229,7 +1229,7 @@ gui.category.backup=Sauvegarde
 gui.category.runners=Runners
 gui.category.system=Système
 
-# --- bin/lpm-gui (lanceur de la GUI) ---
+# --- bin/ludis-gui (lanceur de la GUI) ---
 launcher.gui_not_found=Erreur critique : l'interface graphique est introuvable à : %s
 launcher.python3_missing=Erreur : python3 est requis pour l'interface graphique.
 install_runner.cancelled_run_cli=Installation annulée : le runner en cours a été nettoyé.
@@ -1264,10 +1264,10 @@ gui.lutris_version.saved_choice=Choix sauvegardé : %s
 gui.lutris_version.only_one=Une seule version de Lutris détectée (%s) : rien à choisir.
 gui.lutris_version.loading=Détection en cours...
 gui.logs.page_title=Journaux
-gui.logs.page_subtitle=Consulter, copier ou enregistrer les journaux de lpm
+gui.logs.page_subtitle=Consulter, copier ou enregistrer les journaux de ludis
 gui.logs.journal_title=Journal
 gui.logs.journal_both=Les deux
-gui.logs.journal_lpm=Actions de lpm
+gui.logs.journal_ludis=Actions de ludis
 gui.logs.journal_gui=Sortie de l'interface
 gui.logs.period_title=Période
 gui.logs.period_hour=Dernière heure
@@ -1278,12 +1278,12 @@ gui.logs.search_title=Rechercher dans le journal
 gui.logs.copy=Copier
 gui.logs.save=Enregistrer
 gui.logs.clear=Vider
-gui.logs.section_lpm=Actions de lpm (lpm.log)
-gui.logs.section_gui=Sortie de l'interface (lpm-gui.log)
+gui.logs.section_ludis=Actions de ludis (ludis.log)
+gui.logs.section_gui=Sortie de l'interface (ludis-gui.log)
 gui.logs.empty=(aucune ligne)
 gui.logs.truncated=(affichage limité aux %s dernières lignes -- la copie et l'enregistrement contiennent tout)
 gui.logs.count=%s ligne(s)
-gui.logs.export_header=lpm %s -- export du %s
+gui.logs.export_header=ludis %s -- export du %s
 gui.logs.export_filters=Période : %s -- Filtre : %s
 gui.logs.no_filter=aucun
 gui.logs.nothing_to_export=Rien à exporter avec ce filtre.
@@ -1295,12 +1295,12 @@ gui.logs.clear_heading=Vider le journal ?
 gui.logs.clear_body=Le ou les journaux sélectionnés seront effacés définitivement (toutes périodes confondues).
 gui.logs.clear_confirm=Vider
 gui.logs.cleared=Journal vidé.
-help.self_update=Vérifie si une version plus récente de lpm existe et, pour une installation par paquet (.deb/.rpm/Arch), l'installe
+help.self_update=Vérifie si une version plus récente de ludis existe et, pour une installation par paquet (.deb/.rpm/Arch), l'installe
 self_update.fetch_failed=Impossible de contacter GitHub pour vérifier les mises à jour.
-self_update.no_release=Aucune version de lpm trouvée sur GitHub.
+self_update.no_release=Aucune version de ludis trouvée sur GitHub.
 self_update.invalid_arg=Argument invalide : %s (attendu : check ou install).
 self_update.manual_unsupported=Cette installation n'a pas été faite par un paquet : mise à jour automatique indisponible. Télécharge la nouvelle version ici : %s
-self_update.up_to_date=lpm est déjà à jour (%s).
+self_update.up_to_date=ludis est déjà à jour (%s).
 self_update.no_asset=Aucun paquet de type '%s' trouvé dans la release %s.
 self_update.no_digest=GitHub ne fournit pas d'empreinte SHA-256 pour ce paquet : installation refusée par sécurité. Installe la mise à jour à la main depuis la page des releases.
 self_update.pkexec_missing='pkexec' (polkit) est requis pour installer la mise à jour.
@@ -1313,14 +1313,14 @@ self_update.install_failed=L'installation a échoué ou l'authentification a ét
 gui.update.available=Nouvelle version disponible : %s
 gui.update.button_install=Mettre à jour
 gui.update.button_release=Voir la release
-gui.update.confirm_heading=Mettre à jour lpm vers %s ?
-gui.update.confirm_body=lpm va télécharger la mise à jour, l'installer (mot de passe demandé) puis redémarrer.
+gui.update.confirm_heading=Mettre à jour ludis vers %s ?
+gui.update.confirm_body=ludis va télécharger la mise à jour, l'installer (mot de passe demandé) puis redémarrer.
 gui.update.confirm_button=Mettre à jour
-gui.update.progress_title=Mise à jour de lpm
+gui.update.progress_title=Mise à jour de ludis
 gui.update.restarting=Mise à jour installée, redémarrage...
-gui.update.restart_manual=Mise à jour installée. Ferme et rouvre lpm pour utiliser la nouvelle version.
-gui.inputaccess.heading=Ouvrir le menu LPM au clavier ?
-gui.inputaccess.body=Pour ouvrir le menu LPM en jeu avec Ctrl+Maj+M, LPM doit pouvoir lire les touches du clavier (c'est la seule méthode qui marche sous X11 et Wayland). Cela ajoute votre utilisateur au groupe « input », ce qui permet aux programmes que vous lancez de lire les évènements clavier. Le système demandera votre mot de passe, puis il faudra vous déconnecter et vous reconnecter. Le combo manette fonctionne sans cela.
+gui.update.restart_manual=Mise à jour installée. Ferme et rouvre ludis pour utiliser la nouvelle version.
+gui.inputaccess.heading=Ouvrir le menu Ludis au clavier ?
+gui.inputaccess.body=Pour ouvrir le menu Ludis en jeu avec Ctrl+Maj+M, Ludis doit pouvoir lire les touches du clavier (c'est la seule méthode qui marche sous X11 et Wayland). Cela ajoute votre utilisateur au groupe « input », ce qui permet aux programmes que vous lancez de lire les évènements clavier. Le système demandera votre mot de passe, puis il faudra vous déconnecter et vous reconnecter. Le combo manette fonctionne sans cela.
 gui.inputaccess.later=Plus tard
 gui.inputaccess.never=Ne plus demander
 gui.inputaccess.allow=Autoriser
@@ -1330,19 +1330,19 @@ gui.inputaccess.failed_heading=Rien n'a changé
 gui.inputaccess.failed_body=Le groupe « input » n'a pas pu être ajouté (annulé ou refusé). Le raccourci clavier reste indisponible ; le combo manette fonctionne toujours.
 gui.update.failed_heading=Échec de la mise à jour
 gui.update.failed_close=Fermer
-help.footer=Documentation complète de chaque commande : docs/commands/ dans le dépôt du projet (https://github.com/RogerBytes/lpm). (en anglais)
-common.missing_target_cli=Erreur : rien à faire, aucune cible donnée à '%s'. Lancez 'lpm --help' pour l'usage.
+help.footer=Documentation complète de chaque commande : docs/commands/ dans le dépôt du projet (https://github.com/RogerBytes/ludis). (en anglais)
+common.missing_target_cli=Erreur : rien à faire, aucune cible donnée à '%s'. Lancez 'ludis --help' pour l'usage.
 exe_install.cancelled_cli=Annulé.
 gui.check.report_runner_unresolved=Runner non disponible sur le dépôt : %s (requis par : %s). Installez-le depuis la page « Installer un runner » avec un fichier .zgr, ou via ProtonUp-Qt.
 
-# --- lpm vsync ---
-vsync.cli_usage=Utilisation : lpm vsync status | lpm vsync <slug> [status] | lpm vsync <slug> on|off [d3d9|d3d11|d3d12|gl-nvidia|gl-mesa...]
+# --- ludis vsync ---
+vsync.cli_usage=Utilisation : ludis vsync status | ludis vsync <slug> [status] | ludis vsync <slug> on|off [d3d9|d3d11|d3d12|gl-nvidia|gl-mesa...]
 vsync.invalid_action_cli=Erreur : action inconnue '%s' (attendu : status, on ou off).
 vsync.invalid_setting_cli=Erreur : réglage inconnu '%s' (attendu : d3d9, d3d11, d3d12, gl-nvidia ou gl-mesa).
 vsync.saved_on_cli=Réglages VSync activés pour '%s'.
 vsync.saved_off_cli=Réglages VSync retirés pour '%s'.
 help.games_vsync=Force la désactivation du VSync d'un jeu via des variables d'environnement (Direct3D 9/11/12, OpenGL)
-help.games_vsync_cont=lpm vsync status liste les jeux qui l'ont ; réglages : d3d9|d3d11|d3d12|gl-nvidia|gl-mesa (aucun = tous)
+help.games_vsync_cont=ludis vsync status liste les jeux qui l'ont ; réglages : d3d9|d3d11|d3d12|gl-nvidia|gl-mesa (aucun = tous)
 gui.vsync.page_title=Désactiver le VSync
 gui.vsync.intro=Force la désactivation du VSync pour les jeux qui n'ont pas cette option dans leurs réglages graphiques. Chaque case pose la variable lue par une couche graphique ; un jeu n'en utilise qu'une seule, vous pouvez donc tout cocher. Les jeux en gras ont déjà au moins une case cochée.
 gui.vsync.lutris_warning=Fermez Lutris avant de modifier ces réglages, sinon il risque de les écraser.
@@ -1366,9 +1366,9 @@ gui.vsync.toast_all_off=Tous les réglages VSync sont retirés.
 gui.vsync.toast_failed=Impossible d'enregistrer les réglages VSync.
 gui.vsync.toast_load_failed=Impossible de lire les réglages VSync de ce jeu.
 
-# --- lpm tools <slug> runner ---
-game_tools.runner_name_missing_cli=Erreur : indiquez le nom d'un runner installé (voir 'lpm list-runner').
-game_tools.runner_not_installed_cli=Erreur : le runner '%s' n'est pas installé (voir 'lpm list-runner', ou 'lpm install-runner').
+# --- ludis tools <slug> runner ---
+game_tools.runner_name_missing_cli=Erreur : indiquez le nom d'un runner installé (voir 'ludis list-runner').
+game_tools.runner_not_installed_cli=Erreur : le runner '%s' n'est pas installé (voir 'ludis list-runner', ou 'ludis install-runner').
 game_tools.runner_write_failed_cli=Erreur : impossible de changer le runner de '%s' (configuration inchangée).
 game_tools.mangohud_on_cli=MangoHud activé pour '%s'.
 game_tools.mangohud_off_cli=MangoHud désactivé pour '%s'.
@@ -1382,7 +1382,7 @@ game_tools.overlay_invalid_action_cli=Erreur : action overlay inconnue '%s' (att
 game_tools.overlay_write_failed_cli=Erreur : impossible d'enregistrer le réglage de l'overlay FPS de '%s'.
 gui.tools.tool_overlay=Overlay FPS (menu en jeu)
 gui.tools.overlay_global_title=Overlay FPS pour tous les jeux
-gui.tools.overlay_global_subtitle=Désactivé par défaut. Activé, MangoHud est chargé (caché) dans chaque jeu et affiché ou caché depuis le menu LPM en jeu. Un jeu peut avoir son propre réglage. Nécessite MangoHud.
+gui.tools.overlay_global_subtitle=Désactivé par défaut. Activé, MangoHud est chargé (caché) dans chaque jeu et affiché ou caché depuis le menu Ludis en jeu. Un jeu peut avoir son propre réglage. Nécessite MangoHud.
 gui.tools.overlay_game_title=Pour ce jeu
 gui.tools.overlay_follow=Suivre le réglage global
 gui.tools.overlay_on=Activé
@@ -1403,7 +1403,7 @@ game_tools.gamepad_invalid_action_cli=Erreur : action manette inconnue '%s' (att
 game_tools.gamepad_write_failed_cli=Erreur : impossible de changer le réglage manette de '%s' (configuration inchangée).
 game_tools.gamepad_other_cli=Erreur : '%s' utilise déjà un autre profil AntiMicroX (%s). Il n'a pas été touché ; modifie-le ou retire-le toi-même.
 game_tools.gamepad_create_failed_cli=Erreur : impossible de créer le profil %s.
-game_tools.gamepad_missing_profile_cli=Erreur : pas encore de profil de manette LPM pour '%s'. Active d'abord le profil de manette.
+game_tools.gamepad_missing_profile_cli=Erreur : pas encore de profil de manette Ludis pour '%s'. Active d'abord le profil de manette.
 game_tools.gamepad_edit_cli=Ouverture d'AntiMicroX avec %s
 game_tools.gamepad_missing_cli=Erreur : AntiMicroX ne semble pas installé.
 game_tools.gamepad_missing_warn_cli=Attention : AntiMicroX ne semble pas installé. Le réglage est enregistré mais n'a aucun effet tant que tu ne l'installes pas.

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# --- lpm launcher: SINGLE entry point of all shortcuts (.desktop) created by lpm ---
+# --- ludis launcher: SINGLE entry point of all shortcuts (.desktop) created by ludis ---
 #
 # Called directly by "Exec=" of the .desktop (see zgu_write_game_shortcut in
-# zgu-desktop-utils.sh), identical for all Wine games, with or without the LPM Launcher
+# zgu-desktop-utils.sh), identical for all Wine games, with or without the Ludis Launcher
 # (multi-entry "picker"). Role: show the loading background (black, or splash/splash.png if
 # present) with a small "loading" indicator (translated text + spinner) at the bottom right,
 # never covered by a banner, THEN hand over to Lutris for the real launch.
@@ -18,14 +18,14 @@
 # zgp-game-installer.sh (see zgu-lutris-utils.sh).
 #
 # Design:
-#   - Loading screen enabled for ALL lpm shortcuts by default; disabled per game by the
-#     presence of "${game_dir}/lpm/settings/no-loadingscreen" ("Loading screen" checkbox unchecked
+#   - Loading screen enabled for ALL ludis shortcuts by default; disabled per game by the
+#     presence of "${game_dir}/ludis/settings/no-loadingscreen" ("Loading screen" checkbox unchecked
 #     when creating/regenerating the shortcut, see zgp-game-shortcutter.sh /
 #     zgp-game-installer.sh). Then: direct launch, zero overhead.
 #   - The multi-entry picker (several executables per game) is shown HERE, embedded in the
 #     loading screen; then THIS script runs zgl-launcher-runtime.sh (on the host, before
 #     Lutris) which writes lpm-launch.bat with the chosen entry. There is no Lutris
-#     prelaunch command any more. Games made by lpm <= 0.9.5 (relay + prelaunch command) are
+#     prelaunch command any more. Games made by ludis <= 0.9.5 (relay + prelaunch command) are
 #     converted here at their first launch, see zgl-launcher-legacy.sh (DO NOT REMOVE that
 #     conversion: old packages can be installed years later). The picker reuses the
 #     background already opened by THIS script (fixed-path control file below).
@@ -48,8 +48,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/zgl-lang-loader.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
 
@@ -123,7 +123,7 @@ fi
 
 # Title shown at the bottom right of the loading screen (see zgu-launcher-screen.py): the
 # game name by default; replaced by zgl-launcher-runtime.sh once the picker is resolved, ONLY
-# if the game has several active LPM Launcher entries. \n/\r are stripped: "name" comes from
+# if the game has several active Ludis Launcher entries. \n/\r are stripped: "name" comes from
 # the Lutris database (possibly forged by a third party via a shared .zgp package) and the
 # control file protocol is line-based.
 title_text="${game_name//[$'\n\r']/}"
@@ -139,9 +139,9 @@ title_text="${game_name//[$'\n\r']/}"
 ctrl_key=$(printf '%s' "${game_dir}" | sha256sum | cut -c1-24)
 control_file="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${ctrl_key}"
 
-# --- Is the LPM Launcher enabled for this game? Yes when the Lutris YAML runs lpm-launch.bat
-# (game.exe) and lpm/launcher.yml exists. The old format (relay as Lutris prelaunch command,
-# lpm <= 0.9.5) is converted here, at the first launch through an lpm shortcut:
+# --- Is the Ludis Launcher enabled for this game? Yes when the Lutris YAML runs lpm-launch.bat
+# (game.exe) and ludis/launcher.yml exists. The old format (relay as Lutris prelaunch command,
+# ludis <= 0.9.5) is converted here, at the first launch through an ludis shortcut:
 # zgl-launcher-legacy.sh. If it cannot be (relay still referenced afterwards), the old
 # mechanism keeps working untouched: "legacy_relay_present". ---
 lutris_game_yml=""
@@ -150,7 +150,7 @@ lutris_game_yml=""
 # two lines (a game folder with spaces in its name is enough: "exe: .../Zelda solarus" newline
 # "    games/lpm-launch.bat"), and a line-based match then fails to see the launcher. The game
 # silently launched with the lpm-launch.bat of the PREVIOUS launch: no picker, the last entry.
-# Same test as zgp_launcher_is_active in zgl-launcher-manager.sh (what "lpm launcher status"
+# Same test as zgp_launcher_is_active in zgl-launcher-manager.sh (what "ludis launcher status"
 # and the GUI show). python3 is guaranteed here (checked above).
 lutris_exe_is_launch_bat() {
   YML_PATH="$1" python3 -c '
@@ -167,7 +167,7 @@ except Exception:
 
 launcher_active=false
 legacy_relay_present=false
-if [[ -d "${game_dir}" ]] && [[ -f "$(zgu_lpm_find "${game_dir}" launcher)" ]] \
+if [[ -d "${game_dir}" ]] && [[ -f "$(zgu_ludis_find "${game_dir}" launcher)" ]] \
     && [[ -n "${lutris_game_yml}" ]] && [[ -f "${lutris_game_yml}" ]] \
     && lutris_exe_is_launch_bat "${lutris_game_yml}"; then
   launcher_active=true
@@ -175,8 +175,8 @@ if [[ -d "${game_dir}" ]] && [[ -f "$(zgu_lpm_find "${game_dir}" launcher)" ]] \
 fi
 
 # --- Loading screen disabled for this game, or folder not found: no loading screen, but the
-# LPM Launcher still works (its own picker window, then lpm-launch.bat), then direct launch. ---
-if [[ ! -d "${game_dir}" ]] || [[ -e "$(zgu_lpm_find "${game_dir}" no_loadingscreen)" ]]; then
+# Ludis Launcher still works (its own picker window, then lpm-launch.bat), then direct launch. ---
+if [[ ! -d "${game_dir}" ]] || [[ -e "$(zgu_ludis_find "${game_dir}" no_loadingscreen)" ]]; then
   if [[ "${launcher_active}" = true ]] && [[ "${legacy_relay_present}" = false ]]; then
     bash "${script_dir}/zgl-launcher-runtime.sh" "${game_dir}"
   fi
@@ -188,16 +188,18 @@ if [[ "${XDG_SESSION_TYPE,,}" = "wayland" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]];
   session_kind="wayland"
 fi
 
-# --- LPM Launcher (multi-entry picker): the YAML is read HERE, BEFORE the first background
+# --- Ludis Launcher (multi-entry picker): the YAML is read HERE, BEFORE the first background
 # display, only to know whether a picker will be shown (the gamepad is not started yet). It
 # decides the INITIAL background: if a picker follows, the splash must only appear AFTER the
 # choice, never before only to vanish at once (flicker). ---
-launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
+# Prefix made before the rename: its "lpm" folder becomes "ludis" (and the YAML paths follow).
+zgu_ludis_adopt_old_dir "${game_dir}" "${lutris_game_yml}"
+launcher_yml="$(zgu_ludis_find "${game_dir}" launcher)"
 # NOT under /tmp: the /tmp of the Flatpak Lutris sandbox is invisible from the host, so
 # zgl-launcher-runtime.sh (running INSIDE it for Flatpak Lutris) would never find a file
 # written HERE on the host. "${game_dir}" is visible from both sides.
-launcher_choice_file="$(zgu_lpm_path "${game_dir}" launcher_choice)"
-rm -f "${launcher_choice_file}" "$(zgu_lpm_legacy_path "${game_dir}" launcher_choice)" 2>/dev/null
+launcher_choice_file="$(zgu_ludis_path "${game_dir}" launcher_choice)"
+rm -f "${launcher_choice_file}" "$(zgu_ludis_legacy_path "${game_dir}" launcher_choice)" 2>/dev/null
 mkdir -p "$(dirname "${launcher_choice_file}")" 2>/dev/null
 
 # Protocol of the picker embedded in the single window (see zgu-launcher-screen.py, file
@@ -256,7 +258,7 @@ fi
 
 # --- Background: splash image if present, else plain black, EXCEPT when a picker will be
 # shown: then NONE until the choice (see block above). ---
-splash_image="$(zgu_lpm_find "${game_dir}" splash)/splash.png"
+splash_image="$(zgu_ludis_find "${game_dir}" splash)/splash.png"
 bg_state="NONE"
 if [[ "${will_show_picker}" = false ]] && [[ -f "${splash_image}" ]]; then
   bg_state="${splash_image}"
@@ -267,7 +269,7 @@ fi
 # (top of the screen, above its always-centered frame), so no "always on top" window is
 # needed. If absent, zgu-launcher-screen.py shows the title there instead; passed even if
 # missing, the existence check is done on the Python side.
-logo_image="$(zgu_lpm_find "${game_dir}" splash)/logo.png"
+logo_image="$(zgu_ludis_find "${game_dir}" splash)/logo.png"
 
 # Known in advance (see YAML block above, "will_show_picker"): "1" if this game has a single
 # entry (or none), so no label is ever shown on the loading screen; see <no_label> in the
@@ -299,9 +301,9 @@ blackscreen_pid=""
 # Forced foreground recovery by the loading screen (on_active_changed in zgu-launcher-screen.py):
 # DISABLED by default, because a fullscreen Wine game that loses focus gets iconified, so forcing
 # focus back minimized it. A game whose window is recreated several times at startup (e.g.
-# Momodora) can enable it with an empty "lpm/settings/keep-focus" file (never created
-# automatically, like "lpm/settings/no-loadingscreen").
-# WM_CLASS of the game = StartupWMClass of the .desktop generated by lpm (zgu_write_game_shortcut):
+# Momodora) can enable it with an empty "ludis/settings/keep-focus" file (never created
+# automatically, like "ludis/settings/no-loadingscreen").
+# WM_CLASS of the game = StartupWMClass of the .desktop generated by ludis (zgu_write_game_shortcut):
 # the loading window reuses it to group under the game's panel icon. Empty if the menu shortcut
 # does not exist.
 screen_wm_class=""
@@ -311,18 +313,18 @@ if [[ -f "${shortcut_file}" ]]; then
   screen_wm_class="${screen_wm_class//[$'\n\r\t']/}"
 fi
 keep_focus_env=0
-[[ -e "$(zgu_lpm_find "${game_dir}" keep_focus)" ]] && keep_focus_env=1
+[[ -e "$(zgu_ludis_find "${game_dir}" keep_focus)" ]] && keep_focus_env=1
 # Per-game message shown at the bottom center of the loading screen (explains a long loading).
 # VISIBLE file at the prefix root, created empty if missing, never overwritten; an empty file
 # shows nothing. One line of the file = one message (the screen shows one at a time, wraps a long
 # one, and alternates when there are several); 1200 characters at most, CR and tabs become spaces.
-loading_message_file="$(zgu_lpm_find "${game_dir}" loading_message)"
+loading_message_file="$(zgu_ludis_find "${game_dir}" loading_message)"
 if [[ ! -e "${loading_message_file}" ]]; then
   mkdir -p "$(dirname "${loading_message_file}")" 2>/dev/null
   : > "${loading_message_file}" 2>/dev/null
 fi
 loading_message=$(head -c 1200 "${loading_message_file}" 2>/dev/null | tr '\r\t' '  ')
-LPM_PREFIX_DIR="${game_dir}" LPM_LOADING_MESSAGE="${loading_message}" LPM_HELP_ALTTAB="$(t launcher.help_alttab)" LPM_HELP_QUIT="$(t launcher.help_quit)" LPM_WM_CLASS="${screen_wm_class}" LPM_WINDOW_TITLE="${title_text}" LPM_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
+LUDIS_PREFIX_DIR="${game_dir}" LUDIS_LOADING_MESSAGE="${loading_message}" LUDIS_HELP_ALTTAB="$(t launcher.help_alttab)" LUDIS_HELP_QUIT="$(t launcher.help_quit)" LUDIS_WM_CLASS="${screen_wm_class}" LUDIS_WINDOW_TITLE="${title_text}" LUDIS_KEEP_FOCUS="${keep_focus_env}" python3 "${script_dir}/zgu-launcher-screen.py" "${control_file}" "${indicator_text}" "${logo_image}" "${no_label_flag}" "${has_banner_flag}" >/dev/null 2>&1 &
 blackscreen_pid=$!
 disown "${blackscreen_pid}" 2>/dev/null
 
@@ -330,7 +332,7 @@ sleep 0.3  # let the background render before Lutris (or the picker) does anythi
 
 zgu_log "launcher-orchestrator" "OK" "slug=${slug} action=background_started ctrl=${control_file}"
 
-# --- LPM Launcher (multi-entry picker): resolved HERE, on the host, NOT by
+# --- Ludis Launcher (multi-entry picker): resolved HERE, on the host, NOT by
 # zgl-launcher-runtime.sh (started later by Lutris, inside its sandbox for Flatpak Lutris, where
 # neither gamepad nor mouse reliably reached Zenity). The choice is passed to the runtime through
 # a fixed-path file derived from game_dir, like the control file; the runtime only reads it and
@@ -412,7 +414,7 @@ if [[ "${will_show_picker}" = true ]]; then
     # Title UNCHANGED (still the game name, see zgu-launcher-screen.py): the chosen label is
     # added on its own line, never in its place. EXCEPT when the label is exactly the game name
     # (strict comparison): then no subtitle, the screen looks like one of a game without
-    # LPM Launcher.
+    # Ludis Launcher.
     chosen_label_line="${selection//[$'\n\r']/}"
     [[ "${chosen_label_line}" = "${title_text}" ]] && chosen_label_line=""
     {
@@ -444,32 +446,32 @@ fi
 # EVERY launch (idempotent, chained only once); a "Command prefix" of the user (e.g. gamemoderun)
 # is always kept.
 #
-# NEVER a machine-fixed path (no "${script_dir}/..." under /usr/lib/lpm, no /tmp): with Flatpak
+# NEVER a machine-fixed path (no "${script_dir}/..." under /usr/lib/ludis, no /tmp): with Flatpak
 # Lutris, /usr is the runtime's, not the host's, so Lutris' "exec" failed, and a trace file written
 # in the sandbox's PRIVATE /tmp is never seen from the host (same trap as "launcher_choice_file"
-# above). A "lpm ..." command would not work either, since lpm is not in the sandbox PATH.
-# So the relay is GENERATED under "${game_dir}/lpm/scripts" (visible on both sides of the sandbox),
+# above). A "ludis ..." command would not work either, since ludis is not in the sandbox PATH.
+# So the relay is GENERATED under "${game_dir}/ludis/scripts" (visible on both sides of the sandbox),
 # holds all the logic in a few lines, and is portable in a .zgp export; it is regenerated at every
 # launch anyway.
-winetrace_scripts_dir="$(zgu_lpm_path "${game_dir}" scripts)"
+winetrace_scripts_dir="$(zgu_ludis_path "${game_dir}" scripts)"
 winetrace_wrapper="${winetrace_scripts_dir}/lpm-winetrace.sh"
 trace_file="${winetrace_scripts_dir}/lpm-winetrace.log"
 rm -f "${trace_file}" 2>/dev/null
-# Old layout (scripts/ at the prefix root): its relay and trace are replaced by the ones in lpm/scripts.
-rm -f "$(zgu_lpm_legacy_path "${game_dir}" scripts)/lpm-winetrace.sh" "$(zgu_lpm_legacy_path "${game_dir}" scripts)/lpm-winetrace.log" 2>/dev/null
-rmdir "$(zgu_lpm_legacy_path "${game_dir}" scripts)" 2>/dev/null
+# Old layout (scripts/ at the prefix root): its relay and trace are replaced by the ones in ludis/scripts.
+rm -f "$(zgu_ludis_legacy_path "${game_dir}" scripts)/lpm-winetrace.sh" "$(zgu_ludis_legacy_path "${game_dir}" scripts)/lpm-winetrace.log" 2>/dev/null
+rmdir "$(zgu_ludis_legacy_path "${game_dir}" scripts)" 2>/dev/null
 
 use_winetrace=false
 
 if [[ -n "${configpath}" ]] && command -v python3 >/dev/null 2>&1 \
     && python3 -c "import yaml" >/dev/null 2>&1; then
-  # "scripts/" may not exist yet (no game necessarily enables the LPM Launcher, the only other
+  # "scripts/" may not exist yet (no game necessarily enables the Ludis Launcher, the only other
   # place creating it; see zgl-launcher-manager.sh): create it here if needed.
   mkdir -p "${winetrace_scripts_dir}" 2>/dev/null
 
   cat > "${winetrace_wrapper}" <<'WRAPPER_EOF'
 #!/bin/bash
-# Relay generated by lpm (universal game-window detection) -- do not edit by hand, it is
+# Relay generated by ludis (universal game-window detection) -- do not edit by hand, it is
 # rewritten on every launch.
 #
 # Usage: lpm-winetrace.sh <trace_file> <real_command...>
@@ -594,7 +596,7 @@ WIN_IGNORED_CLASSES=(Shell_TrayWnd IPTip_Main_Window WineAppBar SDLHelperWindowI
 # game with a real window (e.g. "bbbridge", the Bloodborne online bridge, which ignores a
 # hidden start) is never taken for the game window. Empty lines and "#" comments are skipped.
 WIN_IGNORED_WORDS=()
-ignored_windows_file="${game_dir:+$(zgu_lpm_find "${game_dir}" ignore_windows)}"
+ignored_windows_file="${game_dir:+$(zgu_ludis_find "${game_dir}" ignore_windows)}"
 if [[ -n "${ignored_windows_file}" ]] && [[ ! -e "${ignored_windows_file}" ]]; then
   mkdir -p "$(dirname "${ignored_windows_file}")" 2>/dev/null
   : > "${ignored_windows_file}" 2>/dev/null
@@ -641,7 +643,7 @@ POST_WINDOW_GRACE_MS=1000
   # Maximum wait for the game window: VISIBLE file at the prefix root, created with 60 if
   # missing, never overwritten, so a user-edited value survives. For a game whose window takes
   # minutes to appear (heavy mods...). Only whole seconds between 5 and 3600 are accepted.
-  max_wait_file="$(zgu_lpm_find "${game_dir}" max_wait)"
+  max_wait_file="$(zgu_ludis_find "${game_dir}" max_wait)"
   if [[ ! -f "${max_wait_file}" ]]; then
     mkdir -p "$(dirname "${max_wait_file}")" 2>/dev/null
     printf '60' > "${max_wait_file}" 2>/dev/null
@@ -658,7 +660,7 @@ POST_WINDOW_GRACE_MS=1000
   # if missing, never overwritten, so a user-edited value survives all later launches. Added to
   # POST_WINDOW_GRACE_MS above; useful for a game whose window appears before it is really
   # playable (e.g. shader compilation right after the window appears).
-  extra_ms_file="$(zgu_lpm_find "${game_dir}" extra_loading)"
+  extra_ms_file="$(zgu_ludis_find "${game_dir}" extra_loading)"
   if [[ ! -f "${extra_ms_file}" ]]; then
     mkdir -p "$(dirname "${extra_ms_file}")" 2>/dev/null
     printf '0' > "${extra_ms_file}" 2>/dev/null
@@ -697,7 +699,7 @@ POST_WINDOW_GRACE_MS=1000
     done
   elif [[ "${session_kind}" = "x11" ]]; then
     # xdotool missing on an X11 session: degrades to the Wayland fixed wait, but LOGGED (same
-    # symptoms as Wayland: always exactly 12s, even for a game starting in 2s). "lpm check" also
+    # symptoms as Wayland: always exactly 12s, even for a game starting in 2s). "ludis check" also
     # recommends installing xdotool on an X11 session; see zgc-dependency-checker.sh.
     zgu_log "launcher-orchestrator" "WARN" "slug=${slug} reason=xdotool_missing_fixed_wait_fallback"
     sleep 12
@@ -765,14 +767,14 @@ disown $! 2>/dev/null
 # "pkill" before restarting: this script stops by itself once the combo is used, but NOT if
 # the game is quit another way (undetectable from here), so without this cleanup an orphan
 # instance from a previous session would stay active next to the new one. Assumes one game
-# at a time (consistent with the rest of lpm).
-# --- FPS overlay (MangoHud) switchable from the LPM menu: loaded now but HIDDEN, only when it is
+# at a time (consistent with the rest of ludis).
+# --- FPS overlay (MangoHud) switchable from the Ludis menu: loaded now but HIDDEN, only when it is
 # wanted for this game (per-game setting, else global), MangoHud is installed and the Lutris option
 # "Enable MangoHud" is not already on (that one shows it all the time). Environment of THIS launch
 # only: nothing is written to the prefix or to Lutris. The menu shows its entry only when
 # "overlay-armed" names this prefix. ---
-overlay_armed_file="${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-armed-$(id -u)"
-rm -f "${overlay_armed_file}" "${XDG_RUNTIME_DIR:-/tmp}/lpm-overlay-visible-$(id -u)" 2>/dev/null
+overlay_armed_file="${XDG_RUNTIME_DIR:-/tmp}/ludis-overlay-armed-$(id -u)"
+rm -f "${overlay_armed_file}" "${XDG_RUNTIME_DIR:-/tmp}/ludis-overlay-visible-$(id -u)" 2>/dev/null
 overlay_reason=""
 overlay_arm_pending=false   # "available": the menu shows the entry; "armed": MangoHud is also loaded now
 overlay_state_line=""
@@ -813,12 +815,12 @@ if [[ "${has_display}" = true ]] && command -v python3 >/dev/null 2>&1; then
   # "overlay-armed" file as it stops: wait for it to be gone, THEN write ours.
   for _ in $(seq 1 30); do pgrep -f "zgu-gamepad-exit-watcher.py" >/dev/null 2>&1 || break; sleep 0.1; done
   [[ "${overlay_arm_pending}" = true ]] && printf '%s\n%s\n' "${game_dir}" "${overlay_state_line}" > "${overlay_armed_file}" 2>/dev/null
-  LPM_MENU_TITLE="$(t launcher.menu_title)" LPM_MENU_HINT="$(t launcher.menu_hint)" \
-    LPM_MENU_WINDOW="$(t launcher.menu_window)" LPM_MENU_ALTENTER="$(t launcher.menu_altenter)" \
-    LPM_MENU_ESCAPE="$(t launcher.menu_escape)" LPM_MENU_QUIT="$(t launcher.menu_quit)" LPM_MENU_FORCE="$(t launcher.menu_force)" LPM_MENU_ALTF4_CONFIRM="$(t launcher.menu_altf4_confirm)" \
-    LPM_MENU_KEYBOARD="$(t launcher.menu_keyboard)" LPM_MENU_MOUSE="$(t launcher.menu_mouse)" LPM_MENU_OVERLAY="$(t launcher.menu_overlay)" LPM_MENU_OVERLAY_OFF="$(t launcher.menu_overlay_off)" LPM_MENU_OVERLAY_HIDDEN="$(t launcher.menu_overlay_hidden)" LPM_MENU_OVERLAY_ON="$(t launcher.menu_overlay_on)" LPM_MENU_OVERLAY_LATER="$(t launcher.menu_overlay_later)" LPM_MENU_VOLUME="$(t launcher.menu_volume)" LPM_MENU_MUTE="$(t launcher.menu_mute)" \
-    LPM_KB_HINT="$(t launcher.kb_hint)" LPM_KB_HINT_KEYS="$(t launcher.kb_hint_keys)" LPM_KB_NOLAYOUT="$(t launcher.kb_nolayout)" \
-    LPM_MENU_QUIT_CONFIRM="$(t launcher.menu_quit_confirm)" LPM_MENU_QUIT_CANCEL="$(t launcher.menu_quit_cancel)" \
+  LUDIS_MENU_TITLE="$(t launcher.menu_title)" LUDIS_MENU_HINT="$(t launcher.menu_hint)" \
+    LUDIS_MENU_WINDOW="$(t launcher.menu_window)" LUDIS_MENU_ALTENTER="$(t launcher.menu_altenter)" \
+    LUDIS_MENU_ESCAPE="$(t launcher.menu_escape)" LUDIS_MENU_QUIT="$(t launcher.menu_quit)" LUDIS_MENU_FORCE="$(t launcher.menu_force)" LUDIS_MENU_ALTF4_CONFIRM="$(t launcher.menu_altf4_confirm)" \
+    LUDIS_MENU_KEYBOARD="$(t launcher.menu_keyboard)" LUDIS_MENU_MOUSE="$(t launcher.menu_mouse)" LUDIS_MENU_OVERLAY="$(t launcher.menu_overlay)" LUDIS_MENU_OVERLAY_OFF="$(t launcher.menu_overlay_off)" LUDIS_MENU_OVERLAY_HIDDEN="$(t launcher.menu_overlay_hidden)" LUDIS_MENU_OVERLAY_ON="$(t launcher.menu_overlay_on)" LUDIS_MENU_OVERLAY_LATER="$(t launcher.menu_overlay_later)" LUDIS_MENU_VOLUME="$(t launcher.menu_volume)" LUDIS_MENU_MUTE="$(t launcher.menu_mute)" \
+    LUDIS_KB_HINT="$(t launcher.kb_hint)" LUDIS_KB_HINT_KEYS="$(t launcher.kb_hint_keys)" LUDIS_KB_NOLAYOUT="$(t launcher.kb_nolayout)" \
+    LUDIS_MENU_QUIT_CONFIRM="$(t launcher.menu_quit_confirm)" LUDIS_MENU_QUIT_CANCEL="$(t launcher.menu_quit_cancel)" \
     python3 "${script_dir}/zgu-gamepad-exit-watcher.py" "${session_kind}" "${game_dir}" >/dev/null 2>&1 &
   disown $! 2>/dev/null
 

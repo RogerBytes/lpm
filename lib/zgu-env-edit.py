@@ -7,7 +7,7 @@ Usage: zgu-env-edit.py <yml> list
        zgu-env-edit.py <yml> apply <file of KEY=VALUE lines>
 
 Writing is done by editing text lines (never yaml.dump): a PyYAML round trip destroys comments,
-including the hooks neutralized by LPM ("# lpm:hook-disabled"). The result is re-read with
+including the hooks neutralized by Ludis ("# lpm:hook-disabled"). The result is re-read with
 yaml.safe_load before being written; on any deviation from what is expected, nothing is modified.
 """
 import os
@@ -158,7 +158,7 @@ def write_desired(path, desired):
         sys.exit("refusing to write, result differs from expected")
     if new_lines == lines:
         return
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".lpm-env-")
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".ludis-env-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.writelines(new_lines)

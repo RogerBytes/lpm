@@ -39,7 +39,7 @@ class PickerMixin:
     # separate window -- see file header) ---
     def _build_picker_card(self):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        card.add_css_class("lpm-picker-card")
+        card.add_css_class("ludis-picker-card")
         card.set_halign(Gtk.Align.CENTER)
         card.set_valign(Gtk.Align.CENTER)
         # The card is centered: moving it down by N takes a margin 2N bigger. Same N as the
@@ -50,11 +50,11 @@ class PickerMixin:
         self.picker_card_fit = None  # (margin, height) last applied by _fit_picker_card
 
         self.picker_title_label = Gtk.Label(xalign=0, visible=False)
-        self.picker_title_label.add_css_class("lpm-picker-title")
+        self.picker_title_label.add_css_class("ludis-picker-title")
         card.append(self.picker_title_label)
 
         self.picker_prompt_label = Gtk.Label(xalign=0, visible=False, wrap=True)
-        self.picker_prompt_label.add_css_class("lpm-picker-prompt")
+        self.picker_prompt_label.add_css_class("ludis-picker-prompt")
         card.append(self.picker_prompt_label)
 
         scroll = Gtk.ScrolledWindow()
@@ -92,30 +92,30 @@ class PickerMixin:
         button_box.set_size_request(-1, 44)
 
         self.picker_cancel_button = Gtk.Button()
-        self.picker_cancel_icon = self._make_pad_icon("B", "lpm-pad-icon-b")
+        self.picker_cancel_icon = self._make_pad_icon("B", "ludis-pad-icon-b")
         self.picker_cancel_text = Gtk.Label()
         cancel_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         cancel_box.append(self.picker_cancel_icon)
         cancel_box.append(self.picker_cancel_text)
         self.picker_cancel_button.set_child(cancel_box)
-        self.picker_cancel_button.add_css_class("lpm-picker-button")
-        self.picker_cancel_button.add_css_class("lpm-picker-cancel-button")
+        self.picker_cancel_button.add_css_class("ludis-picker-button")
+        self.picker_cancel_button.add_css_class("ludis-picker-cancel-button")
         self.picker_cancel_button.connect("clicked", self.on_picker_cancel_clicked)
         button_box.append(self.picker_cancel_button)
 
-        # "lpm-picker-validate-button" (our own colors, not "suggested-action", an Adwaita/
+        # "ludis-picker-validate-button" (our own colors, not "suggested-action", an Adwaita/
         # theme semantic class that would make the button depend on the desktop
         # environment): fixed dark theme, white text, green Validate button, fully
         # independent of the system theme or its absence (Linux without a desktop).
         self.picker_validate_button = Gtk.Button()
-        self.picker_validate_icon = self._make_pad_icon("A", "lpm-pad-icon-a")
+        self.picker_validate_icon = self._make_pad_icon("A", "ludis-pad-icon-a")
         self.picker_validate_text = Gtk.Label()
         validate_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         validate_box.append(self.picker_validate_icon)
         validate_box.append(self.picker_validate_text)
         self.picker_validate_button.set_child(validate_box)
-        self.picker_validate_button.add_css_class("lpm-picker-button")
-        self.picker_validate_button.add_css_class("lpm-picker-validate-button")
+        self.picker_validate_button.add_css_class("ludis-picker-button")
+        self.picker_validate_button.add_css_class("ludis-picker-validate-button")
         self.picker_validate_button.connect("clicked", self.on_picker_validate_clicked)
         button_box.append(self.picker_validate_button)
 
@@ -140,7 +140,7 @@ class PickerMixin:
 
     def _make_pad_icon(self, letter, css_class):
         icon = Gtk.Label(label=letter)
-        icon.add_css_class("lpm-pad-icon")
+        icon.add_css_class("ludis-pad-icon")
         icon.add_css_class(css_class)
         icon.set_halign(Gtk.Align.CENTER)
         icon.set_valign(Gtk.Align.CENTER)
@@ -164,9 +164,9 @@ class PickerMixin:
         self.pad_mode = on
         for button in (self.picker_validate_button, self.picker_cancel_button):
             if on:
-                button.add_css_class("lpm-pad-flat")
+                button.add_css_class("ludis-pad-flat")
             else:
-                button.remove_css_class("lpm-pad-flat")
+                button.remove_css_class("ludis-pad-flat")
             button.set_can_target(not on)
             button.set_focusable(not on)
         self.picker_validate_icon.set_visible(on)
@@ -201,8 +201,8 @@ class PickerMixin:
             label.set_ellipsize(Pango.EllipsizeMode.END)
             label.set_markup(_entry_markup(entry))
             row.set_child(label)
-            row.lpm_label = label
-            row.lpm_scroller = None
+            row.ludis_label = label
+            row.ludis_scroller = None
             self.picker_listbox.append(row)
             if first_row is None:
                 first_row = row
@@ -223,11 +223,11 @@ class PickerMixin:
             self.marquee_source = 0
         row = self.marquee_row
         self.marquee_row = None
-        if row is not None and row.lpm_scroller is not None:
-            row.lpm_scroller.set_child(None)
-            row.lpm_label.set_ellipsize(Pango.EllipsizeMode.END)
-            row.set_child(row.lpm_label)
-            row.lpm_scroller = None
+        if row is not None and row.ludis_scroller is not None:
+            row.ludis_scroller.set_child(None)
+            row.ludis_label.set_ellipsize(Pango.EllipsizeMode.END)
+            row.set_child(row.ludis_label)
+            row.ludis_scroller = None
 
     def _on_row_selected(self, *_args):
         self._marquee_stop()
@@ -246,7 +246,7 @@ class PickerMixin:
         if (not self.picker_visible or row is not self.picker_listbox.get_selected_row()
                 or self.marquee_row is not None):
             return False
-        label = row.lpm_label
+        label = row.ludis_label
         if not label.get_layout().is_ellipsized():
             return False
         scroller = Gtk.ScrolledWindow()
@@ -256,7 +256,7 @@ class PickerMixin:
         label.set_ellipsize(Pango.EllipsizeMode.NONE)
         scroller.set_child(label)
         row.set_child(scroller)
-        row.lpm_scroller = scroller
+        row.ludis_scroller = scroller
         self.marquee_row = row
         self.marquee_state = {"phase": "wait_start", "t0": time.monotonic(), "x": 0.0}
         self.marquee_source = GLib.timeout_add(MARQUEE_TICK_MS, self._marquee_tick)
@@ -264,10 +264,10 @@ class PickerMixin:
 
     def _marquee_tick(self):
         row = self.marquee_row
-        if row is None or row.lpm_scroller is None:
+        if row is None or row.ludis_scroller is None:
             self.marquee_source = 0
             return False
-        adj = row.lpm_scroller.get_hadjustment()
+        adj = row.ludis_scroller.get_hadjustment()
         end_x = max(0.0, adj.get_upper() - adj.get_page_size())
         st = self.marquee_state
         now = time.monotonic()
@@ -328,7 +328,7 @@ class PickerMixin:
         # "get_text()", NEVER "get_label()" -- "get_label()" would return the raw Pango
         # markup ("<span size=...>...</span>"); "get_text()" returns the displayed text
         # with the markup stripped.
-        label_widget = row.lpm_label
+        label_widget = row.ludis_label
         self._write_picker_result(True, label_widget.get_text())
 
     # --- Gamepad navigation (see init_gamepad()/tick_gamepad() above): direct actions

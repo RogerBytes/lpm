@@ -35,7 +35,7 @@ fi
 games_list=$(sqlite3 "${lutris_db}" "SELECT slug || char(31) || name FROM games WHERE runner='wine' ORDER BY name COLLATE NOCASE ASC;" 2>/dev/null)
 
 if [[ -z "${games_list}" ]]; then
-  # On stderr, not stdout: gui/backend.py::list_games() parses all of "lpm list" stdout line
+  # On stderr, not stdout: gui/backend.py::list_games() parses all of "ludis list" stdout line
   # by line as "<slug>  <name>" (regex "^(\S+)\s+(.*)$"), so this purely informational
   # message would show up as a fake selectable game.
   t list_games.none_installed >&2
@@ -43,7 +43,7 @@ if [[ -z "${games_list}" ]]; then
 fi
 
 # Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
-# outside lpm's one-game-one-prefix model and never listed (see zgu_get_blacklisted_slugs in
+# outside ludis's one-game-one-prefix model and never listed (see zgu_get_blacklisted_slugs in
 # zgu-lutris-utils.sh).
 declare -A blacklisted_slugs
 while IFS= read -r bl_slug; do

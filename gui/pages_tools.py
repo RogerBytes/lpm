@@ -52,7 +52,7 @@ class ToolsPage:
         # <tool_id>", see lib/zgp-game-tools.sh) -- never translated. tool_labels: text shown
         # in the dropdown, in the same order -- the two lists are decoupled (as for
         # "flatpak"/"native"/"reset" in page_lutris_version), so translating the display never
-        # touches the arguments sent to bin/lpm.
+        # touches the arguments sent to bin/ludis.
         self.tools = ["winetricks", "regedit", "winecfg", "console", "exe", "folder", "favorite", "env", "runner", "mangohud", "overlay", "gamepad"]
         tool_labels = [
             t("gui.tools.tool_winetricks"),
@@ -138,7 +138,7 @@ class ToolsPage:
     @staticmethod
     def _menu_conf_path():
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-        return os.path.join(base, "lpm", "menu.conf")
+        return os.path.join(base, "ludis", "menu.conf")
 
     def _overlay_global_read(self):
         """Global overlay setting (key overlay_fps of menu.conf); off unless it says on."""
@@ -219,7 +219,7 @@ class ToolsPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["tools", slug, "overlay", "status"], on_done=done)
+        backend.run_ludis_async(["tools", slug, "overlay", "status"], on_done=done)
 
     def _add_gamepad_rows(self):
         # Gamepad profile (AntiMicroX) -- visible only for the "gamepad" tool. Same pattern as
@@ -298,7 +298,7 @@ class ToolsPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["tools", slug, "mangohud", "status"], on_done=done)
+        backend.run_ludis_async(["tools", slug, "mangohud", "status"], on_done=done)
 
     def _load_gamepad(self):
         slug = self.game_row.selected_slug()
@@ -334,7 +334,7 @@ class ToolsPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["tools", slug, "gamepad", "status"], on_done=done)
+        backend.run_ludis_async(["tools", slug, "gamepad", "status"], on_done=done)
 
     def _on_gamepad_edit(self, _btn):
         slug = self.gamepad_state["slug"]
@@ -350,7 +350,7 @@ class ToolsPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["tools", slug, "gamepad", "edit"], on_done=done)
+        backend.run_ludis_async(["tools", slug, "gamepad", "edit"], on_done=done)
 
     # No "Run" button for this tool: ticking / unticking the switch applies at once
     # ("tools <slug> gamepad on|off"); on failure the switch goes back to its old position.
@@ -378,7 +378,7 @@ class ToolsPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["tools", slug, "gamepad", "on" if want else "off"], on_done=done)
+        backend.run_ludis_async(["tools", slug, "gamepad", "on" if want else "off"], on_done=done)
 
     def _load_env(self):
         slug = self.game_row.selected_slug()
@@ -404,7 +404,7 @@ class ToolsPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["tools", slug, "env", "list"], on_done=done)
+        backend.run_ludis_async(["tools", slug, "env", "list"], on_done=done)
 
     def _update_path_rows_visibility(self, *_):
         idx = self.tool_row.get_selected()
@@ -502,7 +502,7 @@ class ToolsPage:
             if "=" not in ln or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
                 self.page.toast(t("gui.tools.env_toast_invalid", ln))
                 return None
-        fd, env_tmp = tempfile.mkstemp(prefix="lpm-env-", suffix=".txt")
+        fd, env_tmp = tempfile.mkstemp(prefix="ludis-env-", suffix=".txt")
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write("\n".join(env_lines) + ("\n" if env_lines else ""))
         GLib.timeout_add_seconds(120, lambda: (os.path.exists(env_tmp) and os.unlink(env_tmp)) and False)

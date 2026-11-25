@@ -9,8 +9,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: lpm version
-      description: Output of `lpm --version`
+      label: ludis version
+      description: Output of `ludis --version`
       placeholder: v0.9.5
     validations:
       required: true
@@ -26,8 +26,8 @@ body:
     attributes:
       label: Where did it happen?
       options:
-        - Graphical interface (lpm-gui)
-        - Command line (lpm)
+        - Graphical interface (ludis-gui)
+        - Command line (ludis)
         - Game launcher / loading screen
         - Other
     validations:
@@ -42,10 +42,10 @@ body:
   - type: textarea
     id: log
     attributes:
-      label: lpm log
+      label: ludis log
       description: |
         Graphical interface: System > Logs > Copy, then paste here.
-        Command line: output of `lpm log -n 50`.
+        Command line: output of `ludis log -n 50`.
       render: text
     validations:
       required: true

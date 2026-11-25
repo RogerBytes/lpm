@@ -1,4 +1,4 @@
-"""UI log (lpm-gui.log): writing, reading, filtering, dialog."""
+"""UI log (ludis-gui.log): writing, reading, filtering, dialog."""
 
 import datetime
 import logging
@@ -18,27 +18,27 @@ from i18n import t
 # ---------------------------------------------------------------------------------------
 # File log: full raw stdout/stderr of each command launched from the GUI, with rotation;
 # never shown live in the UI (see CommandPage below). Deliberately separate from
-# ~/.local/share/lpm/lpm.log: that one (written by lib/*.sh via zgu_log, see
+# ~/.local/share/ludis/ludis.log: that one (written by lib/*.sh via zgu_log, see
 # lib/zgu-log-utils.sh) is a line-per-event log of business decisions (4 columns) whose
-# format "lpm log --grep" parses, and mixing raw output into it would break that. Rotation
-# is by size (standard RotatingFileHandler style) rather than by line count like lpm.log,
+# format "ludis log --grep" parses, and mixing raw output into it would break that. Rotation
+# is by size (standard RotatingFileHandler style) rather than by line count like ludis.log,
 # since raw output has a different volume profile.
-_LOG_DIR = os.path.join(os.path.expanduser("~"), ".local", "share", "lpm")
+_LOG_DIR = os.path.join(os.path.expanduser("~"), ".local", "share", "ludis")
 
 
-_GUI_LOGGER = logging.getLogger("lpm.gui.commands")
+_GUI_LOGGER = logging.getLogger("ludis.gui.commands")
 
 
 def _init_gui_logger():
     # Without an explicit level the logger inherits the root one (WARNING), which silently
-    # drops every .info() call: lpm-gui.log stayed empty.
+    # drops every .info() call: ludis-gui.log stayed empty.
     _GUI_LOGGER.setLevel(logging.INFO)
     if _GUI_LOGGER.handlers:
         return
     try:
         os.makedirs(_LOG_DIR, exist_ok=True)
         handler = logging.handlers.RotatingFileHandler(
-            os.path.join(_LOG_DIR, "lpm-gui.log"),
+            os.path.join(_LOG_DIR, "ludis-gui.log"),
             maxBytes=1_000_000,
             backupCount=3,
             encoding="utf-8",
@@ -56,12 +56,12 @@ _init_gui_logger()
 
 # ---------------------------------------------------------------------------------------
 # --- Reading/filtering the two logs ("Logs" page, see page_logs) ---
-#   lpm.log     : "YYYY-MM-DDTHH:MM:SS+ZZZZ<TAB>command<TAB>status<TAB>detail" (written by lib/*.sh)
-#   lpm-gui.log : "YYYY-MM-DD HH:MM:SS,mmm <message>" (local time, written by _GUI_LOGGER), plus
-#                 its rotated files lpm-gui.log.1..3 (newest to oldest).
+#   ludis.log     : "YYYY-MM-DDTHH:MM:SS+ZZZZ<TAB>command<TAB>status<TAB>detail" (written by lib/*.sh)
+#   ludis-gui.log : "YYYY-MM-DD HH:MM:SS,mmm <message>" (local time, written by _GUI_LOGGER), plus
+#                 its rotated files ludis-gui.log.1..3 (newest to oldest).
 # A line without a recognized timestamp (continuation of multi-line output) is attached to
 # the previous entry: it is kept or dropped together with it.
-_LPM_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d{4})\t")
+_LUDIS_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d{4})\t")
 
 
 _GUI_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ ")
@@ -69,16 +69,16 @@ _GUI_LOG_TS_RE = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ ")
 
 def _log_files(kind: str) -> list[str]:
     """Files of a log, oldest to newest."""
-    if kind == "lpm":
-        return [os.path.join(_LOG_DIR, "lpm.log")]
-    base = os.path.join(_LOG_DIR, "lpm-gui.log")
+    if kind == "ludis":
+        return [os.path.join(_LOG_DIR, "ludis.log")]
+    base = os.path.join(_LOG_DIR, "ludis-gui.log")
     return [f"{base}.3", f"{base}.2", f"{base}.1", base]
 
 
 def _read_log_lines(kind: str, cutoff: "datetime.datetime | None", query: str) -> list[str]:
-    """Lines of log "kind" ("lpm" or "gui") newer than "cutoff" (None = all), containing
+    """Lines of log "kind" ("ludis" or "gui") newer than "cutoff" (None = all), containing
     "query" (case-insensitive, empty = all). Reading/parsing happens off the GTK thread."""
-    ts_re = _LPM_LOG_TS_RE if kind == "lpm" else _GUI_LOG_TS_RE
+    ts_re = _LUDIS_LOG_TS_RE if kind == "ludis" else _GUI_LOG_TS_RE
     needle = query.lower()
     out: list[str] = []
     keep = True
@@ -90,7 +90,7 @@ def _read_log_lines(kind: str, cutoff: "datetime.datetime | None", query: str) -
                     m = ts_re.match(line)
                     if m and cutoff is not None:
                         try:
-                            if kind == "lpm":
+                            if kind == "ludis":
                                 ts = datetime.datetime.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S%z")
                                 keep = ts >= cutoff
                             else:
@@ -121,9 +121,9 @@ def _clear_log_files(kind: str):
 
 
 def _read_gui_log_tail(max_lines: int = 300) -> str:
-    """Last lines of lpm-gui.log (see _init_gui_logger), for display in the GUI."""
+    """Last lines of ludis-gui.log (see _init_gui_logger), for display in the GUI."""
     try:
-        with open(os.path.join(_LOG_DIR, "lpm-gui.log"), "r", encoding="utf-8", errors="replace") as f:
+        with open(os.path.join(_LOG_DIR, "ludis-gui.log"), "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
     except OSError:
         return ""
@@ -131,7 +131,7 @@ def _read_gui_log_tail(max_lines: int = 300) -> str:
 
 
 def show_log_dialog(parent: Gtk.Widget | None):
-    """Window showing the end of the command log (lpm-gui.log), selectable and copyable
+    """Window showing the end of the command log (ludis-gui.log), selectable and copyable
     text -- opened from the "View log" button of the failure message."""
     dialog = Adw.Dialog()
     dialog.set_title(t("gui.common.log_dialog_title"))

@@ -1,17 +1,17 @@
-# lpm icon
+# ludis icon
 
 Downloads an icon for one or more installed games from SteamGridDB (with a Steam fallback) and refreshes the games' existing shortcuts so that they use it.
 
 ## Synopsis
 
 ```
-lpm icon <slug>... [--url <url>]
-lpm icon --all
+ludis icon <slug>... [--url <url>]
+ludis icon --all
 ```
 
 ## Description
 
-For each target game, `lpm icon` looks the game up on SteamGridDB by its Lutris name, picks an icon, converts it to PNG, stores it in `<game dir>/lpm/images/icon/` and regenerates the game's menu/desktop shortcuts if they already exist. It depends on a third-party service and needs a personal SteamGridDB API key (see Scripting notes); it is never run automatically by other commands.
+For each target game, `ludis icon` looks the game up on SteamGridDB by its Lutris name, picks an icon, converts it to PNG, stores it in `<game dir>/ludis/images/icon/` and regenerates the game's menu/desktop shortcuts if they already exist. It depends on a third-party service and needs a personal SteamGridDB API key (see Scripting notes); it is never run automatically by other commands.
 
 Only Wine games (`runner='wine'`) not living in a shared store prefix are eligible.
 
@@ -28,7 +28,7 @@ Requires `sqlite3`, `curl`, `python3`, `realpath` and ImageMagick (`magick`, or 
 | --- | --- |
 | `--url <url>` | Skip the SteamGridDB search and use this image URL directly. Requires exactly one target game (error otherwise). Used by the GUI after its visual picker. The value is the next argument; the `--url=` form does not exist. |
 
-The generic options of `bin/lpm` (`-y`, ...) have no effect here.
+The generic options of `bin/ludis` (`-y`, ...) have no effect here.
 
 ## Behavior
 
@@ -38,9 +38,9 @@ The generic options of `bin/lpm` (`-y`, ...) have no effect here.
 4. For each game:
    - Without `--url`: searches SteamGridDB (autocomplete) with the game's Lutris name. No result: skipped. Several results: lists them numbered and asks `Pick a number: `; an invalid or empty answer skips the game. One result: used directly.
    - Gathers candidate icons: SteamGridDB icons for the game (default and `styles=official`) plus, via the Steam store search and `api.steamcmd.net`, the Steam "client icon" (`.ico`) or, failing that, the small Steam icon. Candidates are listed in that order and the first one is used: so the first SteamGridDB icon when the game has any, and the Steam client icon only when SteamGridDB has none.
-   - Deletes the existing `*.png`, `*.ico`, `*.svg`, `*.xpm` in `<game dir>/lpm/images/icon/`, downloads the chosen image there, converts `.ico` to `icon.png` (largest frame via ImageMagick), or keeps other formats as `icon.<ext>`.
+   - Deletes the existing `*.png`, `*.ico`, `*.svg`, `*.xpm` in `<game dir>/ludis/images/icon/`, downloads the chosen image there, converts `.ico` to `icon.png` (largest frame via ImageMagick), or keeps other formats as `icon.<ext>`.
    - If the menu shortcut (`~/.local/share/applications/net.lutris.<slug>.desktop`) and/or the desktop shortcut (`<desktop dir>/<slug>.desktop`) already exist, rewrites them to use the new icon. No new shortcut is created.
-   - Logs the result in `lpm.log` and prints `Icon set for <name>.`
+   - Logs the result in `ludis.log` and prints `Icon set for <name>.`
 5. Failures on one game do not stop the others; the final status is 1 if any game failed.
 
 Note: the icon directory is emptied before the download, so a failed download leaves the game without a custom icon.
@@ -77,10 +77,10 @@ No installed games found.
 
 ## Scripting notes
 
-- **API key**: personal, never shipped with lpm. Stored as the first line of `${XDG_CONFIG_HOME:-$HOME/.config}/lpm/steamgriddb.key`, mode 600. It is validated by a request to `https://www.steamgriddb.com/api/v2/search/autocomplete/a` (HTTP 200 = valid, timeout 10 s) every time the command runs. Get one at https://www.steamgriddb.com/profile/preferences/api. Save it non-interactively with `lpm sgdb-key set <key>` before scripting.
+- **API key**: personal, never shipped with ludis. Stored as the first line of `${XDG_CONFIG_HOME:-$HOME/.config}/ludis/steamgriddb.key`, mode 600. It is validated by a request to `https://www.steamgriddb.com/api/v2/search/autocomplete/a` (HTTP 200 = valid, timeout 10 s) every time the command runs. Get one at https://www.steamgriddb.com/profile/preferences/api. Save it non-interactively with `ludis sgdb-key set <key>` before scripting.
 - **Interactive prompts**: (1) `Paste your SteamGridDB API key: ` when no valid key is saved (loops until a valid key or an empty answer); avoided by saving a valid key beforehand. (2) `Pick a number: ` when SteamGridDB returns several games for a name; avoided only with `--url <url>` (single game). In a script without that, an ambiguous game is skipped (empty/EOF answer).
 - Without a TTY on stdin, `read` gets EOF: an empty answer. The key prompt then ends with exit 1; the picker skips the game. The prompt text itself is only displayed when stdin is a terminal.
-- The dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`) can appear; avoid it with `LPM_LUTRIS_VERSION=flatpak|native` or `lpm lutris-version`.
+- The dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`) can appear; avoid it with `LUDIS_LUTRIS_VERSION=flatpak|native` or `ludis lutris-version`.
 - `--url` as the last argument without a value is treated as not given (normal SteamGridDB search).
 - Needs network access (steamgriddb.com, store.steampowered.com, api.steamcmd.net, the image host).
 - Stable output: the `Icon set for <name>.` lines; error texts follow the system language (`LC_ALL=C` for English).
@@ -88,19 +88,19 @@ No installed games found.
 ## Examples
 
 ```
-lpm sgdb-key set "$MY_KEY"
-lpm icon my-game
-lpm icon --all
-lpm icon my-game --url https://example.com/icon.png
+ludis sgdb-key set "$MY_KEY"
+ludis icon my-game
+ludis icon --all
+ludis icon my-game --url https://example.com/icon.png
 ```
 
 ## Files and data touched
 
-- `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read; written when a new key is accepted).
-- `<game dir>/lpm/images/icon/icon.png` (or `icon.<ext>`), temporary `.lpm-download.<ext>`.
+- `${XDG_CONFIG_HOME:-~/.config}/ludis/steamgriddb.key` (read; written when a new key is accepted).
+- `<game dir>/ludis/images/icon/icon.png` (or `icon.<ext>`), temporary `.ludis-download.<ext>`.
 - Existing shortcuts: `~/.local/share/applications/net.lutris.<slug>.desktop`, `<desktop dir>/<slug>.desktop`.
-- Lutris `pga.db` (read), `~/.local/share/lpm/lpm.log`.
+- Lutris `pga.db` (read), `~/.local/share/ludis/ludis.log`.
 
 ## See also
 
-`lpm shortcut`, `lpm splash`, `lpm logo`, `lpm sgdb-key`, `lpm sgdb-images`, `lpm sync-media`
+`ludis shortcut`, `ludis splash`, `ludis logo`, `ludis sgdb-key`, `ludis sgdb-images`, `ludis sync-media`

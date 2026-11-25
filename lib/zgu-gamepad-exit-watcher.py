@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-# --- lpm launcher: opens the in-game LPM menu (gamepad combo or keyboard hotkey) ---
+# --- ludis launcher: opens the in-game Ludis menu (gamepad combo or keyboard hotkey) ---
 #
 # Usage: zgu-gamepad-exit-watcher.py <x11|wayland> <prefix_folder>
 #
 # Historical name: this watcher used to be the "quit the game" combo. The combo now opens the
-# LPM menu (lib/zgu-game-menu.py), whose "Quit the game" entry does what the combo used to do.
+# Ludis menu (lib/zgu-game-menu.py), whose "Quit the game" entry does what the combo used to do.
 #
 # Runs for the WHOLE game session (not single-use) and stops by itself once the game is over
 # (no wineserver of the prefix any more, see zgu-prefix-watch.py).
@@ -12,7 +12,7 @@
 # Gamepad: read through SDL2 WITHOUT EVIOCGRAB, so the game and remapping tools such as
 # AntiMicro keep working. Default combo: L1 + R1 + L2 + R2 + L3 + R3 ALL pressed at once
 # (chosen to avoid classic reset combos and cheat codes); configurable, see
-# zgu_common.load_menu_conf (<XDG config>/lpm/menu.conf, one setting for every game). SDL2's
+# zgu_common.load_menu_conf (<XDG config>/ludis/menu.conf, one setting for every game). SDL2's
 # bundled gamecontrollerdb gives every known pad the same standard layout.
 #
 # Keyboard (default Ctrl+Shift+M, same config file): read straight from /dev/input/event*
@@ -25,7 +25,7 @@
 # Also here (same SDL reading): with the window-switch hold of zgu-gamepad-alttab-watcher.py
 # (L1+L2+R1+R2+R3, no L3) pressed, D-pad UP opens the virtual keyboard (zgu-virtual-keyboard.py)
 # and D-pad DOWN turns the gamepad mouse on / off (zgu-gamepad-mouse.py, a separate process that
-# lives only while the mouse mode is on). The LPM menu asks for the same through a small command
+# lives only while the mouse mode is on). The Ludis menu asks for the same through a small command
 # file (zgu_common.runtime_file("gamepad-cmd")).
 #
 # SYSTEM DEPENDENCY: the libSDL2 shared library ("libsdl2-2.0-0" on Debian/Ubuntu, "sdl2"
@@ -73,7 +73,7 @@ running = True
 # (keyboards opened or refused, gamepads), every trigger, and the menu's own errors.
 LOG_PATH = os.path.join(
     os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"),
-    "lpm", "menu-watcher.log")
+    "ludis", "menu-watcher.log")
 
 
 def log(message):
@@ -226,8 +226,8 @@ def start_detached(script):
 
 
 def menu_is_open():
-    """True while the LPM menu runs (it holds a lock on its file for its whole life)."""
-    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "lpm-game-menu.lock-%d" % os.getuid())
+    """True while the Ludis menu runs (it holds a lock on its file for its whole life)."""
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "ludis-game-menu.lock-%d" % os.getuid())
     try:
         import fcntl
         with open(path, "r") as handle:
@@ -241,13 +241,13 @@ def menu_is_open():
 
 
 def show_toast(on):
-    """Brief notice (top right) that the gamepad mouse was turned on / off. Not while the LPM menu
+    """Brief notice (top right) that the gamepad mouse was turned on / off. Not while the Ludis menu
     is open: the notice takes the focus for an instant and the menu closes when it loses it (the
     menu's own switch already shows the state)."""
     if menu_is_open():
         return
-    label = os.environ.get("LPM_MENU_MOUSE", "").strip() or "Gamepad mouse"
-    state = (os.environ.get("LPM_MENU_ON", "").strip() or "on") if on else (os.environ.get("LPM_MENU_OFF", "").strip() or "off")
+    label = os.environ.get("LUDIS_MENU_MOUSE", "").strip() or "Gamepad mouse"
+    state = (os.environ.get("LUDIS_MENU_ON", "").strip() or "on") if on else (os.environ.get("LUDIS_MENU_OFF", "").strip() or "off")
     try:
         subprocess.Popen([sys.executable, TOAST_SCRIPT, SESSION_KIND, "%s: %s" % (label, state)],
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -302,7 +302,7 @@ class MouseMode:
 
 
 def take_command():
-    """Command left by the LPM menu in CMD_FILE (one word), or "" ."""
+    """Command left by the Ludis menu in CMD_FILE (one word), or "" ."""
     try:
         with open(CMD_FILE, encoding="utf-8") as f:
             command = f.read().strip()
@@ -470,7 +470,7 @@ def main():
     # Reading is passive and nearly free (see file header), so keep running and re-scan
     # periodically (RESCAN_INTERVAL_LOOPS, ~1x/s). This also covers a pad that disconnects
     # and reconnects mid-game. The comparison is deliberately simple (number of recognized
-    # gamepads, not a per-GUID match); enough since lpm assumes one player/one gamepad.
+    # gamepads, not a per-GUID match); enough since ludis assumes one player/one gamepad.
     pads = find_controllers(sdl)
     loops_since_rescan = 0
     game_watch = _load_prefix_watch().GameEndWatch(PREFIX_DIR)

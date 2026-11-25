@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# --- LPM Launcher: conversion of the OLD format to the current one ---
+# --- Ludis Launcher: conversion of the OLD format to the current one ---
 #
 # Usage: zgl-launcher-legacy.sh <lutris game yml> <game dir>
 #
-# !!! DO NOT REMOVE this script nor its callers (orchestrator, "lpm launcher on", install).
-# !!! Packages (.zgp) and games made with lpm <= 0.9.5 can be installed or launched years from
+# !!! DO NOT REMOVE this script nor its callers (orchestrator, "ludis launcher on", install).
+# !!! Packages (.zgp) and games made with ludis <= 0.9.5 can be installed or launched years from
 # !!! now: they still carry the old format, and this is what converts them. A test in
 # !!! tests/cli_smoke.sh ("legacy launcher") fails if the conversion disappears.
 #
 # Old format: Lutris ran a relay (<game dir>/scripts/lpm-launcher.sh) as the game's
 # "system.prelaunch_command" just before the game, which wrote lpm-launch.bat from the choice
 # made in the picker. Current format: the orchestrator (lib/zgl-launcher-orchestrator.sh,
-# entry point of every lpm shortcut) writes lpm-launch.bat itself, on the host, BEFORE launching
+# entry point of every ludis shortcut) writes lpm-launch.bat itself, on the host, BEFORE launching
 # Lutris. No prelaunch command, no relay.
 #
 # What this script does (idempotent, silent, never fails the caller):
@@ -85,16 +85,16 @@ fi
 if ! relay_in_yml && [[ -n "${game_dir}" ]]; then
   rm -f -- "${game_dir}/scripts/lpm-launcher.sh" 2>/dev/null
   rmdir "${game_dir}/scripts" 2>/dev/null
-  # Same relay once the prefix was migrated to the "lpm/" layout (installer moves "scripts/").
-  rm -f -- "${game_dir}/lpm/scripts/lpm-launcher.sh" 2>/dev/null
-  rmdir "${game_dir}/lpm/scripts" 2>/dev/null
+  # Same relay once the prefix was migrated to the "ludis/" layout (installer moves "scripts/").
+  rm -f -- "${game_dir}/ludis/scripts/lpm-launcher.sh" 2>/dev/null
+  rmdir "${game_dir}/ludis/scripts" 2>/dev/null
 fi
 
-# --- 3. bat_path of lpm/launcher.yml, from the game.exe Lutris really runs ---
+# --- 3. bat_path of ludis/launcher.yml, from the game.exe Lutris really runs ---
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
-launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
+launcher_yml="$(zgu_ludis_find "${game_dir}" launcher)"
 if [[ -n "${game_dir}" ]] && [[ -f "${launcher_yml}" ]]; then
   YML_PATH="${yml}" LAUNCHER_YML="${launcher_yml}" python3 -c '
 import os, yaml

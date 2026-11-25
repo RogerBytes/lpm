@@ -11,9 +11,9 @@ fi
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 
 # Destination paths on the system.
-# Overridable via LPM_INSTALL_BIN_DIR (tests, packaging); defaults to /usr/local/bin.
-INSTALL_BIN_DIR="${LPM_INSTALL_BIN_DIR:-/usr/local/bin}"
-INSTALL_LIB_DIR="/usr/local/lib/lpm"
+# Overridable via LUDIS_INSTALL_BIN_DIR (tests, packaging); defaults to /usr/local/bin.
+INSTALL_BIN_DIR="${LUDIS_INSTALL_BIN_DIR:-/usr/local/bin}"
+INSTALL_LIB_DIR="/usr/local/lib/ludis"
 APP_DESKTOP_DIR="/usr/share/applications"
 MIME_DIR="/usr/share/mime/packages"
 ZSH_COMPLETION_DIR="/usr/local/share/zsh/site-functions"
@@ -23,14 +23,14 @@ ICON_THEME_DIR="/usr/share/icons/hicolor"
 ICON_APPS_DIR="${ICON_THEME_DIR}/scalable/apps"
 ICON_MIMETYPES_DIR="${ICON_THEME_DIR}/scalable/mimetypes"
 
-echo "=== Installation de lpm ==="
+echo "=== Installation de ludis ==="
 
-# 0. Another program may already be named "lpm" (e.g. Lite XL's plugin manager). Never
-# overwrite it: if "lpm" exists there and is not our script (identified by its LPM_VERSION=
+# 0. Another program may already be named "ludis" (e.g. Lite XL's plugin manager). Never
+# overwrite it: if "ludis" exists there and is not our script (identified by its LUDIS_VERSION=
 # line), abort before copying anything.
-if [[ -e "${INSTALL_BIN_DIR}/lpm" ]] && ! grep -aq 'LPM_VERSION=' "${INSTALL_BIN_DIR}/lpm" 2>/dev/null; then
-  echo "Error: ${INSTALL_BIN_DIR}/lpm already exists and is not Ludis Prefix Manager (another program named \"lpm\"?)."
-  echo "Nothing was installed or modified. Move or delete that file if you want to install lpm, then run this script again."
+if [[ -e "${INSTALL_BIN_DIR}/ludis" ]] && ! grep -aq 'LUDIS_VERSION=' "${INSTALL_BIN_DIR}/ludis" 2>/dev/null; then
+  echo "Error: ${INSTALL_BIN_DIR}/ludis already exists and is not Ludis (another program named \"ludis\"?)."
+  echo "Nothing was installed or modified. Move or delete that file if you want to install ludis, then run this script again."
   exit 1
 fi
 
@@ -62,37 +62,37 @@ else
   exit 1
 fi
 
-# 3. Copy and link the main binary (bin/lpm)
-if [[ -f "bin/lpm" ]]; then
-  cp bin/lpm "${INSTALL_BIN_DIR}/lpm"
-  chmod +x "${INSTALL_BIN_DIR}/lpm"
-  echo "[OK] lpm binary installed in ${INSTALL_BIN_DIR}/lpm"
+# 3. Copy and link the main binary (bin/ludis)
+if [[ -f "bin/ludis" ]]; then
+  cp bin/ludis "${INSTALL_BIN_DIR}/ludis"
+  chmod +x "${INSTALL_BIN_DIR}/ludis"
+  echo "[OK] ludis binary installed in ${INSTALL_BIN_DIR}/ludis"
 else
-  echo "Error: the 'bin/lpm' file was not found."
+  echo "Error: the 'bin/ludis' file was not found."
   exit 1
 fi
 
-# 3bis. Copy the GTK4/Libadwaita GUI (gui/) and its launcher (bin/lpm-gui)
+# 3bis. Copy the GTK4/Libadwaita GUI (gui/) and its launcher (bin/ludis-gui)
 # -- optional: missing PyGObject/GTK4/Libadwaita must not fail the install; the CLI works
-# without them (bin/lpm-gui checks these dependencies itself at runtime).
-if [[ -d "gui" ]] && [[ -f "bin/lpm-gui" ]]; then
+# without them (bin/ludis-gui checks these dependencies itself at runtime).
+if [[ -d "gui" ]] && [[ -f "bin/ludis-gui" ]]; then
   mkdir -p "${INSTALL_LIB_DIR}/gui"
   cp -r gui/* "${INSTALL_LIB_DIR}/gui/"
   chmod +x "${INSTALL_LIB_DIR}/gui"/*.py 2>/dev/null || true
-  cp bin/lpm-gui "${INSTALL_BIN_DIR}/lpm-gui"
-  chmod +x "${INSTALL_BIN_DIR}/lpm-gui"
-  echo "[OK] GUI installed in ${INSTALL_LIB_DIR}/gui (run with: lpm-gui)"
+  cp bin/ludis-gui "${INSTALL_BIN_DIR}/ludis-gui"
+  chmod +x "${INSTALL_BIN_DIR}/ludis-gui"
+  echo "[OK] GUI installed in ${INSTALL_LIB_DIR}/gui (run with: ludis-gui)"
 else
   echo "[INFO] GUI not present in this source package, skipped."
 fi
 
-# 3bis. Copy lpm's own SVG icons (hicolor theme: app icon, fallback game-shortcut icon,
+# 3bis. Copy ludis's own SVG icons (hicolor theme: app icon, fallback game-shortcut icon,
 # .zgp/.zgr MIME type icons). assets/icons/lutris-bg-template.svg and
 # assets/icons/box-bg-template.svg are intentionally not copied: they are reserves for
 # future icons, not runtime assets.
-if [[ -f "assets/icons/lpm.svg" ]] && [[ -f "assets/icons/lpm-game-generic.svg" ]] && [[ -f "assets/icons/application-x-zgp-game.svg" ]] && [[ -f "assets/icons/application-x-zgr-runner.svg" ]]; then
-  cp assets/icons/lpm.svg "${ICON_APPS_DIR}/lpm.svg"
-  cp assets/icons/lpm-game-generic.svg "${ICON_APPS_DIR}/lpm-game-generic.svg"
+if [[ -f "assets/icons/ludis.svg" ]] && [[ -f "assets/icons/ludis-game-generic.svg" ]] && [[ -f "assets/icons/application-x-zgp-game.svg" ]] && [[ -f "assets/icons/application-x-zgr-runner.svg" ]]; then
+  cp assets/icons/ludis.svg "${ICON_APPS_DIR}/ludis.svg"
+  cp assets/icons/ludis-game-generic.svg "${ICON_APPS_DIR}/ludis-game-generic.svg"
   cp assets/icons/application-x-zgp-game.svg "${ICON_MIMETYPES_DIR}/application-x-zgp-game.svg"
   cp assets/icons/application-x-zgr-runner.svg "${ICON_MIMETYPES_DIR}/application-x-zgr-runner.svg"
   if command -v gtk-update-icon-cache >/dev/null 2>&1; then
@@ -102,7 +102,7 @@ if [[ -f "assets/icons/lpm.svg" ]] && [[ -f "assets/icons/lpm-game-generic.svg" 
     # new icons) and hide them; remove it to force a direct directory scan.
     rm -f "${ICON_THEME_DIR}/icon-theme.cache"
   fi
-  echo "[OK] lpm icons installed in ${ICON_THEME_DIR}"
+  echo "[OK] ludis icons installed in ${ICON_THEME_DIR}"
 else
   echo "Error: the 'assets/icons' folder is incomplete or was not found."
   exit 1
@@ -114,20 +114,20 @@ fi
 # stays among the candidates, and a known Nemo bug (linuxmint/nemo issue #3062) makes it
 # match that generic name in a parent theme (e.g. Adwaita) before reaching hicolor, where
 # our specific icon lives. Pointing <generic-icon> at our icon removes that candidate.
-MIME_FILE="${MIME_DIR}/lpm.xml"
+MIME_FILE="${MIME_DIR}/ludis.xml"
 
 cat << EOF > "${MIME_FILE}"
 <?xml-stylesheet type="text/xsl" href="libxslt:shared-mime-info"?>
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-zgp-game">
-    <comment>lpm game</comment>
-    <comment xml:lang="fr">Jeu lpm</comment>
+    <comment>ludis game</comment>
+    <comment xml:lang="fr">Jeu ludis</comment>
     <glob pattern="*.zgp"/>
     <generic-icon name="application-x-zgp-game"/>
   </mime-type>
   <mime-type type="application/x-zgr-runner">
-    <comment>lpm runner</comment>
-    <comment xml:lang="fr">Runner lpm</comment>
+    <comment>ludis runner</comment>
+    <comment xml:lang="fr">Runner ludis</comment>
     <glob pattern="*.zgr"/>
     <generic-icon name="application-x-zgr-runner"/>
   </mime-type>
@@ -135,19 +135,19 @@ cat << EOF > "${MIME_FILE}"
 EOF
 
 update-mime-database /usr/share/mime 2>/dev/null || true
-echo "[OK] MIME types registered with the lpm icons."
+echo "[OK] MIME types registered with the ludis icons."
 
 # 5. Generate the launcher in the Applications menu
-DESKTOP_FILE="${APP_DESKTOP_DIR}/lpm.desktop"
+DESKTOP_FILE="${APP_DESKTOP_DIR}/ludis.desktop"
 
 cat << EOF > "${DESKTOP_FILE}"
 [Desktop Entry]
 Type=Application
-Name=lpm
+Name=ludis
 Comment=Prefix manager for Lutris games and runners
 Comment[fr]=Gestionnaire de préfixes et runners pour Lutris
-Exec=lpm-gui %f
-Icon=lpm
+Exec=ludis-gui %f
+Icon=ludis
 Categories=Game;Utility;
 Terminal=false
 StartupNotify=true
@@ -160,18 +160,18 @@ echo "[OK] Launcher and file associations created."
 
 # 6. zsh completion (optional: a missing zsh or completion directory does not abort the
 # install)
-if [[ -f "completions/_lpm" ]]; then
+if [[ -f "completions/_ludis" ]]; then
   mkdir -p "${ZSH_COMPLETION_DIR}"
-  cp completions/_lpm "${ZSH_COMPLETION_DIR}/_lpm"
+  cp completions/_ludis "${ZSH_COMPLETION_DIR}/_ludis"
   echo "[OK] zsh completion installed in ${ZSH_COMPLETION_DIR}"
   echo "     (if it does not show up: check that this folder is in your \$fpath,"
   echo "     then run 'rm -f ~/.zcompdump && compinit' in a new terminal)"
 fi
 
 # 7. bash completion (optional, same logic as zsh completion above)
-if [[ -f "completions/lpm.bash" ]]; then
+if [[ -f "completions/ludis.bash" ]]; then
   mkdir -p "${BASH_COMPLETION_DIR}"
-  cp completions/lpm.bash "${BASH_COMPLETION_DIR}/lpm"
+  cp completions/ludis.bash "${BASH_COMPLETION_DIR}/ludis"
   echo "[OK] bash completion installed in ${BASH_COMPLETION_DIR}"
   echo "     (if it does not show up: open a new terminal, or check that the"
   echo "     'bash-completion' package is installed on this system)"
@@ -180,20 +180,36 @@ fi
 # 8. Man page, multi-language (English default + French variant in the standard "fr/man1/"
 # locale directory, picked by "man" from $LANG/$LC_MESSAGES). Optional: a missing "mandb"
 # does not abort the install (same best-effort logic as update-desktop-database/
-# update-mime-database above); "lpm --help" works regardless via its built-in fallback,
-# see bin/lpm)
-if [[ -f "man/man1/lpm.1" ]]; then
+# update-mime-database above); "ludis --help" works regardless via its built-in fallback,
+# see bin/ludis)
+if [[ -f "man/man1/ludis.1" ]]; then
   mkdir -p "${MAN_DIR}/man1"
-  cp man/man1/lpm.1 "${MAN_DIR}/man1/lpm.1"
-  if [[ -f "man/fr/man1/lpm.1" ]]; then
+  cp man/man1/ludis.1 "${MAN_DIR}/man1/ludis.1"
+  if [[ -f "man/fr/man1/ludis.1" ]]; then
     mkdir -p "${MAN_DIR}/fr/man1"
-    cp man/fr/man1/lpm.1 "${MAN_DIR}/fr/man1/lpm.1"
+    cp man/fr/man1/ludis.1 "${MAN_DIR}/fr/man1/ludis.1"
   fi
   mandb 2>/dev/null || true
-  echo "[OK] Man page (EN + FR) installed in ${MAN_DIR} ('lpm --help' will use it from now on)"
+  echo "[OK] Man page (EN + FR) installed in ${MAN_DIR} ('ludis --help' will use it from now on)"
 fi
+
+# 9. Former name "lpm": remove the files of an older manual install (so that the menu has no
+# duplicate entry) and keep the old paths alive as links, because the shortcuts created before
+# the rename point to <lib>/lpm/zgl-launcher-orchestrator.sh.
+if [[ -f "${INSTALL_BIN_DIR}/lpm" ]] && grep -aq 'LPM_VERSION=' "${INSTALL_BIN_DIR}/lpm" 2>/dev/null; then
+  rm -f "${INSTALL_BIN_DIR}/lpm"
+fi
+rm -f "${INSTALL_BIN_DIR}/lpm-gui" "${APP_DESKTOP_DIR}/lpm.desktop" "${MIME_DIR}/lpm.xml" \
+      "${ICON_APPS_DIR}/lpm.svg" "${ICON_APPS_DIR}/lpm-game-generic.svg" \
+      "${ZSH_COMPLETION_DIR}/_lpm" "${BASH_COMPLETION_DIR}/lpm" "${MAN_DIR}/man1/lpm.1" "${MAN_DIR}/fr/man1/lpm.1" 2>/dev/null
+if [[ -d "$(dirname "${INSTALL_LIB_DIR}")/lpm" && ! -L "$(dirname "${INSTALL_LIB_DIR}")/lpm" ]]; then
+  rm -rf "$(dirname "${INSTALL_LIB_DIR}")/lpm"
+fi
+ln -sfn ludis "$(dirname "${INSTALL_LIB_DIR}")/lpm"
+[[ -e "${INSTALL_BIN_DIR}/lpm" ]] || ln -s ludis "${INSTALL_BIN_DIR}/lpm"
+echo "[OK] Old name 'lpm' kept as a link to ludis (existing shortcuts keep working)"
 
 echo "========================================"
 echo " Installation completed successfully!"
-echo " You can now run 'lpm' or open your .zgp / .zgr files directly!"
+echo " You can now run 'ludis' or open your .zgp / .zgr files directly!"
 echo "========================================"

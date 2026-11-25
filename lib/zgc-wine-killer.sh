@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# --- lpm killwine: immediately kills every running Wine/Winetricks/umu-run/Proton process,
+# --- ludis killwine: immediately kills every running Wine/Winetricks/umu-run/Proton process,
 # whatever the game or prefix (a "panic" button for a stuck/crashed process) ---
 #
-# Unlike "lpm tools <game> <action>" (which targets ONE game with the wine binary resolved from its
+# Unlike "ludis tools <game> <action>" (which targets ONE game with the wine binary resolved from its
 # config), this command is deliberately broad: any wine/wine64/wine-preloader/wine64-preloader/
 # wineserver/winetricks/umu-run process is killed, wherever it comes from.
 #
@@ -16,7 +16,7 @@
 #   1. "pkill -x" compares the kernel "comm" name, TRUNCATED to 15 characters -- "wine64-preloader"
 #      is 16 characters and would NEVER match with -x.
 #   2. Safety: each PID found is compared to $$ (this script) and $PPID (its parent, e.g. the bash of
-#      bin/lpm) before being killed, in addition to anchoring the pattern on "/" and a separator --
+#      bin/ludis) before being killed, in addition to anchoring the pattern on "/" and a separator --
 #      extra caution for a destructive, irreversible action (-9, no confirmation afterwards).
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

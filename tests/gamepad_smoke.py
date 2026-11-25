@@ -207,7 +207,7 @@ if _sdl is not None and hasattr(_sdl, "SDL_JoystickAttachVirtual") and zgu_commo
     _sync()
     expect("hot-plug: reconnected controller is opened again", (len(_pads), _log), (1, ["add", "rm", "add"]))
 
-# --- LPM menu opener (lib/zgu-gamepad-exit-watcher.py) ------------------------------------
+# --- Ludis menu opener (lib/zgu-gamepad-exit-watcher.py) ------------------------------------
 print("--- menu opener")
 expect("hotkey: default", zgu_common.parse_keyboard_hotkey("ctrl+shift+m"), ([(29, 97), (42, 54)], 50))
 _env = os.environ.pop("DISPLAY", None)
@@ -225,8 +225,8 @@ def load_exit_watcher(conf_text=None):
     import tempfile
     cfg = tempfile.mkdtemp()
     if conf_text is not None:
-        os.makedirs(os.path.join(cfg, "lpm"))
-        open(os.path.join(cfg, "lpm", "menu.conf"), "w").write(conf_text)
+        os.makedirs(os.path.join(cfg, "ludis"))
+        open(os.path.join(cfg, "ludis", "menu.conf"), "w").write(conf_text)
     os.environ["XDG_CONFIG_HOME"] = cfg
     sys.argv = ["zgu-gamepad-exit-watcher.py", "x11", "/tmp"]
     sp = importlib.util.spec_from_file_location("exit_w", os.path.join(ROOT, "lib", "zgu-gamepad-exit-watcher.py"))
@@ -316,12 +316,12 @@ def _mouse_suspend_check():
     spec.loader.exec_module(mod)
     mouse = mod.GamepadMouse(None, None, 1.0, 0.016)
     before = mouse.other_ui_open(1.0)
-    handle = open(os.path.join(run, "lpm-virtual-keyboard.lock-%d" % os.getuid()), "w")
+    handle = open(os.path.join(run, "ludis-virtual-keyboard.lock-%d" % os.getuid()), "w")
     fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     during = mouse.other_ui_open(2.0)
     handle.close()
     after = mouse.other_ui_open(3.0)
-    menu = open(os.path.join(run, "lpm-game-menu.lock-%d" % os.getuid()), "w")
+    menu = open(os.path.join(run, "ludis-game-menu.lock-%d" % os.getuid()), "w")
     fcntl.flock(menu, fcntl.LOCK_EX | fcntl.LOCK_NB)
     menu_during = mouse.other_ui_open(4.0)
     menu.close()

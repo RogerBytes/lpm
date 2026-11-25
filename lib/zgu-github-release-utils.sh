@@ -12,10 +12,10 @@
 # computation logic lives here.
 
 # URL of the GitHub release page containing the prebuilt runner packages (.zgr). SINGLE entry point:
-# the only line to change to point lpm to another runner repo/release. zgc-dependency-checker.sh,
+# the only line to change to point ludis to another runner repo/release. zgc-dependency-checker.sh,
 # zgr-runner-installer.sh and zgr-runner-remote-lister.sh source this file and reuse this constant.
 # shellcheck disable=SC2034 # read by the scripts that source this file (e.g. zgc-dependency-checker.sh)
-readonly GITHUB_RELEASE_URL="https://github.com/RogerBytes/lpm/releases/tag/zgr-pkg"
+readonly GITHUB_RELEASE_URL="https://github.com/RogerBytes/ludis/releases/tag/zgr-pkg"
 
 # Converts the URL of a GitHub release page (.../releases/tag/<tag>) into an API URL
 # (https://api.github.com/repos/<owner>/<repo>/releases/tags/<tag>).

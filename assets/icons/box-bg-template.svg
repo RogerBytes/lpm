@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
   <!--
-    Gabarit de fond "carton" pour les icônes de fichiers lpm (.zgp / .zgr), vierge (sans
+    Gabarit de fond "carton" pour les icônes de fichiers ludis (.zgp / .zgr), vierge (sans
     glyphe), pour validation avant d'y coller un glyphe.
 
     Silhouette reprise telle quelle (coordonnées non modifiées) du thème d'icônes
@@ -10,9 +10,9 @@
     120x120 (48 * 2.5 = 120), sans autre transformation ; la marge/proportions internes du
     tracé d'origine sont conservées telles quelles.
 
-    Recoloration : dégradé jaune->orange (le même que lpm.svg et lutris-bg-template.svg),
+    Recoloration : dégradé jaune->orange (le même que ludis.svg et lutris-bg-template.svg),
     à la place du brun carton d'origine du thème. Un fin contour noir semi-transparent
-    (opacité 0.4) souligne le tracé, cohérent avec le reste de la famille d'icônes lpm ;
+    (opacité 0.4) souligne le tracé, cohérent avec le reste de la famille d'icônes ludis ;
     la ligne d'adhésif est un simple fill noir semi-transparent (opacité 0.18) par-dessus.
     Trait de pli du rabat : sur l'icône d'origine, un rectangle interne (path93, coin haut
     à y=17.5) souligne la ligne où le rabat du dessus (vu légèrement de biais, d'où les
@@ -20,12 +20,12 @@
     trait horizontal (mêmes coordonnées x=4.5 à x=43.5, y=17.5 en unités du tracé
     d'origine), en noir semi-transparent, plus discret que le contour principal.
 
-    Choisie à la place d'un carré plein (lpm.svg) ou d'un coin corné "page" : la forme de
+    Choisie à la place d'un carré plein (ludis.svg) ou d'un coin corné "page" : la forme de
     boîte est un repère universel de "ceci est un paquet/fichier", donc bien distincte de
-    l'icône carrée pleine de l'appli lpm elle-même, tout en restant cohérente avec le thème
+    l'icône carrée pleine de l'appli ludis elle-même, tout en restant cohérente avec le thème
     d'icônes Mint-L-Blue.
 
-    Ce fichier n'est pas utilisé tel quel par lpm (ni installé, ni référencé par
+    Ce fichier n'est pas utilisé tel quel par ludis (ni installé, ni référencé par
     install.sh) ; c'est un gabarit de réserve, à dupliquer avec ce même fond pour y coller
     un glyphe blanc plat centré (viewBox 24x24, formule de centrage dans un canevas
     120x120 : translate = 60 - 12*scale, quel que soit le contenu du fond puisque le

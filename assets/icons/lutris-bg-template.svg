@@ -17,8 +17,8 @@
     d'environ 90.5px (20.66% du côté). Reporté ici sur un canevas 120x120 :
     marge = 8.672, côté = 102.656, rx = 21.211.
 
-    Ce fichier n'est pas utilisé tel quel par lpm (ni installé, ni référencé par
-    install.sh) ; c'est un gabarit de réserve pour une future icône de la famille lpm :
+    Ce fichier n'est pas utilisé tel quel par ludis (ni installé, ni référencé par
+    install.sh) ; c'est un gabarit de réserve pour une future icône de la famille ludis :
     dupliquer le <rect> avec ce même fill/stroke dans un nouveau fichier, puis ajouter
     par-dessus un glyphe blanc plat centré (viewBox 24x24, formule de centrage dans un
     carré 120x120 : translate = 60 - 12*scale, quel que soit le côté du carré puisque le

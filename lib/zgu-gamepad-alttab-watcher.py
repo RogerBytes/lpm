@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# --- lpm launcher: "switch window" (Alt+Tab) gamepad combo, via SDL2 ---
+# --- ludis launcher: "switch window" (Alt+Tab) gamepad combo, via SDL2 ---
 #
 # Usage: zgu-gamepad-alttab-watcher.py <x11|wayland> [<prefix_folder>]
 #
@@ -14,7 +14,7 @@
 #     repeatedly. Releasing the combo releases Alt and confirms the selection.
 #
 # F4, Alt+Enter, F11 and the other keys are no longer gamepad shortcuts: they are entries of
-# the LPM menu (lib/zgu-game-menu.py, opened by lib/zgu-gamepad-exit-watcher.py).
+# the Ludis menu (lib/zgu-game-menu.py, opened by lib/zgu-gamepad-exit-watcher.py).
 #
 # Works on X11 (xdotool) and Wayland (ydotool).
 #

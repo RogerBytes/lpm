@@ -26,5 +26,8 @@ jobs:
       - name: Menu tests
         run: bash tests/menu_smoke.sh
 
+      - name: Virtual keyboard tests
+        run: bash tests/keyboard_smoke.sh
+
       - name: GUI tests
         run: bash tests/run_gui_smoke.sh

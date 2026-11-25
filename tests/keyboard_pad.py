@@ -15,5 +15,5 @@ def press(btn, t, hold=150):
 # events: (button, start_ms, hold_ms)
 for b, t, h in eval(sys.argv[2]):
     press(b, t, h)
-sys.argv = [script, "x11", os.environ.get("LPM_TEST_PREFIX", "/tmp")]
+sys.argv = [script, "x11", os.environ.get("LUDIS_TEST_PREFIX", "/tmp")]
 runpy.run_path(script, run_name="__main__")

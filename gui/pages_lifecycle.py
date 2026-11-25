@@ -336,7 +336,7 @@ class InstallPage:
 
     @staticmethod
     def _parse_hooks(stdout: str) -> list[tuple[str, str, list[tuple[str, str]]]]:
-        """Output of "lpm install --list-hooks": [(game name, file name, [(short path, full path)])]."""
+        """Output of "ludis install --list-hooks": [(game name, file name, [(short path, full path)])]."""
         games = []
         for line in stdout.splitlines():
             kind, _, rest = line.partition("\x1f")
@@ -423,7 +423,7 @@ class InstallPage:
         # Scripts embedded in the archives are listed first (read-only), so that ONE
         # confirmation can name every package that has some, as the CLI does.
         self.page.run_button.set_sensitive(False)
-        backend.run_lpm_async(
+        backend.run_ludis_async(
             ["install", "-y", "--list-hooks", *selected],
             on_done=lambda result: _run_on_main(self._on_hooks_scanned, selected, result))
 

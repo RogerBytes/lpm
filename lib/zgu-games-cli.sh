@@ -97,7 +97,7 @@ zgu_image_to_png() {
   err=$("${convert_bin[@]}" "${in}[0]" "$@" "${out}" 2>&1 >/dev/null | head -n1)
   [[ -s "${out}" ]] && return 0
   if command -v ffmpeg >/dev/null 2>&1; then
-    local frame="${out%.png}.lpm-frame.png"
+    local frame="${out%.png}.ludis-frame.png"
     if ffmpeg -y -loglevel error -i "${in}" -frames:v 1 "${frame}" >/dev/null 2>&1 && [[ -s "${frame}" ]]; then
       if "${convert_bin[@]}" "${frame}" "$@" "${out}" >/dev/null 2>&1 && [[ -s "${out}" ]]; then
         rm -f "${frame}"

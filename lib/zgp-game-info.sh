@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# --- lpm info <slug> ---
+# --- ludis info <slug> ---
 #
 # Shows the known metadata of an installed Wine game, combining the Lutris DB (pga.db) and
 # the game's YAML config file (games/<configpath>.yml): name, slug, wineprefix folder,
 # executable, Wine/Proton runner version used, install date, and isolation status (dedicated
-# prefix, or shared store + the store targeted by "lpm isolate" if any).
+# prefix, or shared store + the store targeted by "ludis isolate" if any).
 #
 # One slug at a time (unlike install/uninstall/pack, which accept a list): this is a
 # detailed lookup command, not a batch action.
 
-# --- Arguments from the lpm router ---
+# --- Arguments from the ludis router ---
 slug="${1:-}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,8 +44,8 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# 3. Read the game row -- runner='wine' as everywhere else in lpm: an existing slug with
-# another runner (entry added manually to the DB, outside lpm) is not a game lpm knows.
+# 3. Read the game row -- runner='wine' as everywhere else in ludis: an existing slug with
+# another runner (entry added manually to the DB, outside ludis) is not a game ludis knows.
 safe_slug="${slug//\'/\'\'}"
 row=$(sqlite3 "${lutris_db}" "SELECT COALESCE(name,'') || char(31) || COALESCE(directory,'') || char(31) || COALESCE(executable,'') || char(31) || COALESCE(configpath,'') || char(31) || COALESCE(installed_at,'') FROM games WHERE runner='wine' AND slug='${safe_slug}' LIMIT 1;" 2>/dev/null)
 
@@ -56,7 +56,7 @@ fi
 
 IFS=$'\x1f' read -r game_name game_dir game_exe game_configpath game_installed_at <<< "${row}"
 
-# 4. Resolve to the real wineprefix path (same caution as the rest of lpm: the value comes
+# 4. Resolve to the real wineprefix path (same caution as the rest of ludis: the value comes
 # from the Lutris DB, possibly hand-edited) -- for display only, never used to write or
 # delete anything.
 real_dir=$(realpath -e "${game_dir}" 2>/dev/null)
@@ -70,7 +70,7 @@ runner_version=""
 if [[ -n "${game_configpath}" ]]; then
   # configpath comes from the Lutris DB: same path-traversal filter as zgp-game-isolator.sh
   # (no "/", otherwise refuse to build the path). Read-only here, but same caution as
-  # elsewhere in lpm.
+  # elsewhere in ludis.
   if [[ "${game_configpath}" != *"/"* ]]; then
     yml_path="${lutris_config_dir}/${game_configpath}.yml"
     if [[ -f "${yml_path}" ]] && command -v python3 >/dev/null 2>&1; then
@@ -100,8 +100,8 @@ fi
 [[ -z "${installed_display}" ]] && installed_display="$(t info.unknown)"
 
 # 7. Isolation status: dedicated prefix (one-game-one-prefix, the normal case), or shared
-# prefix -- in which case the targeted store is given if recognised (same detection as "lpm
-# isolate"/"lpm list-isolable", see zgu_detect_isolation_store), so the displayed info never
+# prefix -- in which case the targeted store is given if recognised (same detection as "ludis
+# isolate"/"ludis list-isolable", see zgu_detect_isolation_store), so the displayed info never
 # diverges from what those commands would actually do.
 isolation_status="$(t info.isolation_dedicated)"
 if [[ -n "${real_dir}" ]]; then

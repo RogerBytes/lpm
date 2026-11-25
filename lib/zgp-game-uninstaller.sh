@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- Arguments from the lpm router ---
+# --- Arguments from the ludis router ---
 # $1 = confirmation flag ("yes" if -y)
 # $2, $3, ... = target game slugs in CLI
 confirm_flag="${1:-}"
@@ -36,7 +36,7 @@ source "${script_dir}/zgu-log-utils.sh"
 
 # No target: explicit error (like install, pack...) rather than an empty "success".
 if [[ ${#cli_games[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t common.missing_target_cli "lpm uninstall")"
+  zgu_cli_error "$(t common.missing_target_cli "ludis uninstall")"
   exit 1
 fi
 
@@ -77,7 +77,7 @@ games_to_delete=()
 
 # Physically deletes a game prefix, but ONLY if it resolves to a direct subfolder of
 # games_dir. "directory" in the Lutris DB can come from ANY runner='wine' game, not only
-# those installed by lpm (game added manually, hand-edited DB, leftover entry after a
+# those installed by ludis (game added manually, hand-edited DB, leftover entry after a
 # games-folder change...): without this check, a blind rm -rf on that value could delete an
 # arbitrary system folder if "directory" pointed outside games_dir.
 # Returns 0 if deleted (or already absent), 1 if the path was judged dangerous (nothing is
@@ -158,7 +158,7 @@ for game_slug in "${games_to_delete[@]}"; do
   t uninstall_game.progress_cli "${current}" "${total_games}" "${game_name}"
 
   # game_slug comes from the "slug" column of the Lutris DB, which can come from ANY wine
-  # game in the DB, not only those installed by lpm (game added manually, hand-edited DB...)
+  # game in the DB, not only those installed by ludis (game added manually, hand-edited DB...)
   # -- same remark as for game_name above. game_slug is used below to build deletion paths
   # (rm -f "${lutris_config_dir}/${game_slug}-"*.yml, "${desktop_dir}/${game_slug}.desktop",
   # etc.): without this filter, a "/" or "../" in the slug could target a path outside its

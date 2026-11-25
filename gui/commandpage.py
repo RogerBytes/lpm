@@ -1,4 +1,4 @@
-"""Generic command page: form, launching bin/lpm, reading the line protocol."""
+"""Generic command page: form, launching bin/ludis, reading the line protocol."""
 
 import os
 import re
@@ -41,7 +41,7 @@ _ITEM_NAME_RE = re.compile(r"'(.+)'")
 _PERCENT_LINE_RE = re.compile(r"^\[PROGRESS\]\s*(\d+)")
 
 
-# "[STEP] <n> <total> <label>": current step of a multi-step command (lpm check);
+# "[STEP] <n> <total> <label>": current step of a multi-step command (ludis check);
 # "[REPORT] <ok|warn|error>|<text>": one line of the final summary (see page_check).
 _STEP_LINE_RE = re.compile(r"^\[STEP\]\s+(\d+)\s+(\d+)\s+(.*)$")
 
@@ -108,13 +108,13 @@ class CommandPage(Gtk.Box):
         the list of installed games or runners, so that all selectors built elsewhere are
         refreshed (see _refresh_game_lists/_refresh_runner_lists) after a successful run.
         Deliberately coarse (no partial refresh): a needless refresh costs only a few instant
-        CLI calls like "lpm list"."""
+        CLI calls like "ludis list"."""
         _CommandRun(self, args, done_message, refresh, cancellable, on_cancelled,
                     cancel_toast, cancel_group, on_report, undoable).start()
 
 
 class _CommandRun:
-    """One run of a bin/lpm command from a CommandPage. Its progress, cancel button and error
+    """One run of a bin/ludis command from a CommandPage. Its progress, cancel button and error
     live in an independent ProgressWindow, so the run goes on even if the main window is closed
     (the page is then no longer in a window: nothing of it is touched, see _page_alive)."""
 
@@ -146,15 +146,15 @@ class _CommandRun:
             return
         operations.begin(self)
         page.run_button.set_sensitive(False)
-        self.progress_window = ProgressWindow(page.page.get_title() or "lpm", self.cancellable, self._request_cancel,
+        self.progress_window = ProgressWindow(page.page.get_title() or "Ludis", self.cancellable, self._request_cancel,
                                               self._has_finished_items if self.undoable else None)
         self.progress_window.start()
         self.progress_window.present()
-        _GUI_LOGGER.info("$ bin/lpm " + " ".join(self.args))
+        _GUI_LOGGER.info("$ bin/ludis " + " ".join(self.args))
         # Cancellation (cancellable=True): SIGTERM goes to the WHOLE process group (see
-        # backend.run_lpm, new_session); the lib/ script cleans up the current game itself
-        # (lpm_cancel_cleanup in zgp-game-installer.sh) and exits with 130.
-        backend.run_lpm_async(self.args, on_line=self._on_line, on_done=self._on_done,
+        # backend.run_ludis, new_session); the lib/ script cleans up the current game itself
+        # (ludis_cancel_cleanup in zgp-game-installer.sh) and exits with 130.
+        backend.run_ludis_async(self.args, on_line=self._on_line, on_done=self._on_done,
                               on_proc=self._on_proc, new_session=self.cancellable)
 
     def _on_proc(self, proc):
@@ -180,7 +180,7 @@ class _CommandRun:
             pass
 
     def _on_line(self, line: str):
-        # Called from the background thread (see backend.run_lpm_async): GTK widgets are only
+        # Called from the background thread (see backend.run_ludis_async): GTK widgets are only
         # touched via _run_on_main; the logger is thread-safe.
         _GUI_LOGGER.info(line)
         stripped = line.strip()
@@ -235,7 +235,7 @@ class _CommandRun:
         script already sends one (see operations.COMMANDS_THAT_NOTIFY)."""
         if self.args and self.args[0] in operations.COMMANDS_THAT_NOTIFY:
             return
-        operations.notify("lpm", body)
+        operations.notify("Ludis", body)
 
     def _finish(self, result: backend.CommandResult):
         page = self.page
@@ -270,7 +270,7 @@ class _CommandRun:
                 # likely retry with the same selection.
                 page.reset_selection()
         elif reported:
-            # The report dialog already tells what is wrong (lpm check).
+            # The report dialog already tells what is wrong (ludis check).
             self.progress_window.finish()
         else:
             self.progress_window.show_error(t("gui.op.error_heading"),

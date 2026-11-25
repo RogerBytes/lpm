@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- Prefix creation helpers, shared by "lpm exe-install" and "lpm create-prefix" ---
+# --- Prefix creation helpers, shared by "ludis exe-install" and "ludis create-prefix" ---
 #
 # Library (no code runs when it is sourced): lib/zgp-exe-installer.sh and
 # lib/zgp-prefix-creator.sh create a prefix the same way, so runner detection, umu-run lookup,
@@ -99,7 +99,7 @@ with open(os.environ["YML_PATH"], "w") as f:
 ' 2>/dev/null
 }
 
-# --- Start-up steps shared by "lpm exe-install" and "lpm create-prefix" (they exit on failure) ---
+# --- Start-up steps shared by "ludis exe-install" and "ludis create-prefix" (they exit on failure) ---
 
 # sqlite3, python3 and PyYAML are required.
 zgp_prefix_require_tools() {

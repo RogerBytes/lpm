@@ -1,17 +1,17 @@
-# lpm logo
+# ludis logo
 
 Downloads a transparent game logo (SteamGridDB, with a Steam fallback) and stores it as the permanent overlay of the loading screen of one or more installed games.
 
 ## Synopsis
 
 ```
-lpm logo <slug>... [--url <url>]
-lpm logo --all
+ludis logo <slug>... [--url <url>]
+ludis logo --all
 ```
 
 ## Description
 
-The logo is saved as `<game dir>/lpm/images/splash/logo.png` and is displayed over everything else (black screen, picker, banner) by lpm's loading screen. Without a `logo.png`, no logo is drawn. Independent of `lpm launcher`; `lpm/images/splash/` is created if needed.
+The logo is saved as `<game dir>/ludis/images/splash/logo.png` and is displayed over everything else (black screen, picker, banner) by ludis's loading screen. Without a `logo.png`, no logo is drawn. Independent of `ludis launcher`; `ludis/images/splash/` is created if needed.
 
 It needs a personal SteamGridDB API key. Only Wine games not living in a shared store prefix are eligible. Requires `sqlite3`, `curl`, `python3`, `realpath` and ImageMagick (`magick` or `convert`).
 
@@ -35,7 +35,7 @@ It needs a personal SteamGridDB API key. Only Wine games not living in a shared 
    - With a SteamGridDB game: requests `logos/game/<id>?types=static&mimes=image/png,image/webp`; the first logo is used.
    - Fallback when no SteamGridDB logo was found: searches the Steam store for the Lutris name and, if the file answers (HTTP success), uses `https://cdn.cloudflare.steamstatic.com/steam/apps/<appid>/logo.png`.
    - Nothing found: skipped.
-4. Creates `<game dir>/lpm/images/splash/`, downloads the image to a temporary file, converts it with ImageMagick (`-background none`, to keep transparency) to `logo.png`, overwriting any existing one.
+4. Creates `<game dir>/ludis/images/splash/`, downloads the image to a temporary file, converts it with ImageMagick (`-background none`, to keep transparency) to `logo.png`, overwriting any existing one.
 5. A failure on one game does not stop the others.
 
 ## Output
@@ -67,26 +67,26 @@ No installed games found.
 
 ## Scripting notes
 
-- **API key**: `${XDG_CONFIG_HOME:-$HOME/.config}/lpm/steamgriddb.key` (mode 600), shared with `icon` and `splash`, validated with a live request to the SteamGridDB API on every run. Get a key at https://www.steamgriddb.com/profile/preferences/api; save it with `lpm sgdb-key set <key>`.
+- **API key**: `${XDG_CONFIG_HOME:-$HOME/.config}/ludis/steamgriddb.key` (mode 600), shared with `icon` and `splash`, validated with a live request to the SteamGridDB API on every run. Get a key at https://www.steamgriddb.com/profile/preferences/api; save it with `ludis sgdb-key set <key>`.
 - **Prompts**: `Paste your SteamGridDB API key:` (no valid key saved) and `Pick a number:` (several matches). Avoid the first by saving a key; avoid the second with `--url`. With EOF/no TTY both receive an empty answer (key prompt: exit 1; picker: game skipped).
-- Dual-Lutris prompt: avoid with `LPM_LUTRIS_VERSION=flatpak|native`.
+- Dual-Lutris prompt: avoid with `LUDIS_LUTRIS_VERSION=flatpak|native`.
 - `--url` as the last argument with no value is treated as not given (normal SteamGridDB search).
 - Stable output: `Logo set for <name>.`; `LC_ALL=C` for English.
 
 ## Examples
 
 ```
-lpm logo my-game
-lpm logo --all
-lpm logo my-game --url https://example.com/logo.png
+ludis logo my-game
+ludis logo --all
+ludis logo my-game --url https://example.com/logo.png
 ```
 
 ## Files and data touched
 
-- `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read / written).
-- `<game dir>/lpm/images/splash/logo.png` (created or overwritten), temporary `<game dir>/lpm/images/splash/.lpm-download.<ext>`.
-- `~/.local/share/lpm/lpm.log`.
+- `${XDG_CONFIG_HOME:-~/.config}/ludis/steamgriddb.key` (read / written).
+- `<game dir>/ludis/images/splash/logo.png` (created or overwritten), temporary `<game dir>/ludis/images/splash/.ludis-download.<ext>`.
+- `~/.local/share/ludis/ludis.log`.
 
 ## See also
 
-`lpm splash`, `lpm icon`, `lpm launcher`, `lpm sgdb-key`, `lpm sgdb-images`
+`ludis splash`, `ludis icon`, `ludis launcher`, `ludis sgdb-key`, `ludis sgdb-images`

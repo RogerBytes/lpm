@@ -2,7 +2,7 @@
 
 # --- Shared detection/installation of lsfg-vk ---
 #
-# Used by both "lpm lsfg" (zgl-lsfg-manager.sh) and "lpm check" (zgc-dependency-checker.sh).
+# Used by both "ludis lsfg" (zgl-lsfg-manager.sh) and "ludis check" (zgc-dependency-checker.sh).
 # Centralized so only one version of this logic exists: two copies could disagree ("present" vs
 # "absent") unnoticed.
 #
@@ -57,7 +57,7 @@ zgu_lsfg_resolve_freedesktop_runtime_version() {
 }
 
 # Resolves the native install link of lsfg-vk (AUR if Arch/pacman detected, otherwise the generic link
-# from the official docs) -- shared by zgl-lsfg-manager.sh (CLI confirmation of "lpm lsfg <slug...> on"
+# from the official docs) -- shared by zgl-lsfg-manager.sh (CLI confirmation of "ludis lsfg <slug...> on"
 # AND the non-interactive GUI command "lsfg install-info") so the detection exists in one place. Prints
 # "<link>\t<label key>" on stdout -- the label KEY, not translated text: each caller does its own
 # "t <key>" with its own zgl-lang-loader.sh (bash) or t() function (GUI Python).

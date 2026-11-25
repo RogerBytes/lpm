@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SteamGridDB: API key and calls, shared by every lpm command that uses it ---
+# --- SteamGridDB: API key and calls, shared by every ludis command that uses it ---
 #
 # Library (no code runs when it is sourced): lib/zgp-game-icon.sh, zgp-game-logo.sh,
 # zgp-game-splash.sh, zgl-sgdb-images.sh and zgl-sgdb-key.sh all use THESE functions, so the key
@@ -8,14 +8,14 @@
 # time. "sgdb_key" (the key in use) is set by zgp_sgdb_ensure_key in the calling script.
 
 # Same file for every command: single source of truth, read/written identically everywhere.
-sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/lpm/steamgriddb.key"
+sgdb_key_file="${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/steamgriddb.key"
 sgdb_api="https://www.steamgriddb.com/api/v2"
 ZGU_SGDB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- 5. SteamGridDB API key ---
 #
-# Strictly personal to the user: no shared/bundled key in lpm (one key for many users would
-# quickly be blocked), and no account imposed for the rest of lpm; only this command, which
+# Strictly personal to the user: no shared/bundled key in ludis (one key for many users would
+# quickly be blocked), and no account imposed for the rest of ludis; only this command, which
 # depends on the third-party service, needs one. Validated before being accepted (never stored
 # without a real API call succeeding), and re-prompted on refusal instead of failing outright.
 zgp_sgdb_read_key() {

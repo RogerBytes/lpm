@@ -117,10 +117,10 @@ zgu_get_default_runner() {
 
 # --- Detection of games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) ---
 #
-# lpm applies the one-game-one-prefix principle, but Lutris does not always create a wineprefix per
+# ludis applies the one-game-one-prefix principle, but Lutris does not always create a wineprefix per
 # game: some third-party launchers (client installed + games inside) create ONE wineprefix shared by
 # several games (identical "directory" on several rows of the games table). Those games must appear
-# nowhere in lpm (not listed, packable or uninstallable), or the shared prefix would break for the
+# nowhere in ludis (not listed, packable or uninstallable), or the shared prefix would break for the
 # other games living in it.
 #
 # GOG, itch.io and ZOOM Platform were verified to already follow one-game-one-prefix (each game has
@@ -128,7 +128,7 @@ zgu_get_default_runner() {
 # list.
 ZGU_STORE_KEYWORDS=("Epic Games Store" "EA App" "EA Desktop" "Ubisoft Connect" "Battle.net" "Steam")
 
-# Returns (on stdout, one slug per line) the slugs of runner='wine' games to exclude from lpm: those
+# Returns (on stdout, one slug per line) the slugs of runner='wine' games to exclude from ludis: those
 # whose "directory" is shared by at least one other entry of the games table (main signal, detects any
 # shared-prefix store automatically without knowing its name), plus a keyword safety net
 # (ZGU_STORE_KEYWORDS) to also block a freshly installed but still empty store (no duplicated
@@ -176,12 +176,12 @@ zgu_get_blacklisted_slugs() {
 
 # --- Store detection (Epic/EA/Ubisoft/Battle.net) for a given giga-prefix ---
 #
-# Shared by zgp-game-isolator.sh ("lpm isolate") and zgp-isolable-lister.sh ("lpm list-isolable"):
+# Shared by zgp-game-isolator.sh ("ludis isolate") and zgp-isolable-lister.sh ("ludis list-isolable"):
 # a single definition keeps the list shown by list-isolable and the store actually targeted by
 # isolate consistent.
 #
 # Distinct from ZGU_STORE_KEYWORDS above, which also includes "Steam" for the general blacklist safety
-# net: Steam is out of scope here (lpm does not manage Steam games). Only the 4 documented stores are
+# net: Steam is out of scope here (ludis does not manage Steam games). Only the 4 documented stores are
 # recognized; a shared prefix that is not one of them (unknown store, or blacklisted only by generic
 # duplicated-"directory" detection) returns 1 and prints nothing: neither isolate nor list-isolable
 # must guess a store they cannot handle.
@@ -219,8 +219,8 @@ zgu_store_display_name() {
 # prefix of EACH isolated game (see "1. Copie du socle" in zgp-game-isolator.sh), so isolating the
 # launcher on its own makes no sense and always fails (no game folder of its own).
 #
-# Exact names under which Lutris/lpm knows these entries (a subset of ZGU_STORE_KEYWORDS above) --
-# shared by "lpm isolate" (must never try to isolate it) and "lpm list-isolable" (must never list
+# Exact names under which Lutris/ludis knows these entries (a subset of ZGU_STORE_KEYWORDS above) --
+# shared by "ludis isolate" (must never try to isolate it) and "ludis list-isolable" (must never list
 # it), so both commands always agree.
 zgu_is_store_launcher_name() {
   local store="$1" name="$2"
@@ -240,11 +240,11 @@ zgu_is_store_launcher_name() {
 # library (games/runners) was ignored.
 #
 # Persistent config file for the choice forced by the user, in the same folder as the SteamGridDB key
-# (~/.config/lpm/): same persistence conventions across the project.
-ZGU_LUTRIS_VERSION_CONFIG="${HOME}/.config/lpm/lutris-version"
+# (~/.config/ludis/): same persistence conventions across the project.
+ZGU_LUTRIS_VERSION_CONFIG="${HOME}/.config/ludis/lutris-version"
 
-# Resolves the Lutris version to use for THIS lpm run, in this order:
-#   1. LPM_LUTRIS_VERSION ("flatpak" or "native"): one-off override, never written to disk.
+# Resolves the Lutris version to use for THIS ludis run, in this order:
+#   1. LUDIS_LUTRIS_VERSION ("flatpak" or "native"): one-off override, never written to disk.
 #   2. The saved choice (ZGU_LUTRIS_VERSION_CONFIG), ONLY if that version is still installed;
 #      otherwise it is silently deleted so a stale choice cannot come back later.
 #   3. Only one version installed: used directly, nothing displayed or saved.
@@ -273,7 +273,7 @@ _zgu_saved_lutris_version() {
 }
 
 # Both versions installed, nothing saved: warning + immediate CLI choice, saved unless the answer
-# was cancelled (then Flatpak for THIS run only). "display_mode" is always "cli" now (bin/lpm has
+# was cancelled (then Flatpak for THIS run only). "display_mode" is always "cli" now (bin/ludis has
 # no interactive entry point): no zenity branch.
 _zgu_ask_lutris_version() {
   local choice="" confirmed=true response
@@ -305,7 +305,7 @@ zgu_resolve_lutris_version() {
     return 1
   fi
 
-  case "${LPM_LUTRIS_VERSION:-}" in
+  case "${LUDIS_LUTRIS_VERSION:-}" in
     flatpak) [[ "${has_flatpak}" = true ]] && { echo "flatpak"; return 0; } ;;
     native) [[ "${has_native}" = true ]] && { echo "native"; return 0; } ;;
   esac
@@ -345,7 +345,7 @@ zgu_get_wine_binary() {
 
 # zgu_resolve_prefix_dir_by_slug <slug> <pga.db> <games folder>: real path of the prefix of a wine
 # game, from its "directory" in pga.db. The slug is SQL-escaped here. "directory" may come from
-# ANY wine game in pga.db, not only those managed by lpm: the resolved path must remain a real
+# ANY wine game in pga.db, not only those managed by ludis: the resolved path must remain a real
 # subfolder of the games folder (anti-escape guard, same as zgp-game-uninstaller.sh), otherwise
 # an intermediate folder (e.g. "gog/") shared by several games could be packed wholesale or a
 # forged entry could point elsewhere.

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# --- lpm sgdb-images <icon|splash|logo|title> <slug> [game_id] [game_name] ---
+# --- ludis sgdb-images <icon|splash|logo|title> <slug> [game_id] [game_name] ---
 #
 # "Candidate list" step of the GTK visual picker (page_images). Never interactive (no
 # "read -p"): always prints JSON on stdout; the GUI shows the choice window and then calls
-# "lpm icon/splash/logo <slug> --url <url>" with the chosen image (see zgp-game-icon.sh/
+# "ludis icon/splash/logo <slug> --url <url>" with the chosen image (see zgp-game-icon.sh/
 # zgp-game-splash.sh/zgp-game-logo.sh, "--url" option), reusing all existing download/
 # conversion/placement/shortcut-regeneration code.
 #
@@ -114,7 +114,7 @@ if [[ -z "${g_name}" ]]; then
   fi
 fi
 
-# --- SteamGridDB key (already configured/validated via "lpm sgdb-key set", see
+# --- SteamGridDB key (already configured/validated via "ludis sgdb-key set", see
 # gui/page_images); no interactive loop here: a missing/invalid key is reported in JSON and
 # the GUI redirects to the key field of the page. ---
 
@@ -193,7 +193,7 @@ fi
 # --- Download thumbnails locally, in parallel. Each multi-resolution ".ico" is reduced to its
 # largest frame before the size normalization below (see "thumb_box"/"thumb_crop": the
 # uniform display size is enforced HERE by ImageMagick, not only on the GTK side). ---
-thumb_dir=$(mktemp -d "${TMPDIR:-/tmp}/lpm-sgdb-thumbs.XXXXXX")
+thumb_dir=$(mktemp -d "${TMPDIR:-/tmp}/ludis-sgdb-thumbs.XXXXXX")
 
 urls=() thumbs=()
 while IFS=$'\t' read -r u thumb_u; do

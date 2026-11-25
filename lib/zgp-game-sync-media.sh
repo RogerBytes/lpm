@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- lpm sync-media <slugs...|--all> ---
+# --- ludis sync-media <slugs...|--all> ---
 #
 # Downloads the "native" Lutris media (banner, icon, cover art -- those shown INSIDE the
 # Lutris library itself) for games that don't have them yet, mirroring Lutris's own logic
@@ -9,8 +9,8 @@
 # queried ONLY for games missing at least one of the three media, and only what is actually
 # missing is downloaded -- never what already exists.
 #
-# Unrelated to "lpm icon"/"splash"/"logo" (SteamGridDB, for the icons of the .desktop
-# shortcuts created BY lpm): these are the thumbnails Lutris shows in ITS OWN game library,
+# Unrelated to "ludis icon"/"splash"/"logo" (SteamGridDB, for the icons of the .desktop
+# shortcuts created BY ludis): these are the thumbnails Lutris shows in ITS OWN game library,
 # an entirely separate system. Separate command, never hooked in elsewhere (same philosophy
 # as "icon"): it depends on the network (lutris.net here), and an outage must never make
 # anything else fail.
@@ -29,7 +29,7 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
 
-# Default Lutris API URL (lutris/settings.py::SITE_URL) -- lpm does not read Lutris's
+# Default Lutris API URL (lutris/settings.py::SITE_URL) -- ludis does not read Lutris's
 # internal configuration for a possible override (the "website" setting, very rarely
 # changed), only this official default.
 site_url="https://lutris.net"
@@ -76,7 +76,7 @@ if [[ -z "${games_list}" ]]; then
 fi
 
 # Games living in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect...) are
-# outside lpm's one-game-one-prefix model and never listed here (same filter as
+# outside ludis's one-game-one-prefix model and never listed here (same filter as
 # zgp-game-shortcutter.sh/zgp-game-icon.sh, see zgu_get_blacklisted_slugs).
 declare -A blacklisted_slugs
 while IFS= read -r bl_slug; do
@@ -123,7 +123,7 @@ sm_response="" sm_banner_url="" sm_icon_url="" sm_cover_url=""
 zgp_sync_media_fetch() {
   local slug="$1"
   # An HTTP code other than 200 (most often 404) just means this game is not listed on
-  # lutris.net (e.g. an itch.io/custom game added by other means than lpm) -- never an
+  # lutris.net (e.g. an itch.io/custom game added by other means than ludis) -- never an
   # error, simply nothing to download. Only a failure of "curl" itself (network down,
   # DNS...) is a real error.
   local tmp_response http_code

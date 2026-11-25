@@ -1,19 +1,19 @@
-# lpm vsync
+# ludis vsync
 
 Forces VSync off for one installed Wine/Proton game by setting environment variables in its Lutris configuration, or lists the games that already have such a setting.
 
 ## Synopsis
 
 ```
-lpm vsync status
-lpm vsync <slug> [status]
-lpm vsync <slug> on  [setting...]
-lpm vsync <slug> off [setting...]
+ludis vsync status
+ludis vsync <slug> [status]
+ludis vsync <slug> on  [setting...]
+ludis vsync <slug> off [setting...]
 ```
 
 ## Description
 
-Some games have no VSync option in their graphics settings. This command writes, in the `system.env` of the game's Lutris YAML, the variable that makes each graphics layer stop waiting for the screen's vertical refresh. One game at a time; the same variables can be edited by hand with `lpm tools <slug> env`.
+Some games have no VSync option in their graphics settings. This command writes, in the `system.env` of the game's Lutris YAML, the variable that makes each graphics layer stop waiting for the screen's vertical refresh. One game at a time; the same variables can be edited by hand with `ludis tools <slug> env`.
 
 A game only uses one graphics API, and each variable is read by one layer only, so the five settings can be enabled together without conflict: the layers the game does not use ignore theirs. (This is reasoned from how each layer reads its own variable, not something the upstream projects state explicitly.)
 
@@ -46,7 +46,7 @@ Having both the NVIDIA proprietary driver and Mesa installed is fine: setting bo
 
 1. Needs `sqlite3`, `python3` with PyYAML and Lutris (Flatpak or native); it does not need the Wine runner or the prefix.
 2. Looks the slug up among Wine games (`runner='wine'`) and reads the game's Lutris YAML. Shared store prefixes are accepted.
-3. `on` / `off` edit the YAML by text-level line editing (same editor as `lpm tools <slug> env`): comments, including the `# lpm:hook-disabled` markers, are preserved, the result is re-parsed before writing, and the file is replaced atomically.
+3. `on` / `off` edit the YAML by text-level line editing (same editor as `ludis tools <slug> env`): comments, including the `# lpm:hook-disabled` markers, are preserved, the result is re-parsed before writing, and the file is replaced atomically.
 
 `DXVK_CONFIG` is **merged, never overwritten**: `on` adds or corrects only the DXVK options above (running it twice does not duplicate them) and keeps any other option already there (for example `dxgi.hideAmdGpu = True`); `off` removes only those options and deletes `DXVK_CONFIG` if nothing else remains.
 
@@ -56,7 +56,7 @@ A setting is reported as `on` when its option is present in `DXVK_CONFIG` with v
 
 ## Output
 
-`lpm vsync <slug>` and `lpm vsync <slug> status` print five lines, always in this order:
+`ludis vsync <slug>` and `ludis vsync <slug> status` print five lines, always in this order:
 
 ```
 d3d9=off
@@ -76,7 +76,7 @@ VSync settings removed for 'Foo Game'.
 Errors (stderr):
 
 ```
-Usage: lpm vsync status | lpm vsync <slug> [status] | lpm vsync <slug> on|off [d3d9|d3d11|d3d12|gl-nvidia|gl-mesa...]
+Usage: ludis vsync status | ludis vsync <slug> [status] | ludis vsync <slug> on|off [d3d9|d3d11|d3d12|gl-nvidia|gl-mesa...]
 Error: unknown action '<action>' (expected: status, on or off).
 Error: unknown setting '<setting>' (expected: d3d9, d3d11, d3d12, gl-nvidia or gl-mesa).
 Error: no installed game with slug '<slug>'.
@@ -94,7 +94,7 @@ Error: could not save the environment variables of '<name>' (configuration uncha
 
 - The `status` outputs are stable and parseable (`setting=on|off`, or one slug per line).
 - `on` is idempotent. `off` on a game without these settings succeeds and changes nothing.
-- No confirmation and no interactive prompt, except the dual-Lutris question when Lutris exists in both forms and nothing was saved: avoid it with `LPM_LUTRIS_VERSION=flatpak|native` or `lpm lutris-version`.
+- No confirmation and no interactive prompt, except the dual-Lutris question when Lutris exists in both forms and nothing was saved: avoid it with `LUDIS_LUTRIS_VERSION=flatpak|native` or `ludis lutris-version`.
 - To check the effect in a game that is capped at the screen refresh rate, show its frame rate (for DXVK games, `DXVK_HUD=fps`): it should go above the refresh rate.
 
 ## GUI
@@ -104,10 +104,10 @@ The "Disable VSync" page picks one game (games that already have a setting are s
 ## Examples
 
 ```
-lpm vsync status
-lpm vsync my-game
-lpm vsync my-game on
-lpm vsync my-game on d3d9 d3d11
-lpm vsync my-game off gl-mesa
-lpm vsync my-game off
+ludis vsync status
+ludis vsync my-game
+ludis vsync my-game on
+ludis vsync my-game on d3d9 d3d11
+ludis vsync my-game off gl-mesa
+ludis vsync my-game off
 ```

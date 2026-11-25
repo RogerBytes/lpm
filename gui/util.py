@@ -24,7 +24,7 @@ def _escape_markup(text: str | None) -> str | None:
 
 
 def json_result(result) -> dict:
-    """JSON output (stdout) of a successful lpm command; {} if the command failed or the
+    """JSON output (stdout) of a successful ludis command; {} if the command failed or the
     output is not valid JSON."""
     if result.returncode != 0:
         return {}

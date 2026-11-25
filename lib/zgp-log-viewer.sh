@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- lpm log ---
+# --- ludis log ---
 #
 # Views the journal written by zgu_log (lib/zgu-log-utils.sh). Never modifies it, except
 # with --clear (explicit confirmation required, never a single -y command like
@@ -8,11 +8,11 @@
 # "slug already installed", so a systematic confirmation is deliberately stricter here).
 #
 # Usage:
-#   lpm log                    Show the last 50 lines (most recent last)
-#   lpm log -n <N>              Show the last N lines
-#   lpm log --all                Show the whole journal
-#   lpm log --grep <pattern>     Filter lines containing <pattern> (command, status, slug...)
-#   lpm log --clear               Empty the journal (confirmation asked)
+#   ludis log                    Show the last 50 lines (most recent last)
+#   ludis log -n <N>              Show the last N lines
+#   ludis log --all                Show the whole journal
+#   ludis log --grep <pattern>     Filter lines containing <pattern> (command, status, slug...)
+#   ludis log --clear               Empty the journal (confirmation asked)
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -71,8 +71,8 @@ if [[ "${do_clear}" = true ]]; then
   read -r -p "$(t log.clear_confirm_input) " response
   case "${response}" in
     [oOyY]|[oO][uU][iI]|[yY][eE][sS])
-      # Also purge the rotation file (lpm.log.1, see zgu_log_rotate_if_needed): "clear the
-      # journal" must clear everything "lpm log" can reference, not only the current file.
+      # Also purge the rotation file (ludis.log.1, see zgu_log_rotate_if_needed): "clear the
+      # journal" must clear everything "ludis log" can reference, not only the current file.
       : > "${ZGU_LOG_FILE}"
       rm -f -- "${ZGU_LOG_FILE}.1" 2>/dev/null || true
       zgu_cli_ok "$(t log.cleared)"

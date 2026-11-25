@@ -29,7 +29,7 @@ runners_list=( */ )
 
 if [[ ${#runners_list[@]} -eq 0 ]]; then
   # On stderr, not stdout: gui/backend.py::list_runners() treats EVERY non-empty stdout line of
-  # "lpm list-runner" as a runner name (same fix as "lpm list" in zgp-game-lister.sh).
+  # "ludis list-runner" as a runner name (same fix as "ludis list" in zgp-game-lister.sh).
   t list_runner.none_installed >&2
   exit 0
 fi

@@ -1,16 +1,16 @@
-# lpm killwine
+# ludis killwine
 
 Immediately kills every running Wine, Winetricks, umu-run and Lutris-launched Proton process, whatever game or prefix they belong to (panic button for a stuck game).
 
 ## Synopsis
 
 ```
-lpm killwine [-y]
+ludis killwine [-y]
 ```
 
 ## Description
 
-Unlike `lpm tools`, which targets one game, `killwine` is deliberately global. It sends `SIGKILL` (signal 9) to the matching processes: unsaved game progress is lost and nothing can be undone. It needs `pgrep`.
+Unlike `ludis tools`, which targets one game, `killwine` is deliberately global. It sends `SIGKILL` (signal 9) to the matching processes: unsaved game progress is lost and nothing can be undone. It needs `pgrep`.
 
 ## Arguments
 
@@ -55,20 +55,20 @@ The status does not tell whether anything was killed, nor whether the user cance
 ## Scripting notes
 
 - The only interactive prompt is the confirmation `Continue? [y/N]`, avoided by `-y` (placed right after `killwine`). Without a TTY or with empty stdin, the answer is empty: the command cancels and exits 0 without killing. A script must therefore always pass `-y`.
-- Piping `y` on stdin also confirms (`echo y | lpm killwine`), but `-y` is the supported way.
+- Piping `y` on stdin also confirms (`echo y | ludis killwine`), but `-y` is the supported way.
 - The count line is `N process(es) killed.` (N >= 1) or `No Wine/Proton process running.`; use `LC_ALL=C` for stable English text.
 
 ## Examples
 
 ```
-lpm killwine
-lpm killwine -y
+ludis killwine
+ludis killwine -y
 ```
 
 ## Files and data touched
 
-No file is written except error lines in `~/.local/share/lpm/lpm.log`. Reads `/proc/<pid>/cmdline`.
+No file is written except error lines in `~/.local/share/ludis/ludis.log`. Reads `/proc/<pid>/cmdline`.
 
 ## See also
 
-`lpm tools`, `lpm uninstall`
+`ludis tools`, `ludis uninstall`

@@ -263,7 +263,7 @@ class DrawMixin:
         lines = []
         if HELP_ALTTAB_TEXT:
             lines.append(self._help_line_items(["L1", "L2", "R1", "R2", "R3"], True, HELP_ALTTAB_TEXT))
-        if HELP_QUIT_TEXT:  # text = "LPM menu": the six-button combo opens the in-game menu
+        if HELP_QUIT_TEXT:  # text = "Ludis menu": the six-button combo opens the in-game menu
             menu_items, menu_text = self._help_line_items(["L1", "L2", "R1", "R2"], False, HELP_QUIT_TEXT)
             lines.append((menu_items + [("plus", "+"), ("L3", "L3"), ("plus", "+"), ("R3", "R3")], menu_text))
         return lines

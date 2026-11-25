@@ -1,32 +1,32 @@
-# lpm tools
+# ludis tools
 
 Runs a Wine maintenance tool (winetricks, regedit, winecfg, console, any .exe, folder, favorite folder, environment variables), changes the runner or switches the MangoHud FPS overlay of one installed game inside the prefix of one installed game.
 
 ## Synopsis
 
 ```
-lpm tools <slug> winetricks
-lpm tools <slug> regedit
-lpm tools <slug> winecfg
-lpm tools <slug> console
-lpm tools <slug> exe <file.exe>
-lpm tools <slug> folder
-lpm tools <slug> favorite <directory>
-lpm tools <slug> env list
-lpm tools <slug> env set <KEY> <VALUE>
-lpm tools <slug> env unset <KEY>
-lpm tools <slug> env apply <file>
-lpm tools <slug> runner <runner-name>
-lpm tools <slug> mangohud [on|off|status]
-lpm tools <slug> overlay [status|follow|on|off|global-on|global-off]
-lpm tools <slug> gamepad [on|off|edit|status]
+ludis tools <slug> winetricks
+ludis tools <slug> regedit
+ludis tools <slug> winecfg
+ludis tools <slug> console
+ludis tools <slug> exe <file.exe>
+ludis tools <slug> folder
+ludis tools <slug> favorite <directory>
+ludis tools <slug> env list
+ludis tools <slug> env set <KEY> <VALUE>
+ludis tools <slug> env unset <KEY>
+ludis tools <slug> env apply <file>
+ludis tools <slug> runner <runner-name>
+ludis tools <slug> mangohud [on|off|status]
+ludis tools <slug> overlay [status|follow|on|off|global-on|global-off]
+ludis tools <slug> gamepad [on|off|edit|status]
 ```
 
 ## Description
 
 Mimics what Lutris does for its own Wine menu: the tool runs with the Wine binary of the runner configured **for that game** (the `wine.version` of its Lutris YAML), the game's prefix as `WINEPREFIX`, and a `WINEDLLOVERRIDES` rebuilt from the game's Wine overrides (with `winemenubuilder` always disabled). GUI tools are started detached in the background: the command returns immediately.
 
-Both the slug and the tool are mandatory: there is no interactive menu (although `lpm --help` and the man page show them in brackets). Unlike `pack` or `uninstall`, games in shared store prefixes (Epic, EA, Ubisoft...) are accepted.
+Both the slug and the tool are mandatory: there is no interactive menu (although `ludis --help` and the man page show them in brackets). Unlike `pack` or `uninstall`, games in shared store prefixes (Epic, EA, Ubisoft...) are accepted.
 
 ## Arguments
 
@@ -36,7 +36,7 @@ Both the slug and the tool are mandatory: there is no interactive menu (although
 
 ## Options
 
-None. (`bin/lpm` generic options are not relevant; `-y` etc. are only consumed when placed right after `tools`, before the slug, and are then ignored.)
+None. (`bin/ludis` generic options are not relevant; `-y` etc. are only consumed when placed right after `tools`, before the slug, and are then ignored.)
 
 ## Behavior
 
@@ -47,7 +47,7 @@ Common steps:
 3. Looks up the slug among Wine games; unknown slug: error, exit 1.
 4. Resolves the prefix folder (the `directory` of the game). It must exist and be located inside the Lutris games folder (`~/Games` or `game_path:` of `system.yml`), otherwise "the prefix folder for '<name>' could not be found" (exit 1).
 5. Reads the game's YAML (needs python3 + PyYAML): `wine.version`, `wine.system_winetricks`, `wine.overrides`. Without a configured version, the default runner is used: the `version:` of Lutris' `runners/wine.yml`, else `proton-cachyos-x86_64`.
-6. Locates `<runners>/wine/<version>/bin/wine` (or `.../files/bin/wine`). If absent: "the Wine runner '<version>' configured for this game is no longer installed (lpm install-runner to reinstall it)", exit 1. **This check happens for every tool except `runner`, including `folder` and `env`**, and before the tool name is validated.
+6. Locates `<runners>/wine/<version>/bin/wine` (or `.../files/bin/wine`). If absent: "the Wine runner '<version>' configured for this game is no longer installed (ludis install-runner to reinstall it)", exit 1. **This check happens for every tool except `runner`, including `folder` and `env`**, and before the tool name is validated.
 7. Runs the requested tool.
 
 Tools:
@@ -65,10 +65,10 @@ Tools:
   - `env unset <KEY>` : removes one variable (succeeds even if absent).
   - `env apply <file>` : **replaces the whole `system.env`** by the variables of the file: one `KEY=VALUE` per line (split at the first `=`, key trimmed, value kept as is), blank lines ignored, no comment syntax. Variables not in the file are removed.
   - The result is re-parsed before writing; on any mismatch nothing is changed. The file is replaced atomically with the original permissions.
-- `runner <name>` : changes the runner of the game, i.e. sets `wine.version` in its Lutris YAML (comments are preserved, the file is replaced atomically). `<name>` must be the name of an installed runner as printed by `lpm list-runner`; a name containing `/` or starting with `.` is refused. **This tool is handled right after step 3 (slug lookup), before steps 4 to 6**: it works even when the runner currently configured for the game is no longer installed (the usual reason to change it), and it needs neither the prefix nor the old runner. Only the YAML is changed; the prefix is not touched. Close Lutris first, or it may overwrite the change.
-- `mangohud [on|off|status]` : MangoHud (FPS overlay) for this game, i.e. the Lutris option `system.mangohud` of its YAML (comments preserved). `on` sets it to `true`, `off` removes the key (Lutris default: off), `status` (the default) prints `on` or `off`. Like `runner`, handled before the prefix and runner checks: only the YAML is changed. lpm does not install MangoHud: if it cannot be found (native Lutris: no `mangohud` in `PATH`; Flatpak Lutris: no `org.freedesktop.Platform.VulkanLayer.MangoHud`), `on` still saves the setting and prints a warning on stderr saying it has no effect until MangoHud is installed. Close Lutris first, or it may overwrite the change.
-- `overlay [status|follow|on|off|global-on|global-off]` : FPS overlay (MangoHud) of the in-game LPM menu, not the Lutris option above. When enabled, MangoHud is loaded hidden when the game starts and shown or hidden from the in-game menu (the menu entry is there even when it is off, to turn it on for the next launch). `on`/`off` force it for this game, `follow` (default) uses the global setting (**off** by default), `global-on`/`global-off` change that global setting. Stored in lpm's own files (the game's `lpm` folder and `menu.conf`), never in the Lutris config. `status` (the default) prints `game=<follow|on|off> global=<on|off>`. The menu entry only appears if MangoHud is installed (Vulkan games).
-- `gamepad [on|off|edit|status]` : AntiMicroX profile for this game, i.e. the Lutris option `system.antimicro_config` of its YAML (Lutris then starts AntiMicroX with that profile when the game runs). `on` creates a blank profile `<prefix>/lpm/gamepad/lpm-gamepad.gamecontroller.amgp` only if it does not exist yet (an existing profile is never overwritten) and points the option to it. `off` removes the option only if it points to that profile; the profile file is kept. `edit` opens that profile in AntiMicroX (native `antimicrox`/`antimicro`, or the Flatpak `io.github.antimicrox.antimicrox`) and returns at once, nothing is watched. `status` (the default) prints `on`, `off`, or `other` when `antimicro_config` points to a profile that is not lpm's: that one is never replaced or removed, `on` and `off` then fail with an error and leave it alone. Handled before the prefix and runner checks like `mangohud`, except that the prefix folder must be found. lpm does not install AntiMicroX; if it cannot be found, `on` warns on stderr but still saves.
+- `runner <name>` : changes the runner of the game, i.e. sets `wine.version` in its Lutris YAML (comments are preserved, the file is replaced atomically). `<name>` must be the name of an installed runner as printed by `ludis list-runner`; a name containing `/` or starting with `.` is refused. **This tool is handled right after step 3 (slug lookup), before steps 4 to 6**: it works even when the runner currently configured for the game is no longer installed (the usual reason to change it), and it needs neither the prefix nor the old runner. Only the YAML is changed; the prefix is not touched. Close Lutris first, or it may overwrite the change.
+- `mangohud [on|off|status]` : MangoHud (FPS overlay) for this game, i.e. the Lutris option `system.mangohud` of its YAML (comments preserved). `on` sets it to `true`, `off` removes the key (Lutris default: off), `status` (the default) prints `on` or `off`. Like `runner`, handled before the prefix and runner checks: only the YAML is changed. ludis does not install MangoHud: if it cannot be found (native Lutris: no `mangohud` in `PATH`; Flatpak Lutris: no `org.freedesktop.Platform.VulkanLayer.MangoHud`), `on` still saves the setting and prints a warning on stderr saying it has no effect until MangoHud is installed. Close Lutris first, or it may overwrite the change.
+- `overlay [status|follow|on|off|global-on|global-off]` : FPS overlay (MangoHud) of the in-game Ludis menu, not the Lutris option above. When enabled, MangoHud is loaded hidden when the game starts and shown or hidden from the in-game menu (the menu entry is there even when it is off, to turn it on for the next launch). `on`/`off` force it for this game, `follow` (default) uses the global setting (**off** by default), `global-on`/`global-off` change that global setting. Stored in ludis's own files (the game's `ludis` folder and `menu.conf`), never in the Lutris config. `status` (the default) prints `game=<follow|on|off> global=<on|off>`. The menu entry only appears if MangoHud is installed (Vulkan games).
+- `gamepad [on|off|edit|status]` : AntiMicroX profile for this game, i.e. the Lutris option `system.antimicro_config` of its YAML (Lutris then starts AntiMicroX with that profile when the game runs). `on` creates a blank profile `<prefix>/ludis/gamepad/lpm-gamepad.gamecontroller.amgp` only if it does not exist yet (an existing profile is never overwritten) and points the option to it. `off` removes the option only if it points to that profile; the profile file is kept. `edit` opens that profile in AntiMicroX (native `antimicrox`/`antimicro`, or the Flatpak `io.github.antimicrox.antimicrox`) and returns at once, nothing is watched. `status` (the default) prints `on`, `off`, or `other` when `antimicro_config` points to a profile that is not ludis's: that one is never replaced or removed, `on` and `off` then fail with an error and leave it alone. Handled before the prefix and runner checks like `mangohud`, except that the prefix folder must be found. ludis does not install AntiMicroX; if it cannot be found, `on` warns on stderr but still saves.
 
 ## Output
 
@@ -84,10 +84,10 @@ Runner of 'Foo Game' changed to 'GE-Proton10-1'.
 Errors (stderr):
 
 ```
-Usage: lpm tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud|overlay|gamepad> [path|action|runner] [key|file] [value]
+Usage: ludis tools <slug> <winetricks|regedit|winecfg|console|exe|folder|favorite|env|runner|mangohud|overlay|gamepad> [path|action|runner] [key|file] [value]
 Error: no installed game with slug '<slug>'.
 Error: the prefix folder for '<name>' could not be found.
-Error: the Wine runner '<version>' configured for this game is no longer installed (lpm install-runner to reinstall it).
+Error: the Wine runner '<version>' configured for this game is no longer installed (ludis install-runner to reinstall it).
 Error: unknown tool '<tool>' (expected: winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, overlay or gamepad).
 Error: winetricks could not be found, neither bundled by Lutris nor installed on the system.
 Already running for '<name>'.
@@ -101,8 +101,8 @@ Error: python3 with PyYAML is required for environment variables.
 Error: unknown action '<action>' (expected: list, set, unset or apply).
 Error: unknown overlay action '<action>' (expected: status, follow, on, off, global-on or global-off).
 Error: could not save the environment variables of '<name>' (configuration unchanged).
-Error: give the name of an installed runner (see 'lpm list-runner').
-Error: the runner '<name>' is not installed (see 'lpm list-runner', or 'lpm install-runner').
+Error: give the name of an installed runner (see 'ludis list-runner').
+Error: the runner '<name>' is not installed (see 'ludis list-runner', or 'ludis install-runner').
 Error: could not change the runner of '<name>' (configuration unchanged).
 ```
 
@@ -115,7 +115,7 @@ For `env set/unset/apply` failures, the reason (for example `invalid variable na
 
 ## Scripting notes
 
-- No confirmation and no interactive prompt, except the dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`) when Lutris exists in both forms and nothing was saved: avoid it with `LPM_LUTRIS_VERSION=flatpak|native` or `lpm lutris-version`. With EOF it selects and saves Flatpak.
+- No confirmation and no interactive prompt, except the dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`) when Lutris exists in both forms and nothing was saved: avoid it with `LUDIS_LUTRIS_VERSION=flatpak|native` or `ludis lutris-version`. With EOF it selects and saves Flatpak.
 - `winetricks`, `regedit`, `winecfg`, `console`, `exe` and `folder` start GUI programs and return at once with all output discarded; they need a graphical session.
 - `env set KEY ""` stores an empty value. (`env apply` with a file line `KEY=` also does, but it replaces the whole environment.) A comment line (`# ...`) in an `apply` file is an error ("invalid line (expected KEY=VALUE)"); a missing file produces a Python traceback followed by the "could not save" line.
 - `env list` output is stable and parseable (`KEY=VALUE`, one per line; values with `=` are kept whole after the first `=`).
@@ -125,25 +125,25 @@ For `env set/unset/apply` failures, the reason (for example `invalid variable na
 ## Examples
 
 ```
-lpm tools my-game winecfg
-lpm tools my-game winetricks
-lpm tools my-game exe "$HOME/Downloads/vcredist_x64.exe"
-lpm tools my-game favorite "$HOME/Music"
-lpm tools my-game folder
-lpm tools my-game runner GE-Proton10-1
-lpm tools my-game env list
-lpm tools my-game env set DXVK_HUD fps
-lpm tools my-game env unset DXVK_HUD
-lpm tools my-game env list > my-game.env && lpm tools my-game env apply my-game.env
+ludis tools my-game winecfg
+ludis tools my-game winetricks
+ludis tools my-game exe "$HOME/Downloads/vcredist_x64.exe"
+ludis tools my-game favorite "$HOME/Music"
+ludis tools my-game folder
+ludis tools my-game runner GE-Proton10-1
+ludis tools my-game env list
+ludis tools my-game env set DXVK_HUD fps
+ludis tools my-game env unset DXVK_HUD
+ludis tools my-game env list > my-game.env && ludis tools my-game env apply my-game.env
 ```
 
 ## Files and data touched
 
 - Read: Lutris `pga.db`, `system.yml`, the game's YAML, `runners/wine.yml`, the runner folder, `/proc/<pid>/environ` (running-instance check).
 - Written by Wine inside the prefix (registry, installed software) for the Wine tools; `HKCU\...\Comdlg32\Placesbar\Place0` for `favorite`.
-- `env set|unset|apply`: the game's Lutris YAML (`~/.config/lutris/games/<configpath>.yml` native, `~/.var/app/net.lutris.Lutris/data/lutris/games/<configpath>.yml` Flatpak), via a temporary `.lpm-env-*` file in the same folder.
-- `~/.local/share/lpm/lpm.log` (error lines only).
+- `env set|unset|apply`: the game's Lutris YAML (`~/.config/lutris/games/<configpath>.yml` native, `~/.var/app/net.lutris.Lutris/data/lutris/games/<configpath>.yml` Flatpak), via a temporary `.ludis-env-*` file in the same folder.
+- `~/.local/share/ludis/ludis.log` (error lines only).
 
 ## See also
 
-`lpm list`, `lpm info`, `lpm install-runner`, `lpm killwine`, `lpm lutris-version`
+`ludis list`, `ludis info`, `ludis install-runner`, `ludis killwine`, `ludis lutris-version`

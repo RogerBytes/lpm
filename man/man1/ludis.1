@@ -1,16 +1,16 @@
-.TH LPM 1 "2026" "lpm v0.9.3" "Ludis Prefix Manager"
+.TH Ludis 1 "2026" "ludis v0.9.3" "Ludis"
 .SH NAME
-lpm \- prefix manager for Wine/Proton runners and a Lutris game library
+ludis \- prefix manager for Wine/Proton runners and a Lutris game library
 .SH SYNOPSIS
-.B lpm
+.B ludis
 .RI [ command ] " [options] [arguments...]"
 .br
-.B lpm\-gui
+.B ludis\-gui
 [\fIfile.zgp\fR | \fIfile.zgr\fR]
 .SH DESCRIPTION
-\fBlpm\fR packages, installs, uninstalls and isolates Windows games running under Wine in Lutris, and manages Wine/Proton runners. Games and runners are exchanged as \fI.zgp\fR (game) and \fI.zgr\fR (runner) archives, produced and consumed locally.
+\fBludis\fR packages, installs, uninstalls and isolates Windows games running under Wine in Lutris, and manages Wine/Proton runners. Games and runners are exchanged as \fI.zgp\fR (game) and \fI.zgr\fR (runner) archives, produced and consumed locally.
 .PP
-\fBlpm\fR is a terminal command that can be used in scripts: it never opens a window. Launched with no argument, it shows the help. The graphical interface is started with \fBlpm\-gui\fR (also from the applications menu, or by double-clicking a \fI.zgp\fR or \fI.zgr\fR file).
+\fBludis\fR is a terminal command that can be used in scripts: it never opens a window. Launched with no argument, it shows the help. The graphical interface is started with \fBludis\-gui\fR (also from the applications menu, or by double-clicking a \fI.zgp\fR or \fI.zgr\fR file).
 .PP
 This page is a summary. The complete documentation of every command (arguments, options, behavior, exit status, scripting notes, examples) is in the \fIdocs/commands/\fR folder of the project repository.
 .SH COMMANDS \(em GAMES
@@ -58,7 +58,7 @@ Forces VSync off for a game with environment variables (d3d9, d3d11, d3d12, gl\-
 Enables/disables lsfg-vk frame generation.
 .TP
 .B launcher <slugs...> on|off
-Enables/disables the LPM Launcher (loading screen and executable picker).
+Enables/disables the Ludis Launcher (loading screen and executable picker).
 .TP
 .B launcher\-entries <slug> get|set
 Reads/replaces the launcher's picker entries (JSON).
@@ -87,7 +87,7 @@ Checks that the runners needed by installed games are present and fetches missin
 Shows/forces the Lutris installation used when both exist.
 .TP
 .B self\-update [check|install]
-Checks for a newer lpm release and installs it (package installs only).
+Checks for a newer ludis release and installs it (package installs only).
 .TP
 .B log [\-n N|\-\-all|\-\-grep PATTERN|\-\-clear]
 Shows, filters or clears the action log.
@@ -109,28 +109,28 @@ pack, pack\-runner: writes a sha256 sidecar file next to each archive.
 pack, pack\-runner: zstd compression level.
 .TP
 .B \-\-version, \-v
-Shows the lpm version.
+Shows the ludis version.
 .TP
 .B \-\-help, \-h
 Shows this page (or a built-in summary if it is not installed).
 .PP
-Global options must be placed right after the command name, before its other arguments (for example \fBlpm install \-y game.zgp\fR).
+Global options must be placed right after the command name, before its other arguments (for example \fBludis install \-y game.zgp\fR).
 .SH LOG
-Errors printed by commands, and some successes, are recorded in \fI~/.local/share/lpm/lpm.log\fR (always under the home directory), one line per event with four tab-separated columns: timestamp, origin, status (OK, ERROR, WARN or INFO), detail. Past 10000 lines the file is renamed \fIlpm.log.1\fR and a fresh log is started. See \fBlog\fR above.
+Errors printed by commands, and some successes, are recorded in \fI~/.local/share/ludis/ludis.log\fR (always under the home directory), one line per event with four tab-separated columns: timestamp, origin, status (OK, ERROR, WARN or INFO), detail. Past 10000 lines the file is renamed \fIludis.log.1\fR and a fresh log is started. See \fBlog\fR above.
 .SH FILES
 .TP
-.I ~/.local/share/lpm/lpm.log
+.I ~/.local/share/ludis/ludis.log
 Action log.
 .TP
-.I ~/.config/lpm/
-lpm configuration (SteamGridDB key, Lutris version choice, lsfg\-vk).
+.I ~/.config/ludis/
+ludis configuration (SteamGridDB key, Lutris version choice, lsfg\-vk).
 .TP
-.I <game_dir>/lpm\-launcher.yml
+.I <game_dir>/ludis\-launcher.yml
 Launcher picker entries.
 .TP
 .I ~/.config/lutris/ (native package) / ~/.var/app/net.lutris.Lutris/ (Flatpak)
-Lutris configuration and database, read and modified by lpm.
+Lutris configuration and database, read and modified by ludis.
 .SH SEE ALSO
-The project repository (https://github.com/RogerBytes/lpm), folder \fIdocs/commands/\fR: one page per command, the global options (\fIoptions.md\fR) and the archive formats (\fIarchives.md\fR).
+The project repository (https://github.com/RogerBytes/ludis), folder \fIdocs/commands/\fR: one page per command, the global options (\fIoptions.md\fR) and the archive formats (\fIarchives.md\fR).
 .SH AUTHOR
-Ludis Prefix Manager (lpm) is a personal project.
+Ludis (ludis) is a personal project.

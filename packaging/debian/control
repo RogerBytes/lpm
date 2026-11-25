@@ -1,4 +1,4 @@
-Source: lpm
+Source: ludis
 Section: games
 Priority: optional
 Maintainer: Harry <harry.richmond@rogerbytes.com>
@@ -6,7 +6,7 @@ Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
 Homepage: https://rogerbytes.com
 
-Package: lpm
+Package: ludis
 Architecture: all
 Depends: ${misc:Depends},
  bash,
@@ -24,9 +24,11 @@ Depends: ${misc:Depends},
  hicolor-icon-theme,
  gir1.2-gtk-4.0 (>= 4.10),
  gir1.2-adw-1 (>= 1.5)
+Replaces: lpm
+Conflicts: lpm
 Recommends: lutris, wine, winetricks, imagemagick, curl, xdotool, ydotool, bash-completion
 Description: Prefix manager for Lutris
- lpm (Ludis Prefix Manager) packages, installs and manages Wine/Proton
+ Ludis packages, installs and manages Wine/Proton
  games and runners for Lutris as .zgp/.zgr archives, with support for
  lsfg-vk (frame generation), shared-prefix isolation, and desktop
  integration (icons, MIME types, shortcuts).

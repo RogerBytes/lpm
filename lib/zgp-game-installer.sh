@@ -11,8 +11,8 @@ source "${script_dir}/zgu-lutris-utils.sh"
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
@@ -22,7 +22,7 @@ source "${script_dir}/zgu-hash-utils.sh"
 # the archive data sent to bsdtar and corrupt the extraction.
 exec 3>&1
 
-# --- Arguments passed by bin/lpm ---
+# --- Arguments passed by bin/ludis ---
 # $1 = mode (always "cli"; kept for consistency with the other lib/ scripts, value unused here)
 # $2 = confirm_flag ("yes" if -y)
 # $3 = allow_scripts_flag ("yes" if --allow-scripts)
@@ -31,7 +31,7 @@ exec 3>&1
 #   -s, --shortcut=<menu|desktop|both|none>   shortcuts to create (default "both")
 #   --desktop-dir=<path>                      folder for the desktop shortcut, instead of the one from
 #                                             zgu_get_desktop_dir() (no effect with shortcut_mode "menu"/"none")
-#   -n, --no-loadingscreen                    disable the lpm loading screen for the created shortcut(s)
+#   -n, --no-loadingscreen                    disable the ludis loading screen for the created shortcut(s)
 #                                             (default enabled; see zgl-launcher-orchestrator.sh; no effect
 #                                             with shortcut_mode "none")
 shift || true
@@ -118,7 +118,7 @@ import os, re
 res = re.sub(r"/home/[^/]+", lambda _m: os.environ["HOME"], os.environ["HOOK_VALUE"])
 print(res.replace("$GAMEDIR", os.environ["PFX_DIR"]))
 ' 2>/dev/null)
-    # Short form for display: relative to the game's folder ("lpm/scripts/a.sh").
+    # Short form for display: relative to the game's folder ("ludis/scripts/a.sh").
     hook_short="${hook_full//"${games_dir}/${slug}/"/}"
     printf 'HOOK\x1f%s\x1f%s\x1f%s\x1f%s\n' "${hook_path}" "${hook_value}" "${hook_full}" "${hook_short}"
   done <<< "${hooks}"
@@ -201,9 +201,9 @@ create_desktop=false
 # Loading screen (see lib/zgl-launcher-orchestrator.sh): "loadingscreen_enabled" is already
 # resolved above from -n/--no-loadingscreen.
 
-# Strict CLI mode only: bin/lpm has no interactive entry point.
+# Strict CLI mode only: bin/ludis has no interactive entry point.
 if [[ ${#cli_targets[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t common.missing_target_cli "lpm install")"
+  zgu_cli_error "$(t common.missing_target_cli "ludis install")"
   exit 1
 fi
 
@@ -357,14 +357,14 @@ install_success_file=$(mktemp)
 # --- Cancellation (SIGTERM/SIGINT sent by the GUI "Cancel" button to the whole process group):
 # removes ONLY the game being installed (temp extraction, or a moved prefix not yet finished,
 # including Lutris entry, YAML config and menu/desktop shortcuts). Completed games of the batch
-# are never touched here (the GUI then offers to uninstall them via "lpm uninstall"), and the
+# are never touched here (the GUI then offers to uninstall them via "ludis uninstall"), and the
 # .zgp is never deleted. A pre-existing prefix is never affected, since installation refuses any
 # game whose folder already exists ("deja_installe"). Exit code 130 + "[CANCELLED]" line.
 inprogress_prefix=""
 inprogress_slug=""
 temp_extract_dir=""
 
-lpm_cancel_cleanup() {
+ludis_cancel_cleanup() {
   trap '' TERM INT
   [[ -n "${game_cfg_file:-}" ]] && rm -f -- "${game_cfg_file}"
   if [[ -n "${temp_extract_dir}" ]] && [[ "${temp_extract_dir}" == "${games_dir}/.zgp-extract-"* ]]; then
@@ -396,19 +396,19 @@ lpm_cancel_cleanup() {
 }
 # HUP too: closing the terminal (or the GUI window running this script) must clean up the same
 # way as a cancellation. SIGKILL, a crash or a power loss cannot be trapped by any process.
-trap lpm_cancel_cleanup TERM INT HUP
+trap ludis_cancel_cleanup TERM INT HUP
 
 # Whatever the way the script ends (normal end, "exit" after an error...), never leave its
 # temporary extraction folder behind. Only the temp folder is removed here, never a finished
-# prefix (completed games are not touched, see lpm_cancel_cleanup for the in-progress one).
+# prefix (completed games are not touched, see ludis_cancel_cleanup for the in-progress one).
 game_cfg_file=""
-lpm_exit_cleanup() {
+ludis_exit_cleanup() {
   [[ -n "${game_cfg_file}" ]] && rm -f -- "${game_cfg_file}"
   if [[ -n "${temp_extract_dir}" ]] && [[ "${temp_extract_dir}" == "${games_dir}/.zgp-extract-"* ]]; then
     rm -rf "${temp_extract_dir}"
   fi
 }
-trap lpm_exit_cleanup EXIT
+trap ludis_exit_cleanup EXIT
 
 # Process each selected game
 for name in "${games_to_install[@]}"; do
@@ -458,7 +458,7 @@ for name in "${games_to_install[@]}"; do
   # umask 022 during extraction: without "--no-same-permissions", bsdtar keeps the archive's
   # permission bits, so a forged .zgp could plant a world-writable (777) file in the games
   # folder, or an unreadable (000) one to sabotage the install.
-  _lpm_old_umask=$(umask)
+  _ludis_old_umask=$(umask)
   umask 022
   # bsdtar's messages forced to English (LC_MESSAGES only: LC_CTYPE must stay as the user's, or
   # non-ASCII file names would be mangled) so the "No space left" detection below does not depend
@@ -474,13 +474,13 @@ for name in "${games_to_install[@]}"; do
   # ">(...)" that rereads each percentage and reprints it as "[PROGRESS] <pct>" to fd 3 (see
   # "exec 3>&1" at the top), not stdout, which here is already piped to bsdtar. Same mechanism
   # in zgr-runner-installer.sh.
-  pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _lpm_pct; do
-    printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+  pv -n -s "${file_size:-0}" "${filepath}" 2> >(while IFS= read -r _ludis_pct; do
+    printf '[PROGRESS] %s\n' "${_ludis_pct}" >&3
   done) | env "${bsdtar_env[@]}" bsdtar -xf - -C "${temp_extract_dir}" --exclude .lpm-size --exclude .lpm-config.yml 2> "${extract_err_file}"
   # PIPESTATUS[1] = bsdtar's exit code (only "pv" and "bsdtar" are in the "|" pipe; the
   # process substitution on stderr is not).
   tar_exit="${PIPESTATUS[1]}"
-  umask "${_lpm_old_umask}"
+  umask "${_ludis_old_umask}"
 
   # 1bis. Verify the extraction: if tar failed (corrupt, truncated or invalid archive), abort
   # this game cleanly without touching Lutris or creating shortcuts
@@ -589,15 +589,16 @@ for name in "${games_to_install[@]}"; do
     timestamp=$(date +%s%N)
     config_id="${slug}-${timestamp}"
 
-    # A package made with the old layout (lpm files scattered at the prefix root) is brought to
-    # the current one at once: everything moves into "lpm/" with its new name, so the game needs
-    # no new export. No-op for a package that already has the "lpm/" layout.
-    zgu_lpm_migrate "${prefix_dir}"
+    # A package made with the old layout (ludis files scattered at the prefix root) is brought to
+    # the current one at once: everything moves into "ludis/" with its new name, so the game needs
+    # no new export. No-op for a package that already has the "ludis/" layout.
+    zgu_ludis_adopt_old_dir "${prefix_dir}"
+    zgu_ludis_migrate "${prefix_dir}"
 
     # The display name (.desktop shortcut, messages...) comes straight from the "name" field
     # of the bundled .lpm-config.yml, which is a copy of the original Lutris YAML where
     # it is a root key.
-    bundled_yml="${game_cfg_file:-$(zgu_lpm_find "${prefix_dir}" config)}"
+    bundled_yml="${game_cfg_file:-$(zgu_ludis_find "${prefix_dir}" config)}"
     game_real_name=""
 
     if [[ -f "${bundled_yml}" ]]; then
@@ -687,12 +688,12 @@ except Exception:
       # --- Detect auto-run hooks (prelaunch_command, etc.) ---
       # Read-only: lists in advance the keys that the cleanup below would strip (see
       # strip_exec_hooks below). A .zgp may come from an untrusted third party or from the
-      # user's own "lpm pack"; lpm cannot tell which, so rather than silently stripping
+      # user's own "ludis pack"; ludis cannot tell which, so rather than silently stripping
       # these hooks it informs the user and asks (see the confirmation below).
       detected_hooks=$(zgu_yaml_hooks < "${bundled_yml}")
 
       # Strip by default (safe): keep_hooks becomes "yes" only if authorized for the batch
-      # (the single question above, or --allow-scripts, see bin/lpm). It is separate from -y: -y
+      # (the single question above, or --allow-scripts, see bin/ludis). It is separate from -y: -y
       # skips the general install confirmation, not the authorization to run a script at every
       # game launch; these are different risks.
       keep_hooks="no"
@@ -799,10 +800,10 @@ EOF
 
     zgu_write_game_shortcut "${game_real_name}" "${slug}" "${prefix_dir}" "${game_id}" "${version}" "${create_menu}" "${create_desktop}" "${executable_path}" "${config_id}" "${lutris_config_dir}" "${runner_dir}" "${desktop_dir_override}"
 
-    # --- LPM Launcher of a package made by lpm <= 0.9.5 (old format: relay
+    # --- Ludis Launcher of a package made by ludis <= 0.9.5 (old format: relay
     # "scripts/lpm-launcher.sh" run by a Lutris prelaunch command): converted to the current
     # format, where the orchestrator writes lpm-launch.bat itself before launching. Removes the
-    # relay and any prelaunch command pointing to it, aligns "bat_path" of lpm/launcher.yml on
+    # relay and any prelaunch command pointing to it, aligns "bat_path" of ludis/launcher.yml on
     # the game.exe of the config. Nothing to reconnect any more. Must run AFTER
     # zgu_write_game_shortcut and BEFORE zgu_apply_hook_policy. DO NOT REMOVE: old packages can
     # be installed years from now (see lib/zgl-launcher-legacy.sh). ---
@@ -810,9 +811,10 @@ EOF
       bash "${script_dir}/zgl-launcher-legacy.sh" "${yml_config_file}" "${prefix_dir}" >/dev/null 2>&1
     fi
 
-    # The files moved by zgu_lpm_migrate may be referenced by absolute path in the Lutris YAML
+    # The files moved by zgu_ludis_migrate may be referenced by absolute path in the Lutris YAML
     # (AntiMicroX profile, scripts): point those lines to the new location.
-    zgu_lpm_fix_yml_paths "${prefix_dir}" "${yml_config_file}"
+    zgu_ludis_fix_yml_paths "${prefix_dir}" "${yml_config_file}"
+    zgu_ludis_adopt_old_dir "${prefix_dir}" "${yml_config_file}"
 
     # Neutralize (never delete) unauthorized hooks; see the YAML handling comment above and
     # zgu_apply_hook_policy in zgu-desktop-utils.sh. keep_hooks was resolved earlier. MUST
@@ -828,8 +830,8 @@ EOF
     # as zgp-game-shortcutter.sh: created if unchecked, absent (screen active) otherwise,
     # which is the default for a freshly extracted game folder.
     if [[ "${loadingscreen_enabled}" = false ]]; then
-      mkdir -p "$(dirname "$(zgu_lpm_path "${prefix_dir}" no_loadingscreen)")" 2>/dev/null
-      : > "$(zgu_lpm_path "${prefix_dir}" no_loadingscreen)" 2>/dev/null
+      mkdir -p "$(dirname "$(zgu_ludis_path "${prefix_dir}" no_loadingscreen)")" 2>/dev/null
+      : > "$(zgu_ludis_path "${prefix_dir}" no_loadingscreen)" 2>/dev/null
     fi
 
     zgu_log "install" "OK" "slug=${slug} name=${game_real_name}"
@@ -866,12 +868,12 @@ else
   notify-send "$(t install_game.notify_title_partial)" "$(t install_game.notify_body_partial "${install_success_count}" "${install_total_count}")" 2>/dev/null
 fi
 
-# Best-effort update of Lutris native media (banner/icon/cover, see "lpm sync-media") for the
+# Best-effort update of Lutris native media (banner/icon/cover, see "ludis sync-media") for the
 # games just installed. Outside the install loop: a lutris.net network problem must never fail
 # an installation.
 if [[ ${#install_succeeded_slugs[@]} -gt 0 ]]; then
   # Run in the background, detached ("&" + "disown"): nothing here needs to wait for
-  # sync-media (purely cosmetic); each game's result remains available via "lpm log" (see
+  # sync-media (purely cosmetic); each game's result remains available via "ludis log" (see
   # zgu_log in zgp-game-sync-media.sh).
   bash "${script_dir}/zgp-game-sync-media.sh" "${install_succeeded_slugs[@]}" >/dev/null 2>&1 3>&- </dev/null &
   disown

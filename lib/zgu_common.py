@@ -258,12 +258,12 @@ def init_sdl(sdl):
 # lib/zgu-launcher-screen.py: same palette, same title/prompt and same Validate/Cancel buttons.
 # The rest of each stylesheet (window or card, list rows) differs and stays in each program. ---
 PICKER_TEXT_CSS = b"""
-.lpm-picker-title {
+.ludis-picker-title {
     font-weight: bold;
     font-size: 24px;
     color: #ffffff;
 }
-.lpm-picker-prompt {
+.ludis-picker-prompt {
     font-size: 20px;
     color: #cccccc;
 }
@@ -274,24 +274,24 @@ PICKER_BUTTON_CSS = b"""
    blanc par defaut du theme --. "border" en raccourci complet
    (style + largeur + couleur), meme logique que "background-image: none" plus haut : ne
    laisser aucune propriete de bordure heritee du theme. */
-.lpm-picker-validate-button {
+.ludis-picker-validate-button {
     background-image: none;
     background-color: #2e7d32;
     border: 1px solid #4e9d52;
     color: #ffffff;
 }
-.lpm-picker-validate-button:hover {
+.ludis-picker-validate-button:hover {
     background-image: none;
     background-color: #388e3c;
     border: 1px solid #58ae5c;
 }
-.lpm-picker-cancel-button {
+.ludis-picker-cancel-button {
     background-image: none;
     background-color: #3a3a3a;
     border: 1px solid #5a5a5a;
     color: #ffffff;
 }
-.lpm-picker-cancel-button:hover {
+.ludis-picker-cancel-button:hover {
     background-image: none;
     background-color: #474747;
     border: 1px solid #676767;
@@ -300,7 +300,7 @@ PICKER_BUTTON_CSS = b"""
 
 
 # --- In-game menu settings (lib/zgu-gamepad-exit-watcher.py opens lib/zgu-game-menu.py) -------
-# ONE place for all games: <XDG config>/lpm/menu.conf, "key=value" lines, "#" comments. Missing
+# ONE place for all games: <XDG config>/ludis/menu.conf, "key=value" lines, "#" comments. Missing
 # file or key = default. To change the shortcuts, edit this file (no per-game setting).
 #   gamepad_combo    buttons pressed together: L1,R1,L2,R2,L3,R3 (default: all six)
 #   keyboard_hotkey  modifiers + key joined by "+": ctrl+shift+m (default); "none" disables it
@@ -330,7 +330,7 @@ def load_menu_conf():
     conf = dict(MENU_CONF_DEFAULTS)
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
     try:
-        with open(os.path.join(base, "lpm", "menu.conf"), encoding="utf-8") as f:
+        with open(os.path.join(base, "ludis", "menu.conf"), encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#") or "=" not in line:
@@ -398,7 +398,7 @@ def runtime_file(name):
     watcher and the mouse process talk through these ("gamepad-cmd": a command for the watcher,
     "gamepad-mouse": exists while the gamepad mouse is on)."""
     base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    return os.path.join(base, "lpm-%s-%d" % (name, os.getuid()))
+    return os.path.join(base, "ludis-%s-%d" % (name, os.getuid()))
 
 
 def running_keyboard_pid():

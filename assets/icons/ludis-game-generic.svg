@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
   <!--
-    Icône de secours pour les raccourcis de jeux créés par lpm quand aucune icône n'est
+    Icône de secours pour les raccourcis de jeux créés par ludis quand aucune icône n'est
     disponible (ni icône personnalisée packagée dans le .zgp, ni icône récupérée via
-    "lpm icon"/SteamGridDB ; voir icon_path dans lib/zgu-desktop-utils.sh, qui utilisait
+    "ludis icon"/SteamGridDB ; voir icon_path dans lib/zgu-desktop-utils.sh, qui utilisait
     jusqu'ici l'icône système générique "applications-games").
 
     Fond : reproduction vectorielle fidèle du fond de l'icône système "applications-games"
@@ -14,7 +14,7 @@
 
     Glyphe : manette de jeu (Tabler Icons "device-gamepad", licence MIT) à la place du
     glyphe alien d'origine ; symbole neutre "jeu/manette" qui ne prête pas à confusion
-    avec le glyphe "paquet" de lpm/.zgp ni le "verre" de .zgr, et reste pertinent même si un
+    avec le glyphe "paquet" de ludis/.zgp ni le "verre" de .zgr, et reste pertinent même si un
     raccourci lance autre chose qu'un jeu au sens strict.
   -->
   <defs>

@@ -1,25 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
   <!--
-    Icône du type MIME application/x-zgp-game (fichiers .zgp ; jeux packagés par lpm).
+    Icône du type MIME application/x-zgp-game (fichiers .zgp ; jeux packagés par ludis).
     Nom de fichier = nom d'icône attendu par shared-mime-info pour ce type MIME
     ("/" du type MIME remplacé par "-").
     Forme : silhouette de carton "package-x-generic" reprise telle quelle du thème
     d'icônes Mint-L-Blue (le dépôt public linuxmint/mint-l-icons, licence GPLv3 ;
     voir src/mimetypes/48/package-x-generic.svg dans ce dépôt), recolorée avec notre
-    dégradé jaune->orange (le même que lpm.svg) plutôt que le brun carton d'origine.
+    dégradé jaune->orange (le même que ludis.svg) plutôt que le brun carton d'origine.
     Choisie à la place d'un carré plein ou d'un coin corné "page" : la forme de boîte est
     un repère universel de "ceci est un paquet/fichier", donc bien distincte de l'icône
-    carrée pleine de l'appli lpm elle-même, tout en restant cohérente avec le thème
+    carrée pleine de l'appli ludis elle-même, tout en restant cohérente avec le thème
     d'icônes Mint-L-Blue.
     Glyphe : paquet ouvert (Tabler Icons "package", licence MIT, le même glyphe que
-    lpm.svg), blanc et plat ; la référence à Wine (verre plein) est réservée à .zgr, le
+    ludis.svg), blanc et plat ; la référence à Wine (verre plein) est réservée à .zgr, le
     "moteur d'exécution" ; plus logique là qu'ici. Centré non pas sur le canevas entier
     mais sur la zone utile du carton ; entre le pli du rabat (y=17.5 dans le tracé
     d'origine, soit y=43.59 sur notre canevas 120x120, mesuré sur le rendu) et le bas du
     carton (y=111.09 mesuré) ; soit un centre à (60, 77.34) au lieu de (60, 60).
 
     LICENCE : ce fichier reprend un tracé GPLv3 (Mint-L-Blue), distribué sous GPLv3, PAS
-    sous la licence MIT du reste du projet lpm. Voir packaging/debian/copyright.
+    sous la licence MIT du reste du projet ludis. Voir packaging/debian/copyright.
   -->
   <defs>
     <linearGradient id="lutrisYellowOrange" x1="0" y1="0" x2="0" y2="1">

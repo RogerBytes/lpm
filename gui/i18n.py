@@ -24,7 +24,7 @@ STRINGS: dict[str, str] = {}
 
 def _lang_dir() -> str:
     # gui/ and lang/ are always siblings (source checkout AND every install method, see
-    # install.sh, packaging/debian/lpm.install, packaging/rpm/lpm.spec, packaging/arch/PKGBUILD).
+    # install.sh, packaging/debian/ludis.install, packaging/rpm/ludis.spec, packaging/arch/PKGBUILD).
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lang")
 
 

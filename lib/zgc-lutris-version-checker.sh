@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# --- lpm lutris-version ---
+# --- ludis lutris-version ---
 #
 # Shows the Lutris versions detected on the machine (Flatpak / native package) with their version
-# number and an up-to-date/outdated status, and lets the user force/reset the choice lpm uses when
+# number and an up-to-date/outdated status, and lets the user force/reset the choice ludis uses when
 # both are installed (see zgu_resolve_lutris_version in zgu-lutris-utils.sh, which applies the saved
 # choice silently on every run). This command ONLY displays/configures: the effective resolution
-# used by other lpm commands stays centralized there.
+# used by other ludis commands stays centralized there.
 
-# --- Arguments passed by the lpm router ---
+# --- Arguments passed by the ludis router ---
 # $1 = mode (always "cli")
 # $2 = optional subcommand: "flatpak", "native", "reset", or empty (display only)
 sub_arg="${2:-}"
@@ -67,7 +67,7 @@ if [[ "${has_native}" = true ]]; then
 fi
 
 # --- 3. Latest known upstream version (GitHub, best effort, never blocking) ---
-# No new dependency: curl/wget is already required elsewhere in lpm (runners). A failure here
+# No new dependency: curl/wget is already required elsewhere in ludis (runners). A failure here
 # (offline, GitHub rate limit) must not prevent showing local versions; only the up-to-date/outdated
 # status is omitted.
 latest_version=""
@@ -143,7 +143,7 @@ print_detected_list() {
   fi
 }
 
-# --- 3bis. GUI-readable mode: "lpm lutris-version status" ---
+# --- 3bis. GUI-readable mode: "ludis lutris-version status" ---
 # Lines "[LUTRIS] <flatpak|native>|<version>|<status>" for each DETECTED version, and
 # "[LUTRIS-SAVED] <flatpak|native>" if a saved choice points to a version that is still installed.
 if [[ "${sub_arg}" = "status" ]]; then

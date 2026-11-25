@@ -1,18 +1,18 @@
-# lpm lsfg
+# ludis lsfg
 
 Enables or disables lsfg-vk (Lossless Scaling frame generation) for one or more installed Wine/Proton games.
 
 ## Synopsis
 
 ```
-lpm lsfg <slug>... on
-lpm lsfg <slug>... off
-lpm lsfg status
+ludis lsfg <slug>... on
+ludis lsfg <slug>... off
+ludis lsfg status
 ```
 
 ## Description
 
-lsfg-vk is a Vulkan layer that generates intermediate frames. `lpm lsfg ... on` makes a game use it by copying the reference `lsfg-vk.dll` into the game's prefix and adding three environment variables to the game's Lutris configuration; `off` removes those variables again. The command only acts on Wine/Proton games (`runner='wine'`); games in shared store prefixes are included (the operation is not destructive).
+lsfg-vk is a Vulkan layer that generates intermediate frames. `ludis lsfg ... on` makes a game use it by copying the reference `lsfg-vk.dll` into the game's prefix and adding three environment variables to the game's Lutris configuration; `off` removes those variables again. The command only acts on Wine/Proton games (`runner='wine'`); games in shared store prefixes are included (the operation is not destructive).
 
 The action word (`on` or `off`) must be the **last** argument and at least one slug is required. There is no interactive game selection.
 
@@ -26,7 +26,7 @@ The reference DLL must be the real `lsfg-vk.dll` from the Steam beta branch `lsf
 
 ## Options
 
-None. (`bin/lpm` generic options such as `-y` do not apply: confirmations are always asked, see Scripting notes.)
+None. (`bin/ludis` generic options such as `-y` do not apply: confirmations are always asked, see Scripting notes.)
 
 ## Behavior
 
@@ -41,19 +41,19 @@ For `on` / `off`:
    - Flatpak: determines the freedesktop runtime version (that of an installed `VulkanLayer.*` extension, else the newest installed `org.freedesktop.Platform`), asks `Continue? [y/N] :`, then runs `flatpak remote-add --user --if-not-exists flathub ...` and `flatpak install --user -y flathub org.freedesktop.Platform.VulkanLayer.lsfgvk//<version>` (no root needed). Refusal or failure: status 1.
    - Native: prints the installation link (AUR page if `pacman` exists, otherwise `https://lsfg-vk.dev/docs/installation/`) and asks `Continue? [y/N] :`; after confirming, presence is re-checked ("lsfg-vk still could not be detected. Aborting." if still absent). Nothing is opened automatically: the link is only printed.
    - Any answer starting with `y`, `Y`, `o` or `O` means yes.
-5. For `on` only: if the reference DLL `${XDG_CONFIG_HOME:-$HOME/.config}/lpm/lsfg-vk/lsfg-vk.dll` does not exist, asks `Path:` for its location; the file must exist and be named `lsfg-vk.dll` (case-insensitive), then it is copied there. An empty answer or a wrong file: status 1.
+5. For `on` only: if the reference DLL `${XDG_CONFIG_HOME:-$HOME/.config}/ludis/lsfg-vk/lsfg-vk.dll` does not exist, asks `Path:` for its location; the file must exist and be named `lsfg-vk.dll` (case-insensitive), then it is copied there. An empty answer or a wrong file: status 1.
 6. Lists Wine games. If there are none: "No Wine/Proton games found." (stderr), status 0. A game is "enabled" when `system.env.LSFGVK_ENV` is `1` in its Lutris YAML (read live each time, no separate state file).
 7. Validates every slug **before** changing anything: unknown slug -> error, status 1; `on` for an already enabled game or `off` for a non-enabled game -> error, status 1 (the command is not idempotent).
 8. For each slug:
-   - `on`: creates `<game dir>/lpm/lsfg-vk/` and copies the reference DLL there (overwriting), then sets in the YAML `system.env`: `LSFGVK_ENV: '1'`, `LSFGVK_DLL_PATH: <game dir>/lpm/lsfg-vk/lsfg-vk.dll`, and `LSFGVK_MULTIPLIER: '2'` only if that key is absent (an existing value is kept).
+   - `on`: creates `<game dir>/ludis/lsfg-vk/` and copies the reference DLL there (overwriting), then sets in the YAML `system.env`: `LSFGVK_ENV: '1'`, `LSFGVK_DLL_PATH: <game dir>/ludis/lsfg-vk/lsfg-vk.dll`, and `LSFGVK_MULTIPLIER: '2'` only if that key is absent (an existing value is kept).
    - `off`: removes `LSFGVK_ENV`, `LSFGVK_DLL_PATH` and `LSFGVK_MULTIPLIER` from `system.env`. The copied DLL is left in place.
-   - The YAML is edited line by line (helper `lib/zgu-env-edit.py`, the one used by `lpm tools <slug> env`): YAML comments, including the `# lpm:hook-disabled` lines written by `lpm shortcut`, are preserved, and other keys are untouched. Only if this targeted edit is impossible does lpm fall back to rewriting the whole file with PyYAML (`yaml.dump`), which loses the comments.
+   - The YAML is edited line by line (helper `lib/zgu-env-edit.py`, the one used by `ludis tools <slug> env`): YAML comments, including the `# lpm:hook-disabled` lines written by `ludis shortcut`, are preserved, and other keys are untouched. Only if this targeted edit is impossible does ludis fall back to rewriting the whole file with PyYAML (`yaml.dump`), which loses the comments.
    - Missing YAML or write failure: error for that game, others continue, final status 1.
    - Success is logged and `<name>: done.` is printed.
 
-`lpm lsfg status` prints `{"installed": true}` or `{"installed": false}` and exits 0; it never prompts about installing.
+`ludis lsfg status` prints `{"installed": true}` or `{"installed": false}` and exits 0; it never prompts about installing.
 
-Two further sub-actions exist for the graphical interface: `lpm lsfg install-info` (JSON describing how lsfg-vk can be installed) and `lpm lsfg install-flatpak <runtime_version>` (non-interactive Flatpak install, prints `{"ok": true}` or `{"ok": false, "error": "..."}`). Both always exit 0 after printing.
+Two further sub-actions exist for the graphical interface: `ludis lsfg install-info` (JSON describing how lsfg-vk can be installed) and `ludis lsfg install-flatpak <runtime_version>` (non-interactive Flatpak install, prints `{"ok": true}` or `{"ok": false, "error": "..."}`). Both always exit 0 after printing.
 
 ## Output
 
@@ -67,7 +67,7 @@ Foo Game: done.
 stderr (main messages):
 
 ```
-Usage: lpm lsfg <slug...> on|off|status
+Usage: ludis lsfg <slug...> on|off|status
 Error: the "python3" command is required and was not found.
 Error: the PyYAML Python module is required (pip install pyyaml, or your distribution's python3-yaml package).
 Error: Lutris was not found on this machine.
@@ -100,31 +100,31 @@ No Wine/Proton games found.
 ## Scripting notes
 
 - Interactive prompts that can occur with `on`/`off`:
-  1. `Continue? [y/N] :` when lsfg-vk is not installed (Flatpak install confirmation, or native "installed it yourself" confirmation). No flag skips it; install lsfg-vk beforehand (`lpm lsfg status` tells whether it is detected) so that the prompt never appears.
-  2. `Path:` when the reference DLL is not stored yet (`on` only). Avoid it by running `lpm lsfg-dll set /path/to/lsfg-vk.dll` first.
-  3. The dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`) when Lutris is installed both ways with no saved choice; avoid with `LPM_LUTRIS_VERSION=flatpak|native` or `lpm lutris-version`. This also applies to `status` and `install-info` (the question goes to stderr).
+  1. `Continue? [y/N] :` when lsfg-vk is not installed (Flatpak install confirmation, or native "installed it yourself" confirmation). No flag skips it; install lsfg-vk beforehand (`ludis lsfg status` tells whether it is detected) so that the prompt never appears.
+  2. `Path:` when the reference DLL is not stored yet (`on` only). Avoid it by running `ludis lsfg-dll set /path/to/lsfg-vk.dll` first.
+  3. The dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`) when Lutris is installed both ways with no saved choice; avoid with `LUDIS_LUTRIS_VERSION=flatpak|native` or `ludis lutris-version`. This also applies to `status` and `install-info` (the question goes to stderr).
 - Without a TTY or with empty stdin, `read` returns an empty answer: prompt 1 is a refusal (status 1), prompt 2 gives status 1, prompt 3 selects Flatpak and saves it.
-- `on` fails with status 1 on an already enabled game and `off` on a game that is not enabled; in scripts, check state with `lpm tools <slug> env list` (look for `LSFGVK_ENV=1`) or treat the status as informational. Nothing is modified when validation fails.
-- Stable output: `lpm lsfg status` JSON; the `<name>: done.` lines use the display name.
+- `on` fails with status 1 on an already enabled game and `off` on a game that is not enabled; in scripts, check state with `ludis tools <slug> env list` (look for `LSFGVK_ENV=1`) or treat the status as informational. Nothing is modified when validation fails.
+- Stable output: `ludis lsfg status` JSON; the `<name>: done.` lines use the display name.
 - `LC_ALL=C` forces English messages.
 
 ## Examples
 
 ```
-lpm lsfg status
-lpm lsfg-dll set "$HOME/Downloads/lsfg-vk.dll"
-lpm lsfg my-game on
-lpm lsfg my-game other-game off
+ludis lsfg status
+ludis lsfg-dll set "$HOME/Downloads/lsfg-vk.dll"
+ludis lsfg my-game on
+ludis lsfg my-game other-game off
 ```
 
 ## Files and data touched
 
-- `${XDG_CONFIG_HOME:-~/.config}/lpm/lsfg-vk/lsfg-vk.dll` (reference DLL, created by `on` if missing).
-- `<game dir>/lpm/lsfg-vk/lsfg-vk.dll` (copied by `on`, never deleted).
+- `${XDG_CONFIG_HOME:-~/.config}/ludis/lsfg-vk/lsfg-vk.dll` (reference DLL, created by `on` if missing).
+- `<game dir>/ludis/lsfg-vk/lsfg-vk.dll` (copied by `on`, never deleted).
 - The game's Lutris YAML (`system.env` keys `LSFGVK_ENV`, `LSFGVK_DLL_PATH`, `LSFGVK_MULTIPLIER`), edited line by line (comments kept).
-- Flatpak: `flathub` user remote and the `org.freedesktop.Platform.VulkanLayer.lsfgvk` user extension when installed by lpm.
-- `~/.local/share/lpm/lpm.log`.
+- Flatpak: `flathub` user remote and the `org.freedesktop.Platform.VulkanLayer.lsfgvk` user extension when installed by ludis.
+- `~/.local/share/ludis/ludis.log`.
 
 ## See also
 
-`lpm lsfg-dll`, `lpm tools` (env), `lpm check`, `lpm lutris-version`
+`ludis lsfg-dll`, `ludis tools` (env), `ludis check`, `ludis lutris-version`

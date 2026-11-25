@@ -18,7 +18,7 @@ from widgets_select import GameMultiSelect
 class LsfgPage:
     """Frame generation (lsfg-vk). An extra row above the game selector shows the
     lsfg-vk.dll reference DLL already configured (or lets the user pick it if not yet):
-    "lpm lsfg ... on" needed it via a terminal prompt ("read -p", see zgl-lsfg-manager.sh)
+    "ludis lsfg ... on" needed it via a terminal prompt ("read -p", see zgl-lsfg-manager.sh)
     that can neither display nor receive anything from the GUI (no TTY) and failed
     silently (zgl-lsfg-dll.sh, a dedicated CLI command, replaces that prompt for this
     case).
@@ -26,9 +26,9 @@ class LsfgPage:
     "vk_notice_row", at the very top, is separate from the DLL choice (text too long and
     always shown otherwise): it shows NOTHING when lsfg-vk (the Vulkan layer itself, not
     the reference DLL below) is already installed, and only a short warning otherwise --
-    never both at once. Relies on "lpm lsfg status" (see zgl-lsfg-manager.sh,
+    never both at once. Relies on "ludis lsfg status" (see zgl-lsfg-manager.sh,
     non-interactive query, never the interactive install flow reserved for
-    "lpm lsfg <slug> on").
+    "ludis lsfg <slug> on").
 
     "vk_install_btn", suffix of "vk_notice_row", offers here the installation already
     available via "System > Check dependencies", without duplicating that logic (all
@@ -63,7 +63,7 @@ class LsfgPage:
         self.page.add_row(self.dll_row)
 
         # Tracks the current DLL path -- "Run" must NEVER be able to enable ("on" action) if
-        # no reference DLL is configured, see on_run below. Otherwise "lpm lsfg ... on" hits
+        # no reference DLL is configured, see on_run below. Otherwise "ludis lsfg ... on" hits
         # its own interactive prompt ("read -p" in zgp_lsfg_ensure_dll, see
         # zgl-lsfg-manager.sh), which fails silently from the GUI (no TTY). Not needed for
         # "off", which never touches the DLL.
@@ -97,18 +97,18 @@ class LsfgPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["lsfg", "status"], on_done=on_done)
+        backend.run_ludis_async(["lsfg", "status"], on_done=on_done)
 
     # Optional "Install lsfg-vk" button, suffix of "vk_notice_row": visible only when
     # lsfg-vk is not installed (it disappears with its row, no separate "set_visible"
-    # needed). On click, first queries "lpm lsfg install-info" (see zgl-lsfg-manager.sh) to
+    # needed). On click, first queries "ludis lsfg install-info" (see zgl-lsfg-manager.sh) to
     # know whether Lutris runs as a Flatpak, WITHOUT installing anything before explicit
     # confirmation: Flatpak shows a confirmation window then really installs via "lsfg
     # install-flatpak" (reuses zgu_lsfg_install_flatpak_do on the bash side, no copy of
     # that logic); native shows the same link as "System > Check dependencies"
     # (zgu_lsfg_native_link_info), since no automatic install is possible then.
     def on_install_clicked(self, *_):
-        backend.run_lpm_async(["lsfg", "install-info"], on_done=self._on_install_info)
+        backend.run_ludis_async(["lsfg", "install-info"], on_done=self._on_install_info)
 
     def _on_install_info(self, result: backend.CommandResult):
         data = json_result(result)
@@ -162,7 +162,7 @@ class LsfgPage:
 
             _run_on_main(apply_install)
 
-        backend.run_lpm_async(["lsfg", "install-flatpak", runtime_version], on_done=on_install_done)
+        backend.run_ludis_async(["lsfg", "install-flatpak", runtime_version], on_done=on_install_done)
 
     def _show_native_install_link(self, link, link_label):
         dialog = Adw.AlertDialog(
@@ -187,7 +187,7 @@ class LsfgPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["lsfg-dll", "get"], on_done=on_done)
+        backend.run_ludis_async(["lsfg-dll", "get"], on_done=on_done)
 
     def browse_dll(self):
         def got(paths):
@@ -203,7 +203,7 @@ class LsfgPage:
 
                 _run_on_main(apply)
 
-            backend.run_lpm_async(["lsfg-dll", "set", paths[0]], on_done=on_done)
+            backend.run_ludis_async(["lsfg-dll", "set", paths[0]], on_done=on_done)
 
         pick_file(self.window, t("gui.lsfg.dll_dialog_title"), got,
                   filters=[(t("gui.lsfg.dll_filter_label"), ["*.dll", "*.DLL"])])

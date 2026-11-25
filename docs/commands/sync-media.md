@@ -1,17 +1,17 @@
-# lpm sync-media
+# ludis sync-media
 
 Downloads Lutris' own library media (banner, cover art, icon) from lutris.net for installed games that lack them.
 
 ## Synopsis
 
 ```
-lpm sync-media <slug>...
-lpm sync-media --all
+ludis sync-media <slug>...
+ludis sync-media --all
 ```
 
 ## Description
 
-Reproduces what Lutris does when syncing media: for each target, if at least one of the three media is missing locally, the lutris.net API is queried and only the missing files are downloaded. These are the thumbnails shown inside Lutris' own library; the command has nothing to do with the SteamGridDB images of `icon`, `splash` and `logo`, which are used by lpm's shortcuts and loading screen. No API key is needed.
+Reproduces what Lutris does when syncing media: for each target, if at least one of the three media is missing locally, the lutris.net API is queried and only the missing files are downloaded. These are the thumbnails shown inside Lutris' own library; the command has nothing to do with the SteamGridDB images of `icon`, `splash` and `logo`, which are used by ludis's shortcuts and loading screen. No API key is needed.
 
 Only Wine games not living in a shared store prefix are eligible. Requires `sqlite3`, `curl` and `python3`.
 
@@ -22,7 +22,7 @@ Only Wine games not living in a shared store prefix are eligible. Requires `sqli
 
 ## Options
 
-None specific. (`bin/lpm` generic options such as `-y` have no effect.)
+None specific. (`bin/ludis` generic options such as `-y` have no effect.)
 
 ## Behavior
 
@@ -57,7 +57,7 @@ Error: Lutris database not found: <path>
 No installed games found.
 ```
 
-(`No installed games found.` goes through the error printer, so it is red on a terminal and written to `lpm.log` as an error, but the exit status is 0.)
+(`No installed games found.` goes through the error printer, so it is red on a terminal and written to `ludis.log` as an error, but the exit status is 0.)
 
 ## Exit status
 
@@ -66,7 +66,7 @@ No installed games found.
 
 ## Scripting notes
 
-- No interactive prompt, except the dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`), avoided with `LPM_LUTRIS_VERSION=flatpak|native` or `lpm lutris-version`. With EOF it selects Flatpak and saves the choice.
+- No interactive prompt, except the dual-Lutris question (`Use [1] Flatpak (default) or [2] the native package? :`), avoided with `LUDIS_LUTRIS_VERSION=flatpak|native` or `ludis lutris-version`. With EOF it selects Flatpak and saves the choice.
 - With no target and no `--all`, nothing is done and the status is 0, silently.
 - A game that is already complete produces no output at all, so "no output" does not mean "failure".
 - The target is always the slug as given; the printed text uses the slug, not the display name.
@@ -75,17 +75,17 @@ No installed games found.
 ## Examples
 
 ```
-lpm sync-media my-game
-lpm sync-media --all
-LPM_LUTRIS_VERSION=native lpm sync-media my-game other-game
+ludis sync-media my-game
+ludis sync-media --all
+LUDIS_LUTRIS_VERSION=native ludis sync-media my-game other-game
 ```
 
 ## Files and data touched
 
-- Written: `<lutris data dir>/banners/<slug>.jpg`, `<lutris data dir>/coverart/<slug>.jpg` (`~/.local/share/lutris` native, `~/.var/app/net.lutris.Lutris/data/lutris` Flatpak), `~/.local/share/icons/hicolor/128x128/apps/lutris_<slug>.png`, icon cache of `~/.local/share/icons/hicolor`, `~/.local/share/lpm/lpm.log`.
+- Written: `<lutris data dir>/banners/<slug>.jpg`, `<lutris data dir>/coverart/<slug>.jpg` (`~/.local/share/lutris` native, `~/.var/app/net.lutris.Lutris/data/lutris` Flatpak), `~/.local/share/icons/hicolor/128x128/apps/lutris_<slug>.png`, icon cache of `~/.local/share/icons/hicolor`, `~/.local/share/ludis/ludis.log`.
 - Read: Lutris `pga.db`.
 - Network: `https://lutris.net/api/games/<slug>` and the media URLs it returns.
 
 ## See also
 
-`lpm icon`, `lpm splash`, `lpm logo`, `lpm lutris-version`
+`ludis icon`, `ludis splash`, `ludis logo`, `ludis lutris-version`

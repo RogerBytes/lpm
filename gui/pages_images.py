@@ -41,7 +41,7 @@ class ImagesPage:
 
         # SteamGridDB API key -- entered directly ON this page (never a separate window),
         # masked (asterisks) but still editable (Adw.PasswordEntryRow), persistent once filled
-        # (see lib/zgl-sgdb-key.sh, same storage file as "lpm icon"/"splash"/"logo").
+        # (see lib/zgl-sgdb-key.sh, same storage file as "ludis icon"/"splash"/"logo").
         # "show_apply_button" shows an explicit validation checkmark (in addition to Enter):
         # the key is (re)tested with a REAL API call and saved ONLY on this "apply" signal,
         # never on each keystroke.
@@ -52,8 +52,8 @@ class ImagesPage:
         # Two triggers, and NEVER an API call outside them: verification must only happen
         # when a key is EDITED/ADDED, never on each page opening or reset.
         #   - no saved key (empty) -- known without any API call, simple read via
-        #     "lpm sgdb-key get" (see refresh_sgdb_key_row);
-        #   - an entry attempt was just rejected by "lpm sgdb-key set" (see
+        #     "ludis sgdb-key get" (see refresh_sgdb_key_row);
+        #   - an entry attempt was just rejected by "ludis sgdb-key set" (see
         #     on_sgdb_key_apply) -- that call tests the key against the API anyway in order
         #     to save it, so it is never an EXTRA check.
         # Hidden as soon as a saved key exists (whether it is still valid is no longer
@@ -86,7 +86,7 @@ class ImagesPage:
         self.page.add_row(self.logo_row)
 
         # "Automatic download" checkbox -- UNCHECKED by default. Checked: the first
-        # SteamGridDB result is taken without a window ("lpm icon"/"splash"/"logo" directly --
+        # SteamGridDB result is taken without a window ("ludis icon"/"splash"/"logo" directly --
         # run_step below). Unchecked (default): opens SgdbPickerWindow, which goes game by
         # game then type by type and lets the user choose the image in a thumbnail grid (see
         # lib/zgl-sgdb-images.sh for candidate retrieval).
@@ -99,7 +99,7 @@ class ImagesPage:
         self.page.run_button.connect("clicked", self.on_run)
 
     def refresh_sgdb_key_row(self, on_synced: Callable[[], None] | None = None):
-        """Resync only the FIELD (simple read, "lpm sgdb-key get", never an API call) --
+        """Resync only the FIELD (simple read, "ludis sgdb-key get", never an API call) --
         NEVER touches "sgdb_key_notice_row" itself: its state is decided by the only two
         legitimate callers below (empty key found at opening, or failure of a "set" in
         on_sgdb_key_apply), never rebuilt from the key's presence/absence on each call --
@@ -116,7 +116,7 @@ class ImagesPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["sgdb-key", "get"], on_done=on_done)
+        backend.run_ludis_async(["sgdb-key", "get"], on_done=on_done)
 
     def on_sgdb_key_apply(self, *_):
         candidate = self.sgdb_key_row.get_text().strip()
@@ -133,7 +133,7 @@ class ImagesPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["sgdb-key", "set", candidate], on_done=on_done)
+        backend.run_ludis_async(["sgdb-key", "set", candidate], on_done=on_done)
 
     def reset_fields(self):
         self.selector.refresh()

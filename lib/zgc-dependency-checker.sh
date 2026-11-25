@@ -12,7 +12,7 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-lsfg-utils.sh
 source "${script_dir}/zgu-lsfg-utils.sh"
 
-# --- Arguments passed by the lpm router ---
+# --- Arguments passed by the ludis router ---
 # $1 = mode (always "cli"; ignored, kept for positional consistency with other lib/ scripts)
 # $2 = confirm_flag ("yes" if -y, same convention as zgc-wine-killer.sh): skips the only real
 # question of this script (install the lsfg-vk Flatpak runtime?) so automated callers (GUI,
@@ -82,7 +82,7 @@ if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
 fi
 
 # PyYAML is required to read the wine.version key of installed games' YAML. Without it every game
-# would silently be treated as needing no runner, making `lpm check` useless without any warning.
+# would silently be treated as needing no runner, making `ludis check` useless without any warning.
 if ! python3 -c "import yaml" >/dev/null 2>&1; then
   say_err "$(t check.pyyaml_missing)"
   exit 1
@@ -233,7 +233,7 @@ if [[ ${#lsfg_games[@]} -gt 0 ]]; then
         fi
       fi
     else
-      # Native: no automatic install possible (no universal lsfg-vk package), same limit as "lpm lsfg";
+      # Native: no automatic install possible (no universal lsfg-vk package), same limit as "ludis lsfg";
       # just point to where the instructions are.
       say "$(t check.lsfg_native_hint)"
       report warn "$(t check.report_lsfg_missing "${lsfg_game_list}")"
@@ -387,8 +387,8 @@ extract_cli() {
   archive_size=$(stat -c%s "${archive_path}" 2>/dev/null || stat -f%z "${archive_path}" 2>/dev/null)
   # umask 022 during extraction: same safeguard as zgp-game-installer.sh/zgr-runner-installer.sh
   # against a forged .zgr planting overly permissive files.
-  local _lpm_old_umask
-  _lpm_old_umask=$(umask)
+  local _ludis_old_umask
+  _ludis_old_umask=$(umask)
   umask 022
   if command -v pv >/dev/null 2>&1; then
     pv -n -s "${archive_size:-0}" "${archive_path}" 2> >(while IFS= read -r pct; do
@@ -399,7 +399,7 @@ extract_cli() {
     bsdtar -xf "${archive_path}" -C "${runner_dir}"
     local tar_exit=$?
   fi
-  umask "${_lpm_old_umask}"
+  umask "${_ludis_old_umask}"
   [[ "${tar_exit}" -eq 0 ]] && [[ -d "${runner_dir}/${runner_name}" ]]
 }
 
@@ -436,7 +436,7 @@ for runner_name in "${missing_runners[@]}"; do
   else
     unresolved_runners+=("${runner_name}")
     # Structured line "runner|<name>|<games>": each frontend (GUI, terminal) builds its own sentence
-    # (the GUI points to its pages, the terminal to "lpm install-runner").
+    # (the GUI points to its pages, the terminal to "ludis install-runner").
     report runner "${runner_name}|${games_needing_runner[${runner_name}]}"
   fi
 done

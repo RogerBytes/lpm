@@ -1,17 +1,17 @@
-# lpm splash
+# ludis splash
 
 Downloads a wide banner ("Hero" image) from SteamGridDB and stores it as the loading-screen background of one or more installed games.
 
 ## Synopsis
 
 ```
-lpm splash <slug>... [--url <url>]
-lpm splash --all
+ludis splash <slug>... [--url <url>]
+ludis splash --all
 ```
 
 ## Description
 
-The banner is saved as `<game dir>/lpm/images/splash/splash.png`, the image displayed full screen by lpm's loading screen while the game starts. Without a `splash.png` the loading screen is plain black. The command is independent of `lpm launcher`: it creates `lpm/images/splash/` if needed whether or not the launcher is enabled for the game.
+The banner is saved as `<game dir>/ludis/images/splash/splash.png`, the image displayed full screen by ludis's loading screen while the game starts. Without a `splash.png` the loading screen is plain black. The command is independent of `ludis launcher`: it creates `ludis/images/splash/` if needed whether or not the launcher is enabled for the game.
 
 It needs a personal SteamGridDB API key (see Scripting notes). Only Wine games not living in a shared store prefix are eligible. Requires `sqlite3`, `curl`, `python3`, `realpath` and ImageMagick (`magick` or `convert`).
 
@@ -30,11 +30,11 @@ It needs a personal SteamGridDB API key (see Scripting notes). Only Wine games n
 
 1. Checks dependencies, resolves Lutris (Flatpak or native), loads Wine games from `pga.db`.
 2. Resolves targets; an unknown or shared-store slug aborts with status 1 before any work. `--url` with a number of targets other than 1 is an error.
-3. Ensures a valid SteamGridDB key (same logic as `lpm icon`, done even with no target). No valid key: "No valid API key was provided. Splash banner fetch cancelled.", exit 1.
+3. Ensures a valid SteamGridDB key (same logic as `ludis icon`, done even with no target). No valid key: "No valid API key was provided. Splash banner fetch cancelled.", exit 1.
 4. For each game:
    - Without `--url`: SteamGridDB autocomplete search with the Lutris name; no result = skipped; several results = numbered list and `Pick a number: ` prompt (invalid/empty answer = skipped).
    - Requests `heroes/game/<id>?types=static&mimes=image/png,image/jpeg,image/webp`; the first returned image is used. None: skipped.
-   - Creates `<game dir>/lpm/images/splash/`, downloads the image to a temporary file, converts it with ImageMagick to `splash.png` (overwriting any existing one), removes the temporary file.
+   - Creates `<game dir>/ludis/images/splash/`, downloads the image to a temporary file, converts it with ImageMagick to `splash.png` (overwriting any existing one), removes the temporary file.
 5. A failure on one game does not stop the others.
 
 ## Output
@@ -68,26 +68,26 @@ No installed games found.
 
 ## Scripting notes
 
-- **API key**: same file and validation as `lpm icon`: `${XDG_CONFIG_HOME:-$HOME/.config}/lpm/steamgriddb.key` (mode 600), tested against the SteamGridDB API on each run. Obtain a key at https://www.steamgriddb.com/profile/preferences/api and save it with `lpm sgdb-key set <key>`.
+- **API key**: same file and validation as `ludis icon`: `${XDG_CONFIG_HOME:-$HOME/.config}/ludis/steamgriddb.key` (mode 600), tested against the SteamGridDB API on each run. Obtain a key at https://www.steamgriddb.com/profile/preferences/api and save it with `ludis sgdb-key set <key>`.
 - **Prompts**: `Paste your SteamGridDB API key: ` (only when no valid key is saved) and `Pick a number: ` (several SteamGridDB matches). Avoid the key prompt by saving a key first; avoid the picker with `--url` (single game). Without a TTY/with EOF both get an empty answer: the key prompt aborts with exit 1, the picker skips the game.
-- Dual-Lutris prompt: avoid with `LPM_LUTRIS_VERSION=flatpak|native`.
+- Dual-Lutris prompt: avoid with `LUDIS_LUTRIS_VERSION=flatpak|native`.
 - `--url` as the last argument without a value is treated as not given (normal SteamGridDB search).
 - Stable output: `Splash banner set for <name>.`; use `LC_ALL=C` for English messages.
 
 ## Examples
 
 ```
-lpm splash my-game
-lpm splash --all
-lpm splash my-game --url https://example.com/hero.png
+ludis splash my-game
+ludis splash --all
+ludis splash my-game --url https://example.com/hero.png
 ```
 
 ## Files and data touched
 
-- `${XDG_CONFIG_HOME:-~/.config}/lpm/steamgriddb.key` (read / written).
-- `<game dir>/lpm/images/splash/splash.png` (created or overwritten), `<game dir>/lpm/images/splash/.lpm-download.<ext>` (temporary).
-- `~/.local/share/lpm/lpm.log`.
+- `${XDG_CONFIG_HOME:-~/.config}/ludis/steamgriddb.key` (read / written).
+- `<game dir>/ludis/images/splash/splash.png` (created or overwritten), `<game dir>/ludis/images/splash/.ludis-download.<ext>` (temporary).
+- `~/.local/share/ludis/ludis.log`.
 
 ## See also
 
-`lpm logo`, `lpm icon`, `lpm launcher`, `lpm shortcut`, `lpm sgdb-key`, `lpm sgdb-images`
+`ludis logo`, `ludis icon`, `ludis launcher`, `ludis shortcut`, `ludis sgdb-key`, `ludis sgdb-images`

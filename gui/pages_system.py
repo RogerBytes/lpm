@@ -28,7 +28,7 @@ class LutrisVersionPage:
 
     def _add_rows(self):
         self.page = CommandPage(t("gui.lutris_version.page_title"))
-        # Versions actually DETECTED ("lpm lutris-version status"), loaded when the page
+        # Versions actually DETECTED ("ludis lutris-version status"), loaded when the page
         # opens: the choice only offers what is installed.
         self.info_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.page.add_row(self.info_box)
@@ -103,7 +103,7 @@ class LutrisVersionPage:
         self.add_info(t("gui.lutris_version.loading"))
         self.choice_row.set_visible(False)
         self.page.run_button.set_sensitive(False)
-        backend.run_lpm_async(
+        backend.run_ludis_async(
             ["lutris-version", "status"],
             on_done=lambda result: _run_on_main(self.apply_status, gen, result),
         )
@@ -137,7 +137,7 @@ class LogsPage:
 
         self.journal_row = Adw.ComboRow(title=t("gui.logs.journal_title"))
         self.journal_row.set_model(Gtk.StringList.new([
-            t("gui.logs.journal_both"), t("gui.logs.journal_lpm"), t("gui.logs.journal_gui"),
+            t("gui.logs.journal_both"), t("gui.logs.journal_ludis"), t("gui.logs.journal_gui"),
         ]))
         self.page.add_row(self.journal_row)
         self.period_row = Adw.ComboRow(title=t("gui.logs.period_title"))
@@ -193,7 +193,7 @@ class LogsPage:
 
     def selected(self):
         j = self.journal_row.get_selected()
-        kinds = [("lpm", "gui"), ("lpm",), ("gui",)][j if j != Gtk.INVALID_LIST_POSITION else 0]
+        kinds = [("ludis", "gui"), ("ludis",), ("gui",)][j if j != Gtk.INVALID_LIST_POSITION else 0]
         p = self.period_row.get_selected()
         seconds = self.periods[p if p != Gtk.INVALID_LIST_POSITION else 1]
         return kinds, seconds, self.search_row.get_text().strip(), p
@@ -203,7 +203,7 @@ class LogsPage:
         cutoff = None
         if seconds is not None:
             cutoff = datetime.datetime.now().astimezone() - datetime.timedelta(seconds=seconds)
-        titles = {"lpm": t("gui.logs.section_lpm"), "gui": t("gui.logs.section_gui")}
+        titles = {"ludis": t("gui.logs.section_ludis"), "gui": t("gui.logs.section_gui")}
         sections, total = [], 0
         for kind in kinds:
             lines = _read_log_lines(kind, cutoff, query)
@@ -212,7 +212,7 @@ class LogsPage:
         period_label = [t("gui.logs.period_hour"), t("gui.logs.period_day"),
                         t("gui.logs.period_week"), t("gui.logs.period_all")][period_index]
         header = (
-            t("gui.logs.export_header", backend.get_lpm_version(),
+            t("gui.logs.export_header", backend.get_ludis_version(),
               datetime.datetime.now().strftime("%Y-%m-%d %H:%M")) + "\n"
             + t("gui.logs.export_filters", period_label, query or t("gui.logs.no_filter")) + "\n"
         )
@@ -274,7 +274,7 @@ class LogsPage:
         if not self.has_export():
             return
         dialog = Gtk.FileDialog(title=t("gui.logs.save_dialog_title"))
-        dialog.set_initial_name("lpm-logs-" + datetime.datetime.now().strftime("%Y%m%d-%H%M") + ".txt")
+        dialog.set_initial_name("ludis-logs-" + datetime.datetime.now().strftime("%Y%m%d-%H%M") + ".txt")
 
         def done(dlg, res):
             try:

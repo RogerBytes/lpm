@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- 0. Version ---
-readonly LPM_VERSION="v0.9.6"
+readonly LUDIS_VERSION="v0.9.6"
 
 # --- 1. Locate the libs (dev vs system install) ---
 # Two possible system install locations depending on how the binary was installed
@@ -10,15 +10,15 @@ readonly LPM_VERSION="v0.9.6"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "${SCRIPT_DIR}" in
-    /usr/local/bin) LIB_DIR="/usr/local/lib/lpm" ;;  # install.sh (manual install)
-    /usr/bin)       LIB_DIR="/usr/lib/lpm" ;;        # .deb/.rpm/Arch package
+    /usr/local/bin) LIB_DIR="/usr/local/lib/ludis" ;;  # install.sh (manual install)
+    /usr/bin)       LIB_DIR="/usr/lib/ludis" ;;        # .deb/.rpm/Arch package
     *)              LIB_DIR="${SCRIPT_DIR}/../lib" ;; # dev mode
 esac
 
 if [[ ! -d "${LIB_DIR}" ]]; then
     # Deliberately not localized: the language loader lives in lib/ itself, so it
     # cannot be loaded when that folder is missing. A message on stderr is enough
-    # (lpm cannot start without lib/, so lpm-gui cannot either).
+    # (ludis cannot start without lib/, so ludis-gui cannot either).
     echo "Critical error: the libraries folder (lib) was not found at: ${LIB_DIR}"
     exit 1
 fi
@@ -28,7 +28,7 @@ source "${LIB_DIR}/zgl-lang-loader.sh"
 
 # --- 1bis. Version display (--version / -v) ---
 if [[ "$1" = "--version" ]] || [[ "$1" = "-v" ]]; then
-    echo "lpm ${LPM_VERSION}"
+    echo "ludis ${LUDIS_VERSION}"
     exit 0
 fi
 
@@ -37,60 +37,60 @@ print_help() {
     t help.title
     echo ""
     t help.usage_header
-    printf "  %-38s %s\n" "lpm" "$(t help.usage_menu)"
-    printf "  %-38s %s\n" "lpm-gui [file.zgp|.zgr]" "$(t help.usage_direct)"
+    printf "  %-38s %s\n" "ludis" "$(t help.usage_menu)"
+    printf "  %-38s %s\n" "ludis-gui [file.zgp|.zgr]" "$(t help.usage_direct)"
     echo ""
     t help.games_header
-    printf "  %-42s %s\n" "lpm install [-y] <files.zgp...>" "$(t help.games_install)"
-    printf "  %-42s %s\n" "lpm uninstall [-y] <slugs...>" "$(t help.games_uninstall)"
-    printf "  %-42s %s\n" "lpm pack [-LEVEL] [--hash] <slugs...|--all>" "$(t help.games_pack)"
-    printf "  %-42s %s\n" "lpm isolate [-y] <store|slug>" "$(t help.games_isolate)"
-    printf "  %-42s %s\n" "lpm list" "$(t help.games_list)"
-    printf "  %-42s %s\n" "lpm list-isolable" "$(t help.games_list_isolable)"
-    printf "  %-42s %s\n" "lpm info <slug>" "$(t help.games_info)"
-    printf "  %-42s %s\n" "lpm create-prefix [-y] <names...>" "$(t help.games_create_prefix)"
+    printf "  %-42s %s\n" "ludis install [-y] <files.zgp...>" "$(t help.games_install)"
+    printf "  %-42s %s\n" "ludis uninstall [-y] <slugs...>" "$(t help.games_uninstall)"
+    printf "  %-42s %s\n" "ludis pack [-LEVEL] [--hash] <slugs...|--all>" "$(t help.games_pack)"
+    printf "  %-42s %s\n" "ludis isolate [-y] <store|slug>" "$(t help.games_isolate)"
+    printf "  %-42s %s\n" "ludis list" "$(t help.games_list)"
+    printf "  %-42s %s\n" "ludis list-isolable" "$(t help.games_list_isolable)"
+    printf "  %-42s %s\n" "ludis info <slug>" "$(t help.games_info)"
+    printf "  %-42s %s\n" "ludis create-prefix [-y] <names...>" "$(t help.games_create_prefix)"
     printf "  %-42s %s\n" "" "$(t help.games_create_prefix_cont)"
-    printf "  %-42s %s\n" "lpm exe-install [-y] <file[|name[|slug]]>" "$(t help.games_exe_install)"
+    printf "  %-42s %s\n" "ludis exe-install [-y] <file[|name[|slug]]>" "$(t help.games_exe_install)"
     printf "  %-42s %s\n" "" "$(t help.games_exe_install_cont)"
-    printf "  %-42s %s\n" "lpm shortcut <slugs...|--all>" "$(t help.games_shortcut)"
+    printf "  %-42s %s\n" "ludis shortcut <slugs...|--all>" "$(t help.games_shortcut)"
     printf "  %-42s %s\n" "" "$(t help.games_shortcut_cont)"
-    printf "  %-42s %s\n" "lpm icon <slugs...|--all>" "$(t help.games_icon)"
-    printf "  %-42s %s\n" "lpm splash <slugs...|--all>" "$(t help.games_splash)"
-    printf "  %-42s %s\n" "lpm logo <slugs...|--all>" "$(t help.games_logo)"
-    printf "  %-42s %s\n" "lpm sync-media <slugs...|--all>" "$(t help.games_sync_media)"
-    printf "  %-42s %s\n" "lpm tools <slug> <tool> [args]" "$(t help.games_tools)"
+    printf "  %-42s %s\n" "ludis icon <slugs...|--all>" "$(t help.games_icon)"
+    printf "  %-42s %s\n" "ludis splash <slugs...|--all>" "$(t help.games_splash)"
+    printf "  %-42s %s\n" "ludis logo <slugs...|--all>" "$(t help.games_logo)"
+    printf "  %-42s %s\n" "ludis sync-media <slugs...|--all>" "$(t help.games_sync_media)"
+    printf "  %-42s %s\n" "ludis tools <slug> <tool> [args]" "$(t help.games_tools)"
     printf "  %-42s %s\n" "" "$(t help.games_tools_cont)"
-    printf "  %-42s %s\n" "lpm vsync status | <slug> on|off [setting...]" "$(t help.games_vsync)"
+    printf "  %-42s %s\n" "ludis vsync status | <slug> on|off [setting...]" "$(t help.games_vsync)"
     printf "  %-42s %s\n" "" "$(t help.games_vsync_cont)"
-    printf "  %-42s %s\n" "lpm lsfg <slugs...> on|off" "$(t help.games_lsfg)"
+    printf "  %-42s %s\n" "ludis lsfg <slugs...> on|off" "$(t help.games_lsfg)"
     printf "  %-42s %s\n" "" "$(t help.games_lsfg_cont)"
-    printf "  %-42s %s\n" "lpm launcher <slugs...> on|off" "$(t help.games_launcher)"
+    printf "  %-42s %s\n" "ludis launcher <slugs...> on|off" "$(t help.games_launcher)"
     printf "  %-42s %s\n" "" "$(t help.games_launcher_cont)"
-    printf "  %-42s %s\n" "lpm launcher-entries <slug> get" "$(t help.games_launcher_entries_get)"
-    printf "  %-42s %s\n" "lpm launcher-entries <slug> set <file.json>" "$(t help.games_launcher_entries_set)"
-    printf "  %-42s %s\n" "lpm killwine [-y]" "$(t help.games_killwine)"
+    printf "  %-42s %s\n" "ludis launcher-entries <slug> get" "$(t help.games_launcher_entries_get)"
+    printf "  %-42s %s\n" "ludis launcher-entries <slug> set <file.json>" "$(t help.games_launcher_entries_set)"
+    printf "  %-42s %s\n" "ludis killwine [-y]" "$(t help.games_killwine)"
     echo ""
     t help.runners_header
-    printf "  %-52s %s\n" "lpm install-runner [-y] <files.zgr|names...>" "$(t help.runners_install)"
+    printf "  %-52s %s\n" "ludis install-runner [-y] <files.zgr|names...>" "$(t help.runners_install)"
     printf "  %-52s %s\n" "" "$(t help.runners_install_cont)"
-    printf "  %-52s %s\n" "lpm uninstall-runner [-y] <names...>" "$(t help.runners_uninstall)"
-    printf "  %-52s %s\n" "lpm pack-runner [-LEVEL] [--hash] <names...|--all>" "$(t help.runners_pack)"
-    printf "  %-52s %s\n" "lpm list-runner" "$(t help.runners_list)"
-    printf "  %-52s %s\n" "lpm list-remote-runners" "$(t help.runners_list_remote)"
+    printf "  %-52s %s\n" "ludis uninstall-runner [-y] <names...>" "$(t help.runners_uninstall)"
+    printf "  %-52s %s\n" "ludis pack-runner [-LEVEL] [--hash] <names...|--all>" "$(t help.runners_pack)"
+    printf "  %-52s %s\n" "ludis list-runner" "$(t help.runners_list)"
+    printf "  %-52s %s\n" "ludis list-remote-runners" "$(t help.runners_list_remote)"
     printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"
     echo ""
     t help.deps_header
-    printf "  %-36s %s\n" "lpm check" "$(t help.deps_check)"
+    printf "  %-36s %s\n" "ludis check" "$(t help.deps_check)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont1)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont2)"
-    printf "  %-36s %s\n" "lpm lutris-version [flatpak|native|reset]" "$(t help.lutris_version)"
-    printf "  %-36s %s\n" "lpm self-update [check|install]" "$(t help.self_update)"
+    printf "  %-36s %s\n" "ludis lutris-version [flatpak|native|reset]" "$(t help.lutris_version)"
+    printf "  %-36s %s\n" "ludis self-update [check|install]" "$(t help.self_update)"
     echo ""
     t help.log_header
-    printf "  %-36s %s\n" "lpm log [-n N]" "$(t help.log_show)"
-    printf "  %-36s %s\n" "lpm log --all" "$(t help.log_all)"
-    printf "  %-36s %s\n" "lpm log --grep <pattern>" "$(t help.log_grep)"
-    printf "  %-36s %s\n" "lpm log --clear" "$(t help.log_clear)"
+    printf "  %-36s %s\n" "ludis log [-n N]" "$(t help.log_show)"
+    printf "  %-36s %s\n" "ludis log --all" "$(t help.log_all)"
+    printf "  %-36s %s\n" "ludis log --grep <pattern>" "$(t help.log_grep)"
+    printf "  %-36s %s\n" "ludis log --clear" "$(t help.log_clear)"
     echo ""
     t help.options_header
     printf "  %-36s %s\n" "-y" "$(t help.opt_y)"
@@ -108,8 +108,8 @@ if [[ "$1" = "--help" ]] || [[ "$1" = "-h" ]]; then
     # Prefer the installed man page (see install.sh) when available: it is more complete.
     # Fall back to the built-in text above when running from sources or on a system
     # without "man" -- --help must always work.
-    if command -v man >/dev/null 2>&1 && man -w lpm >/dev/null 2>&1; then
-        exec man lpm
+    if command -v man >/dev/null 2>&1 && man -w ludis >/dev/null 2>&1; then
+        exec man ludis
     fi
     print_help
     exit 0
@@ -231,7 +231,7 @@ if [[ $# -gt 0 ]]; then
             exec bash "${LIB_DIR}/zgc-lutris-version-checker.sh" "cli" "$@"
             ;;
         self-update)
-            exec bash "${LIB_DIR}/zgc-self-update.sh" "${LPM_VERSION}" "$@"
+            exec bash "${LIB_DIR}/zgc-self-update.sh" "${LUDIS_VERSION}" "$@"
             ;;
         list)
             exec bash "${LIB_DIR}/zgp-game-lister.sh"
@@ -260,8 +260,8 @@ if [[ $# -gt 0 ]]; then
 fi
 
 # --- 4. No argument: show help ---
-# "lpm" is a scriptable terminal command and never opens a window. The GUI is started
-# with "lpm-gui" (or from the application menu / by double-clicking a .zgp/.zgr file,
-# see the Exec= field of lpm.desktop).
+# "ludis" is a scriptable terminal command and never opens a window. The GUI is started
+# with "ludis-gui" (or from the application menu / by double-clicking a .zgp/.zgr file,
+# see the Exec= field of ludis.desktop).
 print_help
 exit 0

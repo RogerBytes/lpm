@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# --- lpm vsync: disable VSync for ONE game via environment variables ---
+# --- ludis vsync: disable VSync for ONE game via environment variables ---
 #
-#   lpm vsync status                     slugs of games with at least one active setting
-#   lpm vsync <slug> [status]            state of the game's 5 settings (one "id=on|off" line)
-#   lpm vsync <slug> on  [setting...]    enable the given settings (no argument: all 5)
-#   lpm vsync <slug> off [setting...]    remove the given settings (no argument: all 5)
+#   ludis vsync status                     slugs of games with at least one active setting
+#   ludis vsync <slug> [status]            state of the game's 5 settings (one "id=on|off" line)
+#   ludis vsync <slug> on  [setting...]    enable the given settings (no argument: all 5)
+#   ludis vsync <slug> off [setting...]    remove the given settings (no argument: all 5)
 #
 # Settings: d3d9, d3d11 (Direct3D 10 and 11), d3d12, gl-nvidia, gl-mesa. Each maps to a
 # variable read by ONE graphics layer only (DXVK, VKD3D-Proton, NVIDIA driver, Mesa): a game
 # uses one API at a time and the other variables have no effect on it, so setting them all
 # together is harmless (see lib/zgu-vsync-edit.py for details and sources). The variables
-# are written to system.env in the game's Lutris YAML, like "lpm tools <slug> env" (same
+# are written to system.env in the game's Lutris YAML, like "ludis tools <slug> env" (same
 # file, same editor: YAML comments are preserved).
 #
-# Unlike "lpm tools", no Wine runner or prefix is needed: only the game's YAML is read/written.
+# Unlike "ludis tools", no Wine runner or prefix is needed: only the game's YAML is read/written.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -54,7 +54,7 @@ if [[ ! -f "${lutris_db}" ]]; then
   exit 1
 fi
 
-# --- "lpm vsync status": games with at least one active setting ---
+# --- "ludis vsync status": games with at least one active setting ---
 if [[ ${#cli_args[@]} -eq 1 ]] && [[ "${cli_args[0]}" = "status" ]]; then
   while IFS=$'\x1f' read -r row_slug row_config; do
     [[ -z "${row_slug}" ]] || [[ -z "${row_config}" ]] && continue
@@ -65,7 +65,7 @@ if [[ ${#cli_args[@]} -eq 1 ]] && [[ "${cli_args[0]}" = "status" ]]; then
   exit 0
 fi
 
-# --- One game: "lpm vsync <slug> [status|on|off] [setting...]" ---
+# --- One game: "ludis vsync <slug> [status|on|off] [setting...]" ---
 target_slug=$(basename -- "${cli_args[0]}")
 action="${cli_args[1]:-status}"
 setting_args=("${cli_args[@]:2}")

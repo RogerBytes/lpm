@@ -1,7 +1,7 @@
 """
-Bridge to lpm's CLI scripts (lib/*.sh), never going through Zenity.
+Bridge to ludis's CLI scripts (lib/*.sh), never going through Zenity.
 
-Each function builds an argv for "bin/lpm <command> ... <CLI flags>", exactly as if typed
+Each function builds an argv for "bin/ludis <command> ... <CLI flags>", exactly as if typed
 in a terminal: the GUI is only a layer on top of the CLI scripts, not a duplicate of their
 logic.
 
@@ -25,35 +25,35 @@ from dataclasses import dataclass
 from typing import Callable
 
 
-def _resolve_bin_lpm() -> str:
-    """Resolve the path of "bin/lpm". In a source checkout, gui/ and bin/ are siblings; after
-    install.sh, "bin/lpm" goes to /usr/local/bin/lpm while gui/ goes to
-    /usr/local/lib/lpm/gui, so they are no longer siblings. Try the local sibling first,
+def _resolve_bin_ludis() -> str:
+    """Resolve the path of "bin/ludis". In a source checkout, gui/ and bin/ are siblings; after
+    install.sh, "bin/ludis" goes to /usr/local/bin/ludis while gui/ goes to
+    /usr/local/lib/ludis/gui, so they are no longer siblings. Try the local sibling first,
     then fall back to PATH."""
-    sibling = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin", "lpm")
+    sibling = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin", "ludis")
     if os.path.isfile(sibling):
         return sibling
-    return shutil.which("lpm") or "lpm"
+    return shutil.which("ludis") or "ludis"
 
 
-BIN_LPM = _resolve_bin_lpm()
+BIN_Ludis = _resolve_bin_ludis()
 
 
-def get_lpm_version() -> str:
-    """Version string shown on the home page, read via "bin/lpm --version" so that
-    LPM_VERSION (see bin/lpm) stays the single source of truth.
+def get_ludis_version() -> str:
+    """Version string shown on the home page, read via "bin/ludis --version" so that
+    LUDIS_VERSION (see bin/ludis) stays the single source of truth.
 
     Called once (page_home is cached by show_page, see MainWindow), before the GTK loop
     starts, so the blocking call does not freeze a visible UI. "--version" is handled by
-    bin/lpm right after loading the language loader, so it is almost instant.
+    bin/ludis right after loading the language loader, so it is almost instant.
 
     Best-effort: returns "?" if the command fails or the format is unexpected, so a
     secondary display never crashes the home page."""
     try:
-        result = run_lpm(["--version"])
+        result = run_ludis(["--version"])
         if result.returncode != 0:
             return "?"
-        # Expected output: "lpm v0.9.3\n"
+        # Expected output: "ludis v0.9.3\n"
         match = re.search(r"\bv?\d+\.\d+\.\d+\b", result.stdout)
         return match.group(0) if match else "?"
     except OSError:
@@ -68,9 +68,9 @@ def slugify_preview(name: str) -> str:
     empty (name entirely in non-Latin characters), like zgp_slugify.
 
     Used ONLY for a live preview while typing (see PrefixEntryRow in
-    gui/widgets_rows.py); computed in pure Python because relaunching "bin/lpm" on each
+    gui/widgets_rows.py); computed in pure Python because relaunching "bin/ludis" on each
     keystroke is too slow. Deduplication against existing Lutris slugs (pga.db) or the rest
-    of the batch is done by bin/lpm at actual creation (see zgp-prefix-creator.sh), so the
+    of the batch is done by bin/ludis at actual creation (see zgp-prefix-creator.sh), so the
     real slug may get a "-2", "-3"... suffix; this preview shows the base slug only.
     """
     v = unicodedata.normalize("NFD", name).encode("ascii", "ignore").decode("utf-8")
@@ -88,20 +88,20 @@ class CommandResult:
     stderr: str
 
 
-def run_lpm(
+def run_ludis(
     args: list[str],
     on_line: Callable[[str], None] | None = None,
     on_proc: Callable[[subprocess.Popen], None] | None = None,
     new_session: bool = False,
 ) -> CommandResult:
-    """Run "bin/lpm <args>" synchronously. Call only from a background thread, never from
+    """Run "bin/ludis <args>" synchronously. Call only from a background thread, never from
     the GTK main thread (the UI would freeze for the duration of the command).
 
     "new_session": run the command in its own process group, so it can be interrupted as a
     whole with os.killpg without ever targeting the GUI itself.
     "on_proc": called with the Popen right after launch (to keep a handle)."""
     proc = subprocess.Popen(
-        [BIN_LPM, *args],
+        [BIN_Ludis, *args],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -126,19 +126,19 @@ def run_lpm(
     return CommandResult(returncode=proc.returncode, stdout=stdout, stderr=stderr)
 
 
-def run_lpm_async(
+def run_ludis_async(
     args: list[str],
     on_line: Callable[[str], None] | None = None,
     on_done: Callable[[CommandResult], None] | None = None,
     on_proc: Callable[[subprocess.Popen], None] | None = None,
     new_session: bool = False,
 ) -> threading.Thread:
-    """Non-blocking variant: runs run_lpm() in a separate thread. on_line/on_done are called
+    """Non-blocking variant: runs run_ludis() in a separate thread. on_line/on_done are called
     from that background thread; the caller must re-post to the GTK main thread via
     GLib.idle_add before touching any widget."""
 
     def _worker():
-        result = run_lpm(args, on_line=on_line, on_proc=on_proc, new_session=new_session)
+        result = run_ludis(args, on_line=on_line, on_proc=on_proc, new_session=new_session)
         if on_done is not None:
             on_done(result)
 
@@ -166,7 +166,7 @@ class IsolableEntry:
 
 
 def list_games() -> list[GameEntry]:
-    result = run_lpm(["list"])
+    result = run_ludis(["list"])
     entries: list[GameEntry] = []
     for line in result.stdout.splitlines():
         m = _SLUG_NAME_RE.match(line.strip())
@@ -176,17 +176,17 @@ def list_games() -> list[GameEntry]:
 
 
 def list_runners() -> list[str]:
-    result = run_lpm(["list-runner"])
+    result = run_ludis(["list-runner"])
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def list_remote_runners() -> list[str]:
-    result = run_lpm(["list-remote-runners"])
+    result = run_ludis(["list-remote-runners"])
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
 def list_isolable() -> list[IsolableEntry]:
-    result = run_lpm(["list-isolable"])
+    result = run_ludis(["list-isolable"])
     entries: list[IsolableEntry] = []
     for line in result.stdout.splitlines():
         parts = re.split(r"\s{2,}", line.strip())

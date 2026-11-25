@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# --- lpm launcher: home-made multi-entry picker, DEGRADED fallback of
+# --- ludis launcher: home-made multi-entry picker, DEGRADED fallback of
 # zgl-launcher-runtime.sh, with EXPLICIT Validate/Cancel -- GTK4/Libadwaita ---
 #
 # Usage: zgu-launcher-picker.py <title> <prompt> <validate_label> <cancel_label>
@@ -11,7 +11,7 @@
 #   1 -- error (GTK unavailable...) -- nothing on stdout
 #
 # Only used by zgl-launcher-runtime.sh in its fallback case (loading screen disabled for
-# this game via "lpm/settings/no-loadingscreen", or lpm shortcut bypassed). zgl-launcher-orchestrator.sh
+# this game via "ludis/settings/no-loadingscreen", or ludis shortcut bypassed). zgl-launcher-orchestrator.sh
 # shows the same picker EMBEDDED in its single window (see zgu-launcher-screen.py,
 # "Gtk.Overlay"); GTK4 removed "set_keep_above" with no portable equivalent, so a
 # separate window cannot be kept on top.
@@ -90,7 +90,7 @@ ENTRY_FONT_SIZE_PX = 25
 # zgu-launcher-screen.py), applied here to the whole window since there is no black
 # background behind to extend visually.
 CSS = b"""
-window, .lpm-picker-root {
+window, .ludis-picker-root {
     background-color: #1a1a1a;
     color: #ffffff;
 }
@@ -111,7 +111,7 @@ list row:selected {
     border-radius: 8px;
     color: #ffffff;
 }
-.lpm-picker-button {
+.ludis-picker-button {
     font-size: 20px;
 }
 """ + PICKER_BUTTON_CSS + b"""
@@ -229,10 +229,10 @@ class PickerWindow(Gtk.Window):
         self.add_controller(key_ctrl)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        # "lpm-picker-root" in ADDITION to the "window" selector in the CSS: this Box covers
+        # "ludis-picker-root" in ADDITION to the "window" selector in the CSS: this Box covers
         # the whole client area, so its own background guarantees the color even if a
         # minimal/themeless environment makes the "window" node background unreliable.
-        box.add_css_class("lpm-picker-root")
+        box.add_css_class("ludis-picker-root")
         box.set_margin_top(16)
         box.set_margin_bottom(16)
         box.set_margin_start(16)
@@ -241,12 +241,12 @@ class PickerWindow(Gtk.Window):
 
         if TITLE:
             title_label = Gtk.Label(label=TITLE, xalign=0)
-            title_label.add_css_class("lpm-picker-title")
+            title_label.add_css_class("ludis-picker-title")
             box.append(title_label)
 
         if PROMPT:
             prompt_label = Gtk.Label(label=PROMPT, xalign=0, wrap=True)
-            prompt_label.add_css_class("lpm-picker-prompt")
+            prompt_label.add_css_class("ludis-picker-prompt")
             box.append(prompt_label)
 
         first_row = self._build_list(box)
@@ -288,16 +288,16 @@ class PickerWindow(Gtk.Window):
         button_box.set_halign(Gtk.Align.END)
 
         cancel_button = Gtk.Button(label=CANCEL_LABEL)
-        cancel_button.add_css_class("lpm-picker-button")
-        cancel_button.add_css_class("lpm-picker-cancel-button")
+        cancel_button.add_css_class("ludis-picker-button")
+        cancel_button.add_css_class("ludis-picker-cancel-button")
         cancel_button.connect("clicked", self.on_cancel_clicked)
         button_box.append(cancel_button)
 
-        # "lpm-picker-validate-button" (our own colors), never "suggested-action" (see file
+        # "ludis-picker-validate-button" (our own colors), never "suggested-action" (see file
         # header): independent of any desktop theme.
         validate_button = Gtk.Button(label=VALIDATE_LABEL)
-        validate_button.add_css_class("lpm-picker-button")
-        validate_button.add_css_class("lpm-picker-validate-button")
+        validate_button.add_css_class("ludis-picker-button")
+        validate_button.add_css_class("ludis-picker-validate-button")
         validate_button.connect("clicked", self.on_validate_clicked)
         button_box.append(validate_button)
         return button_box

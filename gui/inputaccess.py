@@ -1,9 +1,9 @@
-"""One-time offer, at GUI startup, to let the in-game LPM menu be opened from the keyboard.
+"""One-time offer, at GUI startup, to let the in-game Ludis menu be opened from the keyboard.
 
 The keyboard hotkey (lib/zgu-gamepad-exit-watcher.py) reads /dev/input/event*, the only way that
 works on X11 AND Wayland (Wayland forbids global key capture). That needs the user to be in the
 "input" group. This module asks ONCE per start (until the user answers "don't ask again") and,
-on approval, runs "pkexec usermod -aG input <user>" (the system's own password dialog; LPM never
+on approval, runs "pkexec usermod -aG input <user>" (the system's own password dialog; Ludis never
 sees the password). The change applies after the next login.
 """
 
@@ -22,12 +22,12 @@ from gi.repository import Adw, Gio, GLib  # noqa: E402
 
 from i18n import t  # noqa: E402
 
-FLAG_NAME = "input-access"  # <XDG config>/lpm/input-access = "never" once declined for good
+FLAG_NAME = "input-access"  # <XDG config>/ludis/input-access = "never" once declined for good
 
 
 def _flag_path() -> str:
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-    return os.path.join(base, "lpm", FLAG_NAME)
+    return os.path.join(base, "ludis", FLAG_NAME)
 
 
 def _declined() -> bool:

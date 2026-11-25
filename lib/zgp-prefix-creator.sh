@@ -10,7 +10,7 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-prefix-common.sh
 source "${script_dir}/zgu-prefix-common.sh"
 
-# --- lpm create-prefix: create one or more blank wineprefixes registered in Lutris, without the
+# --- ludis create-prefix: create one or more blank wineprefixes registered in Lutris, without the
 # install wizard (no script, no executable to run) ---
 #
 # Reproduces what Lutris does to initialize a prefix (lutris/runners/commands/wine.py::create_prefix):
@@ -257,7 +257,7 @@ if [[ ${#failed_names[@]} -gt 0 ]]; then
   t create_prefix.summary_failed "${#failed_names[@]}"
 fi
 
-# Best-effort update of Lutris native media (banner/icon/cover, see "lpm sync-media") for the
+# Best-effort update of Lutris native media (banner/icon/cover, see "ludis sync-media") for the
 # prefixes just created. Outside the creation loop: a lutris.net network problem must never fail
 # a prefix creation. A freshly created prefix has no executable configured yet, so it is
 # unlikely to be referenced on lutris.net, but calling "sync-media" here is harmless and becomes
@@ -265,7 +265,7 @@ fi
 if [[ ${#created_slugs[@]} -gt 0 ]]; then
   # Run in the background, detached ("&" + "disown"), for the same reason as
   # zgp-game-installer.sh: nothing here needs to wait for "sync-media" (purely cosmetic);
-  # results are available afterwards via "lpm log".
+  # results are available afterwards via "ludis log".
   bash "${script_dir}/zgp-game-sync-media.sh" "${created_slugs[@]}" >/dev/null 2>&1 3>&- </dev/null &
   disown
 fi

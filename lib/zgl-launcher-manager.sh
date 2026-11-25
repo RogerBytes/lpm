@@ -1,30 +1,30 @@
 #!/bin/bash
 
-# --- lpm launcher [slug...] [on|off] ---
+# --- ludis launcher [slug...] [on|off] ---
 #
-# Enables/disables the "LPM Launcher" (black screen + splash + gamepad lock, with an optional
+# Enables/disables the "Ludis Launcher" (black screen + splash + gamepad lock, with an optional
 # multi-executable picker) for one or more Lutris Wine/Proton games.
 #
 #   - "Active" means game.exe points to lpm-launch.bat, re-read from the YAML on each run (no
 #     state file).
-#   - "on" asks no single/multi choice: the number of entries is re-read from lpm/launcher.yml at
+#   - "on" asks no single/multi choice: the number of entries is re-read from ludis/launcher.yml at
 #     every launch (zgl-launcher-runtime.sh). It writes a first entry filled from the game.exe /
 #     working_dir already set in Lutris, plus a commented example entry to adapt by hand for games
 #     with several executables. It saves "original_exe", converts Linux paths to Windows paths
 #     (C:\...) by text replacement for drive_c paths (winepath only outside drive_c), and points
 #     game.exe to lpm-launch.bat. No relay and no Lutris prelaunch command: the orchestrator writes
-#     lpm-launch.bat before launching (the relay of lpm <= 0.9.5 is removed, see
-#     zgl-launcher-legacy.sh). No default splash is copied: without lpm/images/splash/splash.png
+#     lpm-launch.bat before launching (the relay of ludis <= 0.9.5 is removed, see
+#     zgl-launcher-legacy.sh). No default splash is copied: without ludis/images/splash/splash.png
 #     the loading screen is plain black.
 #   - "off" restores the original exe ("original_exe", else the first entry's exe), removes
 #     prelaunch_command only if it references the old relay, then deletes what the launcher added:
-#     lpm/launcher.yml (the entries go with it), scripts/lpm-launcher.sh (old format), every
-#     lpm-launch.bat. It never touches lpm/images, the other files of lpm/scripts or any game file.
+#     ludis/launcher.yml (the entries go with it), scripts/lpm-launcher.sh (old format), every
+#     lpm-launch.bat. It never touches ludis/images, the other files of ludis/scripts or any game file.
 #   - Wine/Proton games only (runner='wine'), shared prefixes included (non-destructive).
 #   - "--if-needed" (before or after the slugs): a game already in the requested state is skipped
 #     instead of failing the command. Used by the GUI (page_launcher), where the state follows from
 #     the form content.
-#   - "lpm launcher status" (no slug): prints the slugs of games that have the launcher active (same
+#   - "ludis launcher status" (no slug): prints the slugs of games that have the launcher active (same
 #     detection, zgp_launcher_is_active); modifies nothing. Used by the GUI to highlight them.
 #      nothing. Added for "gui/*.py" (page_launcher) to highlight (bold) active games in the
 #      selection list.
@@ -52,10 +52,10 @@ source "${script_dir}/zgu-lutris-utils.sh"
 source "${script_dir}/zgu-games-cli.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 
-# --- 0. CLI syntax validation (bin/lpm has no interactive entry point: no menu/Zenity
+# --- 0. CLI syntax validation (bin/ludis has no interactive entry point: no menu/Zenity
 # selection, only this explicit terminal command) ---
 cli_action=""
 cli_slugs=()
@@ -278,7 +278,7 @@ zgp_launcher_write_bat() {
   } > "${la_bat_path}" 2>/dev/null
 }
 
-# Creates lpm/launcher.yml with the auto-filled entry + a commented example. Args: slug
+# Creates ludis/launcher.yml with the auto-filled entry + a commented example. Args: slug
 # launcher_yml. Returns 1 on failure.
 zgp_launcher_create_launcher_yml() {
   local slug="$1" launcher_yml_on="$2"
@@ -318,12 +318,12 @@ with open(os.environ["YML_PATH"], "w") as f:
   return 0
 }
 
-# Brings the two keys lpm relies on up to date in an existing lpm/launcher.yml. Args: slug
+# Brings the two keys ludis relies on up to date in an existing ludis/launcher.yml. Args: slug
 # launcher_yml. Returns 1 on failure.
 zgp_launcher_update_launcher_yml() {
   local slug="$1" launcher_yml_on="$2"
-  # lpm/launcher.yml already exists (hand-written, restored from a .zgp, or left by an earlier
-  # "off"): its entries are kept, but the two keys lpm relies on are updated (they hold absolute
+  # ludis/launcher.yml already exists (hand-written, restored from a .zgp, or left by an earlier
+  # "off"): its entries are kept, but the two keys ludis relies on are updated (they hold absolute
   # Linux paths, wrong after an import on another machine):
   #  - "bat_path": where Lutris REALLY runs lpm-launch.bat. If stale, the runtime rewrites another
   #    file than the one Lutris runs and the picker seems to ignore the choice.
@@ -366,16 +366,16 @@ if changed:
   return 0
 }
 
-# Creates or updates lpm/launcher.yml. Args: slug game_dir.
+# Creates or updates ludis/launcher.yml. Args: slug game_dir.
 zgp_launcher_write_launcher_yml() {
   local slug="$1" game_dir="$2"
-  # --- Write lpm/launcher.yml (auto-filled entry + commented example) --
+  # --- Write ludis/launcher.yml (auto-filled entry + commented example) --
   # ONLY if it does not exist yet. "off" deletes it (item 4 of the file header), so a file
   # that exists here comes from a hand edit or a restored .zgp; overwriting it on "on" would
   # lose that customization, including on a repair re-enable after a reinstall that dropped
   # system.prelaunch_command (see zgp_launcher_is_active above). ---
   local launcher_yml_on
-  launcher_yml_on="$(zgu_lpm_find "${game_dir}" launcher)"
+  launcher_yml_on="$(zgu_ludis_find "${game_dir}" launcher)"
   if [[ ! -f "${launcher_yml_on}" ]]; then
     zgp_launcher_create_launcher_yml "${slug}" "${launcher_yml_on}" || return 1
   else
@@ -389,13 +389,13 @@ zgp_launcher_wire_lutris_yml() {
   local slug="$1" yml_file="$2"
   # --- Wiring into the Lutris config: ONLY game.exe -> lpm-launch.bat ---
   #
-  # No relay script, no system.prelaunch_command: the orchestrator (entry point of every lpm
+  # No relay script, no system.prelaunch_command: the orchestrator (entry point of every ludis
   # shortcut) writes lpm-launch.bat itself, on the host, before Lutris starts. No splash image is
-  # copied either: a missing "${game_dir}/lpm/images/splash/splash.png" means "plain black loading screen",
+  # copied either: a missing "${game_dir}/ludis/images/splash/splash.png" means "plain black loading screen",
   # and an existing one is never touched.
   #
   # Line-based text editing (zgu-yaml-edit.py): yaml.dump would destroy the Lutris YAML comments,
-  # including hooks disabled by LPM ("# lpm:hook-disabled"). Falls back to the full rewrite
+  # including hooks disabled by Ludis ("# lpm:hook-disabled"). Falls back to the full rewrite
   # below if targeted editing is not possible.
   if python3 "${script_dir}/zgu-yaml-edit.py" "${yml_file}" set game exe "${la_bat_path}" >/dev/null 2>&1; then
     :
@@ -440,20 +440,20 @@ zgp_launcher_apply_on() {
   zgp_launcher_write_launcher_yml "${slug}" "${game_dir}" || return 1
   zgp_launcher_wire_lutris_yml "${slug}" "${yml_file}" || return 1
 
-  # A relay of the old format (lpm <= 0.9.5) left in this game is removed (and bat_path of
-  # lpm/launcher.yml aligned on game.exe).
+  # A relay of the old format (ludis <= 0.9.5) left in this game is removed (and bat_path of
+  # ludis/launcher.yml aligned on game.exe).
   bash "${script_dir}/zgl-launcher-legacy.sh" "${yml_file}" "${game_dir}" >/dev/null 2>&1
 
   zgu_log "launcher" "OK" "slug=${slug} action=on"
 
-  # The path of lpm/launcher.yml to edit by hand is already given by zgu_cli_ok in the calling
-  # loop; no folder-opening offer via Zenity here (bin/lpm has no interactive entry point).
+  # The path of ludis/launcher.yml to edit by hand is already given by zgu_cli_ok in the calling
+  # loop; no folder-opening offer via Zenity here (bin/ludis has no interactive entry point).
 
   return 0
 }
 
 # --- 5. Apply: disable ---
-# Finds the exe to restore into off_original_exe: "original_exe" of lpm/launcher.yml, else rebuilt
+# Finds the exe to restore into off_original_exe: "original_exe" of ludis/launcher.yml, else rebuilt
 # from the first entry. Args: slug game_dir yml_file launcher_yml. Returns 1 if nothing found.
 off_original_exe=""
 zgp_launcher_find_original_exe() {
@@ -466,7 +466,7 @@ print(data.get("original_exe") or "")
 ' 2>/dev/null)
 
   if [[ -z "${off_original_exe}" ]]; then
-    # No saved original exe (file written by hand or by a very old lpm): fall back on the exe of the
+    # No saved original exe (file written by hand or by a very old ludis): fall back on the exe of the
     # FIRST menu entry, which is nearly always the game's original exe, converted from its Windows
     # path to the Linux path Lutris expects (only "C:\..." is convertible: pure text, no Wine).
     off_original_exe=$(YML_PATH="${launcher_yml}" LUTRIS_YML="${yml_file}" GAME_DIR="${game_dir}" python3 -c '
@@ -563,7 +563,7 @@ fi
 # Removes the files the launcher itself added. Args: game_dir launcher_yml.
 zgp_launcher_remove_files() {
   local game_dir="$1" launcher_yml="$2"
-  # --- Removal of the files the LPM Launcher itself added (only AFTER the Lutris config was
+  # --- Removal of the files the Ludis Launcher itself added (only AFTER the Lutris config was
   # restored above). Exactly these, by name, nothing else:
   #   <game dir>/lpm-launcher.yml, <game dir>/scripts/lpm-launcher.sh,
   #   every "lpm-launch.bat" (the one named by "bat_path", the one at the root of the game
@@ -586,21 +586,21 @@ print(data.get("bat_path") or "")
     [[ -f "${bat_file}" ]] && rm -f -- "${bat_file}"
   done
   rm -f -- "${game_dir}/scripts/lpm-launcher.sh" 2>/dev/null
-  zgu_lpm_remove "${game_dir}" launcher
-  zgu_lpm_remove "${game_dir}" launcher_choice
+  zgu_ludis_remove "${game_dir}" launcher
+  zgu_ludis_remove "${game_dir}" launcher_choice
   rmdir "${game_dir}/scripts" 2>/dev/null
-  zgu_lpm_prune "${game_dir}"
+  zgu_ludis_prune "${game_dir}"
 }
 
 zgp_launcher_apply_off() {
   local slug="$1" game_dir="$2" configpath="$3"
   local yml_file="${lutris_config_dir}/${configpath}.yml"
   local launcher_yml
-  launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
+  launcher_yml="$(zgu_ludis_find "${game_dir}" launcher)"
 
   if [[ ! -f "${launcher_yml}" ]]; then
     zgp_launcher_report_error_early "$(t launcher.launcher_yml_missing "${slug}")"
-    zgu_log "launcher" "ERROR" "slug=${slug} reason=lpm_launcher_yml_not_found"
+    zgu_log "launcher" "ERROR" "slug=${slug} reason=ludis_launcher_yml_not_found"
     return 1
   fi
 
@@ -618,7 +618,7 @@ for target_slug in "${targets[@]}"; do
   if [[ "${action}" = "on" ]]; then
     if zgp_launcher_apply_on "${target_slug}" "${dir_by_slug[${target_slug}]}" "${configpath_by_slug[${target_slug}]}"; then
       n_ok=$(( n_ok + 1 ))
-      zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "$(zgu_lpm_find "${dir_by_slug[${target_slug}]}" launcher)")"
+      zgu_cli_ok "$(t launcher.done_one_on_cli "${name_by_slug[${target_slug}]}" "$(zgu_ludis_find "${dir_by_slug[${target_slug}]}" launcher)")"
     else
       exit_code=1
     fi

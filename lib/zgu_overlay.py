@@ -28,7 +28,7 @@ def use_veil():
     """True when the fullscreen translucent veil can be used: the desktop composites (a fullscreen
     window would otherwise hide the game behind an opaque rectangle) and menu.conf does not say
     "backdrop=off"."""
-    if os.environ.get("LPM_MENU_FORCE_VEIL") == "1":
+    if os.environ.get("LUDIS_MENU_FORCE_VEIL") == "1":
         return True
     if load_menu_conf().get("backdrop", "auto").lower() == "off":
         return False

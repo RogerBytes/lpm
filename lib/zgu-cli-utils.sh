@@ -13,7 +13,7 @@ source "${_zgu_cli_utils_dir}/zgu-log-utils.sh"
 # for a Zenity --text=... never goes through these functions, so no raw ANSI codes in a dialog.
 #
 # Automatically disabled if stdout/stderr is not a real terminal (redirect to a file, pipe to another
-# command...) via "[[ -t N ]]": otherwise "lpm list > games.txt" or "lpm log --grep foo | less" would
+# command...) via "[[ -t N ]]": otherwise "ludis list > games.txt" or "ludis log --grep foo | less" would
 # get literal escape sequences (\033[32m...) polluting the file or breaking the pager.
 #
 # zgu_cli_ok <text>: prints <text> in green on stdout (success/final confirmation of a CLI operation
@@ -29,7 +29,7 @@ zgu_cli_ok() {
 # zgu_cli_error <text>: prints <text> in red on stderr (all CLI error messages, already redirected to
 # stderr throughout the project -- this existing signal allows coloring errors mechanically).
 #
-# ALSO logs every call to lpm.log (STATUS=ERROR), before printing the message -- this covers all
+# ALSO logs every call to ludis.log (STATUS=ERROR), before printing the message -- this covers all
 # pre-check errors (zenity/python3/pyyaml/zstd missing, Lutris database not found, invalid argument...),
 # not only errors inside a processing loop (explicit "zgu_log" calls). "command" is deduced from the
 # calling script (BASH_SOURCE[1], one level above this function) rather than requiring an extra
@@ -69,7 +69,7 @@ zgu_free_bytes() {
   echo $((free_kb * 1024))
 }
 
-# zgu_archive_config <archive.zgp>: prints the game's YAML, stored by "lpm pack" as the FIRST
+# zgu_archive_config <archive.zgp>: prints the game's YAML, stored by "ludis pack" as the FIRST
 # member of the archive (".lpm-config.yml": the cleaned Lutris YAML plus the "lpm_archive" key
 # with the exact extracted size). Returns 1, printing nothing, for an archive without it (made
 # by an older version) or if it cannot be read.
@@ -89,7 +89,7 @@ zgu_archive_config() {
 }
 
 # zgu_archive_exact_size <archive.zgp>: prints the exact extracted size (bytes) recorded by
-# "lpm pack"; prints nothing (return 1) for an archive without it or if it cannot be read. Reads
+# "ludis pack"; prints nothing (return 1) for an archive without it or if it cannot be read. Reads
 # the "lpm_archive: size" of the first-member YAML (see zgu_archive_config); archives of the
 # previous format carry it in a tiny ".lpm-size" first member instead, still understood.
 zgu_archive_exact_size() {

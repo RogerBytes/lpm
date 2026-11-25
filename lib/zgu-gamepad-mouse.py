@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# --- lpm launcher: gamepad mouse (both sticks move the cursor), via SDL2 ---
+# --- ludis launcher: gamepad mouse (both sticks move the cursor), via SDL2 ---
 #
 # Usage: zgu-gamepad-mouse.py <x11|wayland> <prefix_folder>
 #
-# Started by zgu-gamepad-exit-watcher.py when the mouse mode is turned on (LPM menu, or
+# Started by zgu-gamepad-exit-watcher.py when the mouse mode is turned on (Ludis menu, or
 # L1+L2+R1+R2+R3 held then D-pad down) and stopped (SIGTERM) when it is turned off. It also
 # stops by itself when the game is over (see zgu-prefix-watch.py).
 #
@@ -99,14 +99,14 @@ class GamepadMouse:
         return self.sdl.SDL_GameControllerGetAxis(pad, code) / 32767.0
 
     def other_ui_open(self, now):
-        """True while the virtual keyboard or the LPM menu runs (each holds a lock for its whole
+        """True while the virtual keyboard or the Ludis menu runs (each holds a lock for its whole
         life): the mouse is suspended then, so simulated clicks cannot close them. Checked ten
         times a second at most."""
         if now >= self.next_kb_check:
             self.next_kb_check = now + 0.1
             base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
             self.kb_open = False
-            for name in ("lpm-virtual-keyboard.lock-%d", "lpm-game-menu.lock-%d"):
+            for name in ("ludis-virtual-keyboard.lock-%d", "ludis-game-menu.lock-%d"):
                 path = os.path.join(base, name % os.getuid())
                 if not os.path.exists(path):
                     continue
@@ -146,7 +146,7 @@ class GamepadMouse:
         pressed["L2"] = any(self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.5 for pad in self.pads)
         pressed["R2"] = any(self._axis(pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.5 for pad in self.pads)
         if pressed[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] and pressed[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER]:
-            hold = True  # L1 + R1 together are part of the LPM menu / window-switch combos: no click
+            hold = True  # L1 + R1 together are part of the Ludis menu / window-switch combos: no click
         if self.other_ui_open(now):  # keyboard or menu open: it alone reacts
             self.release_all()
             self.rest_x = self.rest_y = 0.0

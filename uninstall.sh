@@ -7,30 +7,30 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 # Destination paths used at install time
-INSTALL_BIN_DIR="${LPM_INSTALL_BIN_DIR:-/usr/local/bin}"
-INSTALL_LIB_DIR="/usr/local/lib/lpm"
+INSTALL_BIN_DIR="${LUDIS_INSTALL_BIN_DIR:-/usr/local/bin}"
+INSTALL_LIB_DIR="/usr/local/lib/ludis"
 APP_DESKTOP_DIR="/usr/share/applications"
-DESKTOP_FILE="${APP_DESKTOP_DIR}/lpm.desktop"
-MIME_FILE="/usr/share/mime/packages/lpm.xml"
-ZSH_COMPLETION_FILE="/usr/local/share/zsh/site-functions/_lpm"
-BASH_COMPLETION_FILE="/usr/local/share/bash-completion/completions/lpm"
-MAN_FILE="/usr/local/share/man/man1/lpm.1"
+DESKTOP_FILE="${APP_DESKTOP_DIR}/ludis.desktop"
+MIME_FILE="/usr/share/mime/packages/ludis.xml"
+ZSH_COMPLETION_FILE="/usr/local/share/zsh/site-functions/_ludis"
+BASH_COMPLETION_FILE="/usr/local/share/bash-completion/completions/ludis"
+MAN_FILE="/usr/local/share/man/man1/ludis.1"
 ICON_THEME_DIR="/usr/share/icons/hicolor"
-ICON_APP_FILE="${ICON_THEME_DIR}/scalable/apps/lpm.svg"
+ICON_APP_FILE="${ICON_THEME_DIR}/scalable/apps/ludis.svg"
 ICON_ZGP_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgp-game.svg"
 ICON_ZGR_FILE="${ICON_THEME_DIR}/scalable/mimetypes/application-x-zgr-runner.svg"
 
-echo "=== Uninstalling lpm ==="
+echo "=== Uninstalling ludis ==="
 
-# 1. Remove the main binary -- only if it is our script (LPM_VERSION= line); another
-# program named "lpm" installed at the same place must never be removed.
-if [[ -f "${INSTALL_BIN_DIR}/lpm" ]] && ! grep -aq 'LPM_VERSION=' "${INSTALL_BIN_DIR}/lpm" 2>/dev/null; then
-  echo "[Info] ${INSTALL_BIN_DIR}/lpm is not Ludis Prefix Manager (another program named \"lpm\"?): it is kept."
-elif [[ -f "${INSTALL_BIN_DIR}/lpm" ]]; then
-  rm -f "${INSTALL_BIN_DIR}/lpm"
-  echo "[OK] lpm binary removed from ${INSTALL_BIN_DIR}"
+# 1. Remove the main binary -- only if it is our script (LUDIS_VERSION= line); another
+# program named "ludis" installed at the same place must never be removed.
+if [[ -f "${INSTALL_BIN_DIR}/ludis" ]] && ! grep -aq 'LUDIS_VERSION=' "${INSTALL_BIN_DIR}/ludis" 2>/dev/null; then
+  echo "[Info] ${INSTALL_BIN_DIR}/ludis is not Ludis (another program named \"ludis\"?): it is kept."
+elif [[ -f "${INSTALL_BIN_DIR}/ludis" ]]; then
+  rm -f "${INSTALL_BIN_DIR}/ludis"
+  echo "[OK] ludis binary removed from ${INSTALL_BIN_DIR}"
 else
-  echo "[Info] The lpm binary was not present in ${INSTALL_BIN_DIR}"
+  echo "[Info] The ludis binary was not present in ${INSTALL_BIN_DIR}"
 fi
 
 # 2. Remove the library directory
@@ -40,6 +40,10 @@ if [[ -d "${INSTALL_LIB_DIR}" ]]; then
 else
   echo "[Info] The libraries folder did not exist at ${INSTALL_LIB_DIR}"
 fi
+
+# 2bis. Remove the compatibility links of the former name "lpm" (only if they are links to ludis)
+[[ -L "$(dirname "${INSTALL_LIB_DIR}")/lpm" ]] && rm -f "$(dirname "${INSTALL_LIB_DIR}")/lpm"
+[[ -L "${INSTALL_BIN_DIR}/lpm" ]] && rm -f "${INSTALL_BIN_DIR}/lpm"
 
 # 3. Remove the MIME types (.zgp and .zgr) and update the database
 if [[ -f "${MIME_FILE}" ]]; then
@@ -59,7 +63,7 @@ else
   echo "[Info] No launcher found in ${APP_DESKTOP_DIR}"
 fi
 
-# 5. Remove lpm icons (hicolor theme)
+# 5. Remove ludis icons (hicolor theme)
 ICONS_REMOVED=false
 for icon_file in "${ICON_APP_FILE}" "${ICON_ZGP_FILE}" "${ICON_ZGR_FILE}"; do
   if [[ -f "${icon_file}" ]]; then
@@ -75,9 +79,9 @@ if [[ "${ICONS_REMOVED}" = true ]]; then
     # our removed icons is worse than a direct directory scan.
     rm -f "${ICON_THEME_DIR}/icon-theme.cache"
   fi
-  echo "[OK] lpm icons removed from ${ICON_THEME_DIR}"
+  echo "[OK] ludis icons removed from ${ICON_THEME_DIR}"
 else
-  echo "[Info] No lpm icon found in ${ICON_THEME_DIR}"
+  echo "[Info] No ludis icon found in ${ICON_THEME_DIR}"
 fi
 
 # 6. Remove zsh completion
@@ -107,5 +111,5 @@ fi
 
 echo "========================================"
 echo " Uninstall completed successfully!"
-echo " lpm has been completely removed from your system."
+echo " ludis has been completely removed from your system."
 echo "========================================"

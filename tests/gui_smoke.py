@@ -29,7 +29,7 @@ def _hook(exc_type, exc, tb):
 
 sys.excepthook = _hook
 
-import lpm_gtk  # noqa: E402
+import ludis_gtk  # noqa: E402
 
 
 def pump(seconds):
@@ -41,14 +41,14 @@ def pump(seconds):
         time.sleep(0.01)
 
 
-app = lpm_gtk.LpmApp()
+app = ludis_gtk.LudisApp()
 app.register(None)
 app.activate()
 pump(0.5)
 win = app.props.active_window
 assert win is not None, "no window created"
 
-page_ids = list(lpm_gtk.MainWindow.BUILDER_NAMES)
+page_ids = list(ludis_gtk.MainWindow.BUILDER_NAMES)
 ok = []
 for page_id in page_ids:
     try:
@@ -199,7 +199,7 @@ except Exception:
 try:
     import pages_home
     import backend
-    installed = backend.get_lpm_version()
+    installed = backend.get_ludis_version()
     newer = "99.0.0"
     for info, want_visible in ((None, False), ({"latest": "0.0.1", "url": "", "method": "deb"}, False),
                                ({"latest": newer, "url": "", "method": "deb"}, True)):
@@ -306,8 +306,8 @@ try:
         extra.close()
     import guilog
     guilog._GUI_LOGGER.info("smoke probe")
-    gui_log = os.path.join(os.path.expanduser("~"), ".local", "share", "lpm", "lpm-gui.log")
-    assert os.path.getsize(gui_log) > 0, "lpm-gui.log stays empty"
+    gui_log = os.path.join(os.path.expanduser("~"), ".local", "share", "ludis", "ludis-gui.log")
+    assert os.path.getsize(gui_log) > 0, "ludis-gui.log stays empty"
     print("operations window + lock + gui log: OK")
 except Exception:
     errors.append("operations:\n" + traceback.format_exc())
@@ -323,7 +323,7 @@ try:
     os.makedirs(os.path.join(tmp, "hookgame"))
     zgp = os.path.join(tmp, "Hook Game.zgp")
     subprocess.run("tar -C %s --zstd -cf '%s' .lpm-config.yml hookgame" % (tmp, zgp), shell=True, check=True)
-    res = backend.run_lpm(["install", "-y", "--list-hooks", zgp])
+    res = backend.run_ludis(["install", "-y", "--list-hooks", zgp])
     games = pages_lifecycle.InstallPage._parse_hooks(res.stdout)
     assert len(games) == 1 and games[0][0] == "Hook Game" and len(games[0][2]) == 1, games
     short, full = games[0][2][0]
@@ -349,12 +349,12 @@ try:
     import progresswindow
     import backend
     from mainwindow import MainWindow
-    slow = os.path.join(os.environ["HOME"], "bin", "slow-lpm")
+    slow = os.path.join(os.environ["HOME"], "bin", "slow-ludis")
     with open(slow, "w") as f:
         f.write("#!/bin/sh\nsleep 2\nexit 0\n")
     os.chmod(slow, 0o755)
-    real_bin = backend.BIN_LPM
-    backend.BIN_LPM = slow
+    real_bin = backend.BIN_Ludis
+    backend.BIN_Ludis = slow
     app = win.get_application()
     win2 = MainWindow(app)
     win2.show_page("install")
@@ -366,7 +366,7 @@ try:
     live = [w for w in app.get_windows() if isinstance(w, progresswindow.ProgressWindow)]
     assert operations.is_busy() and len(live) == 1, "operation stopped with the main window"
     pump(3.5)
-    backend.BIN_LPM = real_bin
+    backend.BIN_Ludis = real_bin
     assert not operations.is_busy(), "operation never ended"
     assert not [w for w in app.get_windows() if isinstance(w, progresswindow.ProgressWindow)], "progress window left open"
     print("operation survives main window: OK")
@@ -379,12 +379,12 @@ try:
     import progresswindow
     import backend
     from mainwindow import MainWindow
-    batch = os.path.join(os.environ["HOME"], "bin", "batch-lpm")
+    batch = os.path.join(os.environ["HOME"], "bin", "batch-ludis")
     with open(batch, "w") as f:
         f.write("#!/bin/sh\necho '[INSTALLED] foo'\nsleep 30\n")
     os.chmod(batch, 0o755)
-    real_bin = backend.BIN_LPM
-    backend.BIN_LPM = batch
+    real_bin = backend.BIN_Ludis
+    backend.BIN_Ludis = batch
     win3 = MainWindow(win.get_application())
     win3.show_page("install")
     pump(0.3)
@@ -400,7 +400,7 @@ try:
     assert pwin.stack.get_visible_child_name() == "choice", pwin.stack.get_visible_child_name()
     pwin.undo_button.emit("clicked")
     pump(3.0)
-    backend.BIN_LPM = real_bin
+    backend.BIN_Ludis = real_bin
     assert seen == [(["foo"], "undo")], seen
     assert not operations.is_busy() and operations.cancel_choice[0] is None
     win3.destroy()

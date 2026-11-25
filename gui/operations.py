@@ -18,7 +18,7 @@ from i18n import t
 # The running operation object (it has a "progress_window" attribute when it shows a ProgressWindow), or None.
 _current = [None]
 
-# "lpm <command>" whose own script already sends the end-of-run desktop notification, so the
+# "ludis <command>" whose own script already sends the end-of-run desktop notification, so the
 # GUI must not send a second one (see notify-send in lib/zgp-game-installer.sh and
 # lib/zgc-wine-killer.sh).
 COMMANDS_THAT_NOTIFY = ("install", "killwine")

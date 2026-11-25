@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=lpm
+Name=Ludis
 Comment=Prefix manager for Lutris games and runners
 Comment[fr]=Gestionnaire de préfixes et runners pour Lutris
-Exec=lpm-gui %f
-Icon=lpm
+Exec=ludis-gui %f
+Icon=ludis
 Categories=Game;Utility;
 Terminal=false
 StartupNotify=true

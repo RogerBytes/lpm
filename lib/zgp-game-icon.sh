@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# --- lpm icon [slug...] ---
+# --- ludis icon [slug...] ---
 #
 # Automatically fetches an icon for one or more installed games via SteamGridDB (square
 # community icons + official "Steam Client Icon" when they exist), and regenerates the game's
 # existing shortcuts (menu and/or desktop) to use it.
 #
-# Separate command, never hooked into install/shortcut: it is the only lpm feature that depends
+# Separate command, never hooked into install/shortcut: it is the only ludis feature that depends
 # on a third-party service (network + API key). A SteamGridDB outage or a missing key must never
 # make an installation or shortcut creation fail.
 #
@@ -29,8 +29,8 @@ source "${script_dir}/zgu-sgdb.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-games-cli.sh
 source "${script_dir}/zgu-games-cli.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
@@ -39,7 +39,7 @@ source "${script_dir}/zgu-log-utils.sh"
 zgp_parse_url_args "$@"
 
 # The SteamGridDB key is strictly personal to the user (see zgp_sgdb_ensure_key below): never
-# shared, never bundled with lpm. Kept in a dedicated file with 600 permissions (owner
+# shared, never bundled with ludis. Kept in a dedicated file with 600 permissions (owner
 # read/write only).
 sgdb_key=""
 
@@ -100,20 +100,20 @@ zgp_icon_choose_url() {
   return 0
 }
 
-# Downloads icon_chosen_url into <prefix>/lpm/images/icon (.ico converted to .png).
+# Downloads icon_chosen_url into <prefix>/ludis/images/icon (.ico converted to .png).
 # Args: slug g_name prefix_dir. Returns 1 on failure.
 zgp_icon_download() {
   local slug="$1" g_name="$2" prefix_dir="$3" chosen_url="${icon_chosen_url}"
   local icon_dir
-  icon_dir="$(zgu_lpm_path "${prefix_dir}" icon)"
+  icon_dir="$(zgu_ludis_path "${prefix_dir}" icon)"
   mkdir -p "${icon_dir}"
   # Purge old icons (same filter as zgu_write_game_shortcut above; nothing else in this
   # folder, e.g. extras packed in a .zgp do not live here).
-  find "${icon_dir}" "$(zgu_lpm_legacy_path "${prefix_dir}" icon)" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -delete 2>/dev/null
+  find "${icon_dir}" "$(zgu_ludis_legacy_path "${prefix_dir}" icon)" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -delete 2>/dev/null
 
   local ext="${chosen_url##*.}"
   ext="${ext,,}"
-  local raw_file="${icon_dir}/.lpm-download.${ext}"
+  local raw_file="${icon_dir}/.ludis-download.${ext}"
 
   if ! curl -sLf --max-time 30 "${chosen_url}" -o "${raw_file}" 2>/dev/null; then
     zgp_icon_report_skip "$(t icon.download_failed "${g_name}")"

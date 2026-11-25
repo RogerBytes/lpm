@@ -1,4 +1,4 @@
-"""Asynchronous, cached check for a newer lpm version."""
+"""Asynchronous, cached check for a newer ludis version."""
 
 import json
 import os
@@ -10,12 +10,12 @@ from util import _run_on_main
 
 
 # ---------------------------------------------------------------------------------------
-# --- lpm update check (home page update button, see page_home) ---
-# "lpm self-update check" (lib/zgc-self-update.sh) contacts GitHub; its result is cached for
+# --- ludis update check (home page update button, see page_home) ---
+# "ludis self-update check" (lib/zgc-self-update.sh) contacts GitHub; its result is cached for
 # 24 h to avoid hitting the API (60 requests/hour/IP without an account) on every launch. The
 # cache keeps the LATEST published version (not a yes/no): the comparison with the installed
 # version is redone on each launch, otherwise the button would survive the update itself.
-_UPDATE_CACHE_FILE = os.path.join(os.path.expanduser("~"), ".cache", "lpm", "update-check.json")
+_UPDATE_CACHE_FILE = os.path.join(os.path.expanduser("~"), ".cache", "ludis", "update-check.json")
 
 
 _UPDATE_CACHE_MAX_AGE_S = 24 * 3600
@@ -57,4 +57,4 @@ def _check_update_async(callback):
                 pass
         _run_on_main(callback, info)
 
-    backend.run_lpm_async(["self-update", "check"], on_done=on_done)
+    backend.run_ludis_async(["self-update", "check"], on_done=on_done)

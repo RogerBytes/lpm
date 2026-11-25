@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- build.sh: builds the lpm packages (.deb / .rpm / Arch), each in a Docker container
+# --- build.sh: builds the ludis packages (.deb / .rpm / Arch), each in a Docker container
 # dedicated to its target distribution -- reproducible, only Docker needed on the host.
 # Finished packages land in packaging/dist/.
 #
@@ -21,27 +21,27 @@ chmod 777 "${DIST_DIR}"   # written by root (deb/rpm) AND by the non-root user o
 HOST_UID="$(id -u)"
 HOST_GID="$(id -g)"
 
-VERSION="$(grep -oP 'LPM_VERSION="v\K[^"]+' "${PROJECT_ROOT}/bin/lpm")"
+VERSION="$(grep -oP 'LUDIS_VERSION="v\K[^"]+' "${PROJECT_ROOT}/bin/ludis")"
 echo "Detected version: ${VERSION}"
 
 build_deb() {
   echo "=== Build .deb (Debian 13) ==="
   echo "--- Preparing the image (download + tools, may take several minutes the first time) ---"
-  docker build -t lpm-builder-debian -f "${SCRIPT_DIR}/docker/Dockerfile.debian" "${SCRIPT_DIR}/docker"
+  docker build -t ludis-builder-debian -f "${SCRIPT_DIR}/docker/Dockerfile.debian" "${SCRIPT_DIR}/docker"
   echo "--- Building the package ---"
   docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
-    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-debian \
+    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" ludis-builder-debian \
     bash -c '
       set -e
       rm -rf /build && mkdir -p /build && cp -a /src/. /build/
       cd /build
       cp -a packaging/debian debian
-      # Version injected from bin/lpm (single source); the "-1" package revision is
+      # Version injected from bin/ludis (single source); the "-1" package revision is
       # maintained by hand in the original changelog.
-      sed -i "s/^lpm (\([^)]*\))/lpm (${VERSION}-1)/" debian/changelog
+      sed -i "s/^ludis (\([^)]*\))/ludis (${VERSION}-1)/" debian/changelog
       dpkg-buildpackage -us -uc -b
-      cp ../lpm_*.deb /dist/
-      chown "${HOST_UID}:${HOST_GID}" /dist/lpm_*.deb
+      cp ../ludis_*.deb /dist/
+      chown "${HOST_UID}:${HOST_GID}" /dist/ludis_*.deb
     '
   echo "[OK] .deb -> ${DIST_DIR}"
 }
@@ -49,18 +49,18 @@ build_deb() {
 build_rpm() {
   echo "=== Build .rpm (Fedora) ==="
   echo "--- Preparing the image (download + tools, may take several minutes the first time) ---"
-  docker build -t lpm-builder-fedora -f "${SCRIPT_DIR}/docker/Dockerfile.fedora" "${SCRIPT_DIR}/docker"
+  docker build -t ludis-builder-fedora -f "${SCRIPT_DIR}/docker/Dockerfile.fedora" "${SCRIPT_DIR}/docker"
   echo "--- Building the package ---"
   docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
-    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-fedora \
+    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" ludis-builder-fedora \
     bash -c '
       set -e
       rpmdev-setuptree
-      tar --transform "s,^,lpm-${VERSION}/," -czf ~/rpmbuild/SOURCES/lpm-${VERSION}.tar.gz -C /src .
-      # Version injected from bin/lpm (single source), replacing the hardcoded "Version:"
+      tar --transform "s,^,ludis-${VERSION}/," -czf ~/rpmbuild/SOURCES/ludis-${VERSION}.tar.gz -C /src .
+      # Version injected from bin/ludis (single source), replacing the hardcoded "Version:"
       # in the original .spec.
-      sed "s/^Version:.*/Version:        ${VERSION}/" /src/packaging/rpm/lpm.spec > ~/rpmbuild/SPECS/lpm.spec
-      rpmbuild -bb ~/rpmbuild/SPECS/lpm.spec
+      sed "s/^Version:.*/Version:        ${VERSION}/" /src/packaging/rpm/ludis.spec > ~/rpmbuild/SPECS/ludis.spec
+      rpmbuild -bb ~/rpmbuild/SPECS/ludis.spec
       cp ~/rpmbuild/RPMS/noarch/*.rpm /dist/
       chown "${HOST_UID}:${HOST_GID}" /dist/*.rpm
     '
@@ -70,22 +70,22 @@ build_rpm() {
 build_arch() {
   echo "=== Build paquet Arch (PKGBUILD) ==="
   echo "--- Preparing the image (download + tools, may take several minutes the first time) ---"
-  docker build -t lpm-builder-arch -f "${SCRIPT_DIR}/docker/Dockerfile.arch" "${SCRIPT_DIR}/docker"
+  docker build -t ludis-builder-arch -f "${SCRIPT_DIR}/docker/Dockerfile.arch" "${SCRIPT_DIR}/docker"
   echo "--- Building the package ---"
   # makepkg refuses to run as root (Arch requirement), but then nothing could install missing
   # dependencies with pacman. So run as root by default (installing dependencies read straight
   # from the PKGBUILD, the single source of truth), then switch to the unprivileged "builder"
   # user only for the build itself.
   docker run --rm -v "${PROJECT_ROOT}:/src:ro" -v "${DIST_DIR}:/dist" \
-    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" lpm-builder-arch \
+    -e VERSION="${VERSION}" -e HOST_UID="${HOST_UID}" -e HOST_GID="${HOST_GID}" ludis-builder-arch \
     bash -c '
       set -e
       source /src/packaging/arch/PKGBUILD
       pacman -Sy --noconfirm --needed "${depends[@]}"
 
       mkdir -p /build/pkg && cd /build/pkg
-      tar --transform "s,^,lpm-${VERSION}/," -czf "lpm-${VERSION}.tar.gz" -C /src .
-      # Version injected from bin/lpm (single source), replacing the hardcoded "pkgver="
+      tar --transform "s,^,ludis-${VERSION}/," -czf "ludis-${VERSION}.tar.gz" -C /src .
+      # Version injected from bin/ludis (single source), replacing the hardcoded "pkgver="
       # in the original PKGBUILD.
       sed "s/^pkgver=.*/pkgver=${VERSION}/" /src/packaging/arch/PKGBUILD > PKGBUILD
       chown -R builder:builder /build

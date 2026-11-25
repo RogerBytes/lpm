@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- Arguments passed by the lpm router ---
+# --- Arguments passed by the ludis router ---
 # $1 = optional compression level (e.g. "5" or empty)
 # $2 = generate_hash_flag ("yes" if --hash)
 # $3, $4, ... = target runners given on the CLI
@@ -67,10 +67,10 @@ fi
 declare -A path_by_runner
 runners_to_export=()
 
-# 3. Runner selection: "lpm pack-runner" always requires names (or "--all") on the command line.
+# 3. Runner selection: "ludis pack-runner" always requires names (or "--all") on the command line.
 # No arguments: explicit error (not a false "completed successfully").
 if [[ ${#cli_runners[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t common.missing_target_cli "lpm pack-runner")"
+  zgu_cli_error "$(t common.missing_target_cli "ludis pack-runner")"
   exit 1
 fi
 
@@ -126,7 +126,7 @@ exec 3>&1
 # Archives already completed are untouched (the GUI offers to remove them, see "[EXPORTED]" lines).
 # Exit code 130. ---
 inprogress_archive=""
-lpm_cancel_cleanup() {
+ludis_cancel_cleanup() {
   trap '' TERM INT
   [[ -n "${inprogress_archive}" ]] && rm -f -- "${inprogress_archive}" \
     "${OUTPUT_DIR}/hash/$(basename -- "${inprogress_archive}").sha256"
@@ -134,7 +134,7 @@ lpm_cancel_cleanup() {
   t pack_runner.cancelled_run_cli
   exit 130
 }
-trap lpm_cancel_cleanup TERM INT
+trap ludis_cancel_cleanup TERM INT
 total_runners=${#runners_to_export[@]}
 current=0
 
@@ -163,10 +163,10 @@ for runner in "${runners_to_export[@]}"; do
   if command -v pv >/dev/null 2>&1; then
     # "pv -n" -> "[PROGRESS] <pct>" on FD 3 (real script output, see zgp-game-packer.sh); capped at
     # 100 because tar adds its headers.
-    tar -C "${runner_dir}" -cf - "${runner}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _lpm_pct; do
-      [[ "${_lpm_pct}" =~ ^[0-9]+$ ]] || continue
-      (( _lpm_pct > 100 )) && _lpm_pct=100
-      printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+    tar -C "${runner_dir}" -cf - "${runner}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _ludis_pct; do
+      [[ "${_ludis_pct}" =~ ^[0-9]+$ ]] || continue
+      (( _ludis_pct > 100 )) && _ludis_pct=100
+      printf '[PROGRESS] %s\n' "${_ludis_pct}" >&3
     done) | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   else

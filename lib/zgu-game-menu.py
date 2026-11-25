@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# --- lpm launcher: in-game LPM menu, shown OVER the running game -- GTK4 ---
+# --- ludis launcher: in-game Ludis menu, shown OVER the running game -- GTK4 ---
 #
 # Usage: zgu-game-menu.py <x11|wayland> <prefix_folder>
 #
@@ -30,7 +30,7 @@
 # (the layout centers it, so it works the same on X11 and Wayland). A click on the veil, outside
 # the card, closes the menu. Without compositing a fullscreen window would hide the game behind
 # an opaque rectangle, so a small opaque window is used instead (centered with xdotool on X11).
-# <XDG config>/lpm/menu.conf: "backdrop=off" forces the small window (see zgu_common.load_menu_conf).
+# <XDG config>/ludis/menu.conf: "backdrop=off" forces the small window (see zgu_common.load_menu_conf).
 #
 # IF A FULLSCREEN GAME REACTS BADLY to this window (minimizes, loses mouse/pad), tricks to try,
 # simplest first (none is implemented, on purpose: see how real games behave first):
@@ -41,7 +41,7 @@
 #      KDE and wlroots compositors (sway...), NOT on GNOME's Mutter.
 #   3. Last resort: backdrop=off in menu.conf (small window), or no veil for that game.
 #
-# Labels come from the environment (LPM_MENU_*, translated by the orchestrator); the English
+# Labels come from the environment (LUDIS_MENU_*, translated by the orchestrator); the English
 # text below is the fallback.
 
 import importlib.util
@@ -92,7 +92,7 @@ PREFIX_DIR = sys.argv[2]
 
 
 def label(name, default):
-    return os.environ.get("LPM_MENU_" + name, "").strip() or default
+    return os.environ.get("LUDIS_MENU_" + name, "").strip() or default
 
 
 # --- Keys that can be sent: name -> (xdotool key spec, ydotool key sequence). Linux key
@@ -172,7 +172,7 @@ def overlay_visible():
 
 
 def _overlay_setting_path():
-    return os.path.join(PREFIX_DIR, "lpm", "settings", "overlay-fps")
+    return os.path.join(PREFIX_DIR, "ludis", "settings", "overlay-fps")
 
 
 def overlay_saved():
@@ -224,7 +224,7 @@ def set_overlay_state(index):
 def _diag_log(message):
     try:
         path = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share"),
-                            "lpm", "menu-watcher.log")
+                            "ludis", "menu-watcher.log")
         with open(path, "a", encoding="utf-8") as f:
             f.write("%s [menu] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), message))
     except OSError:
@@ -321,19 +321,19 @@ def build_menu():
 CSS = b"""
 /* One radius everywhere, the theme's own window corners overridden. Only BACKGROUNDS are
    translucent (rgba): texts keep an opaque color. */
-window.lpm-menu, window.lpm-menu.background, window.lpm-menu.csd {
+window.ludis-menu, window.ludis-menu.background, window.ludis-menu.csd {
     background-color: transparent;
     color: #ffffff;
     box-shadow: none;
 }
 /* Veil mode (fullscreen): dark translucent veil, card in the middle. */
 /* Veil: ~70% black, a bit lighter around the card (vignette: darker toward the screen edges). */
-.lpm-veil {
+.ludis-veil {
     background-color: rgba(0, 0, 0, 0.66);
     background-image: radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.30) 100%);
 }
 /* Card: thin light border and a soft bluish glow so it stands out of the veil. */
-.lpm-card {
+.ludis-card {
     background-color: rgba(26, 26, 26, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 10px;
@@ -341,60 +341,60 @@ window.lpm-menu, window.lpm-menu.background, window.lpm-menu.csd {
     min-width: 520px;
 }
 /* Compact mode (no compositing): the small window itself is the opaque card. */
-window.lpm-menu.lpm-compact, window.lpm-menu.lpm-compact.background, window.lpm-menu.lpm-compact.csd {
+window.ludis-menu.ludis-compact, window.ludis-menu.ludis-compact.background, window.ludis-menu.ludis-compact.csd {
     background-color: #1a1a1a;
     border-radius: 10px;
 }
-window.lpm-compact .lpm-veil, window.lpm-compact .lpm-card { background-color: transparent; background-image: none; border: none; box-shadow: none; }
-.lpm-menu-title { font-size: 22px; font-weight: bold; padding: 18px 24px 6px 24px; color: #ffffff; }
-.lpm-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #bdbdbd; }
-.lpm-menu-hint.lpm-menu-hint-icon { padding-left: 8px; }
-list.lpm-menu-list { background-color: transparent; }
-list.lpm-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color: transparent; color: #ffffff; border-radius: 10px; }
-list.lpm-menu-list row:selected { background-color: #3a6ea5; color: #ffffff; }
-.lpm-menu-entry { font-size: 24px; color: #ffffff; }
-.lpm-menu-chevron { font-size: 28px; color: rgba(255, 255, 255, 0.55); }
-.lpm-seg-pill { font-size: 18px; color: rgba(255, 255, 255, 0.55); padding: 3px 12px; border-radius: 8px; }
-.lpm-seg-pill.lpm-seg-active { color: #ffffff; background-color: rgba(255, 255, 255, 0.24); }
-.lpm-menu-note { font-size: 15px; color: rgba(255, 255, 255, 0.55); }
-.lpm-menu-pct { font-size: 20px; color: #ffffff; min-width: 64px; }
-list.lpm-menu-list row.lpm-sep { margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15); border-radius: 0 0 10px 10px; padding-top: 14px; }
-list.lpm-menu-list row.lpm-danger .lpm-menu-entry { color: #e57373; }
-list.lpm-menu-list row:selected .lpm-menu-chevron { color: #ffffff; }
+window.ludis-compact .ludis-veil, window.ludis-compact .ludis-card { background-color: transparent; background-image: none; border: none; box-shadow: none; }
+.ludis-menu-title { font-size: 22px; font-weight: bold; padding: 18px 24px 6px 24px; color: #ffffff; }
+.ludis-menu-hint { font-size: 14px; padding: 6px 24px 14px 24px; color: #bdbdbd; }
+.ludis-menu-hint.ludis-menu-hint-icon { padding-left: 8px; }
+list.ludis-menu-list { background-color: transparent; }
+list.ludis-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color: transparent; color: #ffffff; border-radius: 10px; }
+list.ludis-menu-list row:selected { background-color: #3a6ea5; color: #ffffff; }
+.ludis-menu-entry { font-size: 24px; color: #ffffff; }
+.ludis-menu-chevron { font-size: 28px; color: rgba(255, 255, 255, 0.55); }
+.ludis-seg-pill { font-size: 18px; color: rgba(255, 255, 255, 0.55); padding: 3px 12px; border-radius: 8px; }
+.ludis-seg-pill.ludis-seg-active { color: #ffffff; background-color: rgba(255, 255, 255, 0.24); }
+.ludis-menu-note { font-size: 15px; color: rgba(255, 255, 255, 0.55); }
+.ludis-menu-pct { font-size: 20px; color: #ffffff; min-width: 64px; }
+list.ludis-menu-list row.ludis-sep { margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15); border-radius: 0 0 10px 10px; padding-top: 14px; }
+list.ludis-menu-list row.ludis-danger .ludis-menu-entry { color: #e57373; }
+list.ludis-menu-list row:selected .ludis-menu-chevron { color: #ffffff; }
 """
 
 
 class MenuWindow(Gtk.Window):
     def __init__(self, app):
         super().__init__(application=app)
-        self.add_css_class("lpm-menu")
-        self.set_title("LPM menu")
+        self.add_css_class("ludis-menu")
+        self.set_title("Ludis menu")
         self.set_decorated(False)
         self.veil = use_veil()
         if self.veil:
             self.fullscreen_on_pointer_monitor()
         else:
-            self.add_css_class("lpm-compact")
+            self.add_css_class("ludis-compact")
             self.set_default_size(520, 460)
             self.set_resizable(False)
         self.stack = []          # (entries, title, selected index) of the levels above
         self.entries = build_menu()
-        self.title_text = label("TITLE", "LPM menu")
+        self.title_text = label("TITLE", "Ludis menu")
         self.pending = None      # action to run once the window is closed
         self.closing = False
         self.was_active = False  # has had the focus at least once
         self.busy = False        # losing the focus is expected (not used for now)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.add_css_class("lpm-card")
+        box.add_css_class("ludis-card")
         box.set_halign(Gtk.Align.CENTER)
         box.set_valign(Gtk.Align.CENTER)
         self.card = box
         self.title_label = Gtk.Label(label=self.title_text, xalign=0)
-        self.title_label.add_css_class("lpm-menu-title")
+        self.title_label.add_css_class("ludis-menu-title")
         box.append(self.title_label)
         self.listbox = Gtk.ListBox()
-        self.listbox.add_css_class("lpm-menu-list")
+        self.listbox.add_css_class("ludis-menu-list")
         self.listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
         self.listbox.set_activate_on_single_click(True)
         self.listbox.connect("row-selected", lambda *_a: self.update_hint() if hasattr(self, "hint") else None)
@@ -404,7 +404,7 @@ class MenuWindow(Gtk.Window):
         hint = Gtk.Label(label=label("HINT", "A: validate    B: back"), xalign=0)
         self.hint = hint
         self.hint_default = hint.get_text()
-        hint.add_css_class("lpm-menu-hint")
+        hint.add_css_class("ludis-menu-hint")
         # Footer = [icon] + text. The icon is a real image (not a glyph of the text: a font without it
         # falls back to a taller one and the footer, then the whole menu, would move). The height is
         # fixed to the one of the usual help line.
@@ -422,7 +422,7 @@ class MenuWindow(Gtk.Window):
         box.append(hint_box)
         if self.veil:
             veil = Gtk.Box()
-            veil.add_css_class("lpm-veil")
+            veil.add_css_class("ludis-veil")
             veil.set_hexpand(True)
             veil.set_vexpand(True)
             box.set_hexpand(True)   # the card takes the whole space, halign/valign center it
@@ -475,18 +475,18 @@ class MenuWindow(Gtk.Window):
             opts = entry[3] if len(entry) > 3 else {}
             row = Gtk.ListBoxRow()
             if opts.get("sep"):
-                row.add_css_class("lpm-sep")
+                row.add_css_class("ludis-sep")
             if opts.get("danger"):
-                row.add_css_class("lpm-danger")
+                row.add_css_class("ludis-danger")
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
             lbl = Gtk.Label(label=entry_label, xalign=0)
-            lbl.add_css_class("lpm-menu-entry")
+            lbl.add_css_class("ludis-menu-entry")
             lbl.set_hexpand(True)
             box.append(lbl)
             info = {}
             if kind == "submenu":
                 chevron = Gtk.Label(label="›")
-                chevron.add_css_class("lpm-menu-chevron")
+                chevron.add_css_class("ludis-menu-chevron")
                 box.append(chevron)
             elif kind == "switch":
                 switch = Gtk.Switch()
@@ -503,7 +503,7 @@ class MenuWindow(Gtk.Window):
                 pills = []
                 for number, text in enumerate(value[3]):
                     pill = Gtk.Label(label=text)
-                    pill.add_css_class("lpm-seg-pill")
+                    pill.add_css_class("ludis-seg-pill")
                     click = Gtk.GestureClick()
                     click.connect("pressed", self.on_pill_pressed, len(self.rows), number)
                     pill.add_controller(click)
@@ -519,7 +519,7 @@ class MenuWindow(Gtk.Window):
                 scale.set_valign(Gtk.Align.CENTER)
                 scale.set_focusable(False)
                 pct = Gtk.Label(label="")
-                pct.add_css_class("lpm-menu-pct")
+                pct.add_css_class("ludis-menu-pct")
                 info.update(scale=scale, pct=pct, value=int(value[0]()))
                 scale.set_value(info["value"])
                 pct.set_text("%d %%" % info["value"])
@@ -547,9 +547,9 @@ class MenuWindow(Gtk.Window):
         info["index"] = index
         for number, pill in enumerate(info["pills"]):
             if number == index:
-                pill.add_css_class("lpm-seg-active")
+                pill.add_css_class("ludis-seg-active")
             else:
-                pill.remove_css_class("lpm-seg-active")
+                pill.remove_css_class("ludis-seg-active")
         info["note"] = bool(note)
         self.update_hint()
 
@@ -564,9 +564,9 @@ class MenuWindow(Gtk.Window):
         self.hint.set_text(text)
         self.hint_icon.set_visible(bool(note))
         if note:
-            self.hint.add_css_class("lpm-menu-hint-icon")
+            self.hint.add_css_class("ludis-menu-hint-icon")
         else:
-            self.hint.remove_css_class("lpm-menu-hint-icon")
+            self.hint.remove_css_class("ludis-menu-hint-icon")
 
     def set_segment(self, idx, index):
         info = self.rows[idx]
@@ -780,7 +780,7 @@ def on_activate(application):
     win = MenuWindow(application)
     win.present()
     if SESSION_KIND == "x11" and not win.veil:
-        GLib.timeout_add(200, place_on_x11, win, "LPM menu", "center")
+        GLib.timeout_add(200, place_on_x11, win, "Ludis menu", "center")
     # Veil mode: the layout centers the card. Compact mode on Wayland: a client cannot position
     # its own window, the compositor decides (most center it).
     init_gamepad()
@@ -802,7 +802,7 @@ def single_instance():
     """One menu at a time; the lock also tells the gamepad mouse to stay quiet while the menu is open."""
     import fcntl
     base = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
-    handle = open(os.path.join(base, "lpm-game-menu.lock-%d" % os.getuid()), "w")
+    handle = open(os.path.join(base, "ludis-game-menu.lock-%d" % os.getuid()), "w")
     try:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -813,6 +813,6 @@ def single_instance():
 _lock = single_instance()
 if _lock is None:
     sys.exit(0)
-app = Gtk.Application(application_id="org.lpm.GameMenu")
+app = Gtk.Application(application_id="org.ludis.GameMenu")
 app.connect("activate", on_activate)
 sys.exit(app.run([sys.argv[0]]))

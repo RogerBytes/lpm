@@ -1,23 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
   <!--
-    Icône du type MIME application/x-zgr-runner (fichiers .zgr ; runners packagés par lpm).
+    Icône du type MIME application/x-zgr-runner (fichiers .zgr ; runners packagés par ludis).
     Nom de fichier = nom d'icône attendu par shared-mime-info pour ce type MIME
     ("/" du type MIME remplacé par "-").
     Forme : même silhouette de carton "package-x-generic" que application-x-zgp-game.svg
     (reprise du thème Mint-L-Blue, dépôt public linuxmint/mint-l-icons, licence
     GPLv3), mais recolorée avec un dégradé orange->rouge distinct (au lieu du jaune->orange
-    partagé par lpm.svg et .zgp) : à petite taille (16-24px, taille d'affichage courante
+    partagé par ludis.svg et .zgp) : à petite taille (16-24px, taille d'affichage courante
     dans Nemo en vue liste), une même teinte sur les 3 icônes les rendait difficiles à
     distinguer au premier coup d'oeil. Le runner (.zgr) est donc le seul des 3 à passer sur
     une teinte plus chaude/rouge.
     Glyphe : verre plein (Tabler Icons "glass-full", licence MIT), blanc et plat ;
     référence à Wine, plus logique ici (le "moteur d'exécution" Wine/Proton) que sur .zgp,
-    qui reprend maintenant le glyphe paquet de lpm.svg. Centré sur la zone utile du carton
+    qui reprend maintenant le glyphe paquet de ludis.svg. Centré sur la zone utile du carton
     (entre le pli du rabat et le bas du carton, centre à (60, 77.34) au lieu de (60, 60) ;
     voir la note détaillée dans application-x-zgp-game.svg).
 
     LICENCE : ce fichier reprend un tracé GPLv3 (Mint-L-Blue), distribué sous GPLv3, PAS
-    sous la licence MIT du reste du projet lpm. Voir packaging/debian/copyright.
+    sous la licence MIT du reste du projet ludis. Voir packaging/debian/copyright.
   -->
   <defs>
     <linearGradient id="runnerOrangeRed" x1="0" y1="0" x2="0" y2="1">

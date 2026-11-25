@@ -11,8 +11,8 @@
 # Fallback to the Desktop/Bureau heuristic if xdg-user-dir is missing or returns nothing usable. If
 # neither "~/Bureau" nor "~/Desktop" exists on disk, return "$HOME" rather than a nonexistent
 # "~/Desktop" (zgu_write_game_shortcut checks the folder exists before writing).
-# shellcheck source=./zgu-lpm-paths.sh
-source "$(dirname "${BASH_SOURCE[0]}")/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "$(dirname "${BASH_SOURCE[0]}")/zgu-ludis-paths.sh"
 
 zgu_get_desktop_dir() {
   if command -v xdg-user-dir >/dev/null 2>&1; then
@@ -41,10 +41,10 @@ ZGU_DESKTOP_UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # --- Pieces of zgu_write_game_shortcut (each one does one thing; see the header above) ---
 
 # zgu_shortcut_icon <prefix_dir>: prints the icon of the shortcut, an image of the game folder
-# "lpm/images/icon" or our generic fallback icon.
+# "ludis/images/icon" or our generic fallback icon.
 zgu_shortcut_icon() {
-  local icon_path="lpm-game-generic" icon_src_dir icon_file
-  icon_src_dir="$(zgu_lpm_find "$1" icon)"
+  local icon_path="ludis-game-generic" icon_src_dir icon_file
+  icon_src_dir="$(zgu_ludis_find "$1" icon)"
   if [[ -d "${icon_src_dir}" ]]; then
     icon_file=$(find "${icon_src_dir}" -maxdepth 1 -type f \( -name "*.png" -o -name "*.ico" -o -name "*.svg" -o -name "*.xpm" \) -print -quit 2>/dev/null)
     # icon_file is a real file name possibly forged by a third party (shared .zgp package) and injected
@@ -118,7 +118,7 @@ zgu_shortcut_write_desktop() {
   gio set "${desktop_dir}/${slug}.desktop" metadata::trusted true 2>/dev/null || true
 
   local extras_src_dir bonus_dir_name
-  extras_src_dir="$(zgu_lpm_find "${prefix_dir}" extras)"
+  extras_src_dir="$(zgu_ludis_find "${prefix_dir}" extras)"
   if [[ -d "${extras_src_dir}" ]]; then
     bonus_dir_name="${game_real_name} $(t install_game.bonus_folder_suffix)"
     rm -rf "${desktop_dir}/${bonus_dir_name:?}"
@@ -126,7 +126,7 @@ zgu_shortcut_write_desktop() {
   fi
 }
 
-# --- Shared utility: generates the .desktop shortcut(s) of an lpm game ---
+# --- Shared utility: generates the .desktop shortcut(s) of an ludis game ---
 #
 # zgu_write_game_shortcut <display_name> <slug> <prefix_dir> <game_id> <version> <create_menu> <create_desktop> [<executable_path>] [<configpath>] [<lutris_config_dir>] [<runner_dir>] [<desktop_dir_override>]
 #
@@ -142,8 +142,8 @@ zgu_shortcut_write_desktop() {
 # Used by zgp-game-installer.sh and zgp-game-shortcutter.sh. Assumes "t" (zgl-lang-loader.sh) is
 # already loaded.
 #
-# Icon: the first image of <prefix_dir>/lpm/images/icon, else "lpm-game-generic" (our own icon,
-# assets/icons/lpm-game-generic.svg, installed in hicolor by install.sh; different on purpose from
+# Icon: the first image of <prefix_dir>/ludis/images/icon, else "ludis-game-generic" (our own icon,
+# assets/icons/ludis-game-generic.svg, installed in hicolor by install.sh; different on purpose from
 # the .zgp and .zgr icons).
 #
 # StartupWMClass: without it the taskbar shows the icon Wine announces for the window instead of
@@ -167,7 +167,7 @@ zgu_write_game_shortcut() {
   icon_path="$(zgu_shortcut_icon "${prefix_dir}")"
   wm_class="$(zgu_shortcut_wm_class "${executable_path}" "${game_id}" "${configpath}" "${lutris_config_dir}" "${runner_dir}")"
 
-  # All lpm .desktop shortcuts go through the orchestrator (lib/zgl-launcher-orchestrator.sh), the
+  # All ludis .desktop shortcuts go through the orchestrator (lib/zgl-launcher-orchestrator.sh), the
   # single entry point -- see its header for the full design. Only "game_id" (integer) and "version"
   # (fixed word "flatpak"/"package") go through Exec=: both always safe without special escaping,
   # unlike "slug"/"game_dir" (paths that may contain spaces and would need Desktop Entry escaping rules,
@@ -202,7 +202,7 @@ StartupWMClass=${wm_class}"
 # switch goes back to "allowed". Secure by default: allow_hooks=false neutralizes any active hook.
 #
 # "mode" (default "fixed") chooses the targeted keys:
-#   - "fixed": only prelaunch_command/prelaunch_wait/postexit_command ("lpm shortcut").
+#   - "fixed": only prelaunch_command/prelaunch_wait/postexit_command ("ludis shortcut").
 #   - "broad": any key ending in "_command"/"_script"/"_wait" or containing "exec", anywhere in
 #     the YAML, as in zgp-game-installer.sh: used at install, where the YAML of a shared .zgp may
 #     be forged.
@@ -210,10 +210,10 @@ StartupWMClass=${wm_class}"
 # Acts only if the file exists AND contains a targeted key (never creates a file or a key).
 # Idempotent both ways.
 #
-# Exception, the old LPM Launcher relay: a prelaunch_command/prelaunch_wait pointing to
-# "${game_dir}/scripts/lpm-launcher.sh" is lpm's own (generated only by lpm, never by a .zgp), so
+# Exception, the old Ludis Launcher relay: a prelaunch_command/prelaunch_wait pointing to
+# "${game_dir}/scripts/lpm-launcher.sh" is ludis's own (generated only by ludis, never by a .zgp), so
 # it is left alone, in both modes; otherwise every shortcut regeneration would break games of
-# lpm 0.9.5 and earlier that still have it.
+# ludis 0.9.5 and earlier that still have it.
 zgu_apply_hook_policy() {
   local yml_path="$1"
   local allow_hooks="$2"

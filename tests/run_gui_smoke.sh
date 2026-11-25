@@ -7,7 +7,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 cp -r "${repo}" "${work}/repo"
-chmod +x "${work}/repo/bin/lpm"
+chmod +x "${work}/repo/bin/ludis"
 export HOME="${work}/home"
 mkdir -p "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test" "${HOME}/.config/lutris/games" \
   "${HOME}/Games/mario" "${HOME}/Games/zelda" "${HOME}/.local/share/applications"

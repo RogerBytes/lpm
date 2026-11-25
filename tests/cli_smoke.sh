@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# CLI smoke test: runs the main "lpm" commands against a fake HOME (fake Lutris, demo
+# CLI smoke test: runs the main "ludis" commands against a fake HOME (fake Lutris, demo
 # database, fake Wine runner) and checks exit code + output.
 # No GUI, no network, nothing touched outside the temp directory.
-# Requires: bash, sqlite3, python3 + PyYAML, zstd/tar (like lpm itself).
+# Requires: bash, sqlite3, python3 + PyYAML, zstd/tar (like ludis itself).
 set -uo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
 cp -r "${repo}" "${work}/repo"
-chmod +x "${work}/repo/bin/lpm"
-R="${work}/repo/bin/lpm"
+chmod +x "${work}/repo/bin/ludis"
+R="${work}/repo/bin/ludis"
 
 export HOME="${work}/home"
 # GitHub runners define XDG_* for their own home: the tests must only look inside the fake HOME.
@@ -22,12 +22,12 @@ mkdir -p "${HOME}/bin" "${HOME}/.config/lutris/games" "${HOME}/.local/share/appl
 printf '#!/bin/sh\nexit 0\n' > "${HOME}/bin/lutris"; chmod +x "${HOME}/bin/lutris"
 printf '#!/bin/sh\nexit 0\n' > "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin/wine"
 chmod +x "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin/wine"
-# Fake wine/wineserver/winetricks first in PATH: if an lpm command ran them, the test would
+# Fake wine/wineserver/winetricks first in PATH: if an ludis command ran them, the test would
 # start a real Wine (writing into the fake prefix and skewing packaging).
 for fake in wine wine64 wineserver winetricks umu-run; do
   printf '#!/bin/sh\nexit 0\n' > "${HOME}/bin/${fake}"; chmod +x "${HOME}/bin/${fake}"
 done
-# Fake winepath ("winepath -w /a/b" -> Z:\a\b): lpm calls it for the LPM Launcher, and the
+# Fake winepath ("winepath -w /a/b" -> Z:\a\b): ludis calls it for the Ludis Launcher, and the
 # real one would initialize a real Wine prefix (wineserver) in the test directory.
 for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin"; do
   printf '#!/bin/sh\nprintf "Z:%%s\\n" "$(printf %%s "$2" | tr / "\\\\")"\n' > "${dir}/winepath"
@@ -40,7 +40,7 @@ printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lu
 printf 'game:\n  exe: /y.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/zelda-1.yml"
 
 pass=0; fail=0
-# check "name" <expected code> "<regex expected in stdout+stderr, or empty>" <lpm arguments...>
+# check "name" <expected code> "<regex expected in stdout+stderr, or empty>" <ludis arguments...>
 check() {
   local name="$1" want_rc="$2" want_re="$3"; shift 3
   local out rc
@@ -60,18 +60,18 @@ expect() {
 }
 
 # --- General
-check "version" 0 '^lpm v[0-9]' --version
+check "version" 0 '^ludis v[0-9]' --version
 check "unknown command" 1 'Unknown command' bogus
-check "no argument: help, exit code 0" 0 'lpm vsync' 
+check "no argument: help, exit code 0" 0 'ludis vsync' 
 check "list" 0 'mario +Mario' list
 check "list (zelda)" 0 'zelda +Zelda' list
 check "list-runner" 0 'GE-Test' list-runner
 check "list-isolable" 0 'No isolable|Nothing' list-isolable
 check "isolate without shared store" 0 'Nothing to isolate' isolate
 check "sgdb-key get" 0 '"key"' sgdb-key get
-# --- lpm isolate: every store (Epic, EA, Battle.net, Ubisoft), game split out of the shared prefix
+# --- ludis isolate: every store (Epic, EA, Battle.net, Ubisoft), game split out of the shared prefix
 # Fixture: a shared prefix holding the launcher (base), the game to isolate and ANOTHER game. After
-# "lpm isolate -y <store>" the game has its own prefix (base + its own folders, not the other
+# "ludis isolate -y <store>" the game has its own prefix (base + its own folders, not the other
 # game), its Lutris row/YAML point to it, and it is purged from the shared prefix.
 iso_db="${HOME}/.local/share/lutris/pga.db"
 iso_cfg="${HOME}/.config/lutris/games"
@@ -169,7 +169,7 @@ sqlite3 "${HOME}/.local/share/lutris/pga.db" "delete from games where slug in ('
 # --- No function is copy-pasted between scripts: a name defined in two files of lib/ is only allowed
 # for the per-script cancel handler and the tiny output wrappers (each script has its own).
 expect "lib: no shell function defined in two different files (except the per-script handlers)" bash -c '
-  dups=$(grep -hoE "^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{" "$1"/lib/*.sh | sort | uniq -d | grep -vE "^(lpm_cancel_cleanup|say|say_err)\(\)")
+  dups=$(grep -hoE "^[a-zA-Z_][a-zA-Z0-9_]*\(\) \{" "$1"/lib/*.sh | sort | uniq -d | grep -vE "^(ludis_cancel_cleanup|say|say_err)\(\)")
   [ -z "$dups" ] || { echo "$dups" >&2; exit 1; }' _ "${repo}"
 # --- Lutris paths: one function (zgu_set_lutris_paths) gives every path of the Flatpak or native install
 expect "lutris paths: flatpak" bash -c 'source "$1/lib/zgu-lutris-utils.sh"; HOME=/h zgu_set_lutris_paths flatpak && [ "$lutris_db" = /h/.var/app/net.lutris.Lutris/data/lutris/pga.db ] && [ "$lutris_config_dir" = /h/.var/app/net.lutris.Lutris/data/lutris/games ] && [ "$runner_dir" = /h/.var/app/net.lutris.Lutris/data/lutris/runners/wine ] && [ "$lutris_umu" = /h/.var/app/net.lutris.Lutris/data/lutris/runtime/umu/umu-run ] && [ "$version" = flatpak ] && [ "$games_dir" = /h/Games ]' _ "${repo}"
@@ -215,11 +215,11 @@ CURLEOF
 chmod +x "${e2e}/curl"
 sqlite3 "${HOME}/.local/share/lutris/pga.db" "insert into games(name,slug,runner,directory,configpath) values('Link','link','wine','${HOME}/Games/link','link-1');"
 mkdir -p "${HOME}/Games/link"; printf 'game:\n  exe: /z.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/link-1.yml"
-mkdir -p "${HOME}/.config/lpm"; echo testkey > "${HOME}/.config/lpm/steamgriddb.key"
+mkdir -p "${HOME}/.config/ludis"; echo testkey > "${HOME}/.config/ludis/steamgriddb.key"
 for kind in icon splash logo; do
   PATH="${e2e}:${PATH}" check "${kind}: found on SteamGridDB, downloaded and converted" 0 'Link' "${kind}" link
 done
-expect "icon/splash/logo: the 3 images are in the lpm folder" bash -c 'find "$1/lpm" -name "icon.png" | grep -q . && find "$1/lpm" -name "splash.png" | grep -q . && find "$1/lpm" -name "logo.png" | grep -q .' _ "${HOME}/Games/link"
+expect "icon/splash/logo: the 3 images are in the ludis folder" bash -c 'find "$1/ludis" -name "icon.png" | grep -q . && find "$1/ludis" -name "splash.png" | grep -q . && find "$1/ludis" -name "logo.png" | grep -q .' _ "${HOME}/Games/link"
 
 check "icon: unknown slug is refused" 1 'nosuch' icon nosuch
 check "splash: --url needs a single game" 1 '' splash --url http://x/a.png mario zelda
@@ -257,7 +257,7 @@ check "uninstall-runner: unknown" 1 'could not be found' uninstall-runner -y nos
 
 # --- Launcher and tools (Lutris YAML editing)
 check "launcher on" 0 'enabled' launcher mario on
-expect "launcher on: file created" test -f "${HOME}/Games/mario/lpm/launcher.yml"
+expect "launcher on: file created" test -f "${HOME}/Games/mario/ludis/launcher.yml"
 check "launcher off" 0 'disabled' launcher mario off
 # Exe inside drive_c: the Windows paths are computed as text, Wine (winepath) is NOT started.
 mkdir -p "${HOME}/Games/mario/drive_c/Games/Mario/sub"
@@ -267,10 +267,10 @@ for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin";
   mv "${dir}/winepath" "${dir}/winepath.real"
   printf '#!/bin/sh\ntouch "%s/winepath-called"\nexit 1\n' "${HOME}" > "${dir}/winepath"; chmod +x "${dir}/winepath"
 done
-rm -f "${HOME}/Games/mario/lpm/launcher.yml"
+rm -f "${HOME}/Games/mario/ludis/launcher.yml"
 check "launcher on: exe in drive_c" 0 'enabled' launcher mario on
 expect "launcher on: winepath not called" test ! -e "${HOME}/winepath-called"
-expect "launcher on: Windows path computed" grep -qF 'C:\Games\Mario\sub\m.exe' "${HOME}/Games/mario/lpm/launcher.yml"
+expect "launcher on: Windows path computed" grep -qF 'C:\Games\Mario\sub\m.exe' "${HOME}/Games/mario/ludis/launcher.yml"
 expect "launcher on: bat has the path" grep -qF 'start "" "C:\Games\Mario\sub\m.exe"' "${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat"
 for dir in "${HOME}/bin" "${HOME}/.local/share/lutris/runners/wine/GE-Test/bin"; do
   mv -f "${dir}/winepath.real" "${dir}/winepath"
@@ -279,28 +279,28 @@ check "launcher off (2)" 0 'disabled' launcher mario off
 # Existing lpm-launcher.yml WITHOUT bat_path/original_exe (hand-written or restored from a .zgp):
 # "on" keeps the entries and comments, and adds the two keys (otherwise the runtime writes a
 # lpm-launch.bat that Lutris never runs and the picker choice is ignored).
-mkdir -p "${HOME}/Games/mario/lpm"
-printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\one.exe\n- label: Two\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\two.exe\n# my comment\n' > "${HOME}/Games/mario/lpm/launcher.yml"
+mkdir -p "${HOME}/Games/mario/ludis"
+printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\one.exe\n- label: Two\n  workdir: C:\\Games\\Mario\n  exe: C:\\Games\\Mario\\two.exe\n# my comment\n' > "${HOME}/Games/mario/ludis/launcher.yml"
 check "launcher on: existing yml without bat_path" 0 'enabled' launcher mario on
-expect "existing yml: bat_path added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if d.get('bat_path')=='${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat' else 1)"
-expect "existing yml: original_exe added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
-expect "existing yml: entries kept" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if [e['label'] for e in d['entries']]==['One','Two'] else 1)"
-expect "existing yml: comment kept" grep -q '# my comment' "${HOME}/Games/mario/lpm/launcher.yml"
+expect "existing yml: bat_path added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/ludis/launcher.yml')); sys.exit(0 if d.get('bat_path')=='${HOME}/Games/mario/drive_c/Games/Mario/lpm-launch.bat' else 1)"
+expect "existing yml: original_exe added" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/ludis/launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+expect "existing yml: entries kept" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/ludis/launcher.yml')); sys.exit(0 if [e['label'] for e in d['entries']]==['One','Two'] else 1)"
+expect "existing yml: comment kept" grep -q '# my comment' "${HOME}/Games/mario/ludis/launcher.yml"
 check "launcher on again: refused" 1 'already enabled' launcher mario on
-expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
+expect "existing yml: original_exe still the real exe" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/ludis/launcher.yml')); sys.exit(0 if str(d.get('original_exe','')).endswith('m.exe') else 1)"
 mkdir -p "${HOME}/Games/mario/splash"
 echo img > "${HOME}/Games/mario/splash/splash.png"
 mkdir -p "${HOME}/Games/mario/scripts"
 echo trace > "${HOME}/Games/mario/scripts/lpm-winetrace.sh"
 echo data > "${HOME}/Games/mario/drive_c/Games/Mario/game-data.txt"
-expect "launcher on: bat and yml exist, NO relay" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/lpm/launcher.yml" ]]' _ "${HOME}/Games/mario"
+expect "launcher on: bat and yml exist, NO relay" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && -f "$1/drive_c/Games/Mario/lpm-launch.bat" && -f "$1/ludis/launcher.yml" ]]' _ "${HOME}/Games/mario"
 expect "launcher on: Lutris config has game.exe on the bat and NO prelaunch command" bash -c 'grep -q "lpm-launch.bat" "$1" && ! grep -q "prelaunch" "$1"' _ "${HOME}/.config/lutris/games/mario-1.yml"
 check "launcher off (3)" 0 'disabled' launcher mario off
-expect "launcher off: yml and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/lpm/launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
+expect "launcher off: yml and bat deleted" bash -c '[[ ! -e "$1/scripts/lpm-launcher.sh" && ! -e "$1/drive_c/Games/Mario/lpm-launch.bat" && ! -e "$1/ludis/launcher.yml" && ! -e "$1/lpm-launch.bat" ]]' _ "${HOME}/Games/mario"
 expect "launcher off: splash, loading-screen script and game files kept" bash -c '[[ -f "$1/splash/splash.png" && -f "$1/scripts/lpm-winetrace.sh" && -f "$1/drive_c/Games/Mario/game-data.txt" ]]' _ "${HOME}/Games/mario"
 expect "launcher off: Lutris exe restored" grep -q 'm.exe' "${HOME}/.config/lutris/games/mario-1.yml"
 check "launcher on after off: fresh yml" 0 'enabled' launcher mario on
-expect "launcher on after off: only the default entry (old entries gone)" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/lpm/launcher.yml')); sys.exit(0 if len(d['entries'])==1 else 1)"
+expect "launcher on after off: only the default entry (old entries gone)" python3 -c "import sys,yaml; d=yaml.safe_load(open('${HOME}/Games/mario/ludis/launcher.yml')); sys.exit(0 if len(d['entries'])==1 else 1)"
 check "launcher off (4)" 0 'disabled' launcher mario off
 # Runtime with a YAML WITHOUT bat_path (picker choice already made): the choice must reach the
 # lpm-launch.bat of drive_c that Lutris runs, not only a file at the root of the game folder.
@@ -308,7 +308,7 @@ rt_game="${HOME}/Games/rtgame"
 mkdir -p "${rt_game}/drive_c/Games/Rt"
 printf '@echo off\r\nstart "" "C:\\Games\\Rt\\first.exe"\r\n' > "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
 printf 'title: T\nprompt: P\nentries:\n- label: One\n  workdir: C:\\Games\\Rt\n  exe: C:\\Games\\Rt\\first.exe\n- label: Two\n  workdir: C:\\Games\\Rt\n  exe: C:\\Games\\Rt\\second.exe\n' > "${rt_game}/lpm-launcher.yml"
-mkdir -p "${rt_game}/lpm"; printf 'Two' > "${rt_game}/lpm/.launcher-choice"
+mkdir -p "${rt_game}/ludis"; printf 'Two' > "${rt_game}/ludis/.launcher-choice"
 expect "runtime without bat_path: runs" bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "runtime without bat_path: drive_c bat gets the choice" grep -q 'second.exe' "${rt_game}/drive_c/Games/Rt/lpm-launch.bat"
 # Loading-screen subtitle: the title (line 3) never changes; line 4 = chosen label, empty if the
@@ -316,20 +316,20 @@ expect "runtime without bat_path: drive_c bat gets the choice" grep -q 'second.e
 rt_key=$(printf '%s' "${rt_game}" | sha256sum | cut -c1-24)
 rt_ctrl="${TMPDIR:-/tmp}/lpm-launcher-ctrl-${rt_key}"
 printf 'NONE\nIND_SHOW\nRt Game\n\n' > "${rt_ctrl}"
-mkdir -p "${rt_game}/lpm"; printf 'Two' > "${rt_game}/lpm/.launcher-choice"
+mkdir -p "${rt_game}/ludis"; printf 'Two' > "${rt_game}/ludis/.launcher-choice"
 bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "subtitle: title kept, label on line 4" bash -c '[[ "$(sed -n 3p "$1")" = "Rt Game" && "$(sed -n 4p "$1")" = "Two" ]]' _ "${rt_ctrl}"
 printf 'NONE\nIND_SHOW\nOne\n\n' > "${rt_ctrl}"
-mkdir -p "${rt_game}/lpm"; printf 'One' > "${rt_game}/lpm/.launcher-choice"
+mkdir -p "${rt_game}/ludis"; printf 'One' > "${rt_game}/ludis/.launcher-choice"
 bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "subtitle: label equal to the game name -> no subtitle" bash -c '[[ "$(sed -n 3p "$1")" = "One" && -z "$(sed -n 4p "$1")" ]]' _ "${rt_ctrl}"
 printf 'NONE\nIND_SHOW\nOne Two\n\n' > "${rt_ctrl}"
-mkdir -p "${rt_game}/lpm"; printf 'One' > "${rt_game}/lpm/.launcher-choice"
+mkdir -p "${rt_game}/ludis"; printf 'One' > "${rt_game}/ludis/.launcher-choice"
 bash "${repo}/lib/zgl-launcher-runtime.sh" "${rt_game}"
 expect "subtitle: similar but different name -> subtitle kept" bash -c '[[ "$(sed -n 4p "$1")" = "One" ]]' _ "${rt_ctrl}"
 rm -f "${rt_ctrl}"
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${HOME}/.config/lutris/games/mario-1.yml"
-rm -f "${HOME}/Games/mario/lpm/launcher.yml"
+rm -f "${HOME}/Games/mario/ludis/launcher.yml"
 check "tools env set" 0 '' tools mario env set FOO bar
 check "tools env list" 0 'FOO' tools mario env list
 check "tools env set empty" 0 '' tools mario env set FOO ""
@@ -345,7 +345,7 @@ expect "tools mangohud off: key removed" bash -c '! grep -q mangohud "$1"' _ "${
 check "tools mangohud off when already off" 0 'MangoHud disabled' tools mario mangohud off
 check "tools mangohud: invalid action" 1 'unknown MangoHud action' tools mario mangohud maybe
 
-# FPS overlay of the in-game menu (lpm's own files, not the Lutris YAML)
+# FPS overlay of the in-game menu (ludis's own files, not the Lutris YAML)
 check "tools overlay status (default)" 0 '^game=follow global=off$' tools mario overlay status
 check "tools overlay off" 0 'off' tools mario overlay off
 check "tools overlay status (game off)" 0 '^game=off global=off$' tools mario overlay
@@ -356,9 +356,9 @@ check "tools overlay global-off" 0 'off' tools mario overlay global-off
 check "tools overlay status (back to default)" 0 '^game=follow global=off$' tools mario overlay status
 check "tools overlay: invalid action" 1 'unknown overlay action' tools mario overlay maybe
 
-# Gamepad: Lutris option system.antimicro_config -> profile in <prefix>/lpm/gamepad/
+# Gamepad: Lutris option system.antimicro_config -> profile in <prefix>/ludis/gamepad/
 gp_yml="${HOME}/.config/lutris/games/mario-1.yml"
-gp_prof="${HOME}/Games/mario/lpm/gamepad/lpm-gamepad.gamecontroller.amgp"
+gp_prof="${HOME}/Games/mario/ludis/gamepad/lpm-gamepad.gamecontroller.amgp"
 check "tools gamepad status (default off)" 0 '^off$' tools mario gamepad
 check "tools gamepad on" 0 'Gamepad profile enabled' tools mario gamepad on
 expect "tools gamepad on: profile created" test -f "${gp_prof}"
@@ -377,10 +377,10 @@ check "tools gamepad off leaves the user's profile" 1 'another AntiMicroX profil
 expect "tools gamepad: user's profile still referenced" grep -q 'mine.amgp' "${gp_yml}"
 check "tools gamepad: invalid action" 1 'unknown gamepad action' tools mario gamepad maybe
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${gp_yml}"
-rm -rf "${HOME}/Games/mario/lpm/gamepad"
+rm -rf "${HOME}/Games/mario/ludis/gamepad"
 expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
 
-# --- Legacy launcher (format of lpm <= 0.9.5: relay + Lutris prelaunch command). Packages made then
+# --- Legacy launcher (format of ludis <= 0.9.5: relay + Lutris prelaunch command). Packages made then
 # can be installed or launched years later: the orchestrator must convert them. DO NOT delete this
 # test together with lib/zgl-launcher-legacy.sh.
 lg="${HOME}/Games/mario"
@@ -508,7 +508,7 @@ rm -rf "${HOME}/.local/share/lutris/runners/wine/ProtonTest" "${HOME}/gameid-des
 # --- Launch-hook policy keeps the YAML valid when a hook value spans several lines (YAML tools
 #     wrap long values) -- an orphan line made Lutris report "game has no executable"
 hook_yml="${HOME}/hook-policy.yml"
-hook_run() { bash -c 'source "$1/lib/zgu-desktop-utils.sh"; t() { echo "disabled by lpm"; }; zgu_apply_hook_policy "$2" "$3" broad' _ "${repo}" "${hook_yml}" "$1"; }
+hook_run() { bash -c 'source "$1/lib/zgu-desktop-utils.sh"; t() { echo "disabled by ludis"; }; zgu_apply_hook_policy "$2" "$3" broad' _ "${repo}" "${hook_yml}" "$1"; }
 printf 'game:\n  exe: /y.exe\nsystem:\n  env:\n    GAMEID: umu-3\n  prefix_command: /a/scripts/lpm-winetrace.sh\n    /a/scripts/lpm-winetrace.log\nwine:\n  version: X\n' > "${hook_yml}"
 hook_run false
 expect "hook policy: wrapped value disabled, YAML valid, hook gone" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert "prefix_command" not in d["system"] and d["system"]["env"]["GAMEID"]=="umu-3" and d["wine"]["version"]=="X"' "${hook_yml}"
@@ -516,10 +516,10 @@ cp "${hook_yml}" "${hook_yml}.once"; hook_run false
 expect "hook policy: disabling twice changes nothing" cmp -s "${hook_yml}" "${hook_yml}.once"
 hook_run true
 expect "hook policy: restore gives back the whole value" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert d["system"]["prefix_command"]=="/a/scripts/lpm-winetrace.sh /a/scripts/lpm-winetrace.log"' "${hook_yml}"
-# File left broken by an older lpm: first line commented, second line orphan
+# File left broken by an older ludis: first line commented, second line orphan
 printf 'game:\n  exe: /y.exe\nsystem:\n  env:\n    GAMEID: umu-3\n  # prefix_command: /a/x.sh  # lpm:hook-disabled (old)\n    /a/x.log\nwine:\n  version: X\n' > "${hook_yml}"
 hook_run false
-expect "hook policy: file broken by an older lpm is repaired" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert "prefix_command" not in d["system"] and d["wine"]["version"]=="X"' "${hook_yml}"
+expect "hook policy: file broken by an older ludis is repaired" python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert "prefix_command" not in d["system"] and d["wine"]["version"]=="X"' "${hook_yml}"
 # A sibling key after a disabled hook is never swallowed
 printf 'system:\n  env:\n    GAMEID: umu-3\n  # prefix_command: /a/x.sh  # lpm:hook-disabled (old)\n    FOO: bar\n' > "${hook_yml}"
 hook_run false
@@ -555,7 +555,7 @@ expect "window detection: empty window with a title bar ignored" bash -c "${load
 expect "window detection: small window without a title bar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Whatever 80000000 100x100)"
 expect "window detection: Wine taskbar ignored" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 166x52)"
 expect "window detection: Wine taskbar ignored even when big" bash -c "${load_detection}"'; ! zgl_trace_line_is_game_window "$2"' _ "${repo}" "$(trace_line Shell_TrayWnd 00c80000 1920x1080)"
-expect "window detection: per-game ignored word (lpm-ignore-windows.txt)" bash -c 'd=$(mktemp -d); mkdir -p "${d}/lpm/settings"; printf "# helper\nbbbridge\n" > "${d}/lpm/settings/ignore-windows.txt"; game_dir="${d}"; source "$1/lib/zgu-lpm-paths.sh"; '"${load_detection}"'; rc=0; zgl_trace_line_is_game_window "$3" && rc=1; rm -rf "${d}"; exit "${rc}"' _ "${repo}" "${repo}" "$(trace_line bbbridge 16cf0000 1280x800)"
+expect "window detection: per-game ignored word (lpm-ignore-windows.txt)" bash -c 'd=$(mktemp -d); mkdir -p "${d}/ludis/settings"; printf "# helper\nbbbridge\n" > "${d}/ludis/settings/ignore-windows.txt"; game_dir="${d}"; source "$1/lib/zgu-ludis-paths.sh"; '"${load_detection}"'; rc=0; zgl_trace_line_is_game_window "$3" && rc=1; rm -rf "${d}"; exit "${rc}"' _ "${repo}" "${repo}" "$(trace_line bbbridge 16cf0000 1280x800)"
 
 # --- Pack safety: links pointing outside the game folder or to themselves are never copied
 mkdir -p "${HOME}/outside-secret" "${HOME}/Games/zelda/drive_c/Games/Z"
@@ -576,31 +576,31 @@ expect "pack safety: outside folder untouched" test -f "${HOME}/outside-secret/p
 expect "pack safety: no temporary copy left" bash -c '[ -z "$(find "$1" -name "*.zgp-tmp")" ]' _ "${HOME}/Games/zelda"
 rm -f "${HOME}/Zelda.zgp"
 
-# --- Pack: lpm's own window-detection relay is not exported, a command of the user stays
+# --- Pack: ludis's own window-detection relay is not exported, a command of the user stays
 printf 'game:\n  exe: /y.exe\nsystem:\n  prefix_command: %s/Games/zelda/scripts/lpm-winetrace.sh %s/Games/zelda/scripts/lpm-winetrace.log gamemoderun\nwine:\n  version: GE-Test\n' "${HOME}" "${HOME}" > "${HOME}/.config/lutris/games/zelda-1.yml"
 check "pack: relay + user command" 0 '\[EXPORTED\]' pack -3 zelda
 expect "pack: relay removed, user command kept" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; d=yaml.safe_load(sys.stdin); assert d[\"system\"][\"prefix_command\"]==\"gamemoderun\", d"' _ "${HOME}/Zelda.zgp"
-# --- Pack: a pre-launch script of the game is copied into lpm/scripts, YAML points to the copy
+# --- Pack: a pre-launch script of the game is copied into ludis/scripts, YAML points to the copy
 mkdir -p "${HOME}/hooks"; printf '#!/bin/bash\necho hi\n' > "${HOME}/hooks/before.sh"
 printf 'game:\n  exe: /y.exe\nsystem:\n  prelaunch_command: %s/hooks/before.sh\nwine:\n  version: GE-Test\n' "${HOME}" > "${HOME}/.config/lutris/games/zelda-1.yml"
 rm -f "${HOME}/Zelda.zgp"
 check "pack: game with a pre-launch script" 0 '\[EXPORTED\]' pack -3 zelda
-expect "pack: script copied to lpm/scripts in the archive" bash -c 'zstd -dc "$1" | tar -t | grep -q "/lpm/scripts/before.sh$"' _ "${HOME}/Zelda.zgp"
-expect "pack: YAML points to the copied script" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | grep -q "GAMEDIR\|lpm/scripts/before.sh"' _ "${HOME}/Zelda.zgp"
+expect "pack: script copied to ludis/scripts in the archive" bash -c 'zstd -dc "$1" | tar -t | grep -q "/ludis/scripts/before.sh$"' _ "${HOME}/Zelda.zgp"
+expect "pack: YAML points to the copied script" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | grep -q "GAMEDIR\|ludis/scripts/before.sh"' _ "${HOME}/Zelda.zgp"
 # Install: the script travels in the archive; without --allow-scripts the hook is neutralized,
-# with it the hook points to the copy in the new lpm/scripts.
+# with it the hook points to the copy in the new ludis/scripts.
 mkdir -p "${HOME}/hookdir"; cp "${HOME}/Zelda.zgp" "${HOME}/hookdir/Zelda.zgp"
 # --list-hooks (used by the GUI confirmation): read-only list of the scripts of the archives.
 check "install --list-hooks: game with a script" 0 'GAME.*Zelda.zgp' install -y --list-hooks "${HOME}/hookdir/Zelda.zgp"
 check "install --list-hooks: lists the script key" 0 'HOOK.*prelaunch_command' install -y --list-hooks "${HOME}/hookdir/Zelda.zgp"
-check "install --list-hooks: full path once installed, no GAMEDIR left" 0 "/Games/[^[:cntrl:]]*/lpm/scripts/before.sh" install -y --list-hooks "${HOME}/hookdir/Zelda.zgp"
+check "install --list-hooks: full path once installed, no GAMEDIR left" 0 "/Games/[^[:cntrl:]]*/ludis/scripts/before.sh" install -y --list-hooks "${HOME}/hookdir/Zelda.zgp"
 check "uninstall zelda (hook test)" 0 '\[REMOVED\] zelda' uninstall -y zelda
 check "install: archive with a script, no --allow-scripts" 0 '\[INSTALLED\] zelda' install -y "${HOME}/hookdir/Zelda.zgp"
-expect "install: script restored in lpm/scripts" test -f "${HOME}/Games/zelda/lpm/scripts/before.sh"
+expect "install: script restored in ludis/scripts" test -f "${HOME}/Games/zelda/ludis/scripts/before.sh"
 expect "install: script hook neutralized by default" bash -c '! grep -hE "^[[:space:]]*prelaunch_command:" $1' _ "${HOME}/.config/lutris/games/zelda-*.yml"
 check "uninstall zelda (hook test 2)" 0 '\[REMOVED\] zelda' uninstall -y zelda
 check "install: archive with a script, --allow-scripts" 0 '\[INSTALLED\] zelda' install -y --allow-scripts "${HOME}/hookdir/Zelda.zgp"
-expect "install: --allow-scripts keeps the hook on the copy" bash -c 'grep -hE "^[[:space:]]*prelaunch_command:.*/lpm/scripts/before.sh" $1' _ "${HOME}/.config/lutris/games/zelda-*.yml"
+expect "install: --allow-scripts keeps the hook on the copy" bash -c 'grep -hE "^[[:space:]]*prelaunch_command:.*/ludis/scripts/before.sh" $1' _ "${HOME}/.config/lutris/games/zelda-*.yml"
 rm -rf "${HOME}/hookdir"
 rm -f "${HOME}/Zelda.zgp"
 rm -f "${HOME}/Zelda.zgp"
@@ -638,7 +638,7 @@ expect "pack: the name in the archive is the one in Lutris' database (renamed ga
 expect "pack: .lpm-config.yml is the first member of the archive" bash -c 'zstd -dc "$1" | head -c 100 | tr -d "\0" | grep -qx ".lpm-config.yml"' _ "${HOME}/Mario.zgp"
 expect "pack: first-member YAML holds the exact size" bash -c 'bsdtar -xOqf "$1" .lpm-config.yml | python3 -c "import sys,yaml; assert yaml.safe_load(sys.stdin)[\"lpm_archive\"][\"size\"] > 0"' _ "${HOME}/Mario.zgp"
 expect "pack: no .lpm-size and no zgp-game-config.yml left in the archive" bash -c '! zstd -dc "$1" | tar -t | grep -qE "(^|/)(\.lpm-size|zgp-game-config\.yml)$"' _ "${HOME}/Mario.zgp"
-expect "pack: the prefix itself is untouched (no config file left in it)" bash -c '[ ! -e "$1/zgp-game-config.yml" ] && [ ! -e "$1/lpm/config.yml" ]' _ "${HOME}/Games/mario"
+expect "pack: the prefix itself is untouched (no config file left in it)" bash -c '[ ! -e "$1/zgp-game-config.yml" ] && [ ! -e "$1/ludis/config.yml" ]' _ "${HOME}/Games/mario"
 check "uninstall" 0 '\[REMOVED\] mario' uninstall -y mario
 expect "uninstall: removed from the list" bash -c "! bash '${R}' list </dev/null | grep -q '^mario '"
 expect "uninstall: folder deleted" test ! -e "${HOME}/Games/mario"
@@ -659,10 +659,10 @@ d = yaml.safe_load(open(p)) or {}
 d.setdefault("system", {})["antimicro_config"] = "$GAMEDIR/lpm_gamepad/lpm-gamepad.gamecontroller.amgp"
 yaml.dump(d, open(p, "w"), sort_keys=False)
 PYEOF
-# ... and with the relay of the old LPM Launcher format (lpm <= 0.9.5)
+# ... and with the relay of the old Ludis Launcher format (ludis <= 0.9.5)
 mkdir -p "${HOME}/old-archive/mario/scripts"
 printf '#!/bin/sh\n' > "${HOME}/old-archive/mario/scripts/lpm-launcher.sh"
-# Every old-layout lpm file at the prefix root (they must all end up in lpm/ at install)
+# Every old-layout ludis file at the prefix root (they must all end up in ludis/ at install)
 mkdir -p "${HOME}/old-archive/mario/extras/Manual" "${HOME}/old-archive/mario/splash" "${HOME}/old-archive/mario/lpm_gamepad"
 echo m > "${HOME}/old-archive/mario/extras/Manual/readme.txt"; echo s > "${HOME}/old-archive/mario/splash/splash.png"
 echo g > "${HOME}/old-archive/mario/lpm_gamepad/profile.amgp"; echo i > "${HOME}/old-archive/mario/icon"
@@ -673,13 +673,16 @@ tar -C "${HOME}/old-archive" -cf - mario | zstd -q > "${HOME}/Mario-old.zgp"
 check "uninstall before old archive" 0 '\[REMOVED\] mario' uninstall -y mario
 check "install old archive" 0 '\[INSTALLED\] mario' install -y "${HOME}/Mario-old.zgp"
 expect "install: Proton version file removed" test ! -e "${HOME}/Games/mario/version"
-expect "migration: every old file moved into lpm/" bash -c 'g="$1"; test -f "$g/lpm/extras/Manual/readme.txt" && test -f "$g/lpm/images/splash/splash.png" && test -f "$g/lpm/gamepad/profile.amgp" && test -f "$g/lpm/images/icon" && test -f "$g/lpm/settings/ignore-windows.txt" && test -e "$g/lpm/settings/no-loadingscreen" && test -f "$g/lpm/launcher.yml" && test -f "$g/lpm/scripts/hook.sh"' _ "${HOME}/Games/mario"
-expect "migration: Lutris YAML points to the moved gamepad profile" bash -c 'grep -hq "antimicro_config: .*/mario/lpm/gamepad/lpm-gamepad.gamecontroller.amgp" $1 && ! grep -hq "lpm_gamepad" $1' _ "${HOME}/.config/lutris/games/mario-*.yml"
-expect "migration: absolute old paths in a Lutris YAML are rewritten (gamepad, scripts), others untouched" bash -c 'd=$(mktemp -d); printf "system:\n  antimicro_config: %s/g/lpm_gamepad/p.amgp\n  prelaunch_command: %s/g/scripts/h.sh\n  other: /x/lpm_gamepad/keep\n" "$d" "$d" > "$d/y.yml"; source "$1/lib/zgu-lpm-paths.sh"; zgu_lpm_fix_yml_paths "$d/g" "$d/y.yml"; grep -q "g/lpm/gamepad/p.amgp" "$d/y.yml" && grep -q "g/lpm/scripts/h.sh" "$d/y.yml" && grep -q "/x/lpm_gamepad/keep" "$d/y.yml"; rc=$?; rm -rf "$d"; exit $rc' _ "${repo}"
-expect "migration: nothing lpm-owned left at the prefix root" bash -c 'g="$1"; for f in extras splash lpm_gamepad icon lpm-ignore-windows.txt .lpm-no-loadingscreen lpm-launcher.yml scripts zgp-game-config.yml; do test ! -e "$g/$f" || { echo "left: $f"; exit 1; }; done' _ "${HOME}/Games/mario"
+expect "migration: every old file moved into ludis/" bash -c 'g="$1"; test -f "$g/ludis/extras/Manual/readme.txt" && test -f "$g/ludis/images/splash/splash.png" && test -f "$g/ludis/gamepad/profile.amgp" && test -f "$g/ludis/images/icon" && test -f "$g/ludis/settings/ignore-windows.txt" && test -e "$g/ludis/settings/no-loadingscreen" && test -f "$g/ludis/launcher.yml" && test -f "$g/ludis/scripts/hook.sh"' _ "${HOME}/Games/mario"
+expect "migration: Lutris YAML points to the moved gamepad profile" bash -c 'grep -hq "antimicro_config: .*/mario/ludis/gamepad/lpm-gamepad.gamecontroller.amgp" $1 && ! grep -hq "lpm_gamepad" $1' _ "${HOME}/.config/lutris/games/mario-*.yml"
+expect "migration: absolute old paths in a Lutris YAML are rewritten (gamepad, scripts), others untouched" bash -c 'd=$(mktemp -d); printf "system:\n  antimicro_config: %s/g/lpm_gamepad/p.amgp\n  prelaunch_command: %s/g/scripts/h.sh\n  other: /x/lpm_gamepad/keep\n" "$d" "$d" > "$d/y.yml"; source "$1/lib/zgu-ludis-paths.sh"; zgu_ludis_fix_yml_paths "$d/g" "$d/y.yml"; grep -q "g/ludis/gamepad/p.amgp" "$d/y.yml" && grep -q "g/ludis/scripts/h.sh" "$d/y.yml" && grep -q "/x/lpm_gamepad/keep" "$d/y.yml"; rc=$?; rm -rf "$d"; exit $rc' _ "${repo}"
+expect "rename: old <prefix>/lpm folder moves to ludis, YAML paths follow, existing files win" bash -c 'd=$(mktemp -d); mkdir -p "$d/g/lpm/scripts" "$d/g/ludis"; echo a > "$d/g/lpm/scripts/h.sh"; echo old > "$d/g/lpm/x"; echo new > "$d/g/ludis/x"; printf "system:\n  prelaunch_command: %s/g/lpm/scripts/h.sh\n  other: /z/lpm/keep\n  g: \$GAMEDIR/lpm/gamepad/p\n" "$d" > "$d/y.yml"; source "$1/lib/zgu-ludis-paths.sh"; zgu_ludis_adopt_old_dir "$d/g" "$d/y.yml"; [ -f "$d/g/ludis/scripts/h.sh" ] && [ "$(cat "$d/g/ludis/x")" = new ] && grep -q "g/ludis/scripts/h.sh" "$d/y.yml" && grep -q "/z/lpm/keep" "$d/y.yml" && grep -q "GAMEDIR/ludis/gamepad" "$d/y.yml"; rc=$?; rm -rf "$d"; exit $rc' _ "${repo}"
+expect "rename: reads fall back to the old lpm folder until it is moved" bash -c 'd=$(mktemp -d); mkdir -p "$d/g/lpm/settings"; echo on > "$d/g/lpm/settings/overlay-fps"; source "$1/lib/zgu-ludis-paths.sh"; [ "$(zgu_overlay_fps_pergame "$d/g")" = on ]; rc=$?; rm -rf "$d"; exit $rc' _ "${repo}"
+expect "rename: ~/.config/lpm and ~/.local/share/lpm move to ludis (log renamed)" bash -c 'd=$(mktemp -d); mkdir -p "$d/.config/lpm" "$d/.local/share/lpm"; echo k > "$d/.config/lpm/steamgriddb.key"; echo l > "$d/.local/share/lpm/lpm.log"; HOME="$d" XDG_CONFIG_HOME="$d/.config" bash -c "source \"$1/lib/zgu-log-utils.sh\""; [ -f "$d/.config/ludis/steamgriddb.key" ] && [ -f "$d/.local/share/ludis/ludis.log" ] && [ ! -e "$d/.config/lpm" ]; rc=$?; rm -rf "$d"; exit $rc' _ "${repo}"
+expect "migration: nothing ludis-owned left at the prefix root" bash -c 'g="$1"; for f in extras splash lpm_gamepad icon lpm-ignore-windows.txt .lpm-no-loadingscreen lpm-launcher.yml scripts zgp-game-config.yml; do test ! -e "$g/$f" || { echo "left: $f"; exit 1; }; done' _ "${HOME}/Games/mario"
 
 check "list after an old-format install (name read from the old YAML)" 0 'mario +Mario' list
-expect "install: relay of the old LPM Launcher format removed (legacy)" test ! -e "${HOME}/Games/mario/scripts/lpm-launcher.sh"
+expect "install: relay of the old Ludis Launcher format removed (legacy)" test ! -e "${HOME}/Games/mario/scripts/lpm-launcher.sh"
 rm -rf "${HOME}/old-archive" "${HOME}/Mario-old.zgp"
 
 # --- Install: disk space. A small .zgp is enough: the failures happen before/while extracting.
@@ -728,27 +731,27 @@ rm -rf "${HOME}/exactgame" "${HOME}/exactmeta" "${HOME}/Exact.zgp" "${HOME}/Exac
 rm -rf "${shim}" "${HOME}/Space.zgp" "${HOME}/Space2.zgp"
 
 # --- Completion: every documented command is offered (except advanced commands
-#     intentionally absent from "lpm --help"), and options with values complete
+#     intentionally absent from "ludis --help"), and options with values complete
 hidden=" archives options lsfg-dll sgdb-images sgdb-key "
 for page in "${repo}"/docs/commands/*.md; do
   cmd="$(basename "${page}" .md)"
   [[ "${hidden}" == *" ${cmd} "* ]] && continue
-  expect "completion bash: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/lpm.bash"
-  expect "completion zsh: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/_lpm"
+  expect "completion bash: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/ludis.bash"
+  expect "completion zsh: ${cmd}" grep -qw -- "${cmd}" "${repo}/completions/_ludis"
 done
-printf '#!/bin/sh\nexec bash %s "$@"\n' "${R}" > "${HOME}/bin/lpm"; chmod +x "${HOME}/bin/lpm"
+printf '#!/bin/sh\nexec bash %s "$@"\n' "${R}" > "${HOME}/bin/ludis"; chmod +x "${HOME}/bin/ludis"
 # shellcheck disable=SC1091
-source "${repo}/completions/lpm.bash" 2>/dev/null
-comp() { COMP_WORDS=("$@"); COMP_CWORD=$((${#COMP_WORDS[@]} - 1)); COMPREPLY=(); _lpm 2>/dev/null; echo "${COMPREPLY[*]}"; }
-expect "completion: -a offers win32/win64" bash -c '[[ "$1" == *win64* ]]' _ "$(comp lpm create-prefix -a "")"
-expect "completion: -s offers the modes" bash -c '[[ "$1" == *desktop* ]]' _ "$(comp lpm shortcut -s "")"
-expect "completion: --url for icon" bash -c '[[ "$1" == *--url* ]]' _ "$(comp lpm icon "--u")"
-expect "completion: installed slugs" bash -c '[[ "$1" == *mario* ]]' _ "$(comp lpm uninstall "")"
-expect "completion: tools offers the runner tool" bash -c '[[ "$1" == *runner* ]]' _ "$(comp lpm tools mario "")"
-expect "completion: tools runner offers installed runners" bash -c '[[ "$1" == *GE-Test* ]]' _ "$(comp lpm tools mario runner "")"
-expect "completion: vsync offers status and slugs" bash -c '[[ "$1" == *status* && "$1" == *mario* ]]' _ "$(comp lpm vsync "")"
-expect "completion: vsync <slug> offers on/off" bash -c '[[ "$1" == *on* && "$1" == *off* ]]' _ "$(comp lpm vsync mario "")"
-expect "completion: vsync on offers the settings" bash -c '[[ "$1" == *d3d9* && "$1" == *gl-mesa* ]]' _ "$(comp lpm vsync mario on "")"
+source "${repo}/completions/ludis.bash" 2>/dev/null
+comp() { COMP_WORDS=("$@"); COMP_CWORD=$((${#COMP_WORDS[@]} - 1)); COMPREPLY=(); _ludis 2>/dev/null; echo "${COMPREPLY[*]}"; }
+expect "completion: -a offers win32/win64" bash -c '[[ "$1" == *win64* ]]' _ "$(comp ludis create-prefix -a "")"
+expect "completion: -s offers the modes" bash -c '[[ "$1" == *desktop* ]]' _ "$(comp ludis shortcut -s "")"
+expect "completion: --url for icon" bash -c '[[ "$1" == *--url* ]]' _ "$(comp ludis icon "--u")"
+expect "completion: installed slugs" bash -c '[[ "$1" == *mario* ]]' _ "$(comp ludis uninstall "")"
+expect "completion: tools offers the runner tool" bash -c '[[ "$1" == *runner* ]]' _ "$(comp ludis tools mario "")"
+expect "completion: tools runner offers installed runners" bash -c '[[ "$1" == *GE-Test* ]]' _ "$(comp ludis tools mario runner "")"
+expect "completion: vsync offers status and slugs" bash -c '[[ "$1" == *status* && "$1" == *mario* ]]' _ "$(comp ludis vsync "")"
+expect "completion: vsync <slug> offers on/off" bash -c '[[ "$1" == *on* && "$1" == *off* ]]' _ "$(comp ludis vsync mario "")"
+expect "completion: vsync on offers the settings" bash -c '[[ "$1" == *d3d9* && "$1" == *gl-mesa* ]]' _ "$(comp ludis vsync mario on "")"
 
 # --- Gamepad shortcuts (Alt+Tab / F4 / Alt+Enter / F11 watcher), without a real gamepad
 if python3 -c "import ctypes; ctypes.CDLL('libSDL2-2.0.so.0')" 2>/dev/null; then
@@ -757,14 +760,14 @@ else
   echo "(libSDL2 missing: gamepad test skipped)"
 fi
 
-# --- install.sh refuses to overwrite another program named "lpm" (tested only as root,
+# --- install.sh refuses to overwrite another program named "ludis" (tested only as root,
 #     and only the refusal: it stops before copying anything, so nothing is touched)
 if [[ "$(id -u)" -eq 0 ]]; then
   foreign_bin="${work}/foreign-bin"; mkdir -p "${foreign_bin}"
-  printf '\177ELF other-program' > "${foreign_bin}/lpm"
-  out="$(LPM_INSTALL_BIN_DIR="${foreign_bin}" bash "${repo}/install.sh" 2>&1)"; rc=$?
-  expect "install.sh: refuses another program named lpm" bash -c '[[ "$1" -eq 1 && "$2" == *"is not Ludis Prefix Manager"* && "$2" == *"Nothing was installed"* ]]' _ "${rc}" "${out}"
-  expect "install.sh: the other \"lpm\" is intact" grep -q 'other-program' "${foreign_bin}/lpm"
+  printf '\177ELF other-program' > "${foreign_bin}/ludis"
+  out="$(LUDIS_INSTALL_BIN_DIR="${foreign_bin}" bash "${repo}/install.sh" 2>&1)"; rc=$?
+  expect "install.sh: refuses another program named ludis" bash -c '[[ "$1" -eq 1 && "$2" == *"is not Ludis"* && "$2" == *"Nothing was installed"* ]]' _ "${rc}" "${out}"
+  expect "install.sh: the other \"ludis\" is intact" grep -q 'other-program' "${foreign_bin}/ludis"
 else
   echo "(not root: install.sh refusal test skipped)"
 fi

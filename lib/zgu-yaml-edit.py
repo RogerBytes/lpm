@@ -6,7 +6,7 @@ Usage: zgu-yaml-edit.py <yml> set   <section> <key> <value> [--bool]
 
 "section" is a top-level key (e.g. game, system); "key" is a direct child key of that section.
 Writing is done by editing text lines (never yaml.dump): a PyYAML round trip destroys all comments,
-including the hooks neutralized by LPM ("# lpm:hook-disabled"), which are used to restore them
+including the hooks neutralized by Ludis ("# lpm:hook-disabled"), which are used to restore them
 later. The result is re-read with yaml.safe_load and compared to what is expected; on any deviation
 nothing is modified and the exit code is non-zero (the caller can then fall back to a full rewrite).
 """
@@ -114,7 +114,7 @@ def _expected_after(before, action, section, key, py_value):
 
 
 def _write_atomic(path, new_lines):
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".lpm-yaml-")
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".ludis-yaml-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.writelines(new_lines)

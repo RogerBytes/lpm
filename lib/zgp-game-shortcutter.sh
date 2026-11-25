@@ -5,7 +5,7 @@
 # Unlike zgp-game-installer.sh (which offers shortcut creation only when installing a .zgp),
 # this command (re)generates shortcuts afterwards for any game already in Lutris -- e.g. to
 # regenerate a shortcut after the default icon was fixed (see zgu_write_game_shortcut in
-# zgu-desktop-utils.sh), or for a game added to Lutris by other means than lpm.
+# zgu-desktop-utils.sh), or for a game added to Lutris by other means than ludis.
 #
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -16,22 +16,22 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-games-cli.sh
 source "${script_dir}/zgu-games-cli.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 # shellcheck source=./zgu-desktop-utils.sh
 source "${script_dir}/zgu-desktop-utils.sh"
 
-# --- Argument parsing (from bin/lpm) ---
+# --- Argument parsing (from bin/ludis) ---
 # $1, $2... = target game slugs, or "--all" for all installed Wine games, plus these
 # options accepted anywhere among them (short AND long forms, as elsewhere in the project):
 #   -s, --shortcut=<menu|desktop|both|none>   where to (re)generate shortcut(s)
 #                                              (default "both")
-#   -n, --no-loadingscreen                    disable the lpm loading screen for these
+#   -n, --no-loadingscreen                    disable the ludis loading screen for these
 #                                              game(s) (default: enabled, see
 #                                              zgl-launcher-orchestrator.sh)
 #   -k, --allow-hooks                         re-enable the Lutris launch hooks
 #                                              (prelaunch_command/prelaunch_wait/
-#                                              postexit_command) that lpm had disabled for
+#                                              postexit_command) that ludis had disabled for
 #                                              these game(s); default: hooks are left exactly
 #                                              as they are (see zgu_apply_hook_policy)
 #   --desktop-dir=<path>                      folder for the desktop shortcut, instead of the
@@ -114,7 +114,7 @@ fi
 # COALESCE(...,'') on EVERY column is required: in SQLite, NULL || anything is NULL for the
 # whole concatenation, so a game with an empty "executable" (prefix just (re)created in
 # Lutris, .exe not yet configured) would drop the entire row (sqlite3 prints an empty line,
-# skipped by the "[[ -z "${game_name}" ]] && continue" below) and become unfindable for "lpm
+# skipped by the "[[ -z "${game_name}" ]] && continue" below) and become unfindable for "ludis
 # shortcut" ("Game not found") although it exists in the DB.
 zgp_games_load shortcut zgu_cli_error blacklist sanitize
 
@@ -134,10 +134,10 @@ create_desktop=false
 # above (available in both CLI and GUI, see gui/*.py).
 
 # --- Target selection ---
-# "lpm shortcut" always requires slugs (or "--all") on the command line; the former
+# "ludis shortcut" always requires slugs (or "--all") on the command line; the former
 # interactive Zenity mode was removed.
 if [[ ${#cli_targets[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t common.missing_target_cli "lpm shortcut")"
+  zgu_cli_error "$(t common.missing_target_cli "ludis shortcut")"
   exit 1
 elif [[ "${cli_targets[0]}" = "--all" ]]; then
   games_to_process=("${sorted_game_names[@]}")
@@ -180,15 +180,15 @@ for game_name in "${games_to_process[@]}"; do
   # creation and regeneration -- created when the loading screen is unchecked, removed when
   # checked, whatever the previous state.
   if [[ "${loadingscreen_enabled}" = true ]]; then
-    zgu_lpm_remove "${game_prefix_dir}" no_loadingscreen
-    zgu_lpm_prune "${game_prefix_dir}"
+    zgu_ludis_remove "${game_prefix_dir}" no_loadingscreen
+    zgu_ludis_prune "${game_prefix_dir}"
   else
-    zgu_lpm_remove "${game_prefix_dir}" no_loadingscreen
-    mkdir -p "$(dirname "$(zgu_lpm_path "${game_prefix_dir}" no_loadingscreen)")" 2>/dev/null
-    : > "$(zgu_lpm_path "${game_prefix_dir}" no_loadingscreen)" 2>/dev/null
+    zgu_ludis_remove "${game_prefix_dir}" no_loadingscreen
+    mkdir -p "$(dirname "$(zgu_ludis_path "${game_prefix_dir}" no_loadingscreen)")" 2>/dev/null
+    : > "$(zgu_ludis_path "${game_prefix_dir}" no_loadingscreen)" 2>/dev/null
   fi
 
-  # Re-enable the Lutris launch hooks lpm had disabled, ONLY with -k (see zgu_apply_hook_policy
+  # Re-enable the Lutris launch hooks ludis had disabled, ONLY with -k (see zgu_apply_hook_policy
   # in zgu-desktop-utils.sh): without it hooks are never touched, what was decided at install
   # time (kept or refused) stays as it is. No-op if "game_configpath" is empty (no resolved
   # YAML config) or the file does not exist.

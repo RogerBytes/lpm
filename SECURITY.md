@@ -16,7 +16,7 @@ This is a one-person project, so replies may take a few days.
 
 ## What is in scope
 
-lpm installs and exports `.zgp` / `.zgr` archives, which can come from other
+ludis installs and exports `.zgp` / `.zgr` archives, which can come from other
 people. Reports about an archive that can write outside its own folder, run
 unexpected commands, or delete or copy files it should not touch are especially
 welcome.

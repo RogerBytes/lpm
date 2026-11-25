@@ -16,7 +16,7 @@ source "${script_dir}/zgu-hash-utils.sh"
 # (see "exec 3>&1" in zgp-game-installer.sh).
 exec 3>&1
 
-# --- Arguments passed by bin/lpm ---
+# --- Arguments passed by bin/ludis ---
 # $1 = mode (always "cli"; kept for positional consistency with other lib/ scripts, not read here)
 # $2 = confirm_flag ("yes" if -y)
 # $3 = ignore_hash_flag ("yes" if --ignore-hash)
@@ -113,7 +113,7 @@ mkdir -p "${runner_dir}"
 # Only explicit command-line targets are handled (local .zgr files and/or remote GitHub names).
 # No arguments: explicit error (not a silent exit 0).
 if [[ ${#cli_targets[@]} -eq 0 ]]; then
-  zgu_cli_error "$(t common.missing_target_cli "lpm install-runner")"
+  zgu_cli_error "$(t common.missing_target_cli "ludis install-runner")"
   exit 1
 fi
 
@@ -217,9 +217,9 @@ declare -A runner_source   # "local" or "distant"
   # untouched (the GUI offers to remove them, see "[INSTALLED]" lines). Exit code 130. ---
   temp_cli_dir=""
   inprogress_dir=""
-  lpm_cancel_cleanup() {
+  ludis_cancel_cleanup() {
     trap '' TERM INT
-    if [[ -n "${temp_cli_dir}" ]] && { [[ "${temp_cli_dir}" == "${TMPDIR:-/tmp}"/* ]] || [[ "${temp_cli_dir}" == */.lpm-dl-* ]]; }; then
+    if [[ -n "${temp_cli_dir}" ]] && { [[ "${temp_cli_dir}" == "${TMPDIR:-/tmp}"/* ]] || [[ "${temp_cli_dir}" == */.ludis-dl-* ]]; }; then
       rm -rf -- "${temp_cli_dir}"
     fi
     if [[ -n "${inprogress_dir}" ]] && [[ "${inprogress_dir}" == "${runner_dir}/"* ]]; then
@@ -229,7 +229,7 @@ declare -A runner_source   # "local" or "distant"
     t install_runner.cancelled_run_cli
     exit 130
   }
-  trap lpm_cancel_cleanup TERM INT
+  trap ludis_cancel_cleanup TERM INT
 
   for runner_name in "${runners_to_install[@]}"; do
     runner_idx=$((runner_idx + 1))
@@ -291,7 +291,7 @@ except Exception:
       if [[ "${dl_base}" = "${TMPDIR:-/tmp}" ]]; then
         temp_cli_dir=$(mktemp -d)
       else
-        temp_cli_dir=$(mktemp -d "${dl_base}/.lpm-dl-XXXXXX")
+        temp_cli_dir=$(mktemp -d "${dl_base}/.ludis-dl-XXXXXX")
       fi
       archive_path="${temp_cli_dir}/${target_filename}"
 
@@ -303,17 +303,17 @@ except Exception:
       else
         wget -q -O "${archive_path}" "${download_url}" &
       fi
-      _lpm_dl_pid=$!
-      while kill -0 "${_lpm_dl_pid}" 2>/dev/null; do
+      _ludis_dl_pid=$!
+      while kill -0 "${_ludis_dl_pid}" 2>/dev/null; do
         if [[ "${asset_size:-0}" =~ ^[0-9]+$ ]] && (( asset_size > 0 )); then
-          _lpm_cur=$(stat -c%s "${archive_path}" 2>/dev/null || echo 0)
-          _lpm_pct=$(( _lpm_cur * 50 / asset_size ))
-          (( _lpm_pct > 50 )) && _lpm_pct=50
-          printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+          _ludis_cur=$(stat -c%s "${archive_path}" 2>/dev/null || echo 0)
+          _ludis_pct=$(( _ludis_cur * 50 / asset_size ))
+          (( _ludis_pct > 50 )) && _ludis_pct=50
+          printf '[PROGRESS] %s\n' "${_ludis_pct}" >&3
         fi
         sleep 0.3
       done
-      wait "${_lpm_dl_pid}" || rm -f "${archive_path}"
+      wait "${_ludis_dl_pid}" || rm -f "${archive_path}"
 
       if [[ ! -f "${archive_path}" ]] || [[ ! -s "${archive_path}" ]]; then
         zgu_cli_error "$(t install_runner.download_failed_cli "${runner_name}")"
@@ -356,16 +356,16 @@ except Exception:
     fi
     extract_err_file=$(mktemp 2>/dev/null) || extract_err_file="/dev/null"
     inprogress_dir="${runner_dir}/${runner_name}"
-    _lpm_old_umask=$(umask)
+    _ludis_old_umask=$(umask)
     umask 022
     # "pv -n" + process substitution on stderr: same mechanism as in zgp-game-installer.sh.
-    pv -n -s "${archive_size:-0}" "${archive_path}" 2> >(while IFS= read -r _lpm_pct; do
+    pv -n -s "${archive_size:-0}" "${archive_path}" 2> >(while IFS= read -r _ludis_pct; do
       # Remote: extraction takes the 2nd half of the bar (50-100 %).
-      [[ "${src}" = "distant" ]] && _lpm_pct=$(( 50 + ${_lpm_pct:-0} / 2 ))
-      printf '[PROGRESS] %s\n' "${_lpm_pct}" >&3
+      [[ "${src}" = "distant" ]] && _ludis_pct=$(( 50 + ${_ludis_pct:-0} / 2 ))
+      printf '[PROGRESS] %s\n' "${_ludis_pct}" >&3
     done) | bsdtar -xf - -C "${runner_dir}" 2> "${extract_err_file}"
     tar_exit="${PIPESTATUS[1]}"
-    umask "${_lpm_old_umask}"
+    umask "${_ludis_old_umask}"
 
     [[ "${src}" = "distant" ]] && rm -rf "${temp_cli_dir}" && temp_cli_dir=""
 

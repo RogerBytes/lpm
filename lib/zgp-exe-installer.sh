@@ -10,7 +10,7 @@ source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-prefix-common.sh
 source "${script_dir}/zgu-prefix-common.sh"
 
-# --- lpm exe-install: create a prefix (like "blank prefix"), then run a Windows installer
+# --- ludis exe-install: create a prefix (like "blank prefix"), then run a Windows installer
 # (.exe/.msi/.bat/.cmd) inside it, in the foreground, like the Lutris "Install a Windows
 # executable" wizard:
 #   - prefix initialisation identical to "blank prefix" (wineboot / umu-run createprefix, wait for
@@ -68,7 +68,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       # Unrecognised argument: ignored rather than failing the whole script (same tolerance
-      # as the rest of the lpm router).
+      # as the rest of the ludis router).
       shift
       ;;
   esac
@@ -244,10 +244,10 @@ zgp_register_game_row "${display_name}" "${final_slug}" "${final_executable}" "$
 # 13. Final summary
 zgu_cli_ok "$(t exe_install.summary_done "${display_name}")"
 
-# Best-effort update of the native Lutris media (banner/icon/cover art, see "lpm
+# Best-effort update of the native Lutris media (banner/icon/cover art, see "ludis
 # sync-media") for the newly installed game. Run in the background and detached ("&" +
 # "disown"), as in zgp-game-installer.sh: purely cosmetic, so nothing waits on it, and a
-# lutris.net network problem must never fail this command. Results are viewable via "lpm
+# lutris.net network problem must never fail this command. Results are viewable via "ludis
 # log".
 bash "${script_dir}/zgp-game-sync-media.sh" "${final_slug}" >/dev/null 2>&1 3>&- </dev/null &
 disown

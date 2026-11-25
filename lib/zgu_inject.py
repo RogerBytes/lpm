@@ -6,7 +6,7 @@ Wayland: ydotool (needs its ydotoold service), one process per call, so callers 
 Codes are Linux evdev key codes (linux/input-event-codes.h): the PHYSICAL key, so what is typed
 depends on the user's keyboard layout, exactly as with a real keyboard. X keycodes are evdev + 8.
 
-Tests: with LPM_INJECT_LOG=<file> nothing is sent, every event is appended to the file instead.
+Tests: with LUDIS_INJECT_LOG=<file> nothing is sent, every event is appended to the file instead.
 """
 
 import ctypes
@@ -23,7 +23,7 @@ _YDO_BUTTON = {BTN_LEFT: 0, BTN_RIGHT: 1, BTN_MIDDLE: 2}
 class Injector:
     def __init__(self, session_kind):
         self.session = session_kind
-        self.log_path = os.environ.get("LPM_INJECT_LOG", "")
+        self.log_path = os.environ.get("LUDIS_INJECT_LOG", "")
         self._x = None
         self._x_tried = False
 

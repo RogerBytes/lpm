@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# --- lpm launcher-entries <slug> get|set ---
+# --- ludis launcher-entries <slug> get|set ---
 #
-# Counterpart of manually editing lpm/launcher.yml (still possible, see
-# zgl-launcher-manager.sh): only reads/writes the LPM Launcher picker entries (title,
+# Counterpart of manually editing ludis/launcher.yml (still possible, see
+# zgl-launcher-manager.sh): only reads/writes the Ludis Launcher picker entries (title,
 # prompt, and per entry: label, executable, working directory, launch arguments). It never
-# enables/disables the LPM Launcher ("lpm launcher ... on|off") nor changes anything else.
+# enables/disables the Ludis Launcher ("ludis launcher ... on|off") nor changes anything else.
 #
 # "get": prints on stdout a JSON object {"title", "prompt", "drive_c", "entries": [...]}. Each
 # entry carries both its WINDOWS executable/workdir as stored in the YAML ("exe_win"/
@@ -21,8 +21,8 @@
 #
 # "set" <json_file>: FULLY replaces title/prompt/entries from a JSON of the same format. An
 # empty "workdir_linux" is accepted (derived from the executable's folder). Preserves
-# "original_exe" and "bat_path" if already in the file (written by "lpm launcher ... on"):
-# merge, not a full replacement. Creates lpm/launcher.yml if missing.
+# "original_exe" and "bat_path" if already in the file (written by "ludis launcher ... on"):
+# merge, not a full replacement. Creates ludis/launcher.yml if missing.
 
 slug="${1:-}"
 action="${2:-}"
@@ -35,8 +35,8 @@ source "${script_dir}/zgl-lang-loader.sh"
 source "${script_dir}/zgu-cli-utils.sh"
 # shellcheck source=./zgu-lutris-utils.sh
 source "${script_dir}/zgu-lutris-utils.sh"
-# shellcheck source=./zgu-lpm-paths.sh
-source "${script_dir}/zgu-lpm-paths.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
 
 if [[ -z "${slug}" ]] || { [[ "${action}" != "get" ]] && [[ "${action}" != "set" ]]; }; then
   zgu_cli_error "$(t launcher_entries.cli_usage)"
@@ -89,7 +89,7 @@ if [[ ! -f "${yml_path}" ]]; then
   exit 1
 fi
 
-launcher_yml="$(zgu_lpm_find "${game_dir}" launcher)"
+launcher_yml="$(zgu_ludis_find "${game_dir}" launcher)"
 
 # --- WINEPREFIX resolution (for "drive_c" only; no Wine version/binary resolution needed) ---
 current_prefix=$(YML_PATH="${yml_path}" python3 -c '
@@ -199,7 +199,7 @@ if not isinstance(entries_in, list):
     sys.exit(1)
 
 # Merge into the EXISTING file: "original_exe" and "bat_path" are written by
-# "lpm launcher ... on" (zgl-launcher-manager.sh), never by this command, and must survive
+# "ludis launcher ... on" (zgl-launcher-manager.sh), never by this command, and must survive
 # as-is.
 data = {}
 if os.path.isfile(yml_path):

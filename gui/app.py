@@ -12,7 +12,7 @@ import inputaccess
 import operations
 from mainwindow import MainWindow
 
-APP_ID = "com.rogerbytes.lpm.gui"
+APP_ID = "com.rogerbytes.ludis.gui"
 
 
 # ---------------------------------------------------------------------------------------
@@ -21,17 +21,17 @@ APP_ID = "com.rogerbytes.lpm.gui"
 # ("headerbar button"), not just those with the "flat" class, so removing that class is not
 # enough to get a visible frame. Colors use rgba(127,127,127,...) instead of theme aliases
 # (@theme_bg_color, ...) so it looks the same in light and dark themes.
-# An inset box-shadow is used instead of a border on .lpm-back-button: a border adds to the
+# An inset box-shadow is used instead of a border on .ludis-back-button: a border adds to the
 # requested size and made sidebar_header grow slightly when the button appears (category
 # mode only, hidden at the root). An inset box-shadow draws the same frame without
 # affecting the requested size.
 _BACK_BUTTON_CSS = b"""
-.lpm-back-button {
+.ludis-back-button {
     border-radius: 6px;
     box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.4);
     background-color: rgba(127, 127, 127, 0.18);
 }
-.lpm-back-button:hover {
+.ludis-back-button:hover {
     background-color: rgba(127, 127, 127, 0.30);
 }
 """
@@ -47,10 +47,10 @@ def _load_app_css():
         )
 
 
-class LpmApp(Adw.Application):
+class LudisApp(Adw.Application):
     """HANDLES_OPEN (see __init__) lets GLib convert the "open this .zgp/.zgr file" argument
-    (double-click / file association, see bin/lpm section 2) into a Gio.File and route it to
-    do_open(), both on first launch and when LPM is already running (GLib then relays the
+    (double-click / file association, see bin/ludis section 2) into a Gio.File and route it to
+    do_open(), both on first launch and when Ludis is already running (GLib then relays the
     call over D-Bus to the running instance).
 
     Reading sys.argv ourselves does not work: a second process that finds an existing
@@ -80,7 +80,7 @@ class LpmApp(Adw.Application):
     def do_open(self, files, _n_files, _hint):
         """Called by GLib instead of do_activate() when files were passed as arguments (on
         first launch, or relayed over D-Bus to the running instance). "files" is a non-empty
-        list of Gio.File. Only the first file is handled: lpm-gui is never invoked with
+        list of Gio.File. Only the first file is handled: ludis-gui is never invoked with
         several paths at once."""
         win = self._main_window()
         path = files[0].get_path()
@@ -90,5 +90,5 @@ class LpmApp(Adw.Application):
 
 
 def main():
-    app = LpmApp()
+    app = LudisApp()
     return app.run(sys.argv)

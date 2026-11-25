@@ -33,7 +33,7 @@ def _refresh_runner_lists():
 
 
 # --- Shared game/runner refresh ---
-# backend.run_lpm() must not run on the GTK main thread (it would freeze the UI), and the
+# backend.run_ludis() must not run on the GTK main thread (it would freeze the UI), and the
 # "back" button refreshes every built page at once. _make_coalesced_refresher(fetch_fn)
 # therefore builds ONE shared refresher: fetch_fn() runs in a background thread, several close
 # requests trigger a single subprocess, requests arriving meanwhile get the same result, and

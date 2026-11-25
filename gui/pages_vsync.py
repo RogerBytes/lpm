@@ -12,7 +12,7 @@ from commandpage import CommandPage
 from util import _run_on_main
 from widgets_select import SingleGameSelect
 
-# Identifiers passed as is to "lpm vsync <slug> on|off <id>" (never translated); the
+# Identifiers passed as is to "ludis vsync <slug> on|off <id>" (never translated); the
 # displayed texts come from the gui.vsync.<id>_title / _sub keys (CLI hyphens -> "_").
 VSYNC_SETTINGS = ("d3d9", "d3d11", "d3d12", "gl-nvidia", "gl-mesa")
 
@@ -51,7 +51,7 @@ class VsyncPage:
 
     def _add_game_row(self):
         # Games that already have at least one active setting: shown in bold in the list
-        # (same mechanism as page_launcher), re-read via "lpm vsync status".
+        # (same mechanism as page_launcher), re-read via "ludis vsync status".
         self.active_slugs: set = set()
         self.game_row = SingleGameSelect(highlighted_slugs=self.active_slugs)
         self.page.add_row(self.game_row)
@@ -114,7 +114,7 @@ class VsyncPage:
         self.game_row.repaint_titles()
 
     def refresh_active_status(self):
-        backend.run_lpm_async(["vsync", "status"], on_done=lambda r: _run_on_main(self.apply_active_status, r))
+        backend.run_ludis_async(["vsync", "status"], on_done=lambda r: _run_on_main(self.apply_active_status, r))
 
     def load_status(self):
         slug = self.game_row.selected_slug()
@@ -144,7 +144,7 @@ class VsyncPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["vsync", slug, "status"], on_done=done)
+        backend.run_ludis_async(["vsync", slug, "status"], on_done=done)
 
     def write(self, args, ok_toast):
         """Write via the CLI; the checkboxes are blocked during the write (never two
@@ -168,7 +168,7 @@ class VsyncPage:
 
             _run_on_main(apply)
 
-        backend.run_lpm_async(["vsync", slug] + args, on_done=done)
+        backend.run_ludis_async(["vsync", slug] + args, on_done=done)
 
     def on_toggled(self, setting, check):
         if self.state["loading"]:

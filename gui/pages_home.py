@@ -1,4 +1,4 @@
-"""Pages: home and lpm update."""
+"""Pages: home and ludis update."""
 
 import shutil
 import subprocess
@@ -28,8 +28,8 @@ class HomePage:
     - the "LUDIS" backronym joke ("Ludis Usually Disregards the Imitation Shame"),
     deliberately always in English and never passed through t(): it is an
     English-language pun (like WINE/GNU) that does not translate.
-    - the version number, read via "bin/lpm --version" (LPM_VERSION in bin/lpm is the
-    single source of truth, see backend.get_lpm_version), shown as a clickable link
+    - the version number, read via "bin/ludis --version" (LUDIS_VERSION in bin/ludis is the
+    single source of truth, see backend.get_ludis_version), shown as a clickable link
     to the GitHub repository.
     """
 
@@ -46,7 +46,7 @@ class HomePage:
 
     def _build_status_page(self):
         self.status_page = Adw.StatusPage(
-            icon_name="lpm",
+            icon_name="ludis",
             title=t("gui.home.title"),
             description=t("gui.home.description"),
         )
@@ -61,11 +61,11 @@ class HomePage:
         tagline_label.add_css_class("caption")
         self.extra_box.append(tagline_label)
 
-        # Same size as the StatusPage description ("Ludis Prefix Manager", just above), so
+        # Same size as the StatusPage description ("Ludis", just above), so
         # no "caption" class (it would shrink the font), only "dim-label".
         self.version_button = Gtk.LinkButton(
-            uri="https://github.com/RogerBytes/lpm",
-            label=backend.get_lpm_version(),
+            uri="https://github.com/RogerBytes/ludis",
+            label=backend.get_ludis_version(),
         )
         self.version_button.set_halign(Gtk.Align.CENTER)
         self.version_button.add_css_class("dim-label")
@@ -83,7 +83,7 @@ class HomePage:
         self.update_button.set_visible(False)
         self.extra_box.append(self.update_button)
 
-        self.installed_version = backend.get_lpm_version()
+        self.installed_version = backend.get_ludis_version()
         self.update_state = {"info": None}
 
         self.update_button.connect("clicked", lambda *_: self.owner._start_self_update(self.update_state["info"]))
@@ -112,12 +112,12 @@ class HomePages:
 
     def _start_self_update(self, info):
         """Update button on the home page: manual/unknown install -> opens the release page; package
-        install -> confirmation, then "lpm self-update install" (download, SHA-256
+        install -> confirmation, then "ludis self-update install" (download, SHA-256
         verification, install via pkexec) and restart."""
         if not info:
             return
         if info["method"] == "manual":
-            Gtk.UriLauncher(uri=info["url"] or "https://github.com/RogerBytes/lpm/releases").launch(
+            Gtk.UriLauncher(uri=info["url"] or "https://github.com/RogerBytes/ludis/releases").launch(
                 self.window, None, lambda *_: None
             )
             return
@@ -139,7 +139,7 @@ class HomePages:
 
 
 class _SelfUpdateRun:
-    """Progress dialog + "lpm self-update install" run, then restart of the GUI."""
+    """Progress dialog + "ludis self-update install" run, then restart of the GUI."""
 
     def __init__(self, window):
         self.window = window
@@ -183,9 +183,9 @@ class _SelfUpdateRun:
         operations.begin(self)
         self._build_dialog()
         self._start_pulse()
-        _GUI_LOGGER.info("$ bin/lpm self-update install")
+        _GUI_LOGGER.info("$ bin/ludis self-update install")
         self.dialog.present(self.window)
-        backend.run_lpm_async(["self-update", "install"], on_line=self._on_line, on_done=self._on_done)
+        backend.run_ludis_async(["self-update", "install"], on_line=self._on_line, on_done=self._on_done)
 
     def _on_line(self, line):
         _GUI_LOGGER.info(line)
@@ -228,10 +228,10 @@ class _SelfUpdateRun:
         failed.present(self.window)
 
     def _restart(self):
-        launcher = shutil.which("lpm-gui")
+        launcher = shutil.which("ludis-gui")
         if launcher:
             self.bar.set_text(t("gui.update.restarting"))
-            # New copy launched AFTER this one closes: lpm is single-instance, so the new
+            # New copy launched AFTER this one closes: ludis is single-instance, so the new
             # one must wait for the old one to release its application id.
             subprocess.Popen(["sh", "-c", 'sleep 1.5; exec "$0"', launcher],
                              start_new_session=True, stdout=subprocess.DEVNULL,

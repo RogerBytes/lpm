@@ -1,6 +1,6 @@
 """Small progress window of an operation, independent of the main window.
 
-It stays open (and keeps lpm running) even when the main window is closed. A normal end closes
+It stays open (and keeps ludis running) even when the main window is closed. A normal end closes
 it by itself; a failure turns it into an error window brought in front of the others.
 """
 
