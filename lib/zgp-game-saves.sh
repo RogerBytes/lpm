@@ -285,6 +285,42 @@ saves_norm_folder() {
   esac
 }
 
+# saves_write_config <dest>: the folder choice of this game (what "folders" and "exclude" write in
+# the prefix), as "folder=" / "extra=" / "exclude=" lines. Written next to every backup and inside
+# every .zgs, so that a prefix made long ago, with no saves settings of its own, learns them.
+saves_write_config() {
+  {
+    echo "ludis-saves-config=1"
+    saves_list_file_lines "$(zgu_ludis_find "${prefix_dir}" saves_folders)" | sed 's/^/folder=/'
+    saves_list_file_lines "$(zgu_ludis_find "${prefix_dir}" saves_extra)" | sed 's/^/extra=/'
+    saves_list_file_lines "$(zgu_ludis_find "${prefix_dir}" saves_exclude)" | sed 's/^/exclude=/'
+  } > "$1" 2>/dev/null
+}
+
+# saves_adopt_config <file>: when this prefix has NO saves settings of its own, takes the ones
+# recorded in <file> (a backup's "config" or the marker of a .zgs). Settings the prefix already
+# has are never replaced. Only plain relative paths are accepted (no "..", no leading "/").
+saves_adopt_config() {
+  local f="$1" key value dest
+  [[ -f "${f}" ]] || return 0
+  if [[ -e "$(zgu_ludis_find "${prefix_dir}" saves_folders)" || -e "$(zgu_ludis_find "${prefix_dir}" saves_extra)" \
+        || -e "$(zgu_ludis_find "${prefix_dir}" saves_exclude)" ]]; then
+    return 0
+  fi
+  while IFS='=' read -r key value; do
+    value="${value%$'\r'}"
+    [[ -n "${value}" && "${value}" != /* && "${value}" != *..* ]] || continue
+    case "${key}" in
+      folder) dest="$(zgu_ludis_path "${prefix_dir}" saves_folders)" ;;
+      extra) dest="$(zgu_ludis_path "${prefix_dir}" saves_extra)" ;;
+      exclude) dest="$(zgu_ludis_path "${prefix_dir}" saves_exclude)" ;;
+      *) continue ;;
+    esac
+    mkdir -p -- "$(dirname "${dest}")" 2>/dev/null && printf '%s\n' "${value}" >> "${dest}"
+  done < "${f}"
+  return 0
+}
+
 # saves_do_restore <label> [snapshot]: local saves kept in previous/<date>-<label>, then <sync>/current
 # (or the named snapshot of previous/) restored.
 saves_do_restore() {
@@ -299,6 +335,7 @@ saves_do_restore() {
     zgu_cli_error "$(t saves.no_backup_cli "${target_name}")"
     return 1
   fi
+  saves_adopt_config "${game_sync}/config"
   # Prepare the saves to bring BEFORE keeping the local ones: that step rotates previous/ and could
   # delete the very snapshot being restored.
   if [[ -z "${snap}" ]]; then
@@ -443,6 +480,7 @@ case "${cli_action}" in
     fi
     if [[ -d "${game_sync}/current" ]] && diff -rq -- "${game_sync}/current" "${work}/new" >/dev/null 2>&1; then
       saves_mark_synced "${target_slug}"
+      saves_write_config "${game_sync}/config"
       zgu_cli_ok "$(t saves.unchanged_cli "${target_name}")"
       exit 0
     fi
@@ -465,6 +503,7 @@ case "${cli_action}" in
     fi
     mv -- "${game_sync}/.current.tmp" "${game_sync}/current"
     printf '%s %s\n' "$(date +%s)" "$(hostname 2>/dev/null | tr -d ' ')" > "${game_sync}/stamp" 2>/dev/null
+    saves_write_config "${game_sync}/config"
     saves_mark_synced "${target_slug}"
     zgu_log "saves" "OK" "slug=${target_slug} action=backup"
     zgu_cli_ok "$(t saves.backup_ok_cli "${target_name}" "${game_sync}/current")"
@@ -607,6 +646,7 @@ case "${cli_action}" in
     [[ "${out}" = *.zgs ]] || out="${out}.zgs"
     saves_pack "${work}/pack" || { zgu_cli_error "$(t saves.write_failed_cli "${out}")"; exit 1; }
     printf 'ludis-saves=1\nslug=%s\nname=%s\n' "${target_slug}" "${target_name//[$'\n\r']/ }" > "${work}/pack/.ludis-saves"
+    saves_write_config "${work}/config.tmp" && grep -E '^(folder|extra|exclude)=' "${work}/config.tmp" >> "${work}/pack/.ludis-saves"
     tmp_out="${out}.tmp-$$"
     if tar -C "${work}/pack" -cf - . | zstd -q -f -o "${tmp_out}" \
        && mv -f -- "${tmp_out}" "${out}"; then
@@ -645,6 +685,7 @@ case "${cli_action}" in
       zgu_cli_error "$(t saves.import_invalid_cli "${file}")"
       exit 1
     fi
+    saves_adopt_config "${work}/src/.ludis-saves"
     rm -f -- "${work}/src/.ludis-saves"
     # Local saves are kept first: in the sync folder when set, else next to the prefix's own files.
     if [[ -n "${game_sync}" ]]; then
