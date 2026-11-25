@@ -23,7 +23,7 @@ _ludis_installed_runners() {
 
 _ludis_commands="install install-runner uninstall uninstall-runner pack pack-runner \
 isolate list list-isolable info create-prefix exe-install shortcut icon splash logo sync-media lsfg \
-launcher launcher-entries tools saves vsync killwine list-runner list-remote-runners check lutris-version self-update log"
+launcher launcher-entries tools saves vsync killwine list-runner list-remote-runners doctor check lutris-version self-update log"
 
 # Valid compression levels (0 to 22, see bin/ludis: "-[0-9]|-1[0-9]|-2[0-2]") -- a
 # single attached token ("-9", like gzip), not an option followed by a value.

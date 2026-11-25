@@ -394,6 +394,10 @@ expect "sgdb lib: search, icons and key saving work (fake curl)" bash -c 'export
 expect "sgdb lib: no sgdb function is defined anywhere else" bash -c '! grep -lE "^zgp_(sgdb_[a-z_]+|steam_find_appid)\(\) \{" "$1"/lib/*.sh | grep -v "zgu-sgdb.sh"' _ "${repo}"
 check "lsfg status" 0 '"installed"' lsfg status
 check "self-update: invalid argument" 1 'Invalid argument' self-update bogus
+check "doctor: sees Lutris, the runner and the tools" 0 'Lutris \(native\) found.*GE-Test|1 Wine/Proton runner' doctor
+check "doctor: ends with a summary" 0 'Everything needed is present|warning' doctor
+expect "doctor: changes nothing (no new file in the fake home)" bash -c 'a=$(find "$1" -type f | wc -l); bash "$2" doctor >/dev/null 2>&1; [ "$a" = "$(find "$1" -type f | wc -l)" ]' _ "${HOME}" "${R}"
+expect "doctor: fails (exit 1) when a required tool is missing" bash -c 'PATH="$3" "$BASH" "$2" doctor >/dev/null 2>&1; [ $? -eq 1 ]' _ "${HOME}" "${R}" "/nonexistent"
 check "check: structured report" 0 '\[REPORT\] ok\|' check
 check "info" 0 'Slug +: mario' info mario
 check "info: unknown slug" 1 'no installed game' info nosuch

@@ -81,6 +81,7 @@ print_help() {
     printf "  %-52s %s\n" "" "$(t help.runners_list_remote_cont)"
     echo ""
     t help.deps_header
+    printf "  %-36s %s\n" "ludis doctor" "$(t help.doctor)"
     printf "  %-36s %s\n" "ludis check" "$(t help.deps_check)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont1)"
     printf "  %-36s %s\n" "" "$(t help.deps_check_cont2)"
@@ -227,6 +228,9 @@ if [[ $# -gt 0 ]]; then
             ;;
         killwine)
             exec bash "${LIB_DIR}/zgc-wine-killer.sh" "cli" "${confirm_flag}"
+            ;;
+        doctor)
+            exec bash "${LIB_DIR}/zgc-doctor.sh"
             ;;
         check)
             exec bash "${LIB_DIR}/zgc-dependency-checker.sh" "cli" "${confirm_flag}"
