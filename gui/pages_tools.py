@@ -135,6 +135,40 @@ class ToolsPage:
 
     OVERLAY_CHOICES = ("follow", "on", "off")
 
+    @staticmethod
+    def _menu_conf_path():
+        base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+        return os.path.join(base, "lpm", "menu.conf")
+
+    def _overlay_global_read(self):
+        """Global overlay setting (key overlay_fps of menu.conf); off unless it says on."""
+        try:
+            with open(self._menu_conf_path(), encoding="utf-8") as f:
+                value = ""
+                for line in f:
+                    key, _, val = line.partition("=")
+                    if key.strip() == "overlay_fps":
+                        value = val.strip().lower()
+            return value in ("on", "1", "yes", "true")
+        except OSError:
+            return False
+
+    def _overlay_global_write(self, active):
+        path = self._menu_conf_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    lines = [ln for ln in f.read().splitlines() if ln.partition("=")[0].strip() != "overlay_fps"]
+            except OSError:
+                lines = []
+            lines.append("overlay_fps=%s" % ("on" if active else "off"))
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+            return True
+        except OSError:
+            return False
+
     def _add_overlay_rows(self):
         # FPS overlay of the in-game menu: a global switch (saved at once when toggled, it is not
         # tied to one game) and the choice for the selected game (applied by "Run").
@@ -151,12 +185,10 @@ class ToolsPage:
         self.overlay_state = {"slug": None, "token": 0, "loading": False}
 
     def _on_overlay_global_toggled(self, row, _pspec):
-        if self.overlay_state["loading"] or not self.overlay_state["slug"]:
+        if self.overlay_state["loading"]:
             return
-        action = "global-on" if row.get_active() else "global-off"
-        backend.run_lpm_async(["tools", self.overlay_state["slug"], "overlay", action], on_done=lambda r: _run_on_main(
-            lambda: self.page.toast(t("gui.tools.overlay_done") if r.returncode == 0
-                                    else t("gui.common.command_failed", r.returncode))))
+        ok = self._overlay_global_write(row.get_active())
+        self.page.toast(t("gui.tools.overlay_done") if ok else t("gui.common.command_failed", 1))
 
     def _load_overlay(self):
         slug = self.game_row.selected_slug()
@@ -164,7 +196,11 @@ class ToolsPage:
         token = self.overlay_state["token"]
         self.overlay_state["slug"] = None
         self.overlay_game_row.set_sensitive(False)
-        self.overlay_global_row.set_sensitive(False)
+        # The global setting does not depend on a game: always usable on this tool.
+        self.overlay_state["loading"] = True
+        self.overlay_global_row.set_active(self._overlay_global_read())
+        self.overlay_state["loading"] = False
+        self.overlay_global_row.set_sensitive(self.tool_row.get_selected() == self.tools.index("overlay"))
         if not slug or self.tool_row.get_selected() != self.tools.index("overlay"):
             return
 
@@ -176,14 +212,10 @@ class ToolsPage:
                     self.page.toast(t("gui.common.command_failed", result.returncode))
                     return
                 values = dict(p.split("=", 1) for p in result.stdout.split() if "=" in p)
-                self.overlay_state["loading"] = True
-                self.overlay_global_row.set_active(values.get("global") == "on")
                 game = values.get("game", "follow")
                 self.overlay_game_row.set_selected(self.OVERLAY_CHOICES.index(game) if game in self.OVERLAY_CHOICES else 0)
-                self.overlay_state["loading"] = False
                 self.overlay_state["slug"] = slug
                 self.overlay_game_row.set_sensitive(True)
-                self.overlay_global_row.set_sensitive(True)
 
             _run_on_main(apply)
 

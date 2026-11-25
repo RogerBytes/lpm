@@ -69,6 +69,15 @@ check "menu: Alt+F4 > No keeps the menu open, nothing sent" "running" Down Down 
 check "menu: force quit asks a confirmation (No keeps the menu open)" "running" Down Down Down Return Down Down Return Down Return
 check "menu: force quit > Yes closes the menu, no key sent" "exited" Down Down Down Return Down Down Return Return
 check "menu: Gamepad mouse is a switch: asks the watcher to toggle it, menu stays open" $'running\ncmd: mouse-toggle' Down Down Return
+# FPS overlay entry (3 states Off / Hidden / On): shown only when the launcher left its "overlay-armed" file
+# (prefix + "armed"|"available"); the menu stays open and the choice is saved in the prefix.
+ovl() { printf '%s\n%s\n' "${work}/prefix" "$1" > "${work}/run/lpm-overlay-armed-$(id -u)"; }
+ovl armed; LPM_INJECT_LOG="${work}/inject.log" check "menu: overlay armed: Right = On, menu stays open" "running" Down Down Down Right
+if [ "$(tr -d '[:space:]' < "${work}/prefix/lpm/settings/overlay-fps" 2>/dev/null)" = "on" ] && grep -q "hold 54 88" "${work}/inject.log" 2>/dev/null; then echo "OK: menu: overlay On is saved and the key is sent"; else echo "FAILED: menu: overlay On is saved and the key is sent"; status=1; fi
+rm -rf "${work}/prefix/lpm" "${work}/inject.log"
+ovl available; LPM_INJECT_LOG="${work}/inject.log" check "menu: overlay available (not loaded): Right = Hidden, saved for the next launch" "running" Down Down Down Right
+if [ "$(tr -d '[:space:]' < "${work}/prefix/lpm/settings/overlay-fps" 2>/dev/null)" = "on" ] && [ ! -s "${work}/inject.log" ]; then echo "OK: menu: nothing is sent when MangoHud is not loaded"; else echo "FAILED: menu: nothing is sent when MangoHud is not loaded"; status=1; fi
+rm -rf "${work}/prefix/lpm" "${work}/inject.log" "${work}/run/lpm-overlay-armed-$(id -u)"
 FAKE_GAME=3 WAIT=9 check "menu: closes by itself once the game is gone" "exited" Down
 OTHER_WINDOW=1 check "menu: closes when the focus goes elsewhere" "exited" Return
 LPM_MENU_FORCE_VEIL=1 check "menu (fullscreen veil): Window > Alt+Enter" $'exited\nkey alt+Return' Return Return

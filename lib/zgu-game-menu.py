@@ -147,16 +147,78 @@ def toggle_gamepad_mouse(_new_state=None):
 KEY_RIGHTSHIFT, KEY_F12 = 54, 88
 
 
-def overlay_armed():
+def _overlay_file_lines():
     try:
         with open(runtime_file("overlay-armed"), encoding="utf-8") as f:
-            return f.read().strip().rstrip("/") == PREFIX_DIR.rstrip("/")
+            return [line.strip() for line in f.read().splitlines()]
     except OSError:
-        return False
+        return []
+
+
+def overlay_available():
+    """The launcher found MangoHud for this game (the entry is shown): file = prefix + state."""
+    lines = _overlay_file_lines()
+    return bool(lines) and lines[0].rstrip("/") == PREFIX_DIR.rstrip("/")
+
+
+def overlay_armed():
+    """MangoHud was loaded (hidden) when the game started: it can be shown / hidden right now."""
+    lines = _overlay_file_lines()
+    return overlay_available() and len(lines) > 1 and lines[1] == "armed"
 
 
 def overlay_visible():
     return os.path.exists(runtime_file("overlay-visible"))
+
+
+def _overlay_setting_path():
+    return os.path.join(PREFIX_DIR, "lpm", "settings", "overlay-fps")
+
+
+def overlay_saved():
+    """What the next launch will do for this game: "on", "off" or "" (follows the global setting)."""
+    try:
+        with open(_overlay_setting_path(), encoding="utf-8") as f:
+            value = f.read().strip().lower()
+        return value if value in ("on", "off") else ""
+    except OSError:
+        return ""
+
+
+def overlay_save(value):
+    path = _overlay_setting_path()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(value + "\n")
+    except OSError:
+        pass
+
+
+def overlay_state():
+    """0 = Off, 1 = Hidden, 2 = On (what the menu shows)."""
+    if overlay_armed():
+        return 2 if overlay_visible() else 1
+    return 1 if overlay_saved() == "on" else 0
+
+
+def overlay_note():
+    """True when the shown state only takes effect at the next launch."""
+    saved = overlay_saved()
+    if overlay_armed():
+        return saved == "off"
+    return saved == "on"
+
+
+def set_overlay_state(index):
+    """Applies the choice: live when MangoHud is loaded, and saved for the next launches. Returns True
+    when the menu must say it applies at the next launch."""
+    armed = overlay_armed()
+    overlay_save("off" if index == 0 else "on")
+    if armed:
+        if (index == 2) != overlay_visible():
+            toggle_overlay(index == 2)
+    return overlay_note() if index != 0 or armed else False
 
 
 def _diag_log(message):
@@ -242,8 +304,11 @@ def build_menu():
         (label("KEYBOARD", "Virtual keyboard"), "call", start_keyboard),
         (label("MOUSE", "Gamepad mouse"), "switch", (gamepad_mouse_on, toggle_gamepad_mouse)),
     ]
-    if overlay_armed():
-        root.append((label("OVERLAY", "FPS overlay"), "switch", (overlay_visible, toggle_overlay)))
+    if overlay_available() and Injector(SESSION_KIND).available():
+        root.append((label("OVERLAY", "FPS overlay"), "segment",
+                     (overlay_state, set_overlay_state, overlay_note,
+                      [label("OVERLAY_OFF", "Off"), label("OVERLAY_HIDDEN", "Hidden"), label("OVERLAY_ON", "On")],
+                      label("OVERLAY_LATER", "next launch"))))
     if zgu_audio.available() and zgu_audio.get_volume() is not None:
         root.append((label("VOLUME", "Volume"), "slider",
                      (lambda: zgu_audio.get_volume() or 0, zgu_audio.set_volume)))
@@ -288,6 +353,9 @@ list.lpm-menu-list row { padding: 10px 18px; margin: 2px 14px; background-color:
 list.lpm-menu-list row:selected { background-color: #3a6ea5; color: #ffffff; }
 .lpm-menu-entry { font-size: 24px; color: #ffffff; }
 .lpm-menu-chevron { font-size: 28px; color: rgba(255, 255, 255, 0.55); }
+.lpm-seg-pill { font-size: 18px; color: rgba(255, 255, 255, 0.55); padding: 3px 12px; border-radius: 8px; }
+.lpm-seg-pill.lpm-seg-active { color: #ffffff; background-color: rgba(255, 255, 255, 0.24); }
+.lpm-menu-note { font-size: 15px; color: rgba(255, 255, 255, 0.55); }
 .lpm-menu-pct { font-size: 20px; color: #ffffff; min-width: 64px; }
 list.lpm-menu-list row.lpm-sep { margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, 0.15); border-radius: 0 0 10px 10px; padding-top: 14px; }
 list.lpm-menu-list row.lpm-danger .lpm-menu-entry { color: #e57373; }
@@ -395,8 +463,18 @@ class MenuWindow(Gtk.Window):
             box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
             lbl = Gtk.Label(label=entry_label, xalign=0)
             lbl.add_css_class("lpm-menu-entry")
-            lbl.set_hexpand(True)
-            box.append(lbl)
+            if kind == "segment":
+                text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+                text_box.set_hexpand(True)
+                text_box.append(lbl)
+                note = Gtk.Label(label=value[4], xalign=0)
+                note.add_css_class("lpm-menu-note")
+                note.set_visible(False)
+                text_box.append(note)
+                box.append(text_box)
+            else:
+                lbl.set_hexpand(True)
+                box.append(lbl)
             info = {}
             if kind == "submenu":
                 chevron = Gtk.Label(label="›")
@@ -411,6 +489,21 @@ class MenuWindow(Gtk.Window):
                 switch.set_active(info["on"])
                 info["switch"] = switch
                 box.append(switch)
+            elif kind == "segment":
+                seg = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+                seg.set_valign(Gtk.Align.CENTER)
+                pills = []
+                for number, text in enumerate(value[3]):
+                    pill = Gtk.Label(label=text)
+                    pill.add_css_class("lpm-seg-pill")
+                    click = Gtk.GestureClick()
+                    click.connect("pressed", self.on_pill_pressed, len(self.rows), number)
+                    pill.add_controller(click)
+                    seg.append(pill)
+                    pills.append(pill)
+                info.update(pills=pills, note=note, index=int(value[0]()))
+                box.append(seg)
+                self.show_segment(info, info["index"], bool(value[2]()))
             elif kind == "slider":
                 scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, zgu_audio.MAXIMUM, zgu_audio.STEP)
                 scale.set_draw_value(False)
@@ -442,9 +535,37 @@ class MenuWindow(Gtk.Window):
         info["pct"].set_text("%d %%" % new)
         self.entries[idx][2][1](new)
 
+    @staticmethod
+    def show_segment(info, index, note):
+        info["index"] = index
+        for number, pill in enumerate(info["pills"]):
+            if number == index:
+                pill.add_css_class("lpm-seg-active")
+            else:
+                pill.remove_css_class("lpm-seg-active")
+        info["note"].set_visible(bool(note))
+
+    def set_segment(self, idx, index):
+        info = self.rows[idx]
+        index = max(0, min(len(info["pills"]) - 1, index))
+        if index == info["index"]:
+            return
+        note = self.entries[idx][2][1](index)   # the menu stays open
+        self.show_segment(info, index, note)
+
+    def on_pill_pressed(self, gesture, _n, _x, _y, idx, number):
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)   # not also a click on the row
+        row = self.listbox.get_row_at_index(idx)
+        if row:
+            self.listbox.select_row(row)
+        self.set_segment(idx, number)
+
     def adjust(self, step):
-        """Left / right on the selected row: moves a slider."""
+        """Left / right on the selected row: moves a slider or a segmented choice."""
         idx = self.selected_index()
+        if self.entries[idx][1] == "segment":
+            self.set_segment(idx, self.rows[idx]["index"] + step)
+            return
         if self.entries[idx][1] != "slider":
             return
         scale = self.rows[idx]["scale"]
@@ -469,6 +590,9 @@ class MenuWindow(Gtk.Window):
             value[1](info["on"])      # the menu stays open
         elif kind == "slider":
             pass                      # left / right (or a click on the bar) change it
+        elif kind == "segment":       # Enter / A: next choice, back to the first after the last
+            info = self.rows[idx]
+            self.set_segment(idx, (info["index"] + 1) % len(info["pills"]))
         elif kind == "submenu":
             self.stack.append((self.entries, self.title_label.get_text(), idx))
             self.title_label.set_text(_label)

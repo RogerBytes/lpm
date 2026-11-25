@@ -169,7 +169,7 @@ zgu_lpm_fix_yml_paths() {
 
 
 # --- FPS overlay (MangoHud) shown / hidden from the in-game LPM menu ---
-# Global setting: key "overlay_fps" (on | off, default on) of <XDG config>/lpm/menu.conf.
+# Global setting: key "overlay_fps" (on | off, default OFF) of <XDG config>/lpm/menu.conf.
 # Per game: "<prefix>/lpm/settings/overlay-fps" holding "on" or "off"; no file = follow the global
 # setting. The game is started with MangoHud loaded but HIDDEN only when the result is "on".
 
@@ -183,8 +183,8 @@ zgu_overlay_fps_global() {
   conf="$(zgu_overlay_fps_conf)"
   value="$(sed -n 's/^[[:space:]]*overlay_fps[[:space:]]*=[[:space:]]*//p' "${conf}" 2>/dev/null | tail -n 1 | tr -d '[:space:]')"
   case "${value,,}" in
-    off|0|no|false) printf 'off' ;;
-    *) printf 'on' ;;
+    on|1|yes|true) printf 'on' ;;
+    *) printf 'off' ;;
   esac
 }
 

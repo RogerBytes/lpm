@@ -66,6 +66,14 @@ class Injector:
             pass  # best-effort: a missed event must never crash the caller
 
     # --- keyboard ------------------------------------------------------------------------
+    def available(self):
+        """True when keys can be sent: X11 (XTest) or, otherwise, ydotool installed."""
+        if self.log_path:
+            return True
+        if self._xtest():
+            return True
+        return bool(shutil.which("ydotool"))
+
     def hold(self, codes, seconds=0.15):
         """Like tap(), but keeps the keys down for `seconds` before releasing them. For programs that
         poll the keyboard state (MangoHud checks it about once per frame): a press and release
