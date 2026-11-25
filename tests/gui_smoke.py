@@ -228,6 +228,28 @@ try:
 except Exception:
     errors.append("launch options tool:\n" + traceback.format_exc())
 
+# --- Tools page: ready-made gamepad profiles ------------------------------------------------
+try:
+    from gi.repository import Adw
+    tgame._listbox.select_row(tgame._rows[tgame._slugs.index("mario")])
+    pump(0.8)
+    ttool.set_selected(ttool.tools_index if hasattr(ttool, "tools_index") else 11)
+    pump(3.0)
+    trow = next(w for w in walk(tpage) if isinstance(w, Adw.ComboRow) and w.get_title() == i18n.t("gui.tools.gamepad_template_title"))
+    assert trow.get_visible() and trow.get_sensitive(), "template list not loaded"
+    labels = [trow.get_model().get_string(i) for i in range(trow.get_model().get_n_items())]
+    assert any(l.startswith("LPM-FPS-ZQSD (") for l in labels), labels
+    assert len(labels) >= 12, labels
+    trow.set_selected(next(i for i, l in enumerate(labels) if l.startswith("LPM-Course-ZQSD")))
+    apply_btn = next(w for w in walk(trow) if isinstance(w, Gtk.Button))
+    apply_btn.emit("clicked")
+    pump(2.5)
+    prof = os.path.join(os.environ["HOME"], "Games/mario/ludis/gamepad/lpm-gamepad.gamecontroller.amgp")
+    assert os.path.exists(prof) and "0x5a" in open(prof).read(), "template not copied"
+    print("gamepad templates: OK")
+except Exception:
+    errors.append("gamepad templates:\n" + traceback.format_exc())
+
 # --- Lutris defaults page -----------------------------------------------------------------
 try:
     win.show_page("lutris-defaults")

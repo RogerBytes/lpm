@@ -575,6 +575,27 @@ expect "tools gamepad: user's profile still referenced" grep -q 'mine.amgp' "${g
 check "tools gamepad: invalid action" 1 'unknown gamepad action' tools mario gamepad maybe
 printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${gp_yml}"
 rm -rf "${HOME}/Games/mario/ludis/gamepad"
+# ready-made gamepad profiles
+check "gamepad templates: the list has WASD and ZQSD versions" 0 'LPM-FPS-WASD' tools mario gamepad templates
+check "gamepad templates: AZERTY version listed" 0 'LPM-FPS-ZQSD' tools mario gamepad templates
+expect "gamepad templates: every shipped profile is valid XML" python3 -c "
+import glob, sys, xml.dom.minidom as m
+files = glob.glob('${repo}/lib/data/gamepad-LPM-*.amgp')
+[m.parse(f) for f in files]
+sys.exit(0 if len(files) >= 12 else 1)"
+expect "gamepad templates: ZQSD uses Z and Q, WASD uses W and A" bash -c 'grep -q "<code>0x5a</code>" "$1/lib/data/gamepad-LPM-FPS-ZQSD.amgp" && grep -q "<code>0x51</code>" "$1/lib/data/gamepad-LPM-FPS-ZQSD.amgp" && grep -q "<code>0x57</code>" "$1/lib/data/gamepad-LPM-FPS-WASD.amgp" && ! grep -q "<code>0x5a</code>" "$1/lib/data/gamepad-LPM-FPS-WASD.amgp"' _ "${repo}"
+check "gamepad template: unknown name refused" 1 'unknown gamepad template' tools mario gamepad template LPM-Nope
+check "gamepad template: path tricks refused" 1 'unknown gamepad template' tools mario gamepad template ../../etc/passwd
+check "gamepad template: apply" 0 'template LPM-FPS-ZQSD applied' tools mario gamepad template LPM-FPS-ZQSD
+expect "gamepad template: copied into the prefix and enabled" bash -c 'cmp -s "$1/lib/data/gamepad-LPM-FPS-ZQSD.amgp" "$2" && grep -q "antimicro_config" "$3"' _ "${repo}" "${gp_prof}" "${gp_yml}"
+echo '<!-- MY EDIT -->' >> "${gp_prof}"
+check "gamepad template: another template keeps the edited profile as a backup" 0 'previous profile was kept' tools mario gamepad template LPM-Course-WASD
+expect "gamepad template: the backup holds the edit, the profile is the new template" bash -c 'grep -q "MY EDIT" "$1".*.bak && cmp -s "$2/lib/data/gamepad-LPM-Course-WASD.amgp" "$1"' _ "${gp_prof}" "${repo}"
+expect "gamepad template: the shipped model itself is untouched" bash -c '! grep -q "MY EDIT" "$1/lib/data/gamepad-LPM-FPS-ZQSD.amgp"' _ "${repo}"
+printf 'game:\n  exe: /x.exe\nsystem:\n  antimicro_config: /home/me/mine.amgp\nwine:\n  version: GE-Test\n' > "${gp_yml}"
+check "gamepad template: refuses when the game uses the user's own profile" 1 'another AntiMicroX profile' tools mario gamepad template LPM-FPS-WASD
+printf 'game:\n  exe: /x.exe\nwine:\n  version: GE-Test\n' > "${gp_yml}"
+rm -rf "${HOME}/Games/mario/ludis/gamepad"
 expect "YAML still valid" python3 -c "import sys,yaml; yaml.safe_load(open('${HOME}/.config/lutris/games/mario-1.yml'))"
 
 # --- Legacy launcher (format of ludis <= 0.9.5: relay + Lutris prelaunch command). Packages made then

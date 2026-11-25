@@ -235,7 +235,17 @@ class ToolsPage:
         self.gamepad_edit_button = Gtk.Button(label=t("gui.tools.gamepad_edit_button"), valign=Gtk.Align.CENTER)
         self.gamepad_edit_row.add_suffix(self.gamepad_edit_button)
         self.page.add_row(self.gamepad_edit_row)
+        # Ready-made profiles ("tools <slug> gamepad templates"): the chosen one is COPIED into the
+        # game's prefix as its profile (a profile already there is kept as a backup).
+        self.gamepad_template_row = Adw.ComboRow(title=t("gui.tools.gamepad_template_title"),
+                                                 subtitle=t("gui.tools.gamepad_template_sub"))
+        self.gamepad_template_apply = Gtk.Button(label=t("gui.tools.gamepad_template_apply"), valign=Gtk.Align.CENTER)
+        self.gamepad_template_row.add_suffix(self.gamepad_template_apply)
+        self.gamepad_template_row.set_sensitive(False)
+        self.page.add_row(self.gamepad_template_row)
+        self.gamepad_templates = []
         self.gamepad_state = {"slug": None, "token": 0, "updating": False}
+        self.gamepad_template_apply.connect("clicked", self._on_gamepad_template)
 
         self.gamepad_edit_button.connect("clicked", self._on_gamepad_edit)
 
@@ -377,8 +387,21 @@ class ToolsPage:
         self.gamepad_row.set_active(False)
         self.gamepad_state["updating"] = False
         self.gamepad_edit_button.set_sensitive(False)
+        self.gamepad_template_row.set_sensitive(False)
         if not slug or self.tool_row.get_selected() != self.tools.index("gamepad"):
             return
+
+        def got_templates(result):
+            def apply_templates():
+                if token != self.gamepad_state["token"] or result.returncode != 0:
+                    return
+                self.gamepad_templates = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+                self.gamepad_template_row.set_model(Gtk.StringList.new([self._template_label(n) for n in self.gamepad_templates]))
+                self.gamepad_template_row.set_sensitive(bool(self.gamepad_templates) and self.gamepad_state["slug"] == slug)
+
+            _run_on_main(apply_templates)
+
+        backend.run_ludis_async(["tools", slug, "gamepad", "templates"], on_done=got_templates)
 
         def done(result):
             def apply():
@@ -398,10 +421,44 @@ class ToolsPage:
                 self.gamepad_state["slug"] = slug
                 self.gamepad_row.set_sensitive(True)
                 self.gamepad_edit_button.set_sensitive(state == "on")
+                self.gamepad_template_row.set_sensitive(bool(self.gamepad_templates))
 
             _run_on_main(apply)
 
         backend.run_ludis_async(["tools", slug, "gamepad", "status"], on_done=done)
+
+    @staticmethod
+    def _template_label(name):
+        """"LPM-FPS-ZQSD" -> "LPM-FPS-ZQSD (FPS, AZERTY keyboard)" (genre text from the language file)."""
+        parts = name.split("-")
+        genre = parts[1] if len(parts) > 1 else ""
+        layout = parts[2] if len(parts) > 2 else ""
+        genre_text = t("gui.tools.gamepad_tpl_" + genre)
+        if layout:
+            genre_text += ", " + t("gui.tools.gamepad_layout_" + layout)
+        return "%s (%s)" % (name, genre_text)
+
+    def _on_gamepad_template(self, _btn):
+        slug = self.gamepad_state["slug"]
+        idx = self.gamepad_template_row.get_selected()
+        if not slug or idx == Gtk.INVALID_LIST_POSITION or idx >= len(self.gamepad_templates):
+            return
+        name = self.gamepad_templates[idx]
+        self.gamepad_template_apply.set_sensitive(False)
+
+        def done(result):
+            def apply():
+                self.gamepad_template_apply.set_sensitive(True)
+                if result.returncode != 0:
+                    detail = (result.stdout + result.stderr).strip().splitlines()
+                    self.page.toast((detail[-1] if detail else "") or t("gui.common.command_failed", result.returncode))
+                else:
+                    self.page.toast(t("gui.tools.gamepad_template_done", name))
+                self._load_gamepad()
+
+            _run_on_main(apply)
+
+        backend.run_ludis_async(["tools", slug, "gamepad", "template", name], on_done=done)
 
     def _on_gamepad_edit(self, _btn):
         slug = self.gamepad_state["slug"]
@@ -484,6 +541,7 @@ class ToolsPage:
         self.overlay_game_row.set_visible(idx == self.tools.index("overlay"))
         self.gamepad_row.set_visible(idx == self.tools.index("gamepad"))
         self.gamepad_edit_row.set_visible(idx == self.tools.index("gamepad"))
+        self.gamepad_template_row.set_visible(idx == self.tools.index("gamepad"))
         for row in self.options_rows.values():
             row.set_visible(idx == self.tools.index("options"))
         self.page.run_button.set_visible(idx != self.tools.index("gamepad"))
