@@ -1268,7 +1268,8 @@ gui.lutris_version.done=Preference saved.
 
 
 gui.category.games=Games
-gui.category.backup=Backup
+gui.category.backup=Export
+gui.category.saves=Game saves
 gui.category.runners=Runners
 gui.category.system=System
 

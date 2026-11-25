@@ -53,6 +53,8 @@ class MainWindow(Adw.ApplicationWindow):
                 ("backup", t("gui.category.backup"), "package-x-generic-symbolic", [
                     ("pack", t("gui.pack.page_title"), "package-x-generic-symbolic"),
                     ("isolate", t("gui.isolate.page_title"), "security-high-symbolic"),
+                ]),
+                ("saves", t("gui.category.saves"), "document-save-symbolic", [
                     ("saves", t("gui.saves.page_title"), "document-save-symbolic"),
                 ]),
                 ("runners", t("gui.category.runners"), "view-list-symbolic", [

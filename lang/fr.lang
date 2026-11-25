@@ -1195,7 +1195,7 @@ gui.pack.cancel_dialog_heading=Supprimer aussi les archives déjà créées ?
 gui.pack.cancel_dialog_body=Archives déjà créées dans ce lot (%s) :\n%s\n\nLes supprimer efface ces fichiers .zgp (et leurs fichiers de hash).
 gui.pack.toast_cancel_deleted=Archives de ce lot supprimées.
 gui.pack.page_title=Exporter un jeu (.zgp)
-gui.saves.page_title=Saves des jeux
+gui.saves.page_title=Sauvegardes de jeu
 gui.saves.intro=Sauvegarde les saves d'un jeu dans un dossier de ton choix (dossier cloud, clé USB...), remets-les, ou exporte-les en fichier .zgs à partager. Seuls AppData, Documents et Saved Games sont copiés, jamais tout le préfixe.
 gui.saves.global_title=Tous les jeux
 gui.saves.dir_title=Dossier de synchro
@@ -1268,7 +1268,8 @@ gui.lutris_version.done=Préférence enregistrée.
 
 
 gui.category.games=Jeux
-gui.category.backup=Sauvegarde
+gui.category.backup=Export
+gui.category.saves=Sauvegardes de jeu
 gui.category.runners=Runners
 gui.category.system=Système
 
