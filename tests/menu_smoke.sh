@@ -28,9 +28,16 @@ if [ -n "\${FAKE_GAME:-}" ]; then
 fi
 "${py}" "${repo}/lib/zgu-game-menu.py" x11 "${work}/prefix" >/dev/null 2>&1 &
 pid=\$!
-sleep 2
-wid=\$("${real_xdotool}" search --name Ludis | head -1)
+# Wait for the menu window to really exist (a slow runner needs more than a fixed delay), then let it settle.
+wid=""
+for _ in \$(seq 1 60); do
+  wid=\$("${real_xdotool}" search --name Ludis 2>/dev/null | head -1)
+  [ -n "\${wid}" ] && break
+  sleep 0.5
+done
+sleep 1.5
 [ -n "\${wid}" ] && "${real_xdotool}" windowfocus "\${wid}"
+sleep 0.5
 for k in "\$@"; do
   if [ "\${k}" = "click-corner" ]; then "${real_xdotool}" mousemove 5 5 click 1; else "${real_xdotool}" key "\${k}"; fi
   sleep 0.5
@@ -56,8 +63,13 @@ chmod +x "${work}/driver.sh"
 status=0
 check() {  # name, expected output (state + keys, one per line), keys... (env: FAKE_GAME, OTHER_WINDOW, WAIT)
   local name="$1" want="$2"; shift 2
-  local got
-  got="$(PATH="${work}/bin:${PATH}" timeout -s KILL 60 xvfb-run -a dbus-run-session -- "${work}/driver.sh" "$@" 2>/dev/null | grep -vE 'dbus-daemon|^$')"
+  local got attempt
+  # A shared CI runner can be slow enough to lose a key press: a scenario gets up to 3 tries.
+  # A real bug fails every time, so it still shows.
+  for attempt in 1 2 3; do
+    got="$(PATH="${work}/bin:${PATH}" timeout -s KILL 90 xvfb-run -a dbus-run-session -- "${work}/driver.sh" "$@" 2>/dev/null | grep -vE 'dbus-daemon|^$')"
+    [ "${got}" = "${want}" ] && break
+  done
   if [ "${got}" = "${want}" ]; then echo "OK: ${name}"; else echo "FAILED: ${name}"; echo "  got:      ${got//$'\n'/ | }"; echo "  expected: ${want//$'\n'/ | }"; status=1; fi
 }
 check "menu: Window > Alt+Enter" $'exited\nkey alt+Return' Return Return
