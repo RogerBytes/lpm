@@ -45,6 +45,8 @@ source "${script_dir}/zgu-cli-utils.sh"
 source "${script_dir}/zgu-lutris-utils.sh"
 # shellcheck source=./zgu-ludis-paths.sh
 source "${script_dir}/zgu-ludis-paths.sh"
+# shellcheck source=./zgu-saves-ask.sh
+source "${script_dir}/zgu-saves-ask.sh"
 
 saves_conf="${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/saves.conf"
 saves_dirs=(AppData Documents "Saved Games")
@@ -403,9 +405,7 @@ if [[ "${cli_slug}" = "dir" ]]; then
   target="${cli_action}"
   [[ "${target}" = "none" ]] && target=""
   if [[ "${target}" = "default" ]]; then
-    docs="$(xdg-user-dir DOCUMENTS 2>/dev/null)"
-    [[ -n "${docs}" && "${docs}" != "${HOME}" && -d "${docs}" ]] || docs="${HOME}/Documents"
-    target="${docs}/Ludis-saves"
+    target="$(zgu_saves_default_dir)"
   fi
   if [[ -n "${target}" ]]; then
     [[ "${target}" = "~"* ]] && target="${HOME}${target#\~}"

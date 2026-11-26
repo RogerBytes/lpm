@@ -15,11 +15,11 @@ ludis \- prefix manager for Wine/Proton runners and a Lutris game library
 This page is a summary. The complete documentation of every command (arguments, options, behavior, exit status, scripting notes, examples) is in the \fIdocs/commands/\fR folder of the project repository.
 .SH COMMANDS \(em GAMES
 .TP
-.B install [\-y] [\-\-allow\-scripts] [\-\-replace] [\-\-ignore\-hash] <files.zgp...>
-Installs games from .zgp archives. If a game is already installed, ludis asks to replace it (uninstall, then install; its saves are put aside and put back if a saves folder is set); \-\-replace answers yes in advance, without a terminal nothing is replaced.
+.B install [\-y] [\-\-allow\-scripts] [\-\-replace] [\-\-save|\-\-no\-save] [\-\-ignore\-hash] <files.zgp...>
+Installs games from .zgp archives. If a game is already installed, ludis asks to replace it (uninstall, then install; ludis then asks once whether to back up their saves first, default no, and puts them back after the install if it did); \-\-replace answers yes in advance, without a terminal nothing is replaced. \-\-save / \-\-no\-save answer the saves question.
 .TP
-.B uninstall [\-y] <slugs...>
-Uninstalls games.
+.B uninstall [\-y] [\-\-save|\-\-no\-save] <slugs...>
+Uninstalls games. With a terminal, asks once whether to back up their saves first (default no, not skipped by \-y); \-\-save / \-\-no\-save answer in advance. The saves go to the sync folder (see \fBsaves dir\fR), by default Documents/Ludis\-saves, created on first use.
 .TP
 .B pack [\-LEVEL] [\-\-hash] <slugs...|\-\-all>
 Packages games as .zgp archives.

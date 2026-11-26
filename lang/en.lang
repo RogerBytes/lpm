@@ -4,6 +4,9 @@
 common.unknown_command=Unknown command: %s
 common.unknown_command_hint=Use 'ludis --help' to list the available commands, or 'ludis-gui' to open the graphical interface.
 common.checklist_check_all=Check all
+gui.common.saves_check=Back up the saves first (copied to: %s)
+common.saves_dest_cli=Saves are copied to: %s
+common.saves_prompt_cli=Back up the saves of these %s game(s) first? [y/N] 
 common.checklist_uncheck_all=Uncheck all
 
 # --- Simultaneous Flatpak + native package detection (see zgu_resolve_lutris_version) ---
@@ -278,6 +281,7 @@ uninstall_game.confirm_cli_header=Games to uninstall:
 uninstall_game.confirm_cli_item= - %s (%s)
 uninstall_game.confirm_cli_prompt=Are you sure you want to delete these games? [Y/n] 
 uninstall_game.confirm_cli_cancelled=Uninstallation cancelled.
+uninstall_game.saves_failed_cli=Error: the saves of '%s' could not be backed up: the game was NOT uninstalled.
 uninstall_game.confirm_gui_header=Warning, the following items will be permanently deleted:\n
 uninstall_game.confirm_gui_item=\n• %s\n  Folder: %s
 uninstall_game.confirm_gui_footer=\n\nDo you really want to continue?

@@ -191,4 +191,4 @@ ludis saves mariovania import ~/mariovania-saves.zgs
 
 ## See also
 
-[`ludis pack`](pack.md), [`ludis install`](install.md) (replacing an installed game keeps its saves), [`ludis shortcut`](shortcut.md), [`ludis list`](list.md), [Archives](archives.md) (`.zgs`).
+[`ludis pack`](pack.md), [`ludis uninstall`](uninstall.md) (asks whether to back up the saves first), [`ludis install`](install.md) (replacing an installed game: optional saves backup and restore), [`ludis shortcut`](shortcut.md), [`ludis list`](list.md), [Archives](archives.md) (`.zgs`).

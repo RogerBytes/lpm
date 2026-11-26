@@ -13,6 +13,8 @@ source "${script_dir}/zgu-desktop-utils.sh"
 source "${script_dir}/zgu-log-utils.sh"
 # shellcheck source=./zgu-ludis-paths.sh
 source "${script_dir}/zgu-ludis-paths.sh"
+# shellcheck source=./zgu-saves-ask.sh
+source "${script_dir}/zgu-saves-ask.sh"
 # shellcheck source=./zgu-hash-utils.sh
 source "${script_dir}/zgu-hash-utils.sh"
 
@@ -49,6 +51,7 @@ list_hooks_only=false
 list_existing_only=false
 list_versions_only=false
 replace_existing=false
+saves_flag=""
 cli_targets=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -78,6 +81,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --list-existing)
       list_existing_only=true
+      shift
+      ;;
+    --save)
+      saves_flag="yes"
+      shift
+      ;;
+    --no-save)
+      saves_flag="no"
       shift
       ;;
     --replace)
@@ -468,9 +479,16 @@ if [[ "${replace_count}" -gt 0 ]]; then
   fi
 fi
 
+# --- Saves of the games about to be replaced: ONE question for the batch (default: no). ---
+saves_decision="no"
+if [[ ${#replace_approved[@]} -gt 0 ]]; then
+  zgu_saves_decide "${saves_flag}" "${#replace_approved[@]}"
+  zgu_log "install" "INFO" "reason=replace_saves_decision decision=${saves_decision}"
+fi
+
 # zgp_replace_existing <slug>: uninstalls the game that is already there. When a saves folder is
-# set, its saves are backed up first (and put back after the install, see below): replacing must
-# never cost the player a save. Returns 1 (nothing removed) if that backup fails.
+# the player said yes to the saves question, they are backed up first (and put back after the
+# install, see below). Returns 1 (nothing removed) if that backup fails.
 zgp_replace_existing() {
   local old_slug="$1" old_prefix lutris_slug out saves_done=no
   old_prefix="${games_dir}/${old_slug}"
@@ -479,14 +497,14 @@ zgp_replace_existing() {
     zgu_cli_error "$(t install_game.replace_unmanaged_cli "${old_slug}")"
     return 1
   fi
-  if [[ -n "$(zgu_saves_conf_get sync_dir)" ]]; then
-    if out=$(bash "${script_dir}/zgp-game-saves.sh" "${lutris_slug}" backup 2>&1); then
-      saves_done=yes
-    elif ! printf '%s' "${out}" | grep -q 'AppData'; then
+  if [[ "${saves_decision}" = yes ]]; then
+    zgu_saves_ensure_dir "${script_dir}" || return 1
+    if ! zgu_saves_backup_one "${script_dir}" "${lutris_slug}"; then
       zgu_cli_error "$(t install_game.replace_saves_failed_cli "${old_slug}")"
       zgu_log "install" "ERROR" "slug=${old_slug} reason=replace_saves_backup_failed"
       return 1
     fi
+    saves_done=yes
   fi
   t install_game.replace_removing_cli "${old_slug}"
   if ! out=$(bash "${script_dir}/zgp-game-uninstaller.sh" yes "${lutris_slug}" 2>&1) || [[ -d "${old_prefix}" ]]; then

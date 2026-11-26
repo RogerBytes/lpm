@@ -15,11 +15,11 @@ ludis \- gestionnaire de préfixes et de runners Wine/Proton pour une bibliothè
 Cette page est un résumé. La documentation complète de chaque commande (arguments, options, comportement, codes de sortie, notes pour les scripts, exemples) est dans le dossier \fIdocs/commands/\fR du dépôt du projet, en anglais.
 .SH COMMANDES \(em JEUX
 .TP
-.B install [\-y] [\-\-allow\-scripts] [\-\-replace] [\-\-ignore\-hash] <files.zgp...>
-Installe des jeux depuis des archives .zgp. Si un jeu est déjà installé, ludis demande à le remplacer (désinstallation puis installation ; ses sauvegardes sont mises de côté puis remises si un dossier de sauvegardes est défini) ; \-\-replace répond oui d'avance, sans terminal rien n'est remplacé.
+.B install [\-y] [\-\-allow\-scripts] [\-\-replace] [\-\-save|\-\-no\-save] [\-\-ignore\-hash] <files.zgp...>
+Installe des jeux depuis des archives .zgp. Si un jeu est déjà installé, ludis demande à le remplacer (désinstallation puis installation ; ludis demande alors une fois s'il faut d'abord sauvegarder leurs saves, non par défaut, et les remet après l'installation si oui) ; \-\-replace répond oui d'avance, sans terminal rien n'est remplacé. \-\-save / \-\-no\-save répondent à la question des saves.
 .TP
-.B uninstall [\-y] <slugs...>
-Désinstalle des jeux.
+.B uninstall [\-y] [\-\-save|\-\-no\-save] <slugs...>
+Désinstalle des jeux. Avec un terminal, demande une fois s'il faut d'abord sauvegarder leurs saves (non par défaut, \-y ne saute pas la question) ; \-\-save / \-\-no\-save répondent d'avance. Les saves vont dans le dossier de synchronisation (voir \fBsaves dir\fR), par défaut Documents/Ludis\-saves, créé à la première utilisation.
 .TP
 .B pack [\-LEVEL] [\-\-hash] <slugs...|\-\-all>
 Empaquette des jeux en archives .zgp.

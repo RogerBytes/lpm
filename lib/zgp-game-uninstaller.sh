@@ -11,10 +11,13 @@ cli_games=("$@")
 # zgp-game-installer.sh) -- removed from the slug list, and cleaned IN ADDITION to the
 # default desktop folder. Used by the GUI to delete a cancelled batch.
 desktop_dir_override=""
+saves_flag=""
 _filtered_games=()
 for _arg in "${cli_games[@]}"; do
   case "${_arg}" in
     --desktop-dir=*) desktop_dir_override="${_arg#--desktop-dir=}" ;;
+    --save) saves_flag="yes" ;;
+    --no-save) saves_flag="no" ;;
     *) _filtered_games+=("${_arg}") ;;
   esac
 done
@@ -33,6 +36,10 @@ source "${script_dir}/zgu-games-cli.sh"
 source "${script_dir}/zgu-desktop-utils.sh"
 # shellcheck source=./zgu-log-utils.sh
 source "${script_dir}/zgu-log-utils.sh"
+# shellcheck source=./zgu-ludis-paths.sh
+source "${script_dir}/zgu-ludis-paths.sh"
+# shellcheck source=./zgu-saves-ask.sh
+source "${script_dir}/zgu-saves-ask.sh"
 
 # No target: explicit error (like install, pack...) rather than an empty "success".
 if [[ ${#cli_games[@]} -eq 0 ]]; then
@@ -134,8 +141,12 @@ if [[ "${confirm_flag}" != "yes" ]]; then
   esac
 fi
 
-# 7. Deletion processing (text output in CLI)
+# 6bis. Saves: ONE question for the batch (default: no; not skipped by -y).
 total_games=${#games_to_delete[@]}
+zgu_saves_decide "${saves_flag}" "${total_games}"
+saves_dir_ready=no
+
+# 7. Deletion processing (text output in CLI)
 
 # --- EXECUTION (CLI only) ---
 # Cancellation (SIGTERM/SIGINT sent by the GUI to the script
@@ -177,6 +188,19 @@ for game_slug in "${games_to_delete[@]}"; do
   safe_game_slug="${game_slug//\'/\'\'}"
   prefix_dir=$(sqlite3 "${lutris_db}" "SELECT directory FROM games WHERE slug='${safe_game_slug}' AND runner='wine' LIMIT 1;")
   [[ -z "${prefix_dir}" ]] && prefix_dir="${dir_by_slug[${game_slug}]}"
+
+  # A0. Saves backed up first when the player said yes. A failed backup keeps the game installed.
+  if [[ "${saves_decision}" = yes ]]; then
+    if [[ "${saves_dir_ready}" = no ]]; then
+      zgu_saves_ensure_dir "${script_dir}" || { zgu_cli_error "$(t uninstall_game.saves_failed_cli "${game_name}")"; continue; }
+      saves_dir_ready=yes
+    fi
+    if ! zgu_saves_backup_one "${script_dir}" "${game_slug}"; then
+      zgu_cli_error "$(t uninstall_game.saves_failed_cli "${game_name}")"
+      zgu_log "uninstall" "ERROR" "slug=${game_slug} name=${game_name} reason=saves_backup_failed"
+      continue
+    fi
+  fi
 
   # A. Delete the physical prefix on disk
   if ! safe_delete_prefix_dir "${prefix_dir}"; then

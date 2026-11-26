@@ -206,3 +206,28 @@ def list_isolable() -> list[IsolableEntry]:
         if len(parts) >= 3:
             entries.append(IsolableEntry(slug=parts[0], name=parts[1], store_label=parts[2]))
     return entries
+
+
+def saves_destination() -> str:
+    """Folder where saves are copied: the sync folder of saves.conf, else the default one
+    (Documents/Ludis-saves, created on first use). A small file read, fine on the main thread."""
+    import re
+    conf = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "ludis", "saves.conf")
+    try:
+        with open(conf, encoding="utf-8") as fh:
+            found = re.findall(r"^\s*sync_dir\s*=\s*(.+?)\s*$", fh.read(), re.M)
+        if found and found[-1]:
+            return found[-1]
+    except OSError:
+        pass
+    home = os.path.expanduser("~")
+    docs = home
+    try:
+        out = subprocess.run(["xdg-user-dir", "DOCUMENTS"], capture_output=True, text=True, timeout=3).stdout.strip()
+        if out and out != home and os.path.isdir(out):
+            docs = out
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if docs == home:
+        docs = os.path.join(home, "Documents")
+    return os.path.join(docs, "Ludis-saves")

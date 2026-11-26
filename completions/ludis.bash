@@ -77,7 +77,7 @@ _ludis() {
 
   case "${command}" in
     install)
-      COMPREPLY=($(compgen -W "-y --allow-scripts --ignore-hash -s --shortcut --desktop-dir= -n --no-loadingscreen" -- "${cur}"))
+      COMPREPLY=($(compgen -W "-y --allow-scripts --ignore-hash --replace --save --no-save -s --shortcut --desktop-dir= -n --no-loadingscreen" -- "${cur}"))
       # .zgp file completion in addition to options: compgen -f then filter on the
       # extension, so bash handles path escaping as usual.
       if [[ "${cur}" != -* ]]; then
@@ -91,7 +91,7 @@ _ludis() {
       fi
       ;;
     uninstall)
-      COMPREPLY=($(compgen -W "-y --desktop-dir= $(_ludis_installed_slugs)" -- "${cur}"))
+      COMPREPLY=($(compgen -W "-y --save --no-save --desktop-dir= $(_ludis_installed_slugs)" -- "${cur}"))
       ;;
     uninstall-runner)
       COMPREPLY=($(compgen -W "-y $(_ludis_installed_runners)" -- "${cur}"))

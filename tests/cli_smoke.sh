@@ -894,11 +894,35 @@ check "install --list-existing: installed none / new 2.0" 0 'EXISTS.Mario.Mario.
 check "install over an installed game, no terminal, no --replace: refused" 1 'already installed' install -y "${HOME}/Mario.zgp" </dev/null
 expect "refused install changed nothing" test -d "${HOME}/Games/mario"
 mkdir -p "${HOME}/Games/mario/drive_c/users/steamuser/Documents/Mario"; echo keepme > "${HOME}/Games/mario/drive_c/users/steamuser/Documents/Mario/slot.sav"
-check "install --replace: uninstalls then installs" 0 'INSTALLED. mario' install -y --replace "${HOME}/Mario.zgp"
+check "install --replace: uninstalls then installs" 0 'INSTALLED. mario' install -y --replace --save "${HOME}/Mario.zgp"
 check "install --replace: shows the removal" 0 'mario' list
 expect "install --replace: the saves were backed up before and put back after" bash -c '[ "$(cat "$1/Games/mario/drive_c/users/steamuser/Documents/Mario/slot.sav")" = keepme ] && [ "$(cat "$1/syncsaves/mario/current/Documents/Mario/slot.sav")" = keepme ]' _ "${HOME}"
 expect "install --replace: version of the package kept" bash -c '[ "$(cat "$1/ludis/settings/game-version")" = "2.0" ]' _ "${HOME}/Games/mario"
 expect "install: game_version never leaks into the Lutris YAML" bash -c '! grep -rq game_version "$1"' _ "${HOME}/.config/lutris/games" 
+# Saves question: --no-save / no flag = nothing copied, --save = copied (default folder when none is set)
+D="${HOME}/Games/mario/drive_c/users/steamuser/Documents/Mario"; SY="${HOME}/syncsaves/mario/current/Documents/Mario"
+echo s2 > "${D}/slot2.sav"
+check "install --replace --no-save: replaces" 0 'INSTALLED. mario' install -y --replace --no-save "${HOME}/Mario.zgp"
+expect "install --replace --no-save: saves not copied" test ! -e "${SY}/slot2.sav"
+mkdir -p "${D}"; echo s3 > "${D}/slot3.sav"
+check "uninstall --save: backs up then removes" 0 '\[REMOVED\] mario' uninstall -y --save mario
+expect "uninstall --save: saves are in the sync folder" test -e "${SY}/slot3.sav"
+check "reinstall after uninstall --save" 0 'INSTALLED. mario' install -y "${HOME}/Mario.zgp"
+mkdir -p "${D}"; echo s4 > "${D}/slot4.sav"
+check "uninstall --no-save: removes" 0 '\[REMOVED\] mario' uninstall -y --no-save mario
+expect "uninstall --no-save: saves not copied" test ! -e "${SY}/slot4.sav"
+check "reinstall after uninstall --no-save" 0 'INSTALLED. mario' install -y "${HOME}/Mario.zgp"
+mkdir -p "${D}"; echo s5 > "${D}/slot5.sav"
+check "uninstall without flag and without terminal: removes" 0 '\[REMOVED\] mario' uninstall -y mario
+expect "uninstall without flag and without terminal: nothing copied" test ! -e "${SY}/slot5.sav"
+check "reinstall after uninstall without flag" 0 'INSTALLED. mario' install -y "${HOME}/Mario.zgp"
+cp "${HOME}/.config/ludis/saves.conf" "${HOME}/saves.conf.keep"
+check "saves dir none" 0 '' saves dir none
+mkdir -p "${D}"; echo s6 > "${D}/slot6.sav"
+check "uninstall --save without a sync folder: default folder created" 0 'Saves sync folder: .*Ludis-saves' uninstall -y --save mario
+expect "uninstall --save without a sync folder: saves in Documents/Ludis-saves" test -e "${HOME}/Documents/Ludis-saves/mario/current/Documents/Mario/slot6.sav"
+cp "${HOME}/saves.conf.keep" "${HOME}/.config/ludis/saves.conf"
+check "reinstall after the default folder test" 0 'INSTALLED. mario' install -y "${HOME}/Mario.zgp"
 mv -f "${HOME}/Mario-orig.zgp" "${HOME}/Mario.zgp"
 
 # --- Install removes Proton's "version" file from archives made before the export did it

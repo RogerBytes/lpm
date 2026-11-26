@@ -4,6 +4,9 @@
 common.unknown_command=Commande inconnue : %s
 common.unknown_command_hint=Utilisez 'ludis --help' pour lister les commandes, ou 'ludis-gui' pour ouvrir l'interface graphique.
 common.checklist_check_all=Tout cocher
+gui.common.saves_check=Sauvegarder d'abord les saves (copiées dans : %s)
+common.saves_dest_cli=Les sauvegardes sont copiées dans : %s
+common.saves_prompt_cli=Sauvegarder d'abord les saves de ces %s jeu(x) ? [o/N] 
 common.checklist_uncheck_all=Tout décocher
 
 # --- Détection Flatpak + paquet natif simultanés (voir zgu_resolve_lutris_version) ---
@@ -278,6 +281,7 @@ uninstall_game.confirm_cli_header=Jeux à désinstaller :
 uninstall_game.confirm_cli_item= - %s (%s)
 uninstall_game.confirm_cli_prompt=Êtes-vous sûr de vouloir supprimer ces jeux ? [Y/n] 
 uninstall_game.confirm_cli_cancelled=Désinstallation annulée.
+uninstall_game.saves_failed_cli=Erreur : les saves de '%s' n'ont pas pu être sauvegardées : le jeu n'a PAS été désinstallé.
 uninstall_game.confirm_gui_header=Attention, les éléments suivants vont être définitivement supprimés :\n
 uninstall_game.confirm_gui_item=\n• %s\n  Dossier : %s
 uninstall_game.confirm_gui_footer=\n\nVoulez-vous vraiment continuer ?

@@ -168,6 +168,9 @@ _ludis() {
         '--allow-scripts[automatically approve embedded scripts (prelaunch_command...)]' \
         '--ignore-hash[skip the sha256 signature check]' \
         '(-s --shortcut)'{-s,--shortcut}'[where to create shortcuts]:mode:(menu desktop both none)' \
+        '--replace[replace games that are already installed]' \
+        '--save[back up the saves of replaced games]' \
+        '--no-save[do not back up the saves of replaced games]' \
         '--desktop-dir=[folder for the desktop shortcut]:folder:_files -/' \
         '(-n --no-loadingscreen)'{-n,--no-loadingscreen}'[disable ludis loading screen]' \
         '*:.zgp file:_files -g "*.zgp"'
@@ -181,6 +184,8 @@ _ludis() {
     uninstall)
       _arguments \
         '-y[uninstall without confirmation]' \
+        '--save[back up the saves first]' \
+        '--no-save[do not back up the saves]' \
         '--desktop-dir=[folder where a desktop shortcut was created]:folder:_files -/' \
         '*:installed game:_ludis_installed_slugs'
       ;;

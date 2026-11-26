@@ -5,7 +5,7 @@ Removes one or more installed Wine games: their prefix folder, their Lutris entr
 ## Synopsis
 
 ```
-ludis uninstall [-y] [--desktop-dir=<dir>] <slug>...
+ludis uninstall [-y] [--save|--no-save] [--desktop-dir=<dir>] <slug>...
 ```
 
 ## Description
@@ -24,11 +24,13 @@ Lutris is **killed** (`SIGKILL`) first so that its database is not locked.
 
 ## Options
 
-`-y` is read by `bin/ludis` and must come directly after `uninstall` (before the first slug). `--desktop-dir=` is read by the script and may appear anywhere.
+`-y` is read by `bin/ludis` and must come directly after `uninstall` (before the first slug). `--desktop-dir=`, `--save` and `--no-save` are read by the script and may appear anywhere.
 
 | Option | Meaning |
 |---|---|
 | `-y` | Does not ask for confirmation. |
+| `--save` | Answers **yes** in advance to the saves question (see below): the saves of every game of the batch are copied before it is deleted. |
+| `--no-save` | Answers **no** in advance: no saves are copied, and no question is asked. |
 | `--desktop-dir=<dir>` | Also removes the game's desktop shortcut (and its "Bonus" link) from this folder, in addition to the default desktop folder. Meant for shortcuts created with `ludis install --desktop-dir`. |
 
 ## Behavior
@@ -39,6 +41,16 @@ Lutris is **killed** (`SIGKILL`) first so that its database is not locked.
 4. All `runner='wine'` rows are loaded, minus the shared-store ones (a prefix folder shared by several rows, or a game whose name contains one of the store names as a whole word, see [`ludis list`](list.md)). If there are none: `No Wine game found in the Lutris database.` (on stderr) and **exit 0**, whatever the slugs given.
 5. **Every slug is validated first.** The first unknown slug aborts the command with exit 1 (`Error: Game not found in Lutris with slug: <slug>`, or the shared-prefix error) and nothing is deleted.
 6. Unless `-y`, the list of ` - <name> (<folder>)` is shown and `Are you sure you want to delete these games? [Y/n]` is asked. Pressing Enter (or any answer other than `n`/`N`) confirms. `n`/`N`, or end of input (no terminal, empty stdin), cancels (`Uninstallation cancelled.`, exit 0). Games are tracked by slug throughout, so two games with the same name are never confused.
+6bis. **Saves question**, once for the whole batch, asked even with `-y` (`-y` only skips the confirmation above), unless `--save` or `--no-save` is given:
+
+   ```
+   Saves are copied to: /home/you/Documents/Ludis-saves
+   Back up the saves of these 3 game(s) first? [y/N]
+   ```
+
+   The default answer is **no** (Enter). Without a terminal the answer is no. `y`/`o` copies the saves of every game of the batch, `n` copies none of them. For a single game, run [`ludis saves <slug> backup`](saves.md) yourself and answer no.
+
+   The copy goes to the saves sync folder (see [`ludis saves`](saves.md)). If none is set yet, it is set to `Documents/Ludis-saves` (created on first use) and ludis says so. A game with no saves is not an error. If the backup of a game **fails**, that game is **not** uninstalled (`Error: the saves of '<name>' could not be backed up: the game was NOT uninstalled.`); the others go on.
 7. For each game, in order:
    1. The slug must not contain `/`, `..` or control characters (otherwise the game is skipped with a warning).
    2. The prefix folder (the `directory` of the database row) is removed with `rm -rf`, **only if** its real path is inside the games folder. Otherwise the warning "the folder for '<name>' (<path>) is outside your games folder, skipping physical deletion for safety. The Lutris entry was still removed." is printed and the rest of the cleanup still happens.
@@ -71,7 +83,7 @@ The first two lines are printed only without `-y`. The final line is green on a 
 
 ## Scripting notes
 
-- The only prompt is the `[Y/n]` confirmation (plus the one-time Flatpak/native question if both Lutris flavours are installed; avoid it with `LUDIS_LUTRIS_VERSION=flatpak|native`).
+- The prompts are the `[Y/n]` confirmation and the `[y/N]` saves question (avoid it with `--save` or `--no-save`; plus the one-time Flatpak/native question if both Lutris flavours are installed; avoid it with `LUDIS_LUTRIS_VERSION=flatpak|native`).
 - With stdin empty or not a terminal and no `-y`, the confirmation is **cancelled** (nothing is deleted, exit 0): `ludis uninstall slug </dev/null` deletes nothing. Use `-y` explicitly in scripts.
 - `ludis uninstall slug -y` does not work: `-y` would be read as a slug and fail with "Game not found ... slug: -y".
 - Validation is all-or-nothing for slugs (one bad slug, nothing deleted), but per-game failures during deletion do not change the exit status.
@@ -95,6 +107,7 @@ ludis list | awk 'tolower($0) ~ /demo/ {print $1}' | xargs -r ludis uninstall -y
 
 ## Files and data touched
 
+- With `--save` or a yes: copies the saves to the sync folder before deleting (and sets the default folder `Documents/Ludis-saves` if none was set).
 - Deletes: `<games folder>/<slug>/` (recursively), `<Lutris games config dir>/<configpath>.yml` (or `<slug>-<digits>.yml` files, see Behavior), the shortcuts listed above.
 - Modifies: table `games` of `pga.db` (Flatpak: `~/.var/app/net.lutris.Lutris/data/lutris/pga.db`; native: `~/.local/share/lutris/pga.db`).
 - Writes: `~/.local/share/ludis/ludis.log`.
@@ -103,4 +116,4 @@ ludis list | awk 'tolower($0) ~ /demo/ {print $1}' | xargs -r ludis uninstall -y
 
 ## See also
 
-[`ludis install`](install.md), [`ludis list`](list.md), [`ludis info`](info.md), [`ludis isolate`](isolate.md); `ludis log`.
+[`ludis install`](install.md), [`ludis saves`](saves.md), [`ludis list`](list.md), [`ludis info`](info.md), [`ludis isolate`](isolate.md); `ludis log`.

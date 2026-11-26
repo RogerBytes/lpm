@@ -35,6 +35,7 @@ Lutris is **killed** (`SIGKILL`) at the start of the command so that its databas
 | `-s <mode>`, `--shortcut <mode>`, `--shortcut=<mode>` | Which shortcuts to create: `menu`, `desktop`, `both` (default) or `none`. Any other value: error, exit 1. If the option is the very last argument with no value, the default `both` is used. |
 | `--desktop-dir=<dir>` | Folder in which to write the desktop shortcut instead of the detected desktop folder. The folder must already exist, otherwise the desktop shortcut is silently not written. Ignored when the mode is `menu` or `none`. |
 | `-n`, `--no-loadingscreen` | Disables the ludis loading screen for the game's shortcuts (creates an empty marker file `ludis/settings/no-loadingscreen` in the prefix). |
+| `--save`, `--no-save` | Answer the saves question of a replacement in advance (see "Replacing an installed game"): copy the saves of the replaced games first, or do not. Like `--replace`, written before the first file name. |
 | `--list-existing` | Read-only: for each archive whose game is already installed, prints one line `EXISTS<US>name<US>file<US>slug<US>installed version<US>new version` (`<US>` = `0x1f`; a version is empty if there is none). Archives of games that are not installed print nothing. Nothing is installed and Lutris is not touched. Used by the graphical interface for its confirmation. |
 | `--list-versions` | Read-only: for each archive that has a version number or a recorded size, prints `VERSION<US>file<US>version<US>size in bytes` (the size is the one recorded in the archive's first-member YAML; nothing is unpacked). Used by the graphical interface for the file list (`Mario.zgp (v1.2.3) — 3.2 GiB`). |
 | `--list-hooks` | Read-only: prints the launch/exit scripts embedded in the given archives and exits, without installing anything and without touching Lutris. One `GAME<US>name<US>file` line per archive that has some, followed by one `HOOK<US>key<US>value` line per script (`<US>` = the control character `0x1f`). Archives without scripts print nothing. Used by the graphical interface to show a single confirmation listing every package that embeds scripts. |
@@ -91,7 +92,14 @@ A version that does not exist is shown as "none". The answer:
 Details:
 
 - The Lutris entry is found in the database by the prefix directory. If the folder exists but Lutris does not know it: `Error: 'orphan' is in the games folder but not in Lutris: it cannot be replaced automatically. Uninstall it by hand first.` (exit 1, nothing is deleted).
-- **Saves**: if a saves sync folder is set (see [`ludis saves`](saves.md)), the saves are backed up before the uninstall and put back after the install (`Putting back the saves of 'Mario'...`). **Without a sync folder, the saves stored inside the old prefix are lost with it** and ludis prints no warning.
+- **Saves**: right after the replacement question, ludis asks **once** for the batch (default **no**, also asked with `-y`):
+
+  ```
+  Saves are copied to: /home/you/Documents/Ludis-saves
+  Back up the saves of these 2 game(s) first? [y/N]
+  ```
+
+  `y`/`o`: the saves of each replaced game are copied to the sync folder before its uninstall, and put back after the install (`Putting back the saves of 'Mario'...`). `n`, or no terminal: nothing is copied, and **the saves stored inside the old prefix are lost with it**. `--save` and `--no-save` answer in advance. If no sync folder is set yet and the answer is yes, it is set to `Documents/Ludis-saves`. If the backup of a game fails, that game is not replaced.
 - The new package's version replaces the old one in `ludis/settings/game-version`.
 
 ## Output
@@ -143,6 +151,7 @@ Interactive prompts that can occur, and how to avoid them:
 | `Are you sure you want to install these games? [Y/n]` | no `-y` | `-y` | Treated as **no**: the installation is cancelled (exit 0) |
 | `Do you want to install them anyway? [y/N]` | an archive's sha256 sidecar does not match | `--ignore-hash` (skips the check; `-y` does **not**), or fix the archive | Treated as **no**: mismatching archives are skipped silently |
 | `Replace the installed game(s) with the package(s)? [y/N]` | at least one game of the batch is already installed (asked even with `-y`) | `--replace` | Treated as **no**: nothing is replaced, "already installed" error, exit 1 |
+| `Back up the saves of these <n> game(s) first? [y/N]` | at least one game is going to be replaced (asked even with `-y`) | `--save` or `--no-save` | Treated as **no**: nothing is copied |
 | `Keep it and allow it to run automatically? ... [y/N]` | the package embeds hooks, per game | `--allow-scripts` (keep them). There is no flag to refuse explicitly; the default answer is no | Treated as **no**: hooks are commented out |
 
 When stdin is not a terminal (pipe, `</dev/null`, cron), bash does not print the text of the prompts, but the lists that precede them are still printed, and the default answers above apply. A fully non-interactive trusted install is therefore:
@@ -187,7 +196,7 @@ ludis install -y --ignore-hash game.zgp
 - Modifies: the Lutris database `games` table; may rewrite `~/.config/ludis/lutris-version`.
 - Writes: `~/.local/share/ludis/ludis.log`.
 - Kills: running Lutris processes.
-- When replacing: everything `ludis uninstall` does to the old game, and a copy of its saves in the sync folder if one is set.
+- When replacing: everything `ludis uninstall` does to the old game, and a copy of its saves in the sync folder if you said yes to the saves question.
 - Does not delete the `.zgp`.
 
 ## See also

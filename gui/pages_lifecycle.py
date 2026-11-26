@@ -300,12 +300,13 @@ class InstallPage:
             return "desktop"
         return "none"
 
-    def _install_args(self, selected: list[str], allow_scripts: bool, replace: bool = False) -> list[str]:
+    def _install_args(self, selected: list[str], allow_scripts: bool, replace: bool = False, save: bool = False) -> list[str]:
         args = ["install", "-y"]
         if allow_scripts:
             args.append("--allow-scripts")
         if replace:
             args.append("--replace")
+            args.append("--save" if save else "--no-save")
         desktop_on = self.desktop_shortcut_row.get_active()
         args.append(f"--shortcut={self._shortcut_mode()}")
         if desktop_on:
@@ -438,7 +439,9 @@ class InstallPage:
         dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
-        dialog.connect("response", lambda _d, r: on_choice(r == "replace"))
+        save_check = Gtk.CheckButton(label=t("gui.common.saves_check", backend.saves_destination()))
+        dialog.set_extra_child(save_check)
+        dialog.connect("response", lambda _d, r: on_choice(r == "replace", save_check.get_active()))
         dialog.present(self.window)
 
     def _check_existing(self, selected: list[str], allow_scripts: bool):
@@ -450,16 +453,16 @@ class InstallPage:
             if not games:
                 self._start_install(selected, allow_scripts)
                 return
-            self._ask_replace(games, lambda ok: self._start_install(selected, allow_scripts, True) if ok else None)
+            self._ask_replace(games, lambda ok, save: self._start_install(selected, allow_scripts, True, save) if ok else None)
 
         backend.run_ludis_async(
             ["install", "-y", "--list-existing", *selected],
             on_done=lambda result: _run_on_main(done, result))
 
-    def _start_install(self, selected: list[str], allow_scripts: bool, replace: bool = False):
+    def _start_install(self, selected: list[str], allow_scripts: bool, replace: bool = False, save: bool = False):
         batch_desktop_dir = self.desktop_path_row.value() if self.desktop_shortcut_row.get_active() else ""
         self.page.run_command(
-            self._install_args(selected, allow_scripts, replace), t("gui.common.install_done"), refresh="games",
+            self._install_args(selected, allow_scripts, replace, save), t("gui.common.install_done"), refresh="games",
             cancellable=True, undoable=True,
             on_cancelled=lambda slugs: self._on_cancelled(slugs, batch_desktop_dir))
 
@@ -497,7 +500,7 @@ class LifecyclePages:
     def page_install(self, initial_files: list[str] | None = None):
         return InstallPage(self, initial_files).build()
 
-    def _confirm_destructive(self, heading: str, body: str, confirm_label: str, on_confirm):
+    def _confirm_destructive(self, heading: str, body: str, confirm_label: str, on_confirm, ask_saves: bool = False):
         """Confirmation alert before a destructive action (same style as page_killwine):
         "Cancel" by default, red confirm button."""
         dialog = Adw.AlertDialog(heading=heading, body=body)
@@ -506,7 +509,11 @@ class LifecyclePages:
         dialog.set_response_appearance("confirm", Adw.ResponseAppearance.DESTRUCTIVE)
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
-        dialog.connect("response", lambda _d, r: on_confirm() if r == "confirm" else None)
+        save_check = None
+        if ask_saves:
+            save_check = Gtk.CheckButton(label=t("gui.common.saves_check", backend.saves_destination()))
+            dialog.set_extra_child(save_check)
+        dialog.connect("response", lambda _d, r: (on_confirm(save_check.get_active()) if ask_saves else on_confirm()) if r == "confirm" else None)
         dialog.present(self.window)
 
     def page_uninstall(self):
@@ -524,11 +531,12 @@ class LifecyclePages:
                 t("gui.uninstall.confirm_heading", len(slugs)),
                 t("gui.uninstall.confirm_body"),
                 t("gui.uninstall.confirm_button"),
-                lambda: page.run_command(
-                    ["uninstall", "-y", *slugs], t("gui.uninstall.done"), refresh="games",
+                lambda save: page.run_command(
+                    ["uninstall", "-y", "--save" if save else "--no-save", *slugs], t("gui.uninstall.done"), refresh="games",
                     cancellable=True, cancel_group=False, cancel_toast="",
                     on_cancelled=lambda removed: page.toast(t("gui.uninstall.toast_cancelled", len(removed))),
                 ),
+                ask_saves=True,
             )
 
         page.run_button.connect("clicked", on_run)
