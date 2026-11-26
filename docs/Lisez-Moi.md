@@ -1,6 +1,6 @@
 # Ludis
 
-Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
+Un écran de chargement, un menu en jeu, des réglages par jeu, les sauvegardes et des archives de jeux portables pour vos jeux Wine.
 
 <p align="center">
   <img src="../assets/icons/ludis.svg" width="128" height="128" alt="Icône Ludis">
@@ -18,20 +18,23 @@ Sauvegardez, transférez et réinstallez vos jeux Wine/Lutris en un clic.
   <a href="https://github.com/RogerBytes/ludis/issues">Issues</a>
 </p>
 
-**Ludis** vous permet de sauvegarder vos jeux Wine pour Lutris au format `.zgp` et vos runners au format `.zgr`. Il centralise l'exportation, la gestion et la suppression de vos archives, tandis que l'importation se charge de tout configurer pour que votre jeu soit immédiatement prêt à être lancé.
+**Ludis** ajoute à Lutris ce qui lui manque pour les jeux Wine : un lanceur avec écran de chargement et choix de l'exécutable, un menu en jeu, des réglages par jeu (outils Wine, VSync, génération de frames, manette), la sauvegarde des saves, et des archives portables (`.zgp` pour les jeux, `.zgr` pour les runners) pour sauvegarder vos jeux et les déplacer sur une autre machine, déjà configurés.
 
 > [!WARNING]
 > **N'installez que des archives `.zgp` et `.zgr` que vous avez créées vous-même ou qui viennent de quelqu'un en qui vous avez confiance.** ludis sert à sauvegarder et à déplacer vos propres jeux et runners entre vos machines ; il n'est pas fait pour télécharger ou distribuer des jeux. Une archive peut contenir n'importe quel fichier : les scripts qu'elle embarque sont désactivés tant que vous ne les autorisez pas (`--allow-scripts`), mais vous l'installez malgré tout à vos propres risques. N'installez jamais une archive d'origine inconnue.
 
 ## Fonctionnalités
 
+- Lanceur avec écran de chargement, et choix de l'exécutable pour les jeux qui en ont plusieurs.
+- Menu Ludis en jeu (touches de fenêtre, quitter) et raccourci manette Alt+Tab, sous X11 et Wayland.
+- Réglages par jeu : outils Wine (winetricks, éditeur de registre, winecfg, console, variables d'environnement, changement de runner), désactivation forcée du VSync, génération de frames lsfg-vk, overlay MangoHud, profil manette AntiMicroX.
+- Sauvegardes : copie des saves d'un jeu dans un dossier de votre choix (dossier synchronisé dans le cloud, clé USB...) et restauration, automatique ou à la main.
+- Numéros de version et noms affichés des jeux, visibles dans les listes.
 - Sauvegarde et restauration de vos jeux et runners Wine/Lutris sous forme d'archives portables (`.zgp` / `.zgr`), installables sur n'importe quelle machine.
-- Lanceurs (raccourcis desktop) unifiés et fiables, cohérents quel que soit votre environnement de bureau.
-- Icônes fonctionnelles pour vos jeux et runners, correctement affichées dans le menu et le gestionnaire de fichiers.
+- Lanceurs (raccourcis desktop) unifiés et fiables, et icônes fonctionnelles pour vos jeux et runners.
 - Utilisable en ligne de commande, ou avec l'interface graphique (`ludis-gui`) si vous préférez ne rien taper.
-- Réglages par jeu : outils Wine (winetricks, éditeur de registre, winecfg, console, variables d'environnement, changement de runner), désactivation forcée du VSync, génération de frames lsfg-vk, et un lanceur avec écran de chargement qui permet de choisir parmi plusieurs exécutables.
-- Menu Ludis en jeu (touches de fenêtre, quitter) et raccourci manette Alt+Tab quand le lanceur est activé, sous X11 et Wayland.
 - Interface disponible en français et en anglais.
+- `ludis doctor` vérifie que tout ce qu'il faut est présent.
 - Complétion bash/zsh et page de manuel (`man ludis`) incluses.
 - Paquets natifs `.deb`, `.rpm` et Arch, ou installation manuelle universelle sur n'importe quelle distribution.
 
