@@ -44,8 +44,8 @@ Built packages land in `packaging/dist/`.
 
 ## What's welcome
 
-- Bug reports (ideally with reproduction steps and the output of `ludis check` if relevant)
-- Feature requests related to packaging, installation, or runner management
+- Bug reports (ideally with reproduction steps and the output of `ludis doctor` if relevant)
+- Feature requests about Wine games under Lutris: launcher, in-game menu, per-game tuning, saves, packaging, installation, runner management
 - Documentation fixes
 - Pull requests following the project's existing style
 
