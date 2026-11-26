@@ -20,9 +20,6 @@ Un écran de chargement, un menu en jeu, des réglages par jeu, les sauvegardes 
 
 **Ludis** ajoute à Lutris ce qui lui manque pour les jeux Wine : un lanceur avec écran de chargement et choix de l'exécutable, un menu en jeu, des réglages par jeu (outils Wine, VSync, génération de frames, manette), la sauvegarde des saves, et des archives portables (`.zgp` pour les jeux, `.zgr` pour les runners) pour sauvegarder vos jeux et les déplacer sur une autre machine, déjà configurés.
 
-> [!WARNING]
-> **N'installez que des archives `.zgp` et `.zgr` que vous avez créées vous-même ou qui viennent de quelqu'un en qui vous avez confiance.** ludis sert à sauvegarder et à déplacer vos propres jeux et runners entre vos machines ; il n'est pas fait pour télécharger ou distribuer des jeux. Une archive peut contenir n'importe quel fichier : les scripts qu'elle embarque sont désactivés tant que vous ne les autorisez pas (`--allow-scripts`), mais vous l'installez malgré tout à vos propres risques. N'installez jamais une archive d'origine inconnue.
-
 ## Fonctionnalités
 
 - Lanceur avec écran de chargement, et choix de l'exécutable pour les jeux qui en ont plusieurs.
@@ -37,6 +34,11 @@ Un écran de chargement, un menu en jeu, des réglages par jeu, les sauvegardes 
 - `ludis doctor` vérifie que tout ce qu'il faut est présent.
 - Complétion bash/zsh et page de manuel (`man ludis`) incluses.
 - Paquets natifs `.deb`, `.rpm` et Arch, ou installation manuelle universelle sur n'importe quelle distribution.
+
+## Sécurité
+
+> [!WARNING]
+> **N'installez que des archives `.zgp` et `.zgr` que vous avez créées vous-même ou qui viennent de quelqu'un en qui vous avez confiance.** Une archive peut contenir n'importe quel fichier. Les scripts de lancement qu'elle embarque sont désactivés tant que vous ne les autorisez pas (`--allow-scripts`), mais vous l'installez malgré tout à vos propres risques. N'installez jamais une archive d'origine inconnue.
 
 ## Installation
 

@@ -21,9 +21,6 @@
 
 **Ludis** adds to Lutris what it lacks for Wine games: a launcher with a loading screen and an executable picker, an in-game menu, per-game tuning (Wine tools, VSync, frame generation, gamepad), saves backup, and portable archives (`.zgp` for games, `.zgr` for runners) to back up your games and move them to another machine with everything already set up.
 
-> [!WARNING]
-> **Only install `.zgp` and `.zgr` archives that you made yourself or that come from someone you trust.** ludis is meant to back up and move your own games and runners between your machines; it is not made to download or distribute games. An archive can contain any file: scripts embedded in it are disabled unless you allow them (`--allow-scripts`), but you still install it entirely at your own risk. Never install an archive from an unknown source.
-
 ## Features
 
 - Launcher with a loading screen, and an executable picker for games that have several.
@@ -38,6 +35,11 @@
 - `ludis doctor` checks that everything needed is there.
 - Bash/zsh completion and a man page (`man ludis`) included.
 - Native `.deb`, `.rpm` and Arch packages, or a universal manual install on any distribution.
+
+## Security
+
+> [!WARNING]
+> **Only install `.zgp` and `.zgr` archives that you made yourself or that come from someone you trust.** An archive can contain any file. The launch scripts embedded in it are disabled unless you allow them (`--allow-scripts`), but you still install it at your own risk. Never install an archive from an unknown source.
 
 ## Installation
 
