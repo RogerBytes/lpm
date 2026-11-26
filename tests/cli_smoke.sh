@@ -925,6 +925,10 @@ cp "${HOME}/saves.conf.keep" "${HOME}/.config/ludis/saves.conf"
 check "reinstall after the default folder test" 0 'INSTALLED. mario' install -y "${HOME}/Mario.zgp"
 mv -f "${HOME}/Mario-orig.zgp" "${HOME}/Mario.zgp"
 
+# --- Packaging: the RPM spec must not contain a bare path line in %install (it would be run as a command)
+expect "rpm spec: no bare path line in %install" bash -c '! sed -n "/^%install/,/^%files/p" "$1/packaging/rpm/ludis.spec" | grep -q "^/"' _ "${repo}"
+expect "rpm spec: the lpm compatibility links are listed in %files" bash -c 'sed -n "/^%files/,/^%changelog/p" "$1/packaging/rpm/ludis.spec" | grep -qx "/usr/bin/lpm" && sed -n "/^%files/,/^%changelog/p" "$1/packaging/rpm/ludis.spec" | grep -qx "/usr/lib/lpm"' _ "${repo}"
+
 # --- Install removes Proton's "version" file from archives made before the export did it
 mkdir -p "${HOME}/old-archive"
 zstd -dc "${HOME}/Mario.zgp" | tar -x -C "${HOME}/old-archive"

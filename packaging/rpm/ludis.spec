@@ -8,7 +8,7 @@ URL:            https://rogerbytes.com
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 
-Obsoletes:      lpm
+Obsoletes:      lpm < %{version}
 Provides:       lpm = %{version}
 Requires:       bash
 Requires:       python3
@@ -50,8 +50,6 @@ integration (icons, MIME types, shortcuts).
 rm -rf %{buildroot}
 
 install -Dm755 bin/ludis %{buildroot}/usr/bin/ludis
-/usr/bin/lpm
-/usr/lib/lpm
 
 # Interface graphique GTK4/Libadwaita (gui/) + son lanceur (bin/ludis-gui) : gtk4 et
 # libadwaita sont des dépendances obligatoires (voir Requires ci-dessus), donc bin/ludis et
@@ -89,7 +87,6 @@ install -Dm644 assets/icons/ludis.svg %{buildroot}/usr/share/icons/hicolor/scala
 install -Dm644 assets/icons/ludis-game-generic.svg %{buildroot}/usr/share/icons/hicolor/scalable/apps/ludis-game-generic.svg
 install -Dm644 assets/icons/application-x-zgp-game.svg %{buildroot}/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgp-game.svg
 install -Dm644 assets/icons/application-x-zgr-runner.svg %{buildroot}/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgr-runner.svg
-/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgs-saves.svg
 install -Dm644 assets/icons/application-x-zgs-saves.svg %{buildroot}/usr/share/icons/hicolor/scalable/mimetypes/application-x-zgs-saves.svg
 
 install -Dm644 packaging/common/ludis.desktop %{buildroot}/usr/share/applications/ludis.desktop
@@ -103,6 +100,8 @@ ln -s ludis %{buildroot}/usr/bin/lpm
 %license LICENSE
 /usr/bin/ludis
 /usr/bin/ludis-gui
+/usr/bin/lpm
+/usr/lib/lpm
 /usr/lib/ludis/
 /usr/lib/ludis/data/
 /usr/lib/ludis/gui/
