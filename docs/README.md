@@ -146,6 +146,9 @@ New here? The one-page [getting started guide](docs/getting-started.md) covers t
 - [`ludis list`](docs/commands/list.md) — Lists installed games.
 - [`ludis list-isolable`](docs/commands/list-isolable.md) — Lists games that share a store prefix.
 - [`ludis info`](docs/commands/info.md) — Shows an installed game's metadata.
+- [`ludis rename`](docs/commands/rename.md) — Changes the display name of a game in Lutris.
+- [`ludis game-version`](docs/commands/game-version.md) — Shows, sets or removes the version number of a game.
+- [`ludis saves`](docs/commands/saves.md) — Backs up and restores game saves in a sync folder (cloud-style, no cloud needed).
 - [`ludis create-prefix`](docs/commands/create-prefix.md) — Creates empty Wine prefixes registered in Lutris.
 - [`ludis exe-install`](docs/commands/exe-install.md) — Creates a prefix and runs a Windows installer in it.
 - [`ludis shortcut`](docs/commands/shortcut.md) — (Re)creates menu/desktop shortcuts.
@@ -153,7 +156,7 @@ New here? The one-page [getting started guide](docs/getting-started.md) covers t
 - [`ludis splash`](docs/commands/splash.md) — Fetches a loading-screen banner from SteamGridDB.
 - [`ludis logo`](docs/commands/logo.md) — Fetches a transparent game logo.
 - [`ludis sync-media`](docs/commands/sync-media.md) — Downloads Lutris's own media for games that lack them.
-- [`ludis tools`](docs/commands/tools.md) — Runs a Wine tool on a game (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, gamepad).
+- [`ludis tools`](docs/commands/tools.md) — Runs a Wine tool on a game (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, gamepad, game-version).
 - [`ludis vsync`](docs/commands/vsync.md) — Forces VSync off for a game with environment variables (Direct3D 9/11/12, OpenGL).
 - [`ludis lsfg`](docs/commands/lsfg.md) — Enables/disables lsfg-vk frame generation.
 - [`ludis launcher`](docs/commands/launcher.md) — Enables/disables the Ludis Launcher (loading screen and executable picker).
@@ -169,6 +172,8 @@ New here? The one-page [getting started guide](docs/getting-started.md) covers t
 
 ### System
 
+- [`ludis doctor`](docs/commands/doctor.md) — Diagnoses the machine (Lutris, runners, required and optional tools). Changes nothing.
+- [`ludis lutris-defaults`](docs/commands/lutris-defaults.md) — Shows or applies Lutris' default Wine runner and winetricks choice.
 - [`ludis check`](docs/commands/check.md) — Checks that the runners needed by installed games are present and fetches missing ones.
 - [`ludis lutris-version`](docs/commands/lutris-version.md) — Shows or forces the Lutris installation used when both Flatpak and native exist.
 - [`ludis self-update`](docs/commands/self-update.md) — Checks for a newer ludis release and installs it (package installs only).

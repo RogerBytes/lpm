@@ -7,7 +7,7 @@ Options understood by the `ludis` command itself (the router in `bin/ludis`), as
 ```
 ludis --version | -v
 ludis --help | -h
-ludis <command> [-y] [--allow-scripts] [--ignore-hash] [--hash] [-0..-22] [arguments...]
+ludis <command> [-y] [--allow-scripts] [--ignore-hash] [--replace] [--hash] [-0..-22] [arguments...]
 ```
 
 ## Summary
@@ -17,6 +17,7 @@ ludis <command> [-y] [--allow-scripts] [--ignore-hash] [--hash] [-0..-22] [argum
 | `-y` | `install`, `uninstall`, `isolate`, `install-runner`, `uninstall-runner`, `create-prefix`, `exe-install`, `killwine`, `check` | Answer *yes* to the command's general confirmation question. |
 | `--allow-scripts` | `install` | Keep and allow launch/exit scripts embedded in a `.zgp` without asking. |
 | `--ignore-hash` | `install`, `install-runner` | Do not check the sha256 sidecar file of local archives. |
+| `--replace` | `install` | Confirm in advance the replacement of games that are already installed. |
 | `--hash` | `pack`, `pack-runner` | Write a sha256 sidecar file for each archive created. |
 | `-0` ... `-22` | `pack`, `pack-runner` | zstd compression level (default 3). |
 | `--version`, `-v` | `ludis` alone | Print the version and exit. |
@@ -55,13 +56,17 @@ Skips the confirmation of the form "Are you sure ...? [Y/n]". Per command:
 | `killwine` | The confirmation before killing the Wine processes. |
 | `check` | The question about installing the Flatpak lsfg-vk layer (runner downloads never ask). |
 
-`-y` does **not** skip: the hash-mismatch question ("install anyway? [y/N]") of `install` and `install-runner`; the question about scripts embedded in a `.zgp` (that is what `--allow-scripts` is for); the choice between Flatpak and native Lutris when both are installed; the confirmation of `ludis log --clear`.
+`-y` does **not** skip: the hash-mismatch question ("install anyway? [y/N]") of `install` and `install-runner`; the question about scripts embedded in a `.zgp` (that is what `--allow-scripts` is for); the question about replacing an already installed game (that is what `--replace` is for); the choice between Flatpak and native Lutris when both are installed; the confirmation of `ludis log --clear`.
 
 Default answers of the confirmations: for the `[Y/n]` questions of `install`, `uninstall`, `isolate`, `install-runner` and `uninstall-runner`, pressing Enter or typing anything other than `n`/`N` confirms, while end of input (no terminal, empty or closed standard input) **cancels**. For the `[Y/n]` questions of `create-prefix` and `exe-install`, Enter, `y`, `Y`, `o` and `O` confirm; any other text and end of input cancel.
 
 ## --allow-scripts
 
 Applies to `ludis install` only. A game archive can embed Lutris launch/exit commands (keys such as `prelaunch_command`, `postexit_command`, `*_script`, `*_wait` or containing `exec`) that Lutris would run automatically every time the game starts or closes. Without this option, `install` lists them and asks; if you do not allow them they are commented out in the game's configuration, not deleted. With `--allow-scripts` they are kept active without a question and a note is printed. Use it only for archives you trust or made yourself. `-y` never implies it.
+
+## --replace
+
+Applies to `ludis install` only. When a package is for a game that is already installed, ludis asks one question before replacing it (the installed game is uninstalled, then the package is installed). `--replace` answers yes to it. Without a terminal it is the only way to replace a game. `-y` never implies it. See [`ludis install`](install.md), "Replacing an installed game".
 
 ## --ignore-hash
 

@@ -20,6 +20,7 @@ ludis tools <slug> runner <runner-name>
 ludis tools <slug> mangohud [on|off|status]
 ludis tools <slug> overlay [status|follow|on|off|global-on|global-off]
 ludis tools <slug> gamepad [on|off|edit|status]
+ludis tools <slug> game-version [<value>|--clear]
 ```
 
 ## Description
@@ -31,7 +32,7 @@ Both the slug and the tool are mandatory: there is no interactive menu (although
 ## Arguments
 
 - `<slug>` : Lutris slug of an installed Wine game (only its last path component is used).
-- `<tool>` : one of `winetricks`, `regedit`, `winecfg`, `console`, `exe`, `folder`, `favorite`, `env`, `runner`, `mangohud`, `overlay`, `gamepad`.
+- `<tool>` : one of `winetricks`, `regedit`, `winecfg`, `console`, `exe`, `folder`, `favorite`, `env`, `runner`, `mangohud`, `overlay`, `gamepad`, `game-version`.
 - Further arguments depend on the tool (below).
 
 ## Options
@@ -69,6 +70,7 @@ Tools:
 - `mangohud [on|off|status]` : MangoHud (FPS overlay) for this game, i.e. the Lutris option `system.mangohud` of its YAML (comments preserved). `on` sets it to `true`, `off` removes the key (Lutris default: off), `status` (the default) prints `on` or `off`. Like `runner`, handled before the prefix and runner checks: only the YAML is changed. ludis does not install MangoHud: if it cannot be found (native Lutris: no `mangohud` in `PATH`; Flatpak Lutris: no `org.freedesktop.Platform.VulkanLayer.MangoHud`), `on` still saves the setting and prints a warning on stderr saying it has no effect until MangoHud is installed. Close Lutris first, or it may overwrite the change.
 - `overlay [status|follow|on|off|global-on|global-off]` : FPS overlay (MangoHud) of the in-game Ludis menu, not the Lutris option above. When enabled, MangoHud is loaded hidden when the game starts and shown or hidden from the in-game menu (the menu entry is there even when it is off, to turn it on for the next launch). `on`/`off` force it for this game, `follow` (default) uses the global setting (**off** by default), `global-on`/`global-off` change that global setting. Stored in ludis's own files (the game's `ludis` folder and `menu.conf`), never in the Lutris config. `status` (the default) prints `game=<follow|on|off> global=<on|off>`. The menu entry only appears if MangoHud is installed (Vulkan games).
 - `gamepad [on|off|edit|status]` : AntiMicroX profile for this game, i.e. the Lutris option `system.antimicro_config` of its YAML (Lutris then starts AntiMicroX with that profile when the game runs). `on` creates a blank profile `<prefix>/ludis/gamepad/lpm-gamepad.gamecontroller.amgp` only if it does not exist yet (an existing profile is never overwritten) and points the option to it. `off` removes the option only if it points to that profile; the profile file is kept. `edit` opens that profile in AntiMicroX (native `antimicrox`/`antimicro`, or the Flatpak `io.github.antimicrox.antimicrox`) and returns at once, nothing is watched. `status` (the default) prints `on`, `off`, or `other` when `antimicro_config` points to a profile that is not ludis's: that one is never replaced or removed, `on` and `off` then fail with an error and leave it alone. Handled before the prefix and runner checks like `mangohud`, except that the prefix folder must be found. ludis does not install AntiMicroX; if it cannot be found, `on` warns on stderr but still saves.
+- `game-version [<value>|--clear]` : shows, sets or removes the version number of the game, stored in `<prefix>/ludis/settings/game-version`. Same as [`ludis game-version`](game-version.md), which documents the accepted values. Only the prefix's own file is changed, not the Lutris YAML.
 
 ## Output
 
@@ -142,6 +144,7 @@ ludis tools my-game env list > my-game.env && ludis tools my-game env apply my-g
 - Read: Lutris `pga.db`, `system.yml`, the game's YAML, `runners/wine.yml`, the runner folder, `/proc/<pid>/environ` (running-instance check).
 - Written by Wine inside the prefix (registry, installed software) for the Wine tools; `HKCU\...\Comdlg32\Placesbar\Place0` for `favorite`.
 - `env set|unset|apply`: the game's Lutris YAML (`~/.config/lutris/games/<configpath>.yml` native, `~/.var/app/net.lutris.Lutris/data/lutris/games/<configpath>.yml` Flatpak), via a temporary `.ludis-env-*` file in the same folder.
+- `game-version`: `<prefix>/ludis/settings/game-version`.
 - `~/.local/share/ludis/ludis.log` (error lines only).
 
 ## See also

@@ -144,6 +144,9 @@ Nouveau ici ? Le [guide de démarrage](demarrage.md) d'une page couvre les trois
 - [`ludis isolate`](commands/isolate.md) — Sépare un préfixe de store partagé (Epic, EA, Ubisoft, Battle.net) en un préfixe par jeu (bêta).
 - [`ludis list`](commands/list.md) — Liste les jeux installés.
 - [`ludis list-isolable`](commands/list-isolable.md) — Liste les jeux qui partagent un préfixe de store.
+- [`ludis rename`](commands/rename.md) — Change le nom affiché d'un jeu dans Lutris.
+- [`ludis game-version`](commands/game-version.md) — Affiche, définit ou retire le numéro de version d'un jeu.
+- [`ludis saves`](commands/saves.md) — Sauvegarde et restaure les sauvegardes de jeu dans un dossier de synchronisation (type cloud, sans cloud).
 - [`ludis info`](commands/info.md) — Affiche les métadonnées d'un jeu installé.
 - [`ludis create-prefix`](commands/create-prefix.md) — Crée des préfixes Wine vides enregistrés dans Lutris.
 - [`ludis exe-install`](commands/exe-install.md) — Crée un préfixe et y lance un installeur Windows.
@@ -152,7 +155,7 @@ Nouveau ici ? Le [guide de démarrage](demarrage.md) d'une page couvre les trois
 - [`ludis splash`](commands/splash.md) — Récupère la bannière de l'écran de chargement depuis SteamGridDB.
 - [`ludis logo`](commands/logo.md) — Récupère le logo transparent d'un jeu.
 - [`ludis sync-media`](commands/sync-media.md) — Télécharge les médias propres à Lutris pour les jeux qui n'en ont pas.
-- [`ludis tools`](commands/tools.md) — Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, gamepad).
+- [`ludis tools`](commands/tools.md) — Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, gamepad, game-version).
 - [`ludis vsync`](commands/vsync.md) — Force la désactivation du VSync d'un jeu via des variables d'environnement (Direct3D 9/11/12, OpenGL).
 - [`ludis lsfg`](commands/lsfg.md) — Active/désactive la génération de frames lsfg-vk.
 - [`ludis launcher`](commands/launcher.md) — Active/désactive le Ludis Launcher (écran de chargement et sélecteur d'exécutable).
@@ -168,6 +171,8 @@ Nouveau ici ? Le [guide de démarrage](demarrage.md) d'une page couvre les trois
 
 ### Système
 
+- [`ludis doctor`](commands/doctor.md) — Diagnostique la machine (Lutris, runners, outils requis et optionnels). Ne modifie rien.
+- [`ludis lutris-defaults`](commands/lutris-defaults.md) — Affiche ou applique le runner Wine et le choix winetricks par défaut de Lutris.
 - [`ludis check`](commands/check.md) — Vérifie que les runners requis par les jeux installés sont présents et récupère ceux qui manquent.
 - [`ludis lutris-version`](commands/lutris-version.md) — Affiche ou force l'installation de Lutris utilisée quand Flatpak et natif coexistent.
 - [`ludis self-update`](commands/self-update.md) — Cherche une version plus récente de ludis et l'installe (installations par paquet uniquement).

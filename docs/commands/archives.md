@@ -28,7 +28,7 @@ zstd -l runner.zgr
 
 ## .zgp: game archive
 
-Built by [`ludis pack`](pack.md) from the prefix folder registered in Lutris for the game's slug (it must be inside the games folder, `~/Games` or the `game_path` set in Lutris). The archive is named after the **game's name in Lutris** (`$HOME/<name>.zgp`, falling back to the slug).
+Built by [`ludis pack`](pack.md) from the prefix folder registered in Lutris for the game's slug (it must be inside the games folder, `~/Games` or the `game_path` set in Lutris). The archive is named after the **game's name in Lutris** (`$HOME/<name>.zgp`, falling back to the slug), followed by the version if the game has one: `$HOME/<name> (v<version>).zgp` (see [`ludis game-version`](game-version.md)). The sidecar hash, if any, is named after the archive.
 
 Layout:
 
@@ -50,7 +50,7 @@ Everything ludis adds to a game lives in ONE folder, `<prefix-folder>/ludis/`. I
 ```
 ludis/
     launcher.yml               <- Ludis Launcher entries (title, prompt, executables)
-    settings/                  <- loading-screen switches: no-loadingscreen, keep-focus,
+    settings/                  <- loading-screen switches: no-loadingscreen, keep-focus, game-version,
                                   max-wait-s, extra-loading-ms, loading-message.txt, ignore-windows.txt
     scripts/                   <- wine trace wrapper and the game's pre/post-launch scripts
     gamepad/                   <- AntiMicroX profile
@@ -67,9 +67,9 @@ Empty folders are removed when the last file in them is deleted.
 
 Before archiving, `pack` prepares the prefix (these changes are made on the installed game itself, not on a copy): broken and device symbolic links, `dosdevices`, `Local Settings`, Proton's `version` file, temporary and package-cache files and `*.orig` files in `system32`/`syswow64` are removed, links pointing outside the game folder are deleted (never copied), the other links inside `drive_c` are replaced by real copies, the user folder is renamed to `steamuser`, and user names in the registry files, `lutris.json` and `goglog.ini` are replaced by the placeholder `anonuser`.
 
-The embedded `.lpm-config.yml` is the game's Lutris YAML, cleaned: the keys `script`, `version` and `slug` are removed, `system.env.GAMEID` is removed, the absolute prefix path is replaced by `$GAMEDIR`, any other `/home/<user>/` by `/home/anonuser/`, and `wine.version` is set to Lutris' default runner when the game had none. It also carries the key `lpm_archive` (`format: 2` and `size`, the exact size of the extracted prefix in bytes, used for the free-space check before extraction) and the display name (`name:`), which the installer uses. If the game has no Lutris config file, the archive has no `.lpm-config.yml` (the installer then reports an error but still registers the game). Archives of earlier versions carried the YAML as `zgp-game-config.yml` inside the prefix (and the size in a tiny `.lpm-size` first member); they are still understood.
+The embedded `.lpm-config.yml` is the game's Lutris YAML, cleaned: the keys `script`, `version` and `slug` are removed, `system.env.GAMEID` is removed, the absolute prefix path is replaced by `$GAMEDIR`, any other `/home/<user>/` by `/home/anonuser/`, and `wine.version` is set to Lutris' default runner when the game had none. It also carries, if the game has a version, the key `game_version` (readable without unpacking). On install this key is not kept in the Lutris config: it goes to `<prefix>/ludis/settings/game-version`. It also carries the key `lpm_archive` (`format: 2` and `size`, the exact size of the extracted prefix in bytes, used for the free-space check before extraction) and the display name (`name:`), which the installer uses. If the game has no Lutris config file, the archive has no `.lpm-config.yml` (the installer then reports an error but still registers the game). Archives of earlier versions carried the YAML as `zgp-game-config.yml` inside the prefix (and the size in a tiny `.lpm-size` first member); they are still understood.
 
-On install ([`ludis install`](install.md)), the archive is extracted into a temporary folder inside the games folder; the first top-level entry becomes the slug (it must be a real directory whose name has no `/`, control characters, and is not a symbolic link); the folder is refused if `<games folder>/<slug>` already exists; `anonuser` is replaced by your user name; the embedded config is turned into a local Lutris config (`$GAMEDIR` and `/home/<user>` resolved to this machine) and the game is registered. If the config contains launch/exit scripts, they are commented out unless allowed (see [Global options](options.md), `--allow-scripts`). An archive should contain a single top-level folder: if there were several, only the first found is used.
+On install ([`ludis install`](install.md)), the archive is extracted into a temporary folder inside the games folder; the first top-level entry becomes the slug (it must be a real directory whose name has no `/`, control characters, and is not a symbolic link); if `<games folder>/<slug>` already exists, the game is installed only if you confirm its replacement (see [`ludis install`](install.md)); `anonuser` is replaced by your user name; the embedded config is turned into a local Lutris config (`$GAMEDIR` and `/home/<user>` resolved to this machine) and the game is registered. If the config contains launch/exit scripts, they are commented out unless allowed (see [Global options](options.md), `--allow-scripts`). An archive should contain a single top-level folder: if there were several, only the first found is used.
 
 A `.zgp` never contains games that live in a shared store prefix (Epic Games Store, EA App, Ubisoft Connect, Battle.net); `ludis pack` refuses those.
 
