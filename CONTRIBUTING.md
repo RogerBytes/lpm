@@ -4,7 +4,7 @@ Thanks for your interest in this project. Before opening an issue or a pull requ
 
 ## What ludis is
 
-**ludis is an archiving and backup tool** for Wine/Lutris prefixes you already own on your machine. It packages, anonymizes and restores local folders — it does not download, host, or distribute any game content.
+**ludis is a companion for Lutris** and its Wine games: loading-screen launcher, in-game menu, per-game tuning, saves, and archives of the Wine/Lutris prefixes you already own on your machine. It works on local folders — it does not download, host, or distribute any game content.
 
 ## Project layout
 
@@ -19,10 +19,13 @@ The software version lives in a single place, `LUDIS_VERSION` in `bin/ludis`; it
 
 ## Building and testing locally
 
-Two smoke tests live in `tests/`, both running against a throwaway fake `HOME` (fake Lutris, demo database, fake Wine runner), so they never touch your real install:
+The smoke tests live in `tests/`. The first two run against a throwaway fake `HOME` (fake Lutris, demo database, fake Wine runner), so they never touch your real install:
 
 - `bash tests/cli_smoke.sh` — runs the main CLI commands (list, info, launcher, tools, vsync, shortcut, a pack → uninstall → install round trip, error cases) and checks exit codes and output. Needs `sqlite3`, `python3` with PyYAML, `zstd`.
 - `bash tests/run_gui_smoke.sh` — builds every page of the GTK4 interface under a virtual display. Needs `xvfb`, `dbus-run-session`, PyGObject, GTK4 and libadwaita ≥ 1.5.
+- `bash tests/menu_smoke.sh` — drives the in-game menu with real key presses in a virtual display. Needs `xvfb`, `xdotool`, `dbus-run-session`, PyGObject and GTK4.
+- `python3 tests/gamepad_smoke.py` — the gamepad watcher, with a fake SDL and no real gamepad. Needs libSDL2.
+- `bash tests/keyboard_smoke.sh` — the virtual keyboard. Needs `xvfb`, GTK4 and SDL2 (skipped if they are missing).
 
 Run them after any change, then verify what they do not cover (a real Lutris, `pkexec`, double-clicking a `.zgp`) by hand.
 
