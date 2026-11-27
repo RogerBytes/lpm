@@ -182,6 +182,25 @@ check "saves: folders list shows the drive_c entry" 0 'drive_c:Games/Zelda/save'
 check "saves: backup with an extra folder" 0 'backed up|unchanged' saves zelda backup
 expect "saves: the extra folder is in the backup under _extra/" bash -c '[ -f "$1/syncsaves/zelda/current/_extra/Games/Zelda/save/s1.sav" ]' _ "${HOME}"
 check "saves: folders reset clears both" 0 '' saves zelda folders reset
+# file filters: a wildcard (or an exact file) in a folder of drive_c, even before any save exists
+cc="${HOME}/Games/zelda/drive_c/Westwood/C&C95"
+rm -rf "${cc}"; mkdir -p "${cc}"
+check "saves: a filter can be added while no file matches yet" 0 '' saves zelda folders add "drive_c:Westwood/C&C95/savegame.*"
+check "saves: a wildcard without a parent folder is refused" 1 '' saves zelda folders add "drive_c:savegame.*"
+check "saves: the filter is listed" 0 'drive_c:Westwood/C&C95/savegame' saves zelda folders list
+check "saves: backup with a filter that matches nothing" 0 'backed up|unchanged' saves zelda backup
+expect "saves: ... nothing of the C&C folder was taken" bash -c '[ ! -e "$1/syncsaves/zelda/current/_extra" ]' _ "${HOME}"
+echo one > "${cc}/SAVEGAME.001"; echo two > "${cc}/savegame.002"; echo cfg > "${cc}/conf.ini"
+check "saves: backup once the saves exist" 0 'backed up' saves zelda backup
+expect "saves: only the files that match are in the backup (case ignored)" bash -c 'd="$1/syncsaves/zelda/current/_extra/Westwood/C&C95"; [ -f "$d/SAVEGAME.001" ] && [ -f "$d/savegame.002" ] && [ ! -e "$d/conf.ini" ]' _ "${HOME}"
+echo changed > "${cc}/SAVEGAME.001"; echo keep > "${cc}/conf.ini"; rm -f "${cc}/savegame.002"
+check "saves: restore with a filter" 0 'restored' saves zelda restore
+expect "saves: ... the matching files are back, the others untouched" bash -c 'c="$1"; [ "$(cat "$c/SAVEGAME.001")" = one ] && [ -f "$c/savegame.002" ] && [ "$(cat "$c/conf.ini")" = keep ]' _ "${cc}"
+check "saves: an exact file works too" 0 '' saves zelda folders add "${cc}/SAVEGAME.001"
+check "saves: export with a filter" 0 'exported' saves zelda export "${HOME}/zelda-filter"
+expect "saves: the .zgs holds the matching files only" bash -c 'l=$(zstd -dcq "$1" | tar -t); grep -q "SAVEGAME.001" <<<"$l" && ! grep -q "conf.ini" <<<"$l"' _ "${HOME}/zelda-filter.zgs"
+check "saves: filters cleanup" 0 '' saves zelda folders reset
+rm -rf "${HOME}/Games/zelda/drive_c/Westwood"
 # initial copy and reset (kept in the sync folder, never in the prefix; nothing without a sync folder)
 ini="${HOME}/syncsaves/zelda/initial.tar.zst"; oldini="${HOME}/Games/zelda/ludis/saves-initial"
 rm -rf "${ini}"

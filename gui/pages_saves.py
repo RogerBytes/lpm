@@ -76,12 +76,15 @@ class SavesPage:
         self.folders_add = Gtk.Button(label=t("gui.saves.folders_add"))
         self.folders_add.add_css_class("suggested-action")
         self.folders_add.connect("clicked", self.on_folders_add)
+        self.files_add = Gtk.Button(label=t("gui.saves.files_add"))
+        self.files_add.connect("clicked", self.on_files_add)
         self.folders_save = Gtk.Button(label=t("gui.saves.folders_save"))
         self.folders_default = Gtk.Button(label=t("gui.saves.folders_default"))
         self.folders_save.connect("clicked", self.on_folders_save)
         self.folders_default.connect("clicked", self.on_folders_default)
         folders_buttons = Gtk.Box(spacing=8, halign=Gtk.Align.END)
         folders_buttons.append(self.folders_add)
+        folders_buttons.append(self.files_add)
         folders_buttons.append(self.folders_default)
         folders_buttons.append(self.folders_save)
         folders_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=8)
@@ -157,6 +160,7 @@ class SavesPage:
         self.game_auto_row.set_sensitive(game)
         self.folders_save.set_sensitive(game)
         self.folders_add.set_sensitive(game)
+        self.files_add.set_sensitive(game)
         self.folders_default.set_sensitive(game)
         self.exclude_save.set_sensitive(game)
 
@@ -495,6 +499,40 @@ class SavesPage:
                     if path:
                         self.game_run(["folders", "add", path], t("gui.saves.toast_folders"))
                 pick_folder(self.window, t("gui.saves.folders_add_title"), chosen, initial_folder=start)
+            _run_on_main(open_picker)
+        backend.run_ludis_async(["saves", slug, "path"], on_done=got_path)
+
+    def on_files_add(self, *_):
+        """Pick a file INSIDE the prefix, then let the user edit its name: the exact file name, or a pattern
+        with * and ? (savegame.*) to take several files of that folder."""
+        slug = self.state["slug"]
+        if not slug or self.state["busy"]:
+            return
+
+        def got_path(result):
+            def open_picker():
+                start = result.stdout.strip() if result.returncode == 0 else None
+
+                def chosen(paths):
+                    if not paths:
+                        return
+                    folder, name = os.path.split(paths[0])
+                    entry = Gtk.Entry(text=name, activates_default=True)
+                    dialog = Adw.AlertDialog(heading=t("gui.saves.files_pattern_title"), body=t("gui.saves.files_pattern_body"))
+                    dialog.set_extra_child(entry)
+                    dialog.add_response("cancel", t("gui.common.cancel"))
+                    dialog.add_response("add", t("gui.saves.files_pattern_ok"))
+                    dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
+                    dialog.set_default_response("add")
+                    dialog.set_close_response("cancel")
+
+                    def answered(_d, response):
+                        pattern = entry.get_text().strip().replace("/", "")
+                        if response == "add" and pattern:
+                            self.game_run(["folders", "add", os.path.join(folder, pattern)], t("gui.saves.toast_folders"))
+                    dialog.connect("response", answered)
+                    dialog.present(self.window)
+                pick_file(self.window, t("gui.saves.files_add_title"), chosen, initial_folder=start)
             _run_on_main(open_picker)
         backend.run_ludis_async(["saves", slug, "path"], on_done=got_path)
 

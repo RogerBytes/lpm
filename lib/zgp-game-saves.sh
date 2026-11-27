@@ -163,27 +163,55 @@ saves_folder_lines() {
   fi
 }
 
-# saves_items: the folders to take, one per line: relative to the user folder, or "_extra/<line>"
-# for the extra folders (existing ones only).
+# saves_is_filter <base> <line>: a line is a FILE FILTER (not a folder) when its last part has a wildcard
+# (* ? [) or when it is an existing regular file: it takes the matching files of the parent folder
+# (case ignored), nothing else. The filter may match nothing yet (no save made so far).
+saves_is_filter() {
+  case "${2##*/}" in *'*'*|*'?'*|*'['*) return 0 ;; esac
+  [[ -f "$1/$2" && ! -L "$1/$2" ]]
+}
+
+# saves_filter_run <base> <line> <cmd...>: runs <cmd> <file> for each regular file (no link) matching the filter.
+saves_filter_run() {
+  local base="$1" line="$2"; shift 2
+  [[ "${line}" = */* && -d "${base}/${line%/*}" && ! -L "${base}/${line%/*}" ]] || return 0
+  find "${base}/${line%/*}" -maxdepth 1 -type f -iname "${line##*/}" -exec "$@" {} \;
+}
+
+# saves_items: what to take, one per line: relative to the user folder, or "_extra/<line>" for the extra
+# ones (existing ones only; a file filter only when it matches at least one file).
 saves_items() {
   local f line
   while IFS= read -r f; do
-    [[ -d "${user_dir}/${f}" && ! -L "${user_dir}/${f}" ]] && printf '%s\n' "${f}"
+    if saves_is_filter "${user_dir}" "${f}"; then
+      [[ -n "$(saves_filter_run "${user_dir}" "${f}" printf '%s\n')" ]] && printf '%s\n' "${f}"
+    elif [[ -d "${user_dir}/${f}" && ! -L "${user_dir}/${f}" ]]; then
+      printf '%s\n' "${f}"
+    fi
   done < <(saves_folder_lines)
   while IFS= read -r line; do
-    [[ -d "${prefix_dir}/drive_c/${line}" && ! -L "${prefix_dir}/drive_c/${line}" ]] && printf '_extra/%s\n' "${line}"
+    if saves_is_filter "${prefix_dir}/drive_c" "${line}"; then
+      [[ -n "$(saves_filter_run "${prefix_dir}/drive_c" "${line}" printf '%s\n')" ]] && printf '_extra/%s\n' "${line}"
+    elif [[ -d "${prefix_dir}/drive_c/${line}" && ! -L "${prefix_dir}/drive_c/${line}" ]]; then
+      printf '_extra/%s\n' "${line}"
+    fi
   done < <(saves_extra_lines)
 }
 
 # saves_pack <dest_dir>: copies the selection into <dest_dir> (created), links removed.
 saves_pack() {
-  local dest="$1" item args=() x
+  local dest="$1" item args=() x base rel
   mkdir -p -- "${dest}" || return 1
   for x in "${saves_excludes[@]}"; do args+=(--exclude="${x}"); done
   while IFS= read -r x; do args+=(--exclude="${x}"); done < <(saves_list_file_lines "$(zgu_ludis_find "${prefix_dir}" saves_exclude)")
   while IFS= read -r item; do
     [[ -n "${item}" ]] || continue
-    if [[ "${item}" = _extra/* ]]; then
+    if [[ "${item}" = _extra/* ]]; then base="${prefix_dir}/drive_c"; rel="${item#_extra/}"; else base="${user_dir}"; rel="${item}"; fi
+    if saves_is_filter "${base}" "${rel}"; then
+      # the files named by the user: copied as they are (the exclusions are for what is inside folders)
+      mkdir -p -- "${dest}/${item%/*}" || return 1
+      saves_filter_run "${base}" "${rel}" cp -p -t "${dest}/${item%/*}" -- || return 1
+    elif [[ "${item}" = _extra/* ]]; then
       mkdir -p -- "${dest}/${item}" || return 1
       tar -C "${prefix_dir}/drive_c/${item#_extra/}" -cf - "${args[@]}" . | tar -C "${dest}/${item}" -xf - --no-same-owner || return 1
     else
@@ -198,8 +226,9 @@ saves_pack() {
 # Everything but "_extra" goes to the Windows user folder (paths come from a tar without "..", links
 # removed: it cannot land elsewhere); "_extra/<line>" goes to drive_c/<line> ONLY if that line is
 # listed in this prefix's saves-extra.txt (an archive can never choose where those files land).
+# For a file filter, only the files that match it are put back.
 saves_unpack() {
-  local src="$1" item line
+  local src="$1" item line last
   find "${src}" -type l -delete 2>/dev/null
   for item in "${src}"/* "${src}"/.[!.]*; do
     [[ -d "${item}" ]] || continue
@@ -208,7 +237,19 @@ saves_unpack() {
       && cp -a -- "${item}/." "${user_dir}/$(basename -- "${item}")/" || return 1
   done
   while IFS= read -r line; do
+    last="${line##*/}"
+    case "${last}" in
+      *'*'*|*'?'*|*'['*)
+        [[ "${line}" = */* && -d "${src}/_extra/${line%/*}" ]] || continue
+        mkdir -p -- "${prefix_dir}/drive_c/${line%/*}" || return 1
+        find "${src}/_extra/${line%/*}" -maxdepth 1 -type f -iname "${last}" -exec cp -p -- {} "${prefix_dir}/drive_c/${line%/*}/" \; || return 1
+        continue ;;
+    esac
     item="${src}/_extra/${line}"
+    if [[ -f "${item}" && "${line}" = */* ]]; then
+      mkdir -p -- "${prefix_dir}/drive_c/${line%/*}" && cp -p -- "${item}" "${prefix_dir}/drive_c/${line}" || return 1
+      continue
+    fi
     [[ -d "${item}" ]] || continue
     mkdir -p -- "${prefix_dir}/drive_c/${line}" && cp -a -- "${item}/." "${prefix_dir}/drive_c/${line}/" || return 1
   done < <(saves_extra_lines)
@@ -780,6 +821,15 @@ case "${cli_action}" in
       add|remove)
         norm="$(saves_norm_folder "${path_arg}")" || { zgu_cli_error "$(t saves.folder_invalid_cli "${path_arg}")"; exit 1; }
         kind="${norm%%$'\t'*}"; rel="${norm#*$'\t'}"
+        # a file filter (wildcard, or an existing file) needs a parent folder
+        if [[ "${sub}" = add && "${rel}" != */* ]]; then
+          case "${rel}" in
+            *'*'*|*'?'*|*'['*) zgu_cli_error "$(t saves.folder_invalid_cli "${path_arg}")"; exit 1 ;;
+          esac
+          if [[ "${kind}" = U && -f "${user_dir}/${rel}" ]] || [[ "${kind}" = X && -f "${prefix_dir}/drive_c/${rel}" ]]; then
+            zgu_cli_error "$(t saves.folder_invalid_cli "${path_arg}")"; exit 1
+          fi
+        fi
         if [[ "${kind}" = X ]]; then target_file="${xf_extra}"; else target_file="${ff}"; fi
         mkdir -p -- "$(dirname "${target_file}")" || exit 1
         if [[ "${kind}" = U && ! -f "${ff}" ]]; then printf '%s\n' "${saves_dirs[@]}" > "${ff}"; fi

@@ -92,11 +92,14 @@ These settings are in `~/.config/ludis/saves.conf` (`sync_dir=`, `auto=`, `inter
 ludis saves <slug> folders                       # list (same as "list")
 ludis saves <slug> folders add "AppData/Roaming/Foo"
 ludis saves <slug> folders add "drive_c:Games/Foo/save"
+ludis saves <slug> folders add "drive_c:Westwood/C&C95/savegame.*"   # only these files
 ludis saves <slug> folders remove "Saved Games"
 ludis saves <slug> folders reset                 # back to the defaults
 ```
 
 A folder is given relative to the Windows user folder, or as `drive_c:<path relative to drive_c>` for a game that keeps its saves elsewhere (for example in its own folder), or as an absolute path inside the prefix. A path outside the prefix, or containing `..`, is refused (`Error: '<x>' is not a valid folder ...`, exit 1). The first `add` of a folder inside the user folder writes the three default folders first, then your addition, because **a list replaces the defaults**. Folders of the `drive_c:` kind are added to whatever is chosen.
+
+**Only some files of a folder.** If the last part of the path has a wildcard (`*`, `?`, `[...]`), or is an existing file, it is a *file filter*: only the files of that folder that match are taken (capital letters do not matter, no sub-folder). The filter may match nothing yet: it is simply empty until the game makes its first save. A restore or a `reset` only touches the files that match; the other files of the folder are left alone. A filter needs a parent folder (`savegame.*` alone is refused). The exclusions do not apply to the files a filter names. In the GUI, **Add files...** picks a file of the prefix and lets you edit its name (`savegame.*`).
 
 The choice lives in the prefix, in `ludis/settings/saves-folders.txt` and `saves-extra.txt`, and is copied next to every backup (`config`) and inside every `.zgs`. A prefix that has no choice of its own (a game that was just reinstalled) **adopts** the one recorded in the backup before it copies anything, so a reinstall never replaces a backup made with chosen folders by one made with the defaults.
 
