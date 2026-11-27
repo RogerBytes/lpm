@@ -16,7 +16,7 @@ ludis saves <slug> initial
 ludis saves <slug> reset [--yes]
 ludis saves <slug> path
 ludis saves <slug> export [<file>.zgs]
-ludis saves <slug> import <file>.zgs
+ludis saves <slug> import <file>.zgs [--folders zgs|keep|merge]
 ludis saves <slug> auto [follow|on|off]
 ludis saves <slug> folders [list|add <folder>|remove <folder>|reset]
 ludis saves <slug> exclude [list|defaults|add <pattern>|remove <pattern>|reset]
@@ -26,7 +26,7 @@ ludis saves <slug> push
 
 ## Description
 
-The saves of a game are, by default, the folders `AppData`, `Documents` and `Saved Games` of the Windows user of its prefix (`steamuser` under Proton, your Linux user name under Wine), minus what can be rebuilt (caches, shader caches, crash dumps, logs, Windows profile leftovers: see `exclude defaults`). Files are stored with paths **relative to the Windows user folder**, so a backup made under one user name restores under any other.
+The saves of a game are, by default, the folders `AppData`, `Documents` and `Saved Games` of the Windows user of its prefix (`steamuser` under Proton, your Linux user name under Wine), minus what can be rebuilt (caches, shader caches, crash dumps, logs, Windows profile leftovers: see `exclude defaults`). Ludis cannot guess where a game saves: if one writes its saves elsewhere (another folder of the Windows user, or a folder of `drive_c`), add that folder yourself with `folders add` (see below). Files are stored with paths **relative to the Windows user folder**, so a backup made under one user name restores under any other.
 
 `ludis saves` works with a **sync folder** that you choose once (`ludis saves dir`): typically a folder of your cloud client, so that two machines share the same saves. Each game gets its own sub-folder there.
 
@@ -80,7 +80,7 @@ These settings are in `~/.config/ludis/saves.conf` (`sync_dir=`, `auto=`, `inter
 | `history` | Lists the names of the snapshots in `previous/`, newest first. Needs a sync folder. |
 | `path` | Prints the Windows user folder of the prefix. |
 | `export [<file>]` | Writes a `.zgs` file (a zstd-compressed tar). Default name: `<slug>-saves.zgs` in the current folder; `.zgs` is added if missing. Does not need a sync folder. |
-| `import <file>` | Puts the saves of a `.zgs` into the prefix. The archive is inspected before anything is extracted: an absolute path, a `..` or any link refuses it entirely (`unsafe`). The local saves are first kept (in `previous/` if a sync folder is set, otherwise in `<prefix>/ludis/saves-before-import/<date>/`). |
+| `import <file> [--folders zgs\|keep\|merge]` | Puts the saves of a `.zgs` into the prefix. The `.zgs` also records the game's folder choice (`folders`, `exclude`). If the game has none, it takes them. If both have some and they differ, `--folders` decides: `zgs` (default) uses the archive's, `keep` keeps the game's, `merge` keeps both. In a terminal without `--folders`, you are asked. `import <file> --check` imports nothing and prints `differs` (exit 0) when the two differ, otherwise exit 1. The archive is inspected before anything is extracted: an absolute path, a `..` or any link refuses it entirely (`unsafe`). The local saves are first kept (in `previous/` if a sync folder is set, otherwise in `<prefix>/ludis/saves-before-import/<date>/`). |
 | `auto [follow\|on\|off]` | Automatic mode for this game. Without a value: `game=<follow\|on\|off> global=<on\|off>`. `follow` (default) uses the global setting. |
 | `folders ...`, `exclude ...` | Choose what is taken (see below). |
 | `pull`, `push` | What the automatic mode does (see below). They can be run by hand. |
@@ -150,7 +150,7 @@ Saves of 'Zelda' exported to /home/you/z.zgs
 
 ## Scripting notes
 
-- No prompt, ever. `restore` and `import` overwrite the saves in the prefix (after keeping them first), so ask your user before calling them.
+- No prompt, ever (except `reset` and `import` in a terminal). `restore` and `import` overwrite the saves in the prefix (after keeping them first), so ask your user before calling them.
 - The first word after `saves` is read as a slug unless it is `dir`, `auto` or `interval`.
 - `status`, `history`, `path`, `folders list`, `exclude list` print plain lines meant to be parsed. Their text is not translated.
 - Messages (`backed up`, `restored`, errors) follow the locale; use `LC_ALL=C` to get the English strings quoted here.

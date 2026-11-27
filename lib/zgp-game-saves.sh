@@ -13,7 +13,8 @@
 #   ludis saves <slug> reset [--yes]        put the saves back to that initial state (the current ones are kept once)
 #   ludis saves <slug> path                 the Windows user folder of the prefix
 #   ludis saves <slug> export [file.zgs]    make a shareable archive of the saves
-#   ludis saves <slug> import <file.zgs>    put the saves of an archive into the prefix
+#   ludis saves <slug> import <file.zgs> [--folders zgs|keep|merge]   put the saves of an archive into the prefix
+#                                           (if its folder choice differs from the game's: archive's by default)
 #   ludis saves <slug> pull | push          what the automatic mode does at launch / during and
 #                                           at the end of the game (quiet; usable by hand too)
 #   ludis saves <slug> auto [follow|on|off] automatic mode for this game (follows the global one)
@@ -314,15 +315,45 @@ saves_refresh_config() {
   return 0
 }
 
-# saves_adopt_config <file>: when this prefix has NO saves settings of its own, takes the ones
-# recorded in <file> (a backup's "config" or the marker of a .zgs). Settings the prefix already
-# has are never replaced. Only plain relative paths are accepted (no "..", no leading "/").
+# saves_config_sorted <file>: the folder/extra/exclude lines of a config file, sorted (to compare).
+saves_config_sorted() {
+  grep -E '^(folder|extra|exclude)=.' "$1" 2>/dev/null | sed 's/\r$//' | sort -u
+}
+
+# saves_prefix_config_sorted: the same lines for this prefix's own settings.
+saves_prefix_config_sorted() {
+  local tmp="${work}/prefix-config.tmp"
+  saves_write_config "${tmp}"
+  saves_config_sorted "${tmp}"
+  rm -f -- "${tmp}"
+}
+
+# saves_config_differs <file>: true when BOTH the file and this prefix have saves settings and they differ.
+saves_config_differs() {
+  local theirs mine
+  theirs="$(saves_config_sorted "$1")"; mine="$(saves_prefix_config_sorted)"
+  [[ -n "${theirs}" && -n "${mine}" && "${theirs}" != "${mine}" ]]
+}
+
+# saves_adopt_config <file> [mode]: takes the saves settings recorded in <file> (a backup's "config" or the
+# marker of a .zgs). Only plain relative paths are accepted (no "..", no leading "/").
+#   mode "keep" (default): only when this prefix has NO settings of its own; its own are never replaced.
+#   mode "zgs": the file's settings REPLACE those of the prefix (if the file has any).
+#   mode "merge": the lines of both are kept.
 saves_adopt_config() {
-  local f="$1" key value dest
+  local f="$1" mode="${2:-keep}" key value dest have=false k
   [[ -f "${f}" ]] || return 0
   if [[ -e "$(zgu_ludis_find "${prefix_dir}" saves_folders)" || -e "$(zgu_ludis_find "${prefix_dir}" saves_extra)" \
         || -e "$(zgu_ludis_find "${prefix_dir}" saves_exclude)" ]]; then
-    return 0
+    have=true
+  fi
+  if [[ "${have}" = true ]]; then
+    case "${mode}" in
+      zgs) [[ -n "$(saves_config_sorted "${f}")" ]] || return 0
+           for k in saves_folders saves_extra saves_exclude; do zgu_ludis_remove "${prefix_dir}" "${k}"; done ;;
+      merge) ;;
+      *) return 0 ;;
+    esac
   fi
   while IFS='=' read -r key value; do
     value="${value%$'\r'}"
@@ -333,6 +364,7 @@ saves_adopt_config() {
       exclude) dest="$(zgu_ludis_path "${prefix_dir}" saves_exclude)" ;;
       *) continue ;;
     esac
+    grep -qxF -- "${value}" "${dest}" 2>/dev/null && continue
     mkdir -p -- "$(dirname "${dest}")" 2>/dev/null && printf '%s\n' "${value}" >> "${dest}"
   done < "${f}"
   return 0
@@ -787,7 +819,30 @@ case "${cli_action}" in
       zgu_cli_error "$(t saves.import_invalid_cli "${file}")"
       exit 1
     fi
-    saves_adopt_config "${work}/src/.ludis-saves"
+    # The folder choice recorded in the archive vs the one of this prefix.
+    #   "import <file> --check": prints "differs" and exits 0 if the two differ, else exits 1; nothing is imported.
+    #   "import <file> [--folders zgs|keep|merge]": which one wins when they differ (default: the archive's;
+    #   in a terminal the user is asked).
+    if [[ "${4:-}" = "--check" ]]; then
+      saves_config_differs "${work}/src/.ludis-saves" && { echo differs; exit 0; }
+      exit 1
+    fi
+    folders_mode="zgs"
+    if [[ "${4:-}" = "--folders" ]]; then
+      folders_mode="${5:-}"
+      case "${folders_mode}" in
+        zgs|keep|merge) ;;
+        *) zgu_cli_error "$(t saves.folders_mode_invalid_cli "${folders_mode}")"; exit 1 ;;
+      esac
+    elif saves_config_differs "${work}/src/.ludis-saves" && [[ -t 0 ]]; then
+      read -r -p "$(t saves.folders_choice_cli)" reply || reply=""
+      case "${reply}" in
+        [kK]*) folders_mode="keep" ;;
+        [mM]*) folders_mode="merge" ;;
+        *) folders_mode="zgs" ;;
+      esac
+    fi
+    saves_adopt_config "${work}/src/.ludis-saves" "${folders_mode}"
     rm -f -- "${work}/src/.ludis-saves"
     # Local saves are kept first: in the sync folder when set, else next to the prefix's own files.
     if [[ -n "${game_sync}" ]]; then

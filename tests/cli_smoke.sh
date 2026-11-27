@@ -202,6 +202,18 @@ expect "saves: the import adopted the choice too" bash -c 'grep -qx "AppData/Roa
 check "saves: own settings are never replaced (add another folder, restore)" 0 '' saves zelda folders add "Documents/Other"
 check "saves: restore keeps them" 0 'restored' saves zelda restore
 expect "saves: own list kept as is" bash -c 'grep -qx "Documents/Other" "$1/saves-folders.txt"' _ "${zs}"
+# the .zgs and the prefix disagree on the folders: the user chooses
+expect "saves: set a different list in the prefix" bash -c 'printf "Documents/Other\n" > "$1/saves-folders.txt"; rm -f "$1/saves-exclude.txt" "$1/saves-extra.txt"' _ "${zs}"
+check "saves: import --check says the folders differ" 0 'differs' saves zelda import "${HOME}/zelda-cfg.zgs" --check
+check "saves: import --folders keep" 0 'imported' saves zelda import "${HOME}/zelda-cfg.zgs" --folders keep
+expect "saves: ... keeps the game's own list" bash -c '[ "$(cat "$1/saves-folders.txt")" = "Documents/Other" ]' _ "${zs}"
+check "saves: import --folders merge" 0 'imported' saves zelda import "${HOME}/zelda-cfg.zgs" --folders merge
+expect "saves: ... has both lists" bash -c 'grep -qx "Documents/Other" "$1/saves-folders.txt" && grep -qx "AppData/Roaming/Zelda/Slot" "$1/saves-folders.txt"' _ "${zs}"
+expect "saves: set a different list again" bash -c 'printf "Documents/Other\n" > "$1/saves-folders.txt"' _ "${zs}"
+check "saves: import without a terminal: the archive's list wins" 0 'imported' saves zelda import "${HOME}/zelda-cfg.zgs"
+expect "saves: ... the game's list was replaced by the archive's" bash -c 'grep -qx "AppData/Roaming/Zelda/Slot" "$1/saves-folders.txt" && ! grep -qx "Documents/Other" "$1/saves-folders.txt"' _ "${zs}"
+check "saves: import --check with the same lists says nothing" 1 '' saves zelda import "${HOME}/zelda-cfg.zgs" --check
+check "saves: import --folders with a wrong value is refused" 1 '' saves zelda import "${HOME}/zelda-cfg.zgs" --folders nope
 check "saves: cleanup" 0 '' saves zelda folders reset
 check "saves: cleanup exclusions" 0 '' saves zelda exclude reset
 # the backup's config follows the folder choice at once (no new backup needed)

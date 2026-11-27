@@ -372,7 +372,7 @@ class SavesPage:
             # The game list may still be loading: wait for the selection to be effective.
             def go(tries=0):
                 if self.game_row.selected_slug() == slug and self.state["slug"] == slug and not self.state["busy"]:
-                    self.game_run(["import", path], t("gui.saves.toast_import"))
+                    self.import_file(path)
                 elif tries < 50:
                     GLib.timeout_add(200, lambda: go(tries + 1) and False)
                 else:
@@ -382,6 +382,36 @@ class SavesPage:
         dialog.connect("response", answered)
         dialog.present(self.window)
 
+    def import_file(self, path):
+        """Import a .zgs. If the folders to save written in it differ from those of the game, ask
+        which ones win (the archive's, the game's, or both) before importing."""
+        slug = self.state["slug"]
+        if not slug or self.state["busy"]:
+            return
+        self.busy(True)
+
+        def checked(result):
+            def apply():
+                self.busy(False)
+                if result.returncode != 0 or "differs" not in result.stdout:
+                    self.game_run(["import", path], t("gui.saves.toast_import"))
+                    return
+                dialog = Adw.AlertDialog(heading=t("gui.saves.conflict_title"), body=t("gui.saves.conflict_body"))
+                dialog.add_response("cancel", t("gui.common.cancel"))
+                for rid in ("keep", "merge", "zgs"):
+                    dialog.add_response(rid, t("gui.saves.conflict_" + rid))
+                dialog.set_response_appearance("zgs", Adw.ResponseAppearance.SUGGESTED)
+                dialog.set_default_response("zgs")
+                dialog.set_close_response("cancel")
+
+                def answered(_d, response):
+                    if response in ("zgs", "keep", "merge"):
+                        self.game_run(["import", path, "--folders", response], t("gui.saves.toast_import"))
+                dialog.connect("response", answered)
+                dialog.present(self.window)
+            _run_on_main(apply)
+        backend.run_ludis_async(["saves", slug, "import", path, "--check"], on_done=checked)
+
     def on_import(self, *_):
         slug = self.state["slug"]
         if not slug:
@@ -389,7 +419,7 @@ class SavesPage:
 
         def chosen(paths):
             if paths:
-                self.game_run(["import", paths[0]], t("gui.saves.toast_import"))
+                self.import_file(paths[0])
         pick_file(self.window, t("gui.saves.import_title"), chosen, filters=[(t("gui.saves.filter"), ["*.zgs"])])
 
     def on_folders_save(self, *_):
