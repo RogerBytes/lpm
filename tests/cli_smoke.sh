@@ -72,6 +72,9 @@ mkdir -p "${sv_user}/AppData/Roaming/Zelda" "${sv_user}/AppData/Local/Temp" "${s
 echo slot1 > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; echo tmp > "${sv_user}/AppData/Local/Temp/junk"; echo doc > "${sv_user}/Documents/My Games/a.ini"
 ln -s /etc/passwd "${sv_user}/Documents/evil-link"
 check "saves: backup without sync folder is refused" 1 'ludis saves dir' saves zelda backup
+check "saves: initial without sync folder is refused (nothing is created)" 1 'ludis saves dir' saves zelda initial
+expect "saves: ... and nothing was made in the prefix" test ! -e "${HOME}/Games/zelda/ludis/saves-initial"
+check "saves: reset without sync folder is refused" 1 'ludis saves dir' saves zelda reset --yes
 check "saves: dir set" 0 '' saves dir "${HOME}/syncsaves"
 check "saves: backup" 0 'backed up' saves zelda backup
 expect "saves: files copied, Temp and links left out" bash -c 'c="$1/syncsaves/zelda/current"; [ "$(cat "$c/AppData/Roaming/Zelda/save1.dat")" = slot1 ] && [ -f "$c/Documents/My Games/a.ini" ] && [ ! -e "$c/AppData/Local/Temp/junk" ] && [ ! -e "$c/Documents/evil-link" ] && [ ! -L "$c/Documents/evil-link" ]' _ "${HOME}"
@@ -173,16 +176,20 @@ check "saves: folders list shows the drive_c entry" 0 'drive_c:Games/Zelda/save'
 check "saves: backup with an extra folder" 0 'backed up|unchanged' saves zelda backup
 expect "saves: the extra folder is in the backup under _extra/" bash -c '[ -f "$1/syncsaves/zelda/current/_extra/Games/Zelda/save/s1.sav" ]' _ "${HOME}"
 check "saves: folders reset clears both" 0 '' saves zelda folders reset
-# initial copy and reset
-ini="${HOME}/Games/zelda/ludis/saves-initial"
+# initial copy and reset (kept in the sync folder, never in the prefix; nothing without a sync folder)
+ini="${HOME}/syncsaves/zelda/initial"; oldini="${HOME}/Games/zelda/ludis/saves-initial"
+rm -rf "${ini}"
 check "saves: initial makes the first copy" 0 '[Ii]nitial' saves zelda initial
-expect "saves: ... stored in the prefix" test -d "${ini}"
+expect "saves: ... stored in the sync folder" test -d "${ini}"
+expect "saves: ... and nothing in the prefix" test ! -e "${oldini}"
 check "saves: initial again keeps the first copy" 0 '' saves zelda initial
+expect "saves: an initial state left in the prefix by an older version is moved to the sync folder" bash -c 'rm -rf "$2"; mkdir -p "$1/AppData"; echo old > "$1/AppData/m.txt"; bash "$3" saves zelda initial >/dev/null 2>&1 </dev/null; [ -f "$2/AppData/m.txt" ] && [ ! -e "$1" ]' _ "${oldini}" "${ini}" "${R}"
+rm -rf "${ini}"; check "saves: initial again" 0 '[Ii]nitial' saves zelda initial
 echo changed > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; echo newfile > "${sv_user}/AppData/Roaming/Zelda/new.dat"
 check "saves: reset without --yes and without a terminal refuses" 1 '' saves zelda reset
 check "saves: reset --yes" 0 'reset|restored|initial' saves zelda reset --yes
 expect "saves: reset removed files created after the initial copy" bash -c '[ ! -e "$1/new.dat" ]' _ "${sv_user}/AppData/Roaming/Zelda"
-expect "saves: reset keeps the current saves once first (safety copy)" bash -c 'ls "$1"/*before-reset* >/dev/null 2>&1 || ls -d "$2"/ludis/saves-before-reset >/dev/null 2>&1' _ "${rp}" "${HOME}/Games/zelda"
+expect "saves: reset keeps the current saves once first (safety copy)" bash -c 'ls "$1"/*before-reset* >/dev/null 2>&1' _ "${rp}"
 expect "saves: monitor stops by itself when the game never shows up" bash -c 'LUDIS_SAVES_GIVEUP=2 timeout 20 python3 "$1/lib/zgu-saves-monitor.py" "$2" zelda 10; [ $? -eq 0 ]' _ "${repo}" "${HOME}/Games/zelda"
 # the folder choice travels with the backup and the .zgs (old prefixes learn it)
 zs="${HOME}/Games/zelda/ludis/settings"

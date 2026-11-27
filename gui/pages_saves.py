@@ -152,8 +152,8 @@ class SavesPage:
         game = self.state["slug"] is not None and not self.state["busy"]
         has_dir = self.dir_row.get_subtitle() != t("gui.saves.dir_none")
         for index, button in enumerate(self.buttons):
-            # backup / restore need the sync folder; export / import do not
-            button.set_sensitive(game and (has_dir if index < 2 else True))
+            # backup / restore / reset need the sync folder; export / import do not
+            button.set_sensitive(game and (has_dir if index in (0, 1, 4) else True))
         self.game_auto_row.set_sensitive(game)
         self.folders_save.set_sensitive(game)
         self.folders_add.set_sensitive(game)

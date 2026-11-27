@@ -8,8 +8,8 @@
 #   ludis saves <slug> restore [snapshot]   copy <sync>/<slug>/current/ (or an older snapshot of
 #                                           "history") back into the prefix
 #   ludis saves <slug> history              the older snapshot kept in previous/ (compressed)
-#   ludis saves <slug> initial              keep the initial state of the saves (once; the launcher does it
-#                                           the first time the game is launched through Ludis)
+#   ludis saves <slug> initial              keep the initial state of the saves in the sync folder (once; the launcher
+#                                           does it at the first launch through Ludis once a sync folder is set)
 #   ludis saves <slug> reset [--yes]        put the saves back to that initial state (the current ones are kept once)
 #   ludis saves <slug> path                 the Windows user folder of the prefix
 #   ludis saves <slug> export [file.zgs]    make a shareable archive of the saves
@@ -39,7 +39,7 @@
 # Safety: nothing outside the prefix's user folder is ever written; links found in a backup or
 # an archive are deleted (never followed); the local saves are copied to "previous/" before any
 # restore or import overwrites them; "previous/" keeps 2 compressed snapshots at most: the previous backup and
-# the last safety copy (see saves_rotate). The initial state is kept in the prefix: <prefix>/ludis/saves-initial.
+# the last safety copy (see saves_rotate). The initial state is kept in the sync folder: <sync>/<slug>/initial/.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -584,12 +584,20 @@ case "${cli_action}" in
     ;;
 
   initial)
-    # The state of the saves before the game was played, kept once in the prefix itself (works without a sync folder).
-    initial_dir="$(zgu_ludis_dir "${prefix_dir}")/saves-initial"
+    # The state of the saves before the game was played with the saves option on: kept once in the game's
+    # folder of the sync folder (<sync>/<slug>/initial/). Nothing is made when no sync folder is set.
+    saves_need_sync_dir || exit 1
+    initial_dir="${game_sync}/initial"
+    old_initial="$(zgu_ludis_dir "${prefix_dir}")/saves-initial"      # older versions kept it in the prefix
+    if [[ -d "${old_initial}" ]]; then
+      [[ -d "${initial_dir}" ]] || { mkdir -p -- "${game_sync}" && mv -- "${old_initial}" "${initial_dir}"; }
+      rm -rf -- "${old_initial}"
+    fi
     if [[ -d "${initial_dir}" ]]; then
       zgu_cli_ok "$(t saves.initial_exists_cli "${target_name}")"
       exit 0
     fi
+    mkdir -p -- "${game_sync}" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; exit 1; }
     rm -rf -- "${initial_dir}.tmp"
     if [[ -z "${user_dir}" ]]; then initial_ok=true; mkdir -p -- "${initial_dir}.tmp" || initial_ok=false
     else initial_ok=true; saves_pack "${initial_dir}.tmp" || initial_ok=false; fi
@@ -603,7 +611,8 @@ case "${cli_action}" in
     ;;
 
   reset)
-    initial_dir="$(zgu_ludis_dir "${prefix_dir}")/saves-initial"
+    saves_need_sync_dir || exit 1
+    initial_dir="${game_sync}/initial"
     if [[ ! -d "${initial_dir}" ]]; then
       zgu_cli_error "$(t saves.reset_no_initial_cli "${target_name}")"
       exit 1
@@ -619,14 +628,8 @@ case "${cli_action}" in
         *) echo "$(t saves.reset_cancelled_cli)"; exit 0 ;;
       esac
     fi
-    # The current saves are kept once first (sync folder when set, else next to the prefix's own files).
-    if [[ -n "${game_sync}" ]]; then
-      saves_snapshot_local "before-reset" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; exit 1; }
-    elif [[ -n "$(saves_items)" ]]; then
-      bak="$(zgu_ludis_dir "${prefix_dir}")/saves-before-reset"
-      rm -rf -- "${bak}"
-      saves_pack "${bak}" || { zgu_cli_error "$(t saves.write_failed_cli "${bak}")"; exit 1; }
-    fi
+    # The current saves are kept once first, in previous/ of the sync folder.
+    saves_snapshot_local "before-reset" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; exit 1; }
     # Remove exactly the files that count as saves (not the whole folders), then put the initial ones back.
     if saves_pack "${work}/cur"; then
       while IFS= read -r -d '' f; do
