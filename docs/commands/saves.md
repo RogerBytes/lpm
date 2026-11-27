@@ -12,6 +12,8 @@ ludis saves <slug> [status]
 ludis saves <slug> backup
 ludis saves <slug> restore [<snapshot>]
 ludis saves <slug> history
+ludis saves <slug> initial
+ludis saves <slug> reset [--yes]
 ludis saves <slug> path
 ludis saves <slug> export [<file>.zgs]
 ludis saves <slug> import <file>.zgs
@@ -73,6 +75,8 @@ These settings are in `~/.config/ludis/saves.conf` (`sync_dir=`, `auto=`, `inter
 | `status` | Two lines: `local=<n> sync_dir=<folder or none>` (`n` = number of save folders found in the prefix) and `backup=<date> previous=<n>` (or `backup=none`). |
 | `backup` | Copies the saves to `<sync>/<slug>/current/`. The previous `current` becomes a compressed snapshot in `previous/`. If nothing changed: `Saves of '<name>' unchanged since the last backup.` and nothing is written. If the game has no save folder at all: `Error: no saves found for '<name>' ...`, exit 1. Needs a sync folder. |
 | `restore [<snapshot>]` | Puts `current/` (or the snapshot of `previous/` whose name contains `<snapshot>`) back into the prefix. The local saves are **first kept** in `previous/` (label `before-restore`). Needs a sync folder. |
+| `initial` | Keeps the initial state of the saves in the prefix, once (the launcher does it at the first launch). `Initial state of the saves of '<name>' kept.` or `... is already kept.` Works without a sync folder, and on a prefix that was never started (then the initial state is empty). |
+| `reset [--yes]` | Puts the saves back to the initial state: removes the files that count as saves, then copies the initial ones. The current saves are **first kept once** (`previous/` of the sync folder if set, else `ludis/saves-before-reset/`). Asks `[y/N]` in a terminal; without a terminal it needs `--yes`. Error if no initial state was kept. |
 | `history` | Lists the names of the snapshots in `previous/`, newest first. Needs a sync folder. |
 | `path` | Prints the Windows user folder of the prefix. |
 | `export [<file>]` | Writes a `.zgs` file (a zstd-compressed tar). Default name: `<slug>-saves.zgs` in the current folder; `.zgs` is added if missing. Does not need a sync folder. |
@@ -101,7 +105,8 @@ The choice lives in the prefix, in `ludis/settings/saves-folders.txt` and `saves
 
 ## Behavior
 
-- **Snapshots.** Before a `backup` replaces `current/`, the old one is compressed into `previous/<date>-backup.tar.zst`. `previous/` keeps at most **three** snapshots: the newest of the last hour, the newest of the last day, and the newest of the last week; everything older is deleted. The safety copies made before a `restore`, a `pull` or an `import` (names containing `before-` or `conflict`) are in addition kept 7 days. Only files and folders named like a snapshot are ever deleted there.
+- **Snapshots.** Before a `backup` replaces `current/`, the old one can become the "previous" one, `previous/<date>-backup.tar.zst`: only when the last "previous" is **at least 15 minutes old** (otherwise the old `current/` is simply replaced). So `previous/` holds at most **two** snapshots: the previous backup, and the last safety copy made before a `restore`, a `pull`, a `reset` or an `import` (names containing `before-` or `conflict`). Older ones are deleted. Backups made every few minutes therefore never pile up, and a crash that spoils the saves leaves an older copy (15 to 25 minutes old at the most while the automatic mode runs).
+- **Initial state.** The first time a game is launched through Ludis (automatic mode or not, before any `pull`), the saves are kept once in `<prefix>/ludis/saves-initial/` (empty if there were none), and never deleted by Ludis. `reset` puts them back. It is not exported in the `.zgp`. For a game launched before this feature existed, it is the state of the saves at its next launch.
 - **Safety.** Nothing outside the Windows user folder (and the `drive_c` folders you listed) is ever written; links found in a backup or an archive are deleted, never followed; a `.zgs` can never choose where its extra folders land (only those listed in the prefix's `saves-extra.txt` are accepted).
 - **Writes are atomic**: the new backup is built next to `current/` and swapped in by a rename.
 - **Per-machine memory**: the time this machine last pushed or pulled a game is kept in `~/.local/share/ludis/saves-state/<slug>`, never in the prefix (so it is not exported with the game).
@@ -185,7 +190,7 @@ ludis saves mariovania import ~/mariovania-saves.zgs
 
 - Reads/writes: `<sync folder>/<slug>/` (`current/`, `previous/`, `stamp`, `config`), the exported `.zgs`.
 - Reads: the Lutris database, the Windows user folder of the prefix (`drive_c/users/<user>/`) and the `drive_c` folders you listed.
-- Writes into the prefix: the restored or imported saves, and `ludis/settings/saves-folders.txt`, `saves-extra.txt`, `saves-exclude.txt`, `saves-auto`; `ludis/saves-before-import/` for an import without a sync folder.
+- Writes into the prefix: the restored or imported saves, and `ludis/settings/saves-folders.txt`, `saves-extra.txt`, `saves-exclude.txt`, `saves-auto`; `ludis/saves-initial/`, `ludis/saves-before-reset/` and `ludis/saves-before-import/` for an import without a sync folder.
 - Writes elsewhere: `~/.config/ludis/saves.conf`, `~/.local/share/ludis/saves-state/<slug>`, `~/.local/share/ludis/ludis.log`.
 - Lutris is not stopped.
 

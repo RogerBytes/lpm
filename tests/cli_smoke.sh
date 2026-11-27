@@ -146,11 +146,16 @@ check "saves: exclude list empty after reset" 0 '^$' saves zelda exclude list
 # rotation: fake snapshots of known ages (compressed files), then a real change triggers it
 rp="${HOME}/syncsaves/zelda/previous"; rm -rf "${rp}"; mkdir -p "${rp}"
 mk() { touch "${rp}/$(date -d "$1 ago" +%Y%m%d-%H%M%S)-$2.tar.zst"; }
-mk "10 minutes" a; mk "20 minutes" b; mk "100 minutes" c; mk "170 minutes" d; mk "5 hours" e; mk "6 hours" f
-mk "2 days" g; mk "10 days" h; mk "20 days" i; mk "4 days" j; mk "5 days" conflict
+mk "30 minutes" a; mk "40 minutes" b; mk "100 minutes" c; mk "170 minutes" d; mk "5 hours" e; mk "6 hours" f
+mk "2 days" g; mk "10 days" h; mk "20 days" i; mk "4 days" before-pull; mk "5 days" conflict
 echo rot > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
 check "saves: backup triggers the rotation" 0 'backed up' saves zelda backup
-expect "saves: rotation keeps 1 per hour / day / week (+ safety copies): only the new one, c, g, conflict" bash -c 'cd "$1"; n=$(ls | wc -l); for l in a b d e f h i j; do ls | grep -q -- "-$l.tar.zst$" && { echo "kept $l" >&2; exit 1; }; done; for l in c g conflict backup; do ls | grep -q -- "-$l.tar.zst$" || { echo "missing $l" >&2; exit 1; }; done; [ "$n" -eq 4 ]' _ "${rp}"
+expect "saves: rotation keeps only the new backup and the newest safety copy" bash -c 'cd "$1"; [ "$(ls | wc -l)" = 2 ] && ls | grep -q -- "-backup.tar.zst$" && ls | grep -q -- "-before-pull.tar.zst$"' _ "${rp}"
+# a backup made less than 15 minutes after the last "previous" replaces current without making a new snapshot
+before_list="$(ls "${rp}")"; echo rot2 > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
+check "saves: a quick second backup" 0 'backed up' saves zelda backup
+expect "saves: ... makes no new snapshot (previous stays the same)" bash -c '[ "$(ls "$1")" = "$2" ]' _ "${rp}" "${before_list}"
+expect "saves: ... but current holds the new content" bash -c 'grep -q rot2 "$1/syncsaves/zelda/current/AppData/Roaming/Zelda/rot.dat"' _ "${HOME}"
 expect "saves: the snapshot made by the backup is a real compressed archive of the old state" bash -c 'f=$(ls "$1"/*-backup.tar.zst | head -1); zstd -dcq "$f" | tar -t | grep -q "AppData"' _ "${rp}"
 check "saves: history lists the snapshots" 0 'backup' saves zelda history
 check "saves: path prints the Windows user folder" 0 'users/steamuser' saves zelda path
@@ -168,6 +173,16 @@ check "saves: folders list shows the drive_c entry" 0 'drive_c:Games/Zelda/save'
 check "saves: backup with an extra folder" 0 'backed up|unchanged' saves zelda backup
 expect "saves: the extra folder is in the backup under _extra/" bash -c '[ -f "$1/syncsaves/zelda/current/_extra/Games/Zelda/save/s1.sav" ]' _ "${HOME}"
 check "saves: folders reset clears both" 0 '' saves zelda folders reset
+# initial copy and reset
+ini="${HOME}/Games/zelda/ludis/saves-initial"
+check "saves: initial makes the first copy" 0 '[Ii]nitial' saves zelda initial
+expect "saves: ... stored in the prefix" test -d "${ini}"
+check "saves: initial again keeps the first copy" 0 '' saves zelda initial
+echo changed > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; echo newfile > "${sv_user}/AppData/Roaming/Zelda/new.dat"
+check "saves: reset without --yes and without a terminal refuses" 1 '' saves zelda reset
+check "saves: reset --yes" 0 'reset|restored|initial' saves zelda reset --yes
+expect "saves: reset removed files created after the initial copy" bash -c '[ ! -e "$1/new.dat" ]' _ "${sv_user}/AppData/Roaming/Zelda"
+expect "saves: reset keeps the current saves once first (safety copy)" bash -c 'ls "$1"/*before-reset* >/dev/null 2>&1 || ls -d "$2"/ludis/saves-before-reset >/dev/null 2>&1' _ "${rp}" "${HOME}/Games/zelda"
 expect "saves: monitor stops by itself when the game never shows up" bash -c 'LUDIS_SAVES_GIVEUP=2 timeout 20 python3 "$1/lib/zgu-saves-monitor.py" "$2" zelda 10; [ $? -eq 0 ]' _ "${repo}" "${HOME}/Games/zelda"
 # the folder choice travels with the backup and the .zgs (old prefixes learn it)
 zs="${HOME}/Games/zelda/ludis/settings"

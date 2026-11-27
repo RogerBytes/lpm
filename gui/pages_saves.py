@@ -112,7 +112,8 @@ class SavesPage:
         action_box = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, max_children_per_line=2,
                                  column_spacing=8, row_spacing=8, homogeneous=True, margin_top=8)
         for label, handler in (("backup", self.on_backup), ("restore", self.on_restore),
-                               ("export", self.on_export), ("import", self.on_import)):
+                               ("export", self.on_export), ("import", self.on_import),
+                               ("reset", self.on_reset)):
             button = Gtk.Button(label=t("gui.saves.btn_" + label))
             button.add_css_class("pill")
             button.connect("clicked", handler)
@@ -313,6 +314,16 @@ class SavesPage:
         dialog.add_response("restore", t("gui.saves.btn_restore"))
         dialog.set_response_appearance("restore", Adw.ResponseAppearance.SUGGESTED)
         dialog.connect("response", lambda _d, r: r == "restore" and self.game_run(["restore"], t("gui.saves.toast_restore")))
+        dialog.present(self.window)
+
+    def on_reset(self, *_):
+        if not self.state["slug"]:
+            return
+        dialog = Adw.AlertDialog(heading=t("gui.saves.reset_confirm_title"), body=t("gui.saves.reset_confirm_body"))
+        dialog.add_response("cancel", t("gui.common.cancel"))
+        dialog.add_response("reset", t("gui.saves.btn_reset"))
+        dialog.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", lambda _d, r: r == "reset" and self.game_run(["reset", "--yes"], t("gui.saves.toast_reset")))
         dialog.present(self.window)
 
     def on_export(self, *_):

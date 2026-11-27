@@ -51,8 +51,8 @@ Télécharge les médias propres à Lutris pour les jeux qui n'en ont pas.
 .B tools <slug> <tool> [args]
 Lance un outil Wine sur un jeu (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, overlay, gamepad).
 .TP
-.B saves dir [chemin] | <slug> status|backup|restore|export [fichier]|import <fichier>
-Sauvegarde, restaure, exporte (archive .zgs) et importe les saves d'un jeu (AppData, Documents, Saved Games). Le dossier de synchro se règle avec "saves dir" ; les saves locales précédentes sont toujours gardées avant une restauration ou un import.
+.B saves dir [chemin] | <slug> status|backup|restore|export [fichier]|import <fichier>|initial|reset
+Sauvegarde, restaure, exporte (archive .zgs) et importe les saves d'un jeu (AppData, Documents, Saved Games). Le dossier de synchro se règle avec "saves dir" ; les saves locales précédentes sont toujours gardées avant une restauration ou un import. L'état initial des saves est conservé dans le préfixe au premier lancement du jeu via Ludis ; "reset" le remet en place (les saves actuelles sont conservées une fois).
 .TP
 .B vsync status | <slug> [status|on|off] [réglage...]
 Force la désactivation du VSync d'un jeu via des variables d'environnement (d3d9, d3d11, d3d12, gl\-nvidia, gl\-mesa ; aucun réglage donné = tous).

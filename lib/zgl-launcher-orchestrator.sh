@@ -61,6 +61,10 @@ source "${script_dir}/zgu-lutris-utils.sh"
 saves_auto_start() {
   local out
   [[ -n "${slug:-}" && -n "${game_dir:-}" && -d "${game_dir}" ]] || return 0
+  # The initial state of the saves is kept once, the first time the game is launched (before any
+  # pull, so it is the state before the game was played), whether or not the automatic mode is on.
+  [[ -d "$(zgu_ludis_dir "${game_dir}")/saves-initial" ]] \
+    || timeout 20 bash "${script_dir}/zgp-game-saves.sh" "${slug}" initial >/dev/null 2>&1 </dev/null
   pkill -f "zgu-saves-monitor.py" 2>/dev/null
   zgu_saves_auto_wanted "${game_dir}" && command -v python3 >/dev/null 2>&1 || return 0
   out="$(timeout 60 bash "${script_dir}/zgp-game-saves.sh" "${slug}" pull 2>&1 </dev/null | tail -n 1)"

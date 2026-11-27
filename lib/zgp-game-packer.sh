@@ -599,7 +599,7 @@ with open(path, "w") as f:
   # Absolute path: the second -C below is relative to the previous one.
   parent_abs=$(realpath -- "${PARENT_DIR}")
   if command -v pv >/dev/null 2>&1; then
-    tar -cf - -C "${lpm_meta_dir}" .lpm-config.yml -C "${parent_abs}" --exclude="${WINEPREFIX_NAME}/ludis/.launcher-choice" --exclude="${WINEPREFIX_NAME}/.lpm-config.yml" "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _ludis_pct; do
+    tar -cf - -C "${lpm_meta_dir}" .lpm-config.yml -C "${parent_abs}" --exclude="${WINEPREFIX_NAME}/ludis/.launcher-choice" --exclude="${WINEPREFIX_NAME}/ludis/saves-initial" --exclude="${WINEPREFIX_NAME}/ludis/saves-before-reset" --exclude="${WINEPREFIX_NAME}/ludis/saves-before-import" --exclude="${WINEPREFIX_NAME}/.lpm-config.yml" "${WINEPREFIX_NAME}" | pv -n -s "${source_size}" 2> >(while IFS= read -r _ludis_pct; do
       # tar adds its headers: the stream may exceed the folder size -> capped at 100.
       [[ "${_ludis_pct}" =~ ^[0-9]+$ ]] || continue
       (( _ludis_pct > 100 )) && _ludis_pct=100
@@ -607,7 +607,7 @@ with open(path, "w") as f:
     done) | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   else
-    tar -cf - -C "${lpm_meta_dir}" .lpm-config.yml -C "${parent_abs}" --exclude="${WINEPREFIX_NAME}/ludis/.launcher-choice" --exclude="${WINEPREFIX_NAME}/.lpm-config.yml" "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
+    tar -cf - -C "${lpm_meta_dir}" .lpm-config.yml -C "${parent_abs}" --exclude="${WINEPREFIX_NAME}/ludis/.launcher-choice" --exclude="${WINEPREFIX_NAME}/ludis/saves-initial" --exclude="${WINEPREFIX_NAME}/ludis/saves-before-reset" --exclude="${WINEPREFIX_NAME}/ludis/saves-before-import" --exclude="${WINEPREFIX_NAME}/.lpm-config.yml" "${WINEPREFIX_NAME}" | zstd "${zstd_args[@]}" > "${archive_path}"
     tar_exit="${PIPESTATUS[0]}"
   fi
 

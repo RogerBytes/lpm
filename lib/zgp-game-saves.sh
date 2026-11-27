@@ -7,7 +7,10 @@
 #   ludis saves <slug> backup               copy the game's saves to <sync>/<slug>/current/
 #   ludis saves <slug> restore [snapshot]   copy <sync>/<slug>/current/ (or an older snapshot of
 #                                           "history") back into the prefix
-#   ludis saves <slug> history              the older snapshots kept in previous/ (compressed)
+#   ludis saves <slug> history              the older snapshot kept in previous/ (compressed)
+#   ludis saves <slug> initial              keep the initial state of the saves (once; the launcher does it
+#                                           the first time the game is launched through Ludis)
+#   ludis saves <slug> reset [--yes]        put the saves back to that initial state (the current ones are kept once)
 #   ludis saves <slug> path                 the Windows user folder of the prefix
 #   ludis saves <slug> export [file.zgs]    make a shareable archive of the saves
 #   ludis saves <slug> import <file.zgs>    put the saves of an archive into the prefix
@@ -34,7 +37,8 @@
 #
 # Safety: nothing outside the prefix's user folder is ever written; links found in a backup or
 # an archive are deleted (never followed); the local saves are copied to "previous/" before any
-# restore or import overwrites them; "previous/" keeps 3 compressed snapshots at most (see saves_rotate).
+# restore or import overwrites them; "previous/" keeps 2 compressed snapshots at most: the previous backup and
+# the last safety copy (see saves_rotate). The initial state is kept in the prefix: <prefix>/ludis/saves-initial.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -51,6 +55,8 @@ source "${script_dir}/zgu-saves-ask.sh"
 saves_conf="${XDG_CONFIG_HOME:-${HOME}/.config}/ludis/saves.conf"
 saves_dirs=(AppData Documents "Saved Games")
 saves_keep=5
+# A backup becomes the "previous" one only when the last "previous" is at least this old (seconds).
+saves_prev_min_age=900
 saves_excludes=(
   # temporary files and caches that are rebuilt by themselves
   "AppData/Local/Temp" "AppData/LocalLow/Temp"
@@ -213,29 +219,31 @@ saves_compress() {
   tar -C "$1" -cf - . 2>/dev/null | zstd -q -3 -f -o "$2.tmp" 2>/dev/null && mv -f -- "$2.tmp" "$2" || { rm -f -- "$2.tmp"; return 1; }
 }
 
-# saves_rotate <previous_dir>: what previous/ keeps (3 snapshots at most): the newest one of the
-# last hour, the newest one of the last day (older than that hour) and the newest one of the last
-# week (older than that day). Everything else is deleted. The safety copies made before a restore,
-# a pull or an import ("before-*", "conflict") are also kept for 7 days whatever the rule says.
+# saves_name_epoch <snapshot path>: its date (epoch) read from its name YYYYmmdd-HHMMSS-<label>[.tar.zst].
+# Prints nothing when the name is not one of ours.
+saves_name_epoch() {
+  local name stamp epoch
+  name="$(basename -- "$1")"; name="${name%.tar.zst}"
+  stamp="${name:0:8} ${name:9:2}:${name:11:2}:${name:13:2}"
+  epoch="$(date -d "${stamp}" +%s 2>/dev/null)" || return 0
+  [[ "${epoch}" =~ ^[0-9]+$ ]] && printf '%s\n' "${epoch}"
+}
+
+# saves_rotate <previous_dir>: what previous/ keeps (2 snapshots at most): the newest backup that was
+# replaced ("previous backup") and the newest safety copy made before a restore, a pull, a reset or an
+# import ("before-*", "conflict"). Everything else is deleted.
 # Snapshots are named YYYYmmdd-HHMMSS-<label>.tar.zst (older versions made plain folders: same rule).
 saves_rotate() {
-  local d name stamp epoch age keep now key
-  declare -A seen=()
-  now="$(date +%s)"
+  local d name kept_backup=false kept_safe=false
   while IFS= read -r d; do
     name="$(basename -- "${d}")"; name="${name%.tar.zst}"
-    stamp="${name:0:8} ${name:9:2}:${name:11:2}:${name:13:2}"
-    epoch="$(date -d "${stamp}" +%s 2>/dev/null)" || epoch=""
-    [[ "${epoch}" =~ ^[0-9]+$ ]] || continue       # not one of ours: never touched
-    age=$(( now - epoch ))
-    keep=false
-    if (( age < 3600 )); then key="hour"
-    elif (( age < 86400 )); then key="day"
-    elif (( age < 7 * 86400 )); then key="week"
-    else key=""; fi
-    if [[ -n "${key}" && -z "${seen[${key}]:-}" ]]; then seen[${key}]=1; keep=true; fi
-    if [[ "${keep}" = false && "${name}" =~ -(before-|conflict) ]] && (( age < 7 * 86400 )); then keep=true; fi
-    [[ "${keep}" = true ]] || rm -rf -- "${d}"
+    [[ -n "$(saves_name_epoch "${d}")" ]] || continue       # not one of ours: never touched
+    if [[ "${name}" =~ -(before-|conflict) ]]; then
+      [[ "${kept_safe}" = false ]] && { kept_safe=true; continue; }
+    else
+      [[ "${kept_backup}" = false ]] && { kept_backup=true; continue; }
+    fi
+    rm -rf -- "${d}"
   done < <(find "$1" -mindepth 1 -maxdepth 1 \( -type f -name '*.tar.zst' -o -type d \) 2>/dev/null | sort -r)
   return 0
 }
@@ -424,7 +432,7 @@ if [[ "${cli_slug}" = "dir" ]]; then
 fi
 
 case "${cli_action}" in
-  status|backup|restore|export|import|pull|push|auto|folders|exclude|history|path) ;;
+  status|backup|restore|export|import|pull|push|auto|folders|exclude|history|path|initial|reset) ;;
   "") cli_action="status" ;;
   *)
     zgu_cli_error "$(t saves.invalid_action_cli "${cli_action}")"
@@ -454,7 +462,10 @@ if [[ -z "${prefix_dir}" ]]; then
   zgu_cli_error "$(t game_tools.prefix_not_found_cli "${target_name}")"
   exit 1
 fi
-user_dir="$(saves_user_dir)" || { zgu_cli_error "$(t saves.no_user_dir_cli "${target_name}")"; exit 1; }
+if ! user_dir="$(saves_user_dir)"; then
+  # A prefix that was never started has no Windows user folder yet: for "initial" that means "no saves yet".
+  if [[ "${cli_action}" = initial ]]; then user_dir=""; else zgu_cli_error "$(t saves.no_user_dir_cli "${target_name}")"; exit 1; fi
+fi
 
 sync_dir="$(saves_conf_get)"
 game_sync=""
@@ -503,14 +514,23 @@ case "${cli_action}" in
       exit 1
     fi
     if [[ -d "${game_sync}/current" ]]; then
-      mkdir -p -- "${game_sync}/previous"
-      old="${game_sync}/previous/$(date +%Y%m%d-%H%M%S)-backup"
-      if saves_compress "${game_sync}/current" "${old}.tar.zst"; then
-        rm -rf -- "${game_sync}/current"
+      # The old backup becomes the "previous" one only when the last "previous" is old enough:
+      # otherwise it is simply replaced, so a crash never finds two near-identical copies.
+      last_prev="$(find "${game_sync}/previous" -mindepth 1 -maxdepth 1 ! -name '*-before-*' ! -name '*-conflict*' 2>/dev/null | sort -r | head -n 1)"
+      prev_epoch=""
+      [[ -n "${last_prev}" ]] && prev_epoch="$(saves_name_epoch "${last_prev}")"
+      if [[ -z "${prev_epoch}" ]] || (( $(date +%s) - prev_epoch >= saves_prev_min_age )); then
+        mkdir -p -- "${game_sync}/previous"
+        old="${game_sync}/previous/$(date +%Y%m%d-%H%M%S)-backup"
+        if saves_compress "${game_sync}/current" "${old}.tar.zst"; then
+          rm -rf -- "${game_sync}/current"
+        else
+          mv -- "${game_sync}/current" "${old}"
+        fi
+        saves_rotate "${game_sync}/previous"
       else
-        mv -- "${game_sync}/current" "${old}"
+        rm -rf -- "${game_sync}/current"
       fi
-      saves_rotate "${game_sync}/previous"
     fi
     mv -- "${game_sync}/.current.tmp" "${game_sync}/current"
     printf '%s %s\n' "$(date +%s)" "$(hostname 2>/dev/null | tr -d ' ')" > "${game_sync}/stamp" 2>/dev/null
@@ -529,6 +549,65 @@ case "${cli_action}" in
   history)
     saves_need_sync_dir || exit 1
     find "${game_sync}/previous" -mindepth 1 -maxdepth 1 2>/dev/null | sed 's#.*/##; s#\.tar\.zst$##' | sort -r
+    ;;
+
+  initial)
+    # The state of the saves before the game was played, kept once in the prefix itself (works without a sync folder).
+    initial_dir="$(zgu_ludis_dir "${prefix_dir}")/saves-initial"
+    if [[ -d "${initial_dir}" ]]; then
+      zgu_cli_ok "$(t saves.initial_exists_cli "${target_name}")"
+      exit 0
+    fi
+    rm -rf -- "${initial_dir}.tmp"
+    if [[ -z "${user_dir}" ]]; then initial_ok=true; mkdir -p -- "${initial_dir}.tmp" || initial_ok=false
+    else initial_ok=true; saves_pack "${initial_dir}.tmp" || initial_ok=false; fi
+    if [[ "${initial_ok}" != true ]] || ! mv -- "${initial_dir}.tmp" "${initial_dir}"; then
+      rm -rf -- "${initial_dir}.tmp"
+      zgu_cli_error "$(t saves.write_failed_cli "${initial_dir}")"
+      exit 1
+    fi
+    zgu_log "saves" "OK" "slug=${target_slug} action=initial"
+    zgu_cli_ok "$(t saves.initial_ok_cli "${target_name}")"
+    ;;
+
+  reset)
+    initial_dir="$(zgu_ludis_dir "${prefix_dir}")/saves-initial"
+    if [[ ! -d "${initial_dir}" ]]; then
+      zgu_cli_error "$(t saves.reset_no_initial_cli "${target_name}")"
+      exit 1
+    fi
+    if [[ "${cli_arg}" != "--yes" && "${cli_arg}" != "-y" ]]; then
+      if [[ ! -t 0 ]]; then
+        zgu_cli_error "$(t saves.reset_need_yes_cli)"
+        exit 1
+      fi
+      read -r -p "$(t saves.reset_confirm_cli "${target_name}")" reply || reply="n"
+      case "${reply}" in
+        [oOyY]) ;;
+        *) echo "$(t saves.reset_cancelled_cli)"; exit 0 ;;
+      esac
+    fi
+    # The current saves are kept once first (sync folder when set, else next to the prefix's own files).
+    if [[ -n "${game_sync}" ]]; then
+      saves_snapshot_local "before-reset" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; exit 1; }
+    elif [[ -n "$(saves_items)" ]]; then
+      bak="$(zgu_ludis_dir "${prefix_dir}")/saves-before-reset"
+      rm -rf -- "${bak}"
+      saves_pack "${bak}" || { zgu_cli_error "$(t saves.write_failed_cli "${bak}")"; exit 1; }
+    fi
+    # Remove exactly the files that count as saves (not the whole folders), then put the initial ones back.
+    if saves_pack "${work}/cur"; then
+      while IFS= read -r -d '' f; do
+        rel="${f#"${work}/cur/"}"
+        if [[ "${rel}" = _extra/* ]]; then rm -f -- "${prefix_dir}/drive_c/${rel#_extra/}"; else rm -f -- "${user_dir}/${rel}"; fi
+      done < <(find "${work}/cur" -type f -print0)
+    fi
+    if ! saves_unpack "${initial_dir}"; then
+      zgu_cli_error "$(t saves.restore_failed_cli "${target_name}")"
+      exit 1
+    fi
+    zgu_log "saves" "OK" "slug=${target_slug} action=reset"
+    zgu_cli_ok "$(t saves.reset_ok_cli "${target_name}")"
     ;;
 
   path)

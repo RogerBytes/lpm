@@ -51,8 +51,8 @@ Downloads Lutris's own media for games that lack them.
 .B tools <slug> <tool> [args]
 Runs a Wine tool on a game (winetricks, regedit, winecfg, console, exe, folder, favorite, env, runner, mangohud, overlay, gamepad).
 .TP
-.B saves dir [path] | <slug> status|backup|restore|export [file]|import <file>
-Backs up, restores, exports (.zgs archive) and imports the saves of a game (AppData, Documents, Saved Games). The sync folder is set with "saves dir"; the previous local saves are always kept before a restore or an import.
+.B saves dir [path] | <slug> status|backup|restore|export [file]|import <file>|initial|reset
+Backs up, restores, exports (.zgs archive) and imports the saves of a game (AppData, Documents, Saved Games). The sync folder is set with "saves dir"; the previous local saves are always kept before a restore or an import. The initial state of the saves is kept in the prefix the first time the game is launched through Ludis; "reset" puts it back (the current saves are kept once).
 .TP
 .B vsync status | <slug> [status|on|off] [setting...]
 Forces VSync off for a game with environment variables (d3d9, d3d11, d3d12, gl\-nvidia, gl\-mesa; none given = all).
