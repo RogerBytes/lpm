@@ -153,7 +153,13 @@ mk "30 minutes" a; mk "40 minutes" b; mk "100 minutes" c; mk "170 minutes" d; mk
 mk "2 days" g; mk "10 days" h; mk "20 days" i; mk "4 days" before-pull; mk "5 days" conflict
 echo rot > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
 check "saves: backup triggers the rotation" 0 'backed up' saves zelda backup
-expect "saves: rotation keeps only the new backup and the newest safety copy" bash -c 'cd "$1"; [ "$(ls | wc -l)" = 2 ] && ls | grep -q -- "-backup.tar.zst$" && ls | grep -q -- "-before-pull.tar.zst$"' _ "${rp}"
+expect "saves: rotation keeps 2 recent + 1 older (>= 1 day) + the newest safety copy" bash -c 'cd "$1"; [ "$(ls | wc -l)" = 4 ] && ls | grep -q -- "-backup.tar.zst$" && ls | grep -q -- "-a.tar.zst$" && ls | grep -q -- "-g.tar.zst$" && ls | grep -q -- "-before-pull.tar.zst$"' _ "${rp}"
+# no snapshot is a day older than the newest yet: the oldest of the rest is kept as the "older" one
+rm -rf "${rp}"; mkdir -p "${rp}"; mk "20 minutes" x; mk "40 minutes" y; mk "60 minutes" z
+echo rot1 > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
+check "saves: backup with only recent snapshots" 0 'backed up' saves zelda backup
+expect "saves: ... keeps the new one, the last one and the oldest (the middle one goes)" bash -c 'cd "$1"; [ "$(ls | wc -l)" = 3 ] && ls | grep -q -- "-x.tar.zst$" && ls | grep -q -- "-z.tar.zst$" && ! ls | grep -q -- "-y.tar.zst$"' _ "${rp}"
+echo rot > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
 # a backup made less than 15 minutes after the last "previous" replaces current without making a new snapshot
 before_list="$(ls "${rp}")"; echo rot2 > "${sv_user}/AppData/Roaming/Zelda/rot.dat"
 check "saves: a quick second backup" 0 'backed up' saves zelda backup
@@ -177,13 +183,14 @@ check "saves: backup with an extra folder" 0 'backed up|unchanged' saves zelda b
 expect "saves: the extra folder is in the backup under _extra/" bash -c '[ -f "$1/syncsaves/zelda/current/_extra/Games/Zelda/save/s1.sav" ]' _ "${HOME}"
 check "saves: folders reset clears both" 0 '' saves zelda folders reset
 # initial copy and reset (kept in the sync folder, never in the prefix; nothing without a sync folder)
-ini="${HOME}/syncsaves/zelda/initial"; oldini="${HOME}/Games/zelda/ludis/saves-initial"
+ini="${HOME}/syncsaves/zelda/initial.tar.zst"; oldini="${HOME}/Games/zelda/ludis/saves-initial"
 rm -rf "${ini}"
 check "saves: initial makes the first copy" 0 '[Ii]nitial' saves zelda initial
-expect "saves: ... stored in the sync folder" test -d "${ini}"
+expect "saves: ... stored in the sync folder, compressed" bash -c 'zstd -dcq "$1" | tar -t >/dev/null 2>&1' _ "${ini}"
 expect "saves: ... and nothing in the prefix" test ! -e "${oldini}"
 check "saves: initial again keeps the first copy" 0 '' saves zelda initial
-expect "saves: an initial state left in the prefix by an older version is moved to the sync folder" bash -c 'rm -rf "$2"; mkdir -p "$1/AppData"; echo old > "$1/AppData/m.txt"; bash "$3" saves zelda initial >/dev/null 2>&1 </dev/null; [ -f "$2/AppData/m.txt" ] && [ ! -e "$1" ]' _ "${oldini}" "${ini}" "${R}"
+expect "saves: an initial state left in the prefix by an older version is moved to the sync folder" bash -c 'rm -rf "$2"; mkdir -p "$1/AppData"; echo old > "$1/AppData/m.txt"; bash "$3" saves zelda initial >/dev/null 2>&1 </dev/null; zstd -dcq "$2" | tar -t | grep -q "AppData/m.txt" && [ ! -e "$1" ]' _ "${oldini}" "${ini}" "${R}"
+expect "saves: an uncompressed initial folder (previous version) is compressed" bash -c 'g="$3"; rm -rf "$2" "$g/initial"; mkdir -p "$g/initial/AppData"; echo u > "$g/initial/AppData/u.txt"; bash "$4" saves zelda initial >/dev/null 2>&1 </dev/null; zstd -dcq "$2" | tar -t | grep -q "AppData/u.txt" && [ ! -e "$g/initial" ]' _ "${oldini}" "${ini}" "${HOME}/syncsaves/zelda" "${R}"
 rm -rf "${ini}"; check "saves: initial again" 0 '[Ii]nitial' saves zelda initial
 echo changed > "${sv_user}/AppData/Roaming/Zelda/save1.dat"; echo newfile > "${sv_user}/AppData/Roaming/Zelda/new.dat"
 check "saves: reset without --yes and without a terminal refuses" 1 '' saves zelda reset

@@ -33,7 +33,7 @@ The saves of a game are, by default, the folders `AppData`, `Documents` and `Sav
 ```
 <sync folder>/<slug>/current/    the latest backup (plain files)
 <sync folder>/<slug>/previous/   older versions, compressed (<date>-<label>.tar.zst)
-<sync folder>/<slug>/initial/    the saves as they were before the game was played with the saves option on
+<sync folder>/<slug>/initial.tar.zst   the saves as they were before the game was played with the saves option on (compressed)
 <sync folder>/<slug>/stamp       "<epoch> <host name>" of the latest backup
 <sync folder>/<slug>/config      the folder choice of this game (see below)
 ```
@@ -76,7 +76,7 @@ These settings are in `~/.config/ludis/saves.conf` (`sync_dir=`, `auto=`, `inter
 | `status` | Two lines: `local=<n> sync_dir=<folder or none>` (`n` = number of save folders found in the prefix) and `backup=<date> previous=<n>` (or `backup=none`). |
 | `backup` | Copies the saves to `<sync>/<slug>/current/`. The previous `current` becomes a compressed snapshot in `previous/`. If nothing changed: `Saves of '<name>' unchanged since the last backup.` and nothing is written. If the game has no save folder at all: `Error: no saves found for '<name>' ...`, exit 1. Needs a sync folder. |
 | `restore [<snapshot>]` | Puts `current/` (or the snapshot of `previous/` whose name contains `<snapshot>`) back into the prefix. The local saves are **first kept** in `previous/` (label `before-restore`). Needs a sync folder. |
-| `initial` | Keeps the initial state of the saves in `<sync folder>/<slug>/initial/`, once (the launcher does it at the first launch). `Initial state of the saves of '<name>' kept.` or `... is already kept.` Needs a sync folder. On a prefix that was never started the initial state is empty. |
+| `initial` | Keeps the initial state of the saves in `<sync folder>/<slug>/initial.tar.zst` (compressed), once (the launcher does it at the first launch). `Initial state of the saves of '<name>' kept.` or `... is already kept.` Needs a sync folder. On a prefix that was never started the initial state is empty. |
 | `reset [--yes]` | Puts the saves back to the initial state: removes the files that count as saves, then copies the initial ones. The current saves are **first kept once** in `previous/` (label `before-reset`). Needs a sync folder. Asks `[y/N]` in a terminal; without a terminal it needs `--yes`. Error if no initial state was kept. |
 | `history` | Lists the names of the snapshots in `previous/`, newest first. Needs a sync folder. |
 | `path` | Prints the Windows user folder of the prefix. |
@@ -106,8 +106,8 @@ The choice lives in the prefix, in `ludis/settings/saves-folders.txt` and `saves
 
 ## Behavior
 
-- **Snapshots.** Before a `backup` replaces `current/`, the old one can become the "previous" one, `previous/<date>-backup.tar.zst`: only when the last "previous" is **at least 15 minutes old** (otherwise the old `current/` is simply replaced). So `previous/` holds at most **two** snapshots: the previous backup, and the last safety copy made before a `restore`, a `pull`, a `reset` or an `import` (names containing `before-` or `conflict`). Older ones are deleted. Backups made every few minutes therefore never pile up, and a crash that spoils the saves leaves an older copy (15 to 25 minutes old at the most while the automatic mode runs).
-- **Initial state.** Nothing is kept as long as no sync folder is set. Once one is set, the first time a game is launched through Ludis (automatic mode or not, before any `pull`), the saves are kept once in `<sync folder>/<slug>/initial/` (empty if there were none), and never deleted by Ludis. `reset` puts them back. For a game already played, it is the state of the saves at its first launch after the sync folder was set. An initial state kept in the prefix by an earlier version is moved to the sync folder.
+- **Snapshots.** Before a `backup` replaces `current/`, the old one can become a snapshot, `previous/<date>-backup.tar.zst`: only when the last one is **at least 15 minutes old** (otherwise the old `current/` is simply replaced). `previous/` keeps **2 recent** snapshots, **1 older** one (the newest that is at least a day older than the latest; until there is one, the oldest of the rest) and the **last safety copy** made before a `restore`, a `pull`, a `reset` or an `import` (names containing `before-` or `conflict`). Everything else is deleted, so backups made every few minutes never pile up, and a crash that spoils the saves still leaves an older copy.
+- **Initial state.** Nothing is kept as long as no sync folder is set. Once one is set, the first time a game is launched through Ludis (automatic mode or not, before any `pull`), the saves are kept once, compressed, in `<sync folder>/<slug>/initial.tar.zst` (empty if there were none), and never deleted by Ludis. `reset` puts them back. For a game already played, it is the state of the saves at its first launch after the sync folder was set. An initial state kept in the prefix or uncompressed by an earlier version is moved to the sync folder and compressed.
 - **Safety.** Nothing outside the Windows user folder (and the `drive_c` folders you listed) is ever written; links found in a backup or an archive are deleted, never followed; a `.zgs` can never choose where its extra folders land (only those listed in the prefix's `saves-extra.txt` are accepted).
 - **Writes are atomic**: the new backup is built next to `current/` and swapped in by a rename.
 - **Per-machine memory**: the time this machine last pushed or pulled a game is kept in `~/.local/share/ludis/saves-state/<slug>`, never in the prefix (so it is not exported with the game).

@@ -64,7 +64,7 @@ saves_auto_start() {
   # The initial state of the saves is kept once, in the sync folder, the first time the game is launched
   # with the saves option on (a sync folder is set), before any pull. Nothing is made without a sync folder.
   local sd; sd="$(zgu_saves_conf_get sync_dir)"
-  if [[ -n "${sd}" && ( ! -d "${sd%/}/${slug}/initial" || -d "$(zgu_ludis_dir "${game_dir}")/saves-initial" ) ]]; then
+  if [[ -n "${sd}" && ( ! -e "${sd%/}/${slug}/initial.tar.zst" || -d "${sd%/}/${slug}/initial" || -d "$(zgu_ludis_dir "${game_dir}")/saves-initial" ) ]]; then
     timeout 20 bash "${script_dir}/zgp-game-saves.sh" "${slug}" initial >/dev/null 2>&1 </dev/null
   fi
   pkill -f "zgu-saves-monitor.py" 2>/dev/null

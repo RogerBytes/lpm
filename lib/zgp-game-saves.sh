@@ -38,8 +38,8 @@
 #
 # Safety: nothing outside the prefix's user folder is ever written; links found in a backup or
 # an archive are deleted (never followed); the local saves are copied to "previous/" before any
-# restore or import overwrites them; "previous/" keeps 2 compressed snapshots at most: the previous backup and
-# the last safety copy (see saves_rotate). The initial state is kept in the sync folder: <sync>/<slug>/initial/.
+# restore or import overwrites them; "previous/" keeps a few compressed snapshots (2 recent, 1 older, the last
+# safety copy: see saves_rotate). The initial state is kept, compressed, in the sync folder: <sync>/<slug>/initial.tar.zst.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./zgl-lang-loader.sh
@@ -230,22 +230,36 @@ saves_name_epoch() {
   [[ "${epoch}" =~ ^[0-9]+$ ]] && printf '%s\n' "${epoch}"
 }
 
-# saves_rotate <previous_dir>: what previous/ keeps (2 snapshots at most): the newest backup that was
-# replaced ("previous backup") and the newest safety copy made before a restore, a pull, a reset or an
-# import ("before-*", "conflict"). Everything else is deleted.
-# Snapshots are named YYYYmmdd-HHMMSS-<label>.tar.zst (older versions made plain folders: same rule).
+# saves_rotate <previous_dir>: what previous/ keeps: the 2 most recent backups that were replaced, ONE older
+# backup (the newest one that is at least a day older than the newest; while there is none, the oldest of the
+# rest), and the newest safety copy made before a restore, a pull, a reset or an import ("before-", "conflict").
+# Everything else is deleted. Snapshots are named YYYYmmdd-HHMMSS-<label>.tar.zst (older versions made plain
+# folders: same rule); names that are not ours are never touched.
 saves_rotate() {
-  local d name kept_backup=false kept_safe=false
+  local d name e kept_safe=false n=0 newest="" old="" oldest="" keep
+  local -a rest=() all=()
   while IFS= read -r d; do
     name="$(basename -- "${d}")"; name="${name%.tar.zst}"
-    [[ -n "$(saves_name_epoch "${d}")" ]] || continue       # not one of ours: never touched
+    e="$(saves_name_epoch "${d}")"; [[ -n "${e}" ]] || continue
+    all+=("${d}")
     if [[ "${name}" =~ -(before-|conflict) ]]; then
-      [[ "${kept_safe}" = false ]] && { kept_safe=true; continue; }
-    else
-      [[ "${kept_backup}" = false ]] && { kept_backup=true; continue; }
+      [[ "${kept_safe}" = false ]] && { kept_safe=true; keep="${keep:-}|${d}|"; continue; }
+      continue
     fi
-    rm -rf -- "${d}"
+    n=$((n + 1))
+    if (( n == 1 )); then newest="${e}"; keep="${keep:-}|${d}|"
+    elif (( n == 2 )); then keep="${keep:-}|${d}|"
+    else
+      rest+=("${d}")
+      [[ -z "${old}" && $(( newest - e )) -ge 86400 ]] && old="${d}"
+      oldest="${d}"
+    fi
   done < <(find "$1" -mindepth 1 -maxdepth 1 \( -type f -name '*.tar.zst' -o -type d \) 2>/dev/null | sort -r)
+  [[ -n "${old}" ]] || old="${oldest}"
+  [[ -n "${old}" ]] && keep="${keep:-}|${old}|"
+  for d in "${all[@]}"; do
+    [[ "${keep:-}" == *"|${d}|"* ]] || rm -rf -- "${d}"
+  done
   return 0
 }
 
@@ -584,27 +598,34 @@ case "${cli_action}" in
     ;;
 
   initial)
-    # The state of the saves before the game was played with the saves option on: kept once in the game's
-    # folder of the sync folder (<sync>/<slug>/initial/). Nothing is made when no sync folder is set.
+    # The state of the saves before the game was played with the saves option on: kept once, compressed, in the
+    # game's folder of the sync folder (<sync>/<slug>/initial.tar.zst). Nothing is made without a sync folder.
     saves_need_sync_dir || exit 1
-    initial_dir="${game_sync}/initial"
+    initial_file="${game_sync}/initial.tar.zst"
     old_initial="$(zgu_ludis_dir "${prefix_dir}")/saves-initial"      # older versions kept it in the prefix
-    if [[ -d "${old_initial}" ]]; then
-      [[ -d "${initial_dir}" ]] || { mkdir -p -- "${game_sync}" && mv -- "${old_initial}" "${initial_dir}"; }
-      rm -rf -- "${old_initial}"
+    if [[ -d "${old_initial}" && ! -e "${initial_file}" && ! -d "${game_sync}/initial" ]]; then
+      mkdir -p -- "${game_sync}" && mv -- "${old_initial}" "${game_sync}/initial"
     fi
-    if [[ -d "${initial_dir}" ]]; then
+    rm -rf -- "${old_initial}"
+    # An uncompressed initial folder (previous version) is compressed now.
+    if [[ -d "${game_sync}/initial" && ! -e "${initial_file}" ]] && saves_compress "${game_sync}/initial" "${initial_file}"; then
+      rm -rf -- "${game_sync}/initial"
+    fi
+    if [[ -e "${initial_file}" || -d "${game_sync}/initial" ]]; then
       zgu_cli_ok "$(t saves.initial_exists_cli "${target_name}")"
       exit 0
     fi
     mkdir -p -- "${game_sync}" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; exit 1; }
-    rm -rf -- "${initial_dir}.tmp"
-    if [[ -z "${user_dir}" ]]; then initial_ok=true; mkdir -p -- "${initial_dir}.tmp" || initial_ok=false
-    else initial_ok=true; saves_pack "${initial_dir}.tmp" || initial_ok=false; fi
-    if [[ "${initial_ok}" != true ]] || ! mv -- "${initial_dir}.tmp" "${initial_dir}"; then
-      rm -rf -- "${initial_dir}.tmp"
-      zgu_cli_error "$(t saves.write_failed_cli "${initial_dir}")"
-      exit 1
+    mkdir -p -- "${work}/ini"
+    if [[ -n "${user_dir}" ]]; then saves_pack "${work}/ini" || { zgu_cli_error "$(t saves.write_failed_cli "${game_sync}")"; exit 1; }; fi
+    if ! saves_compress "${work}/ini" "${initial_file}"; then
+      # no zstd: keep a plain folder
+      rm -rf -- "${game_sync}/initial.tmp"
+      if ! cp -a -- "${work}/ini" "${game_sync}/initial.tmp" || ! mv -- "${game_sync}/initial.tmp" "${game_sync}/initial"; then
+        rm -rf -- "${game_sync}/initial.tmp"
+        zgu_cli_error "$(t saves.write_failed_cli "${game_sync}/initial")"
+        exit 1
+      fi
     fi
     zgu_log "saves" "OK" "slug=${target_slug} action=initial"
     zgu_cli_ok "$(t saves.initial_ok_cli "${target_name}")"
@@ -613,6 +634,11 @@ case "${cli_action}" in
   reset)
     saves_need_sync_dir || exit 1
     initial_dir="${game_sync}/initial"
+    if [[ -f "${game_sync}/initial.tar.zst" ]]; then
+      mkdir -p -- "${work}/ini" && zstd -dcq -- "${game_sync}/initial.tar.zst" | tar -C "${work}/ini" -xf - --no-same-owner --no-same-permissions 2>/dev/null \
+        || { zgu_cli_error "$(t saves.restore_failed_cli "${target_name}")"; exit 1; }
+      initial_dir="${work}/ini"
+    fi
     if [[ ! -d "${initial_dir}" ]]; then
       zgu_cli_error "$(t saves.reset_no_initial_cli "${target_name}")"
       exit 1
